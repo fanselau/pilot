@@ -1,6 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { scoreFromSignals } from '../../src/core/stuck.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { scoreFromSignals, detectGapClosureMisconfig } from '../../src/core/stuck.js';
 import type { StuckAssessment } from '../../src/core/types.js';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 /**
  * Stuck detection algorithm tests.
@@ -637,5 +640,188 @@ describe('I/O helpers: sampleCpu', () => {
     // Single sample with short interval for non-existent PID
     const samples = await sampleCpu(999999999, 1, 10);
     expect(samples).toEqual([0]);
+  });
+});
+
+// ── Gap Closure Misconfiguration Detection ──────────────────────────────────
+
+describe('Gap closure misconfiguration detection', () => {
+  let tmpDir: string;
+
+  /**
+   * Create a temp project dir with a phase directory and populate with files.
+   * planFiles: array of { name, isGap } for PLAN.md files
+   * summaryFiles: array of { name, superseded? } for SUMMARY.md files
+   */
+  async function createPhaseFixture(opts: {
+    phaseNum: number;
+    phaseDirSuffix: string;
+    planFiles: Array<{ name: string; isGap: boolean }>;
+    summaryFiles: Array<{ name: string; superseded?: boolean }>;
+  }): Promise<string> {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'pilot-stuck-test-'));
+    const padded = String(opts.phaseNum).padStart(2, '0');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', `${padded}-${opts.phaseDirSuffix}`);
+    await mkdir(phaseDir, { recursive: true });
+
+    // Write plan files
+    for (const plan of opts.planFiles) {
+      const frontmatter = opts.planFiles.indexOf(plan);
+      const gapLine = plan.isGap ? 'gap_closure: true\n' : '';
+      const content = `---\nphase: ${padded}-${opts.phaseDirSuffix}\nplan: ${String(frontmatter + 1).padStart(2, '0')}\ntype: execute\n${gapLine}---\n`;
+      await writeFile(path.join(phaseDir, plan.name), content);
+    }
+
+    // Write summary files
+    for (const summary of opts.summaryFiles) {
+      const status = summary.superseded ? 'Status: Superseded' : 'Status: Complete';
+      const content = `# Summary\n${status}\n`;
+      await writeFile(path.join(phaseDir, summary.name), content);
+    }
+
+    return tmpDir;
+  }
+
+  afterEach(async () => {
+    if (tmpDir) {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null for non-gap-closure session title', async () => {
+    // Session without --gaps or --gaps-only → not a gap closure session
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [],
+      summaryFiles: [],
+    });
+    const result = await detectGapClosureMisconfig('myproject-execute-phase-3', projectDir);
+    expect(result).toBeNull();
+  });
+
+  it('returns misconfig for gap planning session with no summaries', async () => {
+    // Session with --gaps on a phase that has 2 regular plans, 0 summaries
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [
+        { name: '03-01-PLAN.md', isGap: false },
+        { name: '03-02-PLAN.md', isGap: false },
+      ],
+      summaryFiles: [],
+    });
+    const result = await detectGapClosureMisconfig(
+      'myproject-plan-phase-3--gaps',
+      projectDir,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.summaryCount).toBe(0);
+    expect(result!.originalPlanCount).toBe(2);
+    expect(result!.phase).toBe(3);
+    expect(result!.project).toBe('myproject');
+    expect(result!.detail).toContain('0/2');
+  });
+
+  it('returns null for gap execution session with full summaries', async () => {
+    // Session with --gaps-only on a phase that has 2 regular plans, 2 summaries
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [
+        { name: '03-01-PLAN.md', isGap: false },
+        { name: '03-02-PLAN.md', isGap: false },
+      ],
+      summaryFiles: [
+        { name: '03-01-SUMMARY.md' },
+        { name: '03-02-SUMMARY.md' },
+      ],
+    });
+    const result = await detectGapClosureMisconfig(
+      'myproject-execute-phase-3--gaps-only--auto',
+      projectDir,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('returns misconfig for gap session with partial summaries', async () => {
+    // Session with --gaps-only on a phase that has 3 regular plans, 1 summary
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [
+        { name: '03-01-PLAN.md', isGap: false },
+        { name: '03-02-PLAN.md', isGap: false },
+        { name: '03-03-PLAN.md', isGap: false },
+      ],
+      summaryFiles: [
+        { name: '03-01-SUMMARY.md' },
+      ],
+    });
+    const result = await detectGapClosureMisconfig(
+      'myproject-execute-phase-3--gaps-only',
+      projectDir,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.summaryCount).toBe(1);
+    expect(result!.originalPlanCount).toBe(3);
+    expect(result!.phase).toBe(3);
+    expect(result!.detail).toContain('1/3');
+  });
+
+  it('excludes gap_closure plans from original plan count', async () => {
+    // 2 regular plans + 1 gap plan, 2 summaries → should return null (2/2 originals done)
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [
+        { name: '03-01-PLAN.md', isGap: false },
+        { name: '03-02-PLAN.md', isGap: false },
+        { name: '03-03-PLAN.md', isGap: true },
+      ],
+      summaryFiles: [
+        { name: '03-01-SUMMARY.md' },
+        { name: '03-02-SUMMARY.md' },
+      ],
+    });
+    const result = await detectGapClosureMisconfig(
+      'myproject-plan-phase-3--gaps',
+      projectDir,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('excludes superseded summaries from summary count', async () => {
+    // 2 regular plans, 1 normal summary + 1 superseded summary → only 1 counts
+    const projectDir = await createPhaseFixture({
+      phaseNum: 3,
+      phaseDirSuffix: 'test',
+      planFiles: [
+        { name: '03-01-PLAN.md', isGap: false },
+        { name: '03-02-PLAN.md', isGap: false },
+      ],
+      summaryFiles: [
+        { name: '03-01-SUMMARY.md' },
+        { name: '03-02-SUMMARY.md', superseded: true },
+      ],
+    });
+    const result = await detectGapClosureMisconfig(
+      'myproject-execute-phase-3--gaps-only',
+      projectDir,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.summaryCount).toBe(1);
+    expect(result!.originalPlanCount).toBe(2);
+  });
+
+  it('returns null when phase directory does not exist', async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'pilot-stuck-test-'));
+    await mkdir(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+    // No phase 3 directory exists
+    const result = await detectGapClosureMisconfig(
+      'myproject-plan-phase-3--gaps',
+      tmpDir,
+    );
+    expect(result).toBeNull();
   });
 });
