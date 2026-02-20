@@ -134,3 +134,14 @@ Plans:
 - dependsOn with circular detection
 - pilot queue --json backward compat preserved
 - QUEUE.md only read by import command
+
+### Phase 7: Smart add per requirements/smart-add.md
+**Goal:** Replace mode-based `pilot add` with intelligent task routing that auto-detects scope (milestone/phase/quick) from requirements files or descriptions, handles project state detection, and queues the right internal mode automatically.
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 7 to break down)
+
+**Details:**
+[To be added during planning]

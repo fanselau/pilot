@@ -5,12 +5,13 @@
 
 ## Current Position
 
-Phase: 4 of 6 (TUI Dashboard)
+Phase: 4 of 7 (TUI Dashboard)
 Plan: 5 of 5 in current phase (all plans complete)
 Status: Phase complete, verified ✓ (10/10 must-haves)
 Last activity: 2026-02-20 - Phase 4 complete, verified 10/10 must-haves
 **Next Phase:** Phase 5 — Integration fixes per requirements/integration-fixes.md
 **Future Phase:** Phase 6 — Queue storage migration per requirements/queue-storage-migration.md
+**Future Phase:** Phase 7 — Smart add per requirements/smart-add.md
 
 Progress: ████████████████████ 100% (20/20 plans)
 
@@ -39,11 +40,15 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
 - **Status:** not planned (0/0 plans)
 
+### Phase 7: Smart add per requirements/smart-add.md
+- **Status:** not planned (0/0 plans)
+
 ## Accumulated Context
 
 ### Roadmap Evolution
 - Phase 5 added: Integration fixes per requirements/integration-fixes.md
 - Phase 6 added: Queue storage migration per requirements/queue-storage-migration.md
+- Phase 7 added: Smart add per requirements/smart-add.md
 
 ## Decisions
 
