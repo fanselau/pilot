@@ -186,12 +186,22 @@ Plans:
 - All existing tests pass with no regressions
 
 ### Phase 10: Smart verify routing per requirements/smart-verify-routing.md
-**Goal:** [To be planned]
+**Goal:** Detect project type and route verification to appropriate strategy (browser UAT for web, file-content checks for non-web, CLI checks for CLI tools). Prevent verify loops by auto-skipping after 3 failures.
 **Depends on:** Phase 9
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 10 to break down)
+- [ ] 10-01-PLAN.md — Project type detection: classify web/cli/file-content (TDD)
+- [ ] 10-02-PLAN.md — File-content and CLI verification strategy implementations (TDD)
+- [ ] 10-03-PLAN.md — Wire verify command + lifecycle runner with smart routing
+- [ ] 10-04-PLAN.md — Verify failure detection and auto-skip after 3 attempts
 
-**Details:**
-[To be added during planning]
+**Success Criteria:**
+- Project type detection classifies web, CLI, and file-content projects from filesystem signals
+- File-content verification checks file existence, stubs, summaries, and test suites
+- CLI verification builds, runs --help, checks binary, and runs tests
+- `pilot verify --strategy auto|browser|file|cli` flag works
+- Lifecycle runner routes non-web projects to pilot's own verification (no AI agent spawn)
+- After 3 verify failures, auto-skip and continue to next phase
+- Web projects still use gsd-verify-auto (unchanged)
+- All existing tests pass with no regressions
