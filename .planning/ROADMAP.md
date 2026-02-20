@@ -7,7 +7,7 @@
 **Requirements:** FOUND-12, FOUND-13, FOUND-14, FOUND-15, FOUND-16, FOUND-17, FOUND-18, FOUND-19, FOUND-20, FOUND-21, FOUND-22, FOUND-23
 **Plans:** 5 plans
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffolding + types + utilities + config
+- [x] 01-01-PLAN.md — Project scaffolding + types + utilities + config
 - [ ] 01-02-PLAN.md — Queue parser (TDD)
 - [ ] 01-03-PLAN.md — Process management + sessions
 - [ ] 01-04-PLAN.md — Stuck detection algorithm (TDD)
