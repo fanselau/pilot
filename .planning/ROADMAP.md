@@ -205,3 +205,15 @@ Plans:
 - After 3 verify failures, auto-skip and continue to next phase
 - Web projects still use gsd-verify-auto (unchanged)
 - All existing tests pass with no regressions
+
+### Phase 11: Finishing touches per requirements/finishing-touches.md
+
+**Goal:** [To be planned]
+**Depends on:** Phase 10
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 11 to break down)
+
+**Details:**
+[To be added during planning]
