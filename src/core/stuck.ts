@@ -98,9 +98,8 @@ function scoreFromSignals(input: StuckSignalInput): StuckScoreResult {
     });
   } else if (
     input.messageCount !== null &&
-    input.messageCount !== undefined &&
-    input.messageCount < 3 &&
     input.messageCount > 0 &&
+    input.messageCount < 3 &&
     input.runtime > 600
   ) {
     // < 3 messages after 10 min → 20 points
