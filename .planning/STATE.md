@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 9
+## Current Phase: 10
 
 ## Current Position
 
-Phase: 9 of 10 (Gap closure resilience)
-Plan: 2 of 2 in current phase (09-03, 09-04 complete)
-Status: Phase complete, verified ✓ (6/6 must-haves)
-Last activity: 2026-02-20 - Phase 9 complete, verified 6/6 must-haves
+Phase: 10 of 10 (Smart verify routing)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-20 - Completed 10-01-PLAN.md
 
-Progress: █████████████████████████ 100% (25/25 plans)
+Progress: ██████████████████████░░░ 90% (26/29 plans)
 
 ## Project Reference
 
@@ -47,7 +47,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (2/2 active plans complete [gap closure 09-03+09-04], verified ✓)
 
 ### Phase 10: Smart verify routing per requirements/smart-verify-routing.md
-- **Status:** not planned (0/0 plans)
+- **Status:** in progress (1/4 plans complete)
 
 ## Accumulated Context
 
@@ -113,9 +113,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 09-04 | detectGapClosureMisconfig in stuck.ts not phase-state.ts | It's a stuck detection concern, co-located with scoring |
 | 09-04 | Misconfig detection on stuck/suspect only | Healthy sessions don't need gap closure checks |
 | 09-04 | Silent error catch during misconfig detection | Monitoring must not break due to filesystem issues |
+| 10-01 | Web signals checked before CLI — web wins when both present | CLI that serves web content should get browser UAT |
+| 10-01 | JSX/TSX scan limited to 2 levels deep | Avoids performance issues on large codebases |
+| 10-01 | Port patterns match spec exactly (:3000, :8080, :5173, localhost) | Simple heuristics per requirements |
 
 ## Session Continuity
 
-Last session: 2026-02-20T22:13:17Z
-Stopped at: Completed 09-04-PLAN.md — Phase 9 complete
+Last session: 2026-02-20T22:51:28Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None

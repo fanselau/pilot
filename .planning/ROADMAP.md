@@ -191,7 +191,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Project type detection: classify web/cli/file-content (TDD)
+- [x] 10-01-PLAN.md — Project type detection: classify web/cli/file-content (TDD)
 - [ ] 10-02-PLAN.md — File-content and CLI verification strategy implementations (TDD)
 - [ ] 10-03-PLAN.md — Wire verify command + lifecycle runner with smart routing
 - [ ] 10-04-PLAN.md — Verify failure detection and auto-skip after 3 attempts
