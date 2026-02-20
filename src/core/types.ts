@@ -172,3 +172,39 @@ export interface RunnerOptions {
   dryRun: boolean;
   force: boolean;
 }
+
+// ── Smart Add ─────────────────────────────────────────────────────────────
+
+export type SmartAddScope = 'milestone' | 'phase' | 'quick';
+
+export interface ScopeDetectionResult {
+  scope: SmartAddScope;
+  itemCount: number;
+  hasPhaseHeaders: boolean;
+  isDirectory: boolean;
+  rationale: string;
+}
+
+export interface ProjectStateResult {
+  exists: boolean;
+  hasOpencode: boolean;
+  hasPlanning: boolean;
+  allPhasesDone: boolean;
+  phasesIncomplete: boolean;
+  isQueued: boolean;
+  isRunning: boolean;
+  queuedMode: string | null;
+  runningPhase: string | null;
+  needsSetup: boolean;
+  needsInit: boolean;
+}
+
+export interface SmartAddDecision {
+  scope: SmartAddScope;
+  internalMode: string;
+  project: string;
+  description: string;
+  requirementsPath: string | null;
+  projectState: ProjectStateResult;
+  scopeDetection: ScopeDetectionResult;
+}
