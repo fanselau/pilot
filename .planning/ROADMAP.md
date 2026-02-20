@@ -56,6 +56,12 @@ Plans:
 ### Phase 3: Queue Runner + Lifecycle Automation
 **Goal:** Implement the queue runner state machine and all lifecycle mode commands. This is the automation engine that processes QUEUE.md entries, spawns AI sessions, and manages the full plan->execute->verify pipeline.
 **Requirements:** AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05, AUTO-06, AUTO-07, AUTO-08, AUTO-09, AUTO-10, AUTO-11, AUTO-12, AUTO-13, AUTO-14, AUTO-15, AUTO-16, AUTO-17, AUTO-18, AUTO-19
+**Plans:** 4 plans
+Plans:
+- [ ] 03-01-PLAN.md — Core infrastructure: lock, spawn, phase-state, postmortem
+- [ ] 03-02-PLAN.md — All lifecycle command wrappers (13 commands)
+- [ ] 03-03-PLAN.md — Queue runner state machine + lifecycle modes
+- [ ] 03-04-PLAN.md — Queue management commands: run, stop, add, build
 **Success Criteria:**
 - `pilot run` processes QUEUE.md entries with state machine (scan -> launch -> reap)
 - Same-project entries run sequentially, cross-project entries parallel up to --max-parallel
