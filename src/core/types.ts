@@ -208,3 +208,7 @@ export interface SmartAddDecision {
   projectState: ProjectStateResult;
   scopeDetection: ScopeDetectionResult;
 }
+
+// ── Verify Routing ──────────────────────────────────────────────────────
+export type ProjectType = 'web' | 'cli' | 'file-content';
+export type VerifyStrategy = 'auto' | 'browser' | 'file' | 'cli';

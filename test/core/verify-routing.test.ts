@@ -65,7 +65,7 @@ describe('detectProjectType', () => {
     const dir = await makeTempDir();
     await writeFile(join(dir, 'package.json'), JSON.stringify({
       name: 'my-app',
-      scripts: { dev: 'node server.js --port=3000' },
+      scripts: { test: 'curl http://localhost:3000/health' },
     }));
     expect(await detectProjectType(dir)).toBe('web');
   });
