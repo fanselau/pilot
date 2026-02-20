@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 7 of 7 (Smart add)
-Plan: 3 of 4 in current phase (gap closure plan 03 complete)
-Status: In progress
-Last activity: 2026-02-20 - Completed 07-03-PLAN.md
+Plan: 4 of 4 in current phase (phase complete)
+Status: Phase complete
+Last activity: 2026-02-20 - Completed 07-04-PLAN.md
 
-Progress: █████████████████████░░░ 87% (21/24 plans)
+Progress: ██████████████████████░░ 91% (22/24 plans)
 
 ## Project Reference
 
@@ -38,7 +38,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** not planned (0/0 plans)
 
 ### Phase 7: Smart add per requirements/smart-add.md
-- **Status:** in progress (1/4 plans complete)
+- **Status:** complete (2/4 plans, gap closure 03+04 done)
 
 ## Accumulated Context
 
@@ -92,9 +92,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 07-03 | Optional PilotConfig param in detectProjectState | Clean test injection without fragile vi.mock on config.js |
 | 07-03 | Multiple Must Have sections (>=2) = phase headers | Indicates milestone-level multi-section scope |
 | 07-03 | Uses parseQueueFile not queue-store.ts | Phase 6 queue-store.ts was never built |
+| 07-04 | addCommand returns AddResult for composition | buildCommand and index.ts JSON output compose with result |
+| 07-04 | Queue writes via withQueueLock not queue-store.ts | Phase 6 never built; QUEUE.md is the storage layer |
+| 07-04 | VALID_MODES removed from user-facing code | GSD modes are internal implementation details |
 
 ## Session Continuity
 
-Last session: 2026-02-20T21:11:05Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-02-20T21:18:57Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None

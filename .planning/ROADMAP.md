@@ -144,7 +144,7 @@ Plans:
 - [ ] 07-01-PLAN.md — Core smart-add logic: scope detection, project state detection, requirements parsing (TDD) [original — superseded by 07-03]
 - [ ] 07-02-PLAN.md — Rewrite add/build commands with smart routing, update CLI registration, integration tests [original — superseded by 07-04]
 - [x] 07-03-PLAN.md — Gap closure: Core smart-add logic adapted for QUEUE.md infrastructure (TDD)
-- [ ] 07-04-PLAN.md — Gap closure: Rewrite add/build commands with QUEUE.md integration, update CLI, tests
+  - [x] 07-04-PLAN.md — Gap closure: Rewrite add/build commands with QUEUE.md integration, update CLI, tests
 
 **Success Criteria:**
 - `pilot add <project> <requirements-file>` detects scope (milestone/phase/quick) and queues correct internal mode
