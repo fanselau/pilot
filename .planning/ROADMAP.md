@@ -85,7 +85,7 @@ Plans:
 Plans:
 - [ ] 04-01-PLAN.md — TUI components: App, Dashboard, 4 panels, data hook (original, not executed)
 - [ ] 04-02-PLAN.md — Command wiring (lazy import), package.json update, tests (original, not executed)
-- [ ] 04-03-PLAN.md — Gap closure: package.json deps + vitest config + data hook + App shell
+- [x] 04-03-PLAN.md — Gap closure: package.json deps + vitest config + data hook + App shell
 - [ ] 04-04-PLAN.md — Gap closure: Dashboard + 4 panels + tui command wiring
 - [ ] 04-05-PLAN.md — Gap closure: TUI component tests (panels + Dashboard)
 **Success Criteria:**

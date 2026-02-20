@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 3
+## Current Phase: 4
 
 ## Current Position
 
-Phase: 3 of 4 (Queue Runner + Lifecycle Automation)
-Plan: 4 of 4 in current phase
-Status: Phase complete, verified ✓ (13/13 must-haves)
-Last activity: 2026-02-20 - Phase 3 complete, verified 13/13 must-haves
+Phase: 4 of 4 (TUI Dashboard)
+Plan: 1 of 3 in current phase (gap closure plans: 03, 04, 05)
+Status: In progress
+Last activity: 2026-02-20 - Completed 04-03-PLAN.md
 
-Progress: ████████████░░░░░░░░ 60% (12/20 plans)
+Progress: █████████████░░░░░░░ 65% (13/20 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 3 complete, verified ✓ — ready for Phase 4 TUI Dashboard
+**Current focus:** Phase 4 TUI Dashboard — infrastructure set up, building panels next
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 4: TUI Dashboard
-- **Status:** not_started
+- **Status:** in progress (1/3 gap closure plans complete)
 
 ## Decisions
 
@@ -66,9 +66,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 03-03 | MAX_GAP_CYCLES=3 with best-effort acceptance | Prevents infinite gap closure loops |
 | 03-04 | Detached execa spawn for runner from build command | Runner survives parent exit; uses process.argv[1] for self-reference |
 | 03-04 | scope --build wired as add-and-build mode | Matches spec §9 lifecycle mode; deferred from 03-02 now that runner exists |
+| 04-03 | Fast stuck scoring in TUI (no CPU/message signals) | Avoids 30s delay per process; log staleness + memory sufficient for dashboard |
 
 ## Session Continuity
 
-Last session: 2026-02-20T17:26:18Z
-Stopped at: Completed 03-04-PLAN.md — queue management commands
+Last session: 2026-02-20T18:27:01Z
+Stopped at: Completed 04-03-PLAN.md — TUI infrastructure setup
 Resume file: None
