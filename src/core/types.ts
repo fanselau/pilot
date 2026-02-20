@@ -130,3 +130,45 @@ export interface ProgressInfo {
   nextAction: string;
   blockers: string[];
 }
+
+// ── Spawn ──────────────────────────────────────────────────────────────────
+
+export interface SpawnOptions {
+  project: string;
+  projectDir: string;
+  command: string;     // gsd-* command name
+  args?: string;
+  title: string;
+  logFile: string;
+}
+
+export interface SpawnResult {
+  pid: number;
+  title: string;
+  logFile: string;
+  process: unknown;    // ChildProcess from execa — opaque to consumers
+}
+
+// ── Phase State ────────────────────────────────────────────────────────────
+
+export type PhaseState = 'needs-plan' | 'needs-execute' | 'needs-verify' | 'needs-gaps' | 'done';
+
+// ── Runner ─────────────────────────────────────────────────────────────────
+
+export interface RunnerJob {
+  entry: QueueEntry;
+  pid: number;
+  title: string;
+  logFile: string;
+  startTime: number;
+  preCommitCount: number;
+  retries: number;
+}
+
+export interface RunnerOptions {
+  maxParallel: number;
+  maxRetries: number;
+  once: boolean;
+  dryRun: boolean;
+  force: boolean;
+}
