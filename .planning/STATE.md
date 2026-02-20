@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 2 of 4 (CLI Commands — Phase 1 Monitoring + Setup)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-20 - Completed 02-01-PLAN.md (entry point + core commands)
+Last activity: 2026-02-20 - Completed 02-02-PLAN.md (log, tail, projects, progress)
 
-Progress: ██████░░░░░░░░░░░░░░ 30% (6/20 plans)
+Progress: ████████░░░░░░░░░░░░ 35% (7/20 plans)
 
 ## Project Reference
 
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
-- **Status:** in_progress (1/3 plans complete)
+- **Status:** in_progress (2/3 plans complete)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
 - **Status:** not_started
@@ -49,9 +49,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 02-01 | Custom formatHelp override for grouped help | Avoids brittle addHelpText ordering |
 | 02-01 | Stub files for all future commands | tsc strict module resolution requires import targets to exist |
 | 02-01 | computeStuckScore called sequentially per PID | CPU sampling is inherently serial (3×10s) |
+| 02-02 | Native fs.watch + 1s poll backup for tail | fs.watch can miss events on some systems; poll ensures reliability |
+| 02-02 | Walk-up cwd detection for progress command | Intuitive UX when running inside a project directory |
+| 02-02 | Content truncation at 500 chars in non-verbose log mode | Keeps transcript readable without overwhelming output |
 
 ## Session Continuity
 
-Last session: 2026-02-20T16:22:00Z
-Stopped at: Completed 02-01-PLAN.md — entry point + core commands
+Last session: 2026-02-20T16:29:55Z
+Stopped at: Completed 02-02-PLAN.md — log, tail, projects, progress commands
 Resume file: None
