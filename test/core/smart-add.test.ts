@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ProjectStateResult } from '../../src/core/types.js';
+import type { PilotConfig, ProjectStateResult } from '../../src/core/types.js';
+
+// ── Test config ────────────────────────────────────────────────────────────
+
+const testConfig: PilotConfig = {
+  projectDir: '/test/projects',
+  queueFile: '/test/QUEUE.md',
+  logDir: '/tmp',
+  stuckThreshold: 90,
+  gsdDir: '/test/pilot-gsd',
+  noColor: false,
+};
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -17,14 +28,7 @@ vi.mock('../../src/core/queue-parser.js', () => ({
 }));
 
 vi.mock('../../src/core/config.js', () => ({
-  getConfig: vi.fn(() => ({
-    projectDir: '/test/projects',
-    queueFile: '/test/QUEUE.md',
-    logDir: '/tmp',
-    stuckThreshold: 90,
-    gsdDir: '/test/pilot-gsd',
-    noColor: false,
-  })),
+  getConfig: vi.fn(() => testConfig),
 }));
 
 // ── Import subjects (will fail in RED — module doesn't exist yet) ──────────
@@ -274,7 +278,7 @@ describe('detectProjectState', () => {
   it('detects project directory does not exist', async () => {
     mockedAccess.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.exists).toBe(false);
     expect(result.needsSetup).toBe(false);
     expect(result.needsInit).toBe(false);
@@ -290,7 +294,7 @@ describe('detectProjectState', () => {
       return undefined;
     });
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.exists).toBe(true);
     expect(result.hasOpencode).toBe(false);
     expect(result.needsSetup).toBe(true);
@@ -306,7 +310,7 @@ describe('detectProjectState', () => {
       return undefined;
     });
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.hasOpencode).toBe(true);
     expect(result.hasPlanning).toBe(false);
     expect(result.needsInit).toBe(true);
@@ -318,7 +322,7 @@ describe('detectProjectState', () => {
       progress: { done: 5, total: 5, percent: 100 },
     });
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.allPhasesDone).toBe(true);
     expect(result.phasesIncomplete).toBe(false);
   });
@@ -329,7 +333,7 @@ describe('detectProjectState', () => {
       progress: { done: 2, total: 5, percent: 40 },
     });
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.phasesIncomplete).toBe(true);
     expect(result.allPhasesDone).toBe(false);
   });
@@ -345,7 +349,7 @@ describe('detectProjectState', () => {
       },
     ]);
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.isQueued).toBe(true);
     expect(result.queuedMode).toBe('build-full');
   });
@@ -361,7 +365,7 @@ describe('detectProjectState', () => {
       },
     ]);
 
-    const result = await detectProjectState('myproject');
+    const result = await detectProjectState('myproject', testConfig);
     expect(result.isRunning).toBe(true);
   });
 });
