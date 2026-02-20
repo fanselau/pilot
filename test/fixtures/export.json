@@ -1,0 +1,26 @@
+{
+  "id": "sess-001",
+  "title": "resume-roast-execute-phase-3",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Phase 3 --auto"
+    },
+    {
+      "role": "assistant",
+      "content": "I'll execute Phase 3...",
+      "tool_calls": [
+        { "name": "Read", "status": "completed" },
+        { "name": "Write", "status": "completed" }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Continue"
+    },
+    {
+      "role": "assistant",
+      "content": "Phase 3 execution complete."
+    }
+  ]
+}
