@@ -6,24 +6,24 @@
 ## Current Position
 
 Phase: 2 of 4 (CLI Commands — Phase 1 Monitoring + Setup)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-20 - Completed 02-02-PLAN.md (log, tail, projects, progress)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-20 - Completed 02-03-PLAN.md (setup/update + command tests)
 
-Progress: ████████░░░░░░░░░░░░ 35% (7/20 plans)
+Progress: ████████░░░░░░░░░░░░ 40% (8/20 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 2 — CLI Commands (Phase 1 Monitoring + Setup)
+**Current focus:** Phase 2 complete — ready for Phase 3: Queue Runner + Lifecycle
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
-- **Status:** in_progress (2/3 plans complete)
+- **Status:** complete (3/3 plans)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
 - **Status:** not_started
@@ -52,9 +52,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 02-02 | Native fs.watch + 1s poll backup for tail | fs.watch can miss events on some systems; poll ensures reliability |
 | 02-02 | Walk-up cwd detection for progress command | Intuitive UX when running inside a project directory |
 | 02-02 | Content truncation at 500 chars in non-verbose log mode | Keeps transcript readable without overwhelming output |
+| 02-03 | stdout spy with type cast for vi.mock of process.stdout.write | Complex overload types require cast for test compatibility |
+| 02-03 | Queue ENOENT graceful in status, exit 1 in queue | Status is dashboard (soft fail), queue is explicit command (hard fail) |
 
 ## Session Continuity
 
-Last session: 2026-02-20T16:29:55Z
-Stopped at: Completed 02-02-PLAN.md — log, tail, projects, progress commands
+Last session: 2026-02-20T16:31:18Z
+Stopped at: Completed 02-03-PLAN.md — setup/update + command tests (Phase 2 complete)
 Resume file: None
