@@ -169,11 +169,13 @@ Plans:
 ### Phase 9: Gap closure resilience per requirements/gap-closure-resilience.md
 **Goal:** Prevent broken gap closure loops by checking execution evidence (SUMMARY.md files) before entering --gaps-only mode. When original plans haven't been executed, run full execute instead.
 **Depends on:** Phase 8
-**Plans:** 2 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Core gap closure guard: summary counting, lifecycle guard, postmortem field (TDD)
-- [ ] 09-02-PLAN.md — Stuck detection: gap closure misconfiguration detection for pilot stuck
+- [ ] 09-01-PLAN.md — Core gap closure guard: summary counting, lifecycle guard, postmortem field (TDD) [original — superseded by 09-03]
+- [ ] 09-02-PLAN.md — Stuck detection: gap closure misconfiguration detection for pilot stuck [original — superseded by 09-04]
+- [ ] 09-03-PLAN.md — Gap closure: Core gap closure guard with TDD (summary counting, lifecycle guard, postmortem field)
+- [ ] 09-04-PLAN.md — Gap closure: Stuck detection gap closure misconfiguration detection
 
 **Success Criteria:**
 - Gap closure only runs when original plans have SUMMARY.md files
