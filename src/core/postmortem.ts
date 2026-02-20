@@ -26,6 +26,7 @@ export interface PostmortemEntry {
   commits: number;
   messages: number;
   failure_category?: string;
+  gap_closure_attempts?: number;
 }
 
 /**

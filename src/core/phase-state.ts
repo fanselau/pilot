@@ -389,9 +389,84 @@ async function checkPhaseCommits(projectDir: string, phase: number): Promise<boo
   }
 }
 
+// ── Summary file counting ──────────────────────────────────────────────────
+
+/**
+ * Count non-superseded SUMMARY.md files in a phase directory.
+ *
+ * Files matching `*-SUMMARY.md` are counted, but any file whose content
+ * contains "Status: Superseded" (case-insensitive) is excluded.
+ *
+ * Returns 0 if directory doesn't exist or is empty.
+ */
+async function countSummaryFiles(phaseDir: string): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await readdir(phaseDir);
+  } catch {
+    return 0;
+  }
+
+  const summaryFiles = entries.filter((name) => name.endsWith('-SUMMARY.md'));
+  let count = 0;
+
+  for (const file of summaryFiles) {
+    try {
+      const content = await readFile(path.join(phaseDir, file), 'utf8');
+      if (!/status:\s*superseded/i.test(content)) {
+        count++;
+      }
+    } catch {
+      // Can't read file — don't count it
+    }
+  }
+
+  return count;
+}
+
+// ── Non-gap plan file counting ─────────────────────────────────────────────
+
+/**
+ * Count PLAN.md files that do NOT have `gap_closure: true` in frontmatter.
+ *
+ * These are "original" plans — the ones that must have SUMMARY.md files
+ * before gap closure can work. Reads the first 20 lines of each PLAN.md
+ * to check for the `gap_closure: true` frontmatter field.
+ *
+ * Returns 0 if directory doesn't exist or is empty.
+ */
+async function countNonGapPlanFiles(phaseDir: string): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await readdir(phaseDir);
+  } catch {
+    return 0;
+  }
+
+  const planFiles = entries.filter((name) => name.endsWith('-PLAN.md'));
+  let count = 0;
+
+  for (const file of planFiles) {
+    try {
+      const content = await readFile(path.join(phaseDir, file), 'utf8');
+      // Read first 20 lines for frontmatter check
+      const first20 = content.split('\n').slice(0, 20).join('\n');
+      if (!/^\s*gap_closure:\s*true/m.test(first20)) {
+        count++;
+      }
+    } catch {
+      // Can't read file — don't count it
+    }
+  }
+
+  return count;
+}
+
 export {
   getPhaseState,
   writePhaseState,
   findPhaseDir,
   getLastPhase,
+  countSummaryFiles,
+  countNonGapPlanFiles,
 };

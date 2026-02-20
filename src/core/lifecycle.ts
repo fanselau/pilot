@@ -21,7 +21,7 @@ import { readFile, rename, access, readdir } from 'node:fs/promises';
 import { execa } from 'execa';
 
 import { getConfig } from './config.js';
-import { getPhaseState, writePhaseState, getLastPhase } from './phase-state.js';
+import { getPhaseState, writePhaseState, getLastPhase, findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
 import { truncateTitle, getResolvedBinary } from './spawn.js';
 import type { PilotConfig } from './types.js';
 
@@ -363,14 +363,41 @@ async function runPhaseCycle(projectDir: string, phase: number): Promise<void> {
       }
 
       case 'needs-gaps': {
+        // Guard: check if original plans have been executed (SUMMARY files exist)
+        const phaseDir = await findPhaseDir(projectDir, phase);
+        if (phaseDir !== null) {
+          const originalPlanCount = await countNonGapPlanFiles(phaseDir);
+          const summaryCount = await countSummaryFiles(phaseDir);
+          if (summaryCount < originalPlanCount) {
+            process.stderr.write(
+              `[lifecycle] Phase ${phase}: needs gap closure but only ${summaryCount}/${originalPlanCount} ` +
+              `original plans have summaries. Skipping gap closure — running full execute.\n`,
+            );
+            await writePhaseState(projectDir, phase, 'executing');
+            const fullExecExit = await spawnAndWait(
+              projectDir,
+              'execute-phase',
+              `${phase} --auto`,
+            );
+            if (fullExecExit !== 0) {
+              throw new Error(
+                `gsd-execute-phase ${phase} --auto (gap fallback) failed with exit code ${fullExecExit}`,
+              );
+            }
+            await writePhaseState(projectDir, phase, 'executed');
+            break; // Continue loop — next iteration re-verifies
+          }
+        }
+
         if (gapCycles >= MAX_GAP_CYCLES) {
-          // Max gap cycles reached — log warning and accept as best-effort
+          // Max gap cycles reached — FAIL instead of silently accepting
           process.stderr.write(
             `[lifecycle] Phase ${phase}: max gap closure cycles (${MAX_GAP_CYCLES}) reached. ` +
-            `Accepting as best-effort done.\n`,
+            `Gaps remain — failing.\n`,
           );
-          await writePhaseState(projectDir, phase, 'verified');
-          return;
+          throw new Error(
+            `Phase ${phase}: gap closure failed after ${MAX_GAP_CYCLES} cycles — gaps remain`,
+          );
         }
 
         gapCycles++;
