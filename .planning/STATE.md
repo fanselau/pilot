@@ -5,7 +5,7 @@
 
 ## Current Position
 
-Phase: 7 of 7 (Smart add)
+Phase: 7 of 8 (Smart add)
 Plan: 4 of 4 in current phase (phase complete)
 Status: Phase complete, verified ✓ (11/11 must-haves)
 Last activity: 2026-02-20 - Phase 7 complete, verified 11/11 must-haves
@@ -47,6 +47,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 6 added: Queue storage migration per requirements/queue-storage-migration.md
 - Phase 7 added: Smart add per requirements/smart-add.md
 - Phase 6 skipped: queue-store.ts never built; Phase 7 adapted to use QUEUE.md
+- Phase 8 added: Smart tail stuck detection per requirements/smart-tail-stuck-detection.md
 
 ## Decisions
 

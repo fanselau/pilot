@@ -156,3 +156,14 @@ Plans:
 - No GSD modes (build-full, continue-all, etc.) exposed to user
 - Project state detection handles: missing dir, no .opencode, no .planning, incomplete phases, all done, already queued, currently running
 - All tests pass with no regressions
+
+### Phase 8: Smart tail stuck detection per requirements/smart-tail-stuck-detection.md
+**Goal:** [To be planned]
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 8 to break down)
+
+**Details:**
+[To be added during planning]
