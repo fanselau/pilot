@@ -110,3 +110,14 @@ Plans:
 - [ ] 05-02-PLAN.md — Fix status: skip queue runner PID, fast stuck scoring
 - [ ] 05-03-PLAN.md — Fix runner --once wait + update explicit remote/branch
 - [ ] 05-04-PLAN.md — Regression tests for all integration fixes
+
+### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
+**Goal:** [To be planned]
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 6 to break down)
+
+**Details:**
+[To be added during planning]
