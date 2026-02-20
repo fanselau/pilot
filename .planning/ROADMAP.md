@@ -138,10 +138,19 @@ Plans:
 ### Phase 7: Smart add per requirements/smart-add.md
 **Goal:** Replace mode-based `pilot add` with intelligent task routing that auto-detects scope (milestone/phase/quick) from requirements files or descriptions, handles project state detection, and queues the right internal mode automatically.
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md — Core smart-add logic: scope detection, project state detection, requirements parsing (TDD)
+- [ ] 07-02-PLAN.md — Rewrite add/build commands with smart routing, update CLI registration, integration tests
 
-**Details:**
-[To be added during planning]
+**Success Criteria:**
+- `pilot add <project> <requirements-file>` detects scope (milestone/phase/quick) and queues correct internal mode
+- `pilot add <project> "description"` queues as quick task
+- `pilot add <project> requirements-dir/` queues as milestone
+- `pilot add --dry-run` shows what would happen without queuing
+- `pilot add --as quick|phase|milestone` overrides auto-detection
+- `pilot build` = smart add + start runner
+- No GSD modes (build-full, continue-all, etc.) exposed to user
+- Project state detection handles: missing dir, no .opencode, no .planning, incomplete phases, all done, already queued, currently running
+- All tests pass with no regressions
