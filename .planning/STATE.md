@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 3 of 4 (Queue Runner + Lifecycle Automation)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-20 - Completed 03-02-PLAN.md
+Last activity: 2026-02-20 - Completed 03-03-PLAN.md
 
-Progress: ██████████░░░░░░░░░░ 50% (10/20 plans)
+Progress: ███████████░░░░░░░░░ 55% (11/20 plans)
 
 ## Project Reference
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
-- **Status:** in_progress (2/4 plans)
+- **Status:** in_progress (3/4 plans)
 
 ### Phase 4: TUI Dashboard
 - **Status:** not_started
@@ -61,9 +61,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 03-02 | void opts for no-flag commands | Consistent signature without unused-param warnings |
 | 03-02 | reject: false on execa calls | Manual exit code propagation instead of throwing on non-zero |
 | 03-02 | scope --build deferred to Plan 04 | Queue runner not yet implemented |
+| 03-03 | Polling-based reap for detached processes | Exit events not reliable for detached processes |
+| 03-03 | markEntryPending helper in runner.ts | queue-parser markEntry only supports running/done/failed |
+| 03-03 | Synchronous spawnAndWait for lifecycle inner steps | Phase cycle steps must complete before next state transition |
+| 03-03 | MAX_GAP_CYCLES=3 with best-effort acceptance | Prevents infinite gap closure loops |
 
 ## Session Continuity
 
-Last session: 2026-02-20T17:25:03Z
-Stopped at: Completed 03-02-PLAN.md — lifecycle command implementations
+Last session: 2026-02-20T17:19:53Z
+Stopped at: Completed 03-03-PLAN.md — queue runner + lifecycle modes
 Resume file: None
