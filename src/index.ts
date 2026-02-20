@@ -353,6 +353,7 @@ program
   .argument('<phase>', 'Phase number')
   .description('Automated UAT')
   .option('--port <port>', 'Port for verification server')
+  .option('-s, --strategy <strategy>', 'Verify strategy: auto|browser|file|cli', 'auto')
   .action(async (project: string, phase: string, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { verifyCommand } = await import('./commands/verify.js');
