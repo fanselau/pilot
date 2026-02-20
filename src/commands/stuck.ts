@@ -8,7 +8,8 @@
 import { createInterface } from 'node:readline';
 import { getConfig } from '../core/config.js';
 import { scanPidFiles, removePidFile } from '../core/process.js';
-import { computeStuckScore } from '../core/stuck.js';
+import { computeStuckScore, detectGapClosureMisconfig } from '../core/stuck.js';
+import type { GapClosureMisconfig } from '../core/stuck.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { formatDuration, truncateString } from '../util/format.js';
 import { bold, red, yellow, dim } from '../util/colors.js';
@@ -44,12 +45,27 @@ async function stuckCommand(opts: StuckOpts): Promise<void> {
   const stuck = assessments.filter((a) => a.verdict === 'stuck');
   const suspect = assessments.filter((a) => a.verdict === 'suspect');
 
+  // Check for gap closure misconfiguration on stuck/suspect sessions
+  const misconfigs: GapClosureMisconfig[] = [];
+  const projectDir = config.projectDir;
+  for (const a of [...stuck, ...suspect]) {
+    try {
+      const misconfig = await detectGapClosureMisconfig(a.session, projectDir);
+      if (misconfig !== null) {
+        misconfigs.push(misconfig);
+      }
+    } catch {
+      // Ignore errors during misconfig detection
+    }
+  }
+
   // ── JSON mode ────────────────────────────────────────────────────────
   if (isJsonMode()) {
     outputJson({
       threshold_minutes: thresholdMinutes,
       stuck: stuck.map(toJsonEntry),
       suspect: suspect.map(toJsonEntry),
+      misconfigs,
     });
     return;
   }
@@ -62,6 +78,13 @@ async function stuckCommand(opts: StuckOpts): Promise<void> {
 
   if (stuck.length === 0 && suspect.length === 0) {
     outputHuman(dim('No stuck or suspect processes found.'));
+    if (misconfigs.length > 0) {
+      outputHuman('');
+      outputHuman(bold(yellow('⚠ Gap Closure Misconfigurations')));
+      for (const m of misconfigs) {
+        outputHuman(`  ${m.session}: ${m.detail}`);
+      }
+    }
     return;
   }
 
@@ -75,6 +98,15 @@ async function stuckCommand(opts: StuckOpts): Promise<void> {
     outputHuman('');
     outputHuman(bold('Suspect (monitoring)'));
     outputHuman(formatTable(suspect, yellow));
+  }
+
+  // Gap closure misconfigurations
+  if (misconfigs.length > 0) {
+    outputHuman('');
+    outputHuman(bold(yellow('⚠ Gap Closure Misconfigurations')));
+    for (const m of misconfigs) {
+      outputHuman(`  ${m.session}: ${m.detail}`);
+    }
   }
 
   // ── Kill mode ────────────────────────────────────────────────────────
