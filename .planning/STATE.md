@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 3 of 4 (Queue Runner + Lifecycle Automation)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-20 - Completed 03-01-PLAN.md
+Last activity: 2026-02-20 - Completed 03-02-PLAN.md
 
-Progress: █████████░░░░░░░░░░░ 45% (9/20 plans)
+Progress: ██████████░░░░░░░░░░ 50% (10/20 plans)
 
 ## Project Reference
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
-- **Status:** in_progress (1/4 plans)
+- **Status:** in_progress (2/4 plans)
 
 ### Phase 4: TUI Dashboard
 - **Status:** not_started
@@ -57,9 +57,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 03-01 | execa v9 file redirect for log appending | Cleaner than manual FD management; execa handles lifecycle |
 | 03-01 | STATE file priority over inference fallback | Explicit state is authoritative; inference for backward compat only |
 | 03-01 | Module-level resolvedBinary cache in spawn.ts | Avoids repeated which calls across multiple spawn cycles |
+| 03-02 | Inline truncateTitle/sanitizeArgs per command file | spawn.ts from Plan 01 has errors; avoid cross-dependency in parallel wave |
+| 03-02 | void opts for no-flag commands | Consistent signature without unused-param warnings |
+| 03-02 | reject: false on execa calls | Manual exit code propagation instead of throwing on non-zero |
+| 03-02 | scope --build deferred to Plan 04 | Queue runner not yet implemented |
 
 ## Session Continuity
 
-Last session: 2026-02-20T17:08:17Z
-Stopped at: Completed 03-01-PLAN.md — core infrastructure: lock, spawn, phase-state, postmortem
+Last session: 2026-02-20T17:25:03Z
+Stopped at: Completed 03-02-PLAN.md — lifecycle command implementations
 Resume file: None
