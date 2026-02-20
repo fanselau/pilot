@@ -2,13 +2,15 @@
  * pilot scope <project> <desc> — Add phase to roadmap.
  *
  * Resolves project dir, spawns gsd-add-phase with stdio: 'inherit'.
- * --build flag is deferred to Plan 04 (queue runner integration).
+ * With --build flag: also adds to queue and starts runner.
  */
 
 import { execa } from 'execa';
 import path from 'node:path';
-import { access } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { getConfig } from '../core/config.js';
+import { withQueueLock } from '../core/lock.js';
+import { readPidFile, isProcessAlive } from '../core/process.js';
 
 function truncateTitle(title: string, max = 80): string {
   return title.length > max ? title.slice(0, max) : title;
@@ -36,10 +38,6 @@ export async function scopeCommand(
     process.exit(1);
   }
 
-  if (opts['build']) {
-    process.stderr.write('Note: --build flag requires queue runner (Plan 04). Running gsd-add-phase only.\n');
-  }
-
   const gsdCommand = 'gsd-add-phase';
   const title = truncateTitle(`${project}-${gsdCommand}-${sanitizeArgs(desc)}`);
 
@@ -48,5 +46,39 @@ export async function scopeCommand(
     '--command', gsdCommand, desc,
   ], { cwd: dir, stdio: 'inherit', reject: false });
 
-  process.exit(result.exitCode ?? 0);
+  if (result.exitCode !== 0) {
+    process.exit(result.exitCode ?? 1);
+  }
+
+  // --build: also add to queue and start runner
+  if (opts['build'] === true) {
+    const entryLine = `## ${project} | add-and-build | ${desc}`;
+
+    await withQueueLock(async () => {
+      const content = await readFile(config.queueFile, 'utf8').catch(() => '');
+      const newContent = content.trimEnd() + '\n\n' + entryLine + '\n';
+      await writeFile(config.queueFile, newContent);
+    });
+
+    // Start runner if not active
+    const runnerPid = await readPidFile('queue');
+    const runnerAlive = runnerPid !== null && isProcessAlive(runnerPid);
+
+    if (!runnerAlive) {
+      try {
+        const pilotBin = process.argv[1]!;
+        const child = execa('node', [pilotBin, 'run'], {
+          detached: true,
+          stdin: 'ignore',
+          stdout: 'ignore',
+          stderr: 'ignore',
+        });
+        child.unref();
+      } catch {
+        // Best effort
+      }
+    }
+  }
+
+  process.exit(0);
 }
