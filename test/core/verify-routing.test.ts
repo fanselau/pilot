@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectProjectType, resolveVerifyStrategy } from '../../src/core/verify-routing.js';
+import { detectProjectType, resolveVerifyStrategy, detectVerifyNotApplicable } from '../../src/core/verify-routing.js';
 
 describe('detectProjectType', () => {
   const tempDirs: string[] = [];
@@ -202,5 +202,61 @@ describe('resolveVerifyStrategy', () => {
     const result = await resolveVerifyStrategy('auto', dir);
     expect(result.strategy).toBe('file-content');
     expect(result.reason).toContain('no package.json');
+  });
+});
+
+describe('detectVerifyNotApplicable', () => {
+  it('detects "not applicable" pattern', () => {
+    expect(detectVerifyNotApplicable('Verification is not applicable for this project')).toBe(true);
+  });
+
+  it('detects "no web UI" pattern', () => {
+    expect(detectVerifyNotApplicable('This project has no web UI to test')).toBe(true);
+  });
+
+  it('detects "no web interface" pattern', () => {
+    expect(detectVerifyNotApplicable('There is no web interface available')).toBe(true);
+  });
+
+  it('detects "no browser" pattern', () => {
+    expect(detectVerifyNotApplicable('There is no browser testing needed')).toBe(true);
+  });
+
+  it('detects "nothing to browser-test" pattern', () => {
+    expect(detectVerifyNotApplicable('Found nothing to browser-test in this project')).toBe(true);
+  });
+
+  it('detects "no dev server" pattern', () => {
+    expect(detectVerifyNotApplicable('Could not find no dev server to start')).toBe(true);
+  });
+
+  it('detects "cannot start dev server" pattern', () => {
+    expect(detectVerifyNotApplicable('Error: cannot start dev server for verification')).toBe(true);
+  });
+
+  it('detects "no frontend" pattern', () => {
+    expect(detectVerifyNotApplicable('No frontend code found in this project')).toBe(true);
+  });
+
+  it('detects "markdown-only" pattern', () => {
+    expect(detectVerifyNotApplicable('This is a markdown-only project')).toBe(true);
+  });
+
+  it('detects "no routes found" pattern', () => {
+    expect(detectVerifyNotApplicable('No routes found in the application')).toBe(true);
+  });
+
+  it('returns false for normal verify output', () => {
+    expect(detectVerifyNotApplicable('Starting verification... 5 checks passed, 2 failed')).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(detectVerifyNotApplicable('')).toBe(false);
+  });
+
+  it('is case insensitive', () => {
+    expect(detectVerifyNotApplicable('NOT APPLICABLE')).toBe(true);
+    expect(detectVerifyNotApplicable('No Web UI detected')).toBe(true);
+    expect(detectVerifyNotApplicable('MARKDOWN-ONLY project')).toBe(true);
   });
 });

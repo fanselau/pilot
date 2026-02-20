@@ -198,6 +198,38 @@ async function detectProjectTypeWithReason(projectDir: string): Promise<Detectio
   return { type: 'file-content', reason: 'no web or CLI signals detected' };
 }
 
+// ── Verify failure pattern detection ─────────────────────────────────────
+
+/**
+ * Patterns in log content indicating browser-based verification is not
+ * applicable for this project. When these appear repeatedly, the runner
+ * should auto-skip verify instead of looping.
+ */
+const NOT_APPLICABLE_PATTERNS = [
+  /not\s+applicable/i,
+  /no\s+web\s+(ui|interface)/i,
+  /no\s+browser/i,
+  /nothing\s+to\s+browser[- ]test/i,
+  /no\s+frontend/i,
+  /no\s+http\s+server/i,
+  /no\s+server\s+to\s+test/i,
+  /markdown[- ]only/i,
+  /no\s+routes?\s+found/i,
+  /cannot\s+start\s+dev\s+server/i,
+  /no\s+dev\s+server/i,
+];
+
+/**
+ * Check if log content indicates that browser-based verification is not
+ * applicable for this project type.
+ *
+ * Used by lifecycle verify tracking to decide whether to auto-skip after
+ * repeated failures rather than looping indefinitely.
+ */
+export function detectVerifyNotApplicable(logContent: string): boolean {
+  return NOT_APPLICABLE_PATTERNS.some((pattern) => pattern.test(logContent));
+}
+
 // ── Strategy resolution ─────────────────────────────────────────────────
 
 /**
