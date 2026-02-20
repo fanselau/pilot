@@ -33,7 +33,7 @@ Plans:
 **Plans:** 3 plans
 Plans:
 - [x] 02-01-PLAN.md — Entry point + status/queue/stuck/config commands
-- [ ] 02-02-PLAN.md — Log/tail/projects/progress commands
+- [x] 02-02-PLAN.md — Log/tail/projects/progress commands
 - [x] 02-03-PLAN.md — Setup/update commands + command tests
 **Success Criteria:**
 - src/index.ts entry point with commander, global --json, grouped help output

@@ -7,17 +7,17 @@
 
 ### Foundation (Monitoring + Setup)
 
-- [ ] **FOUND-01**: CLI entry point with commander, global --json flag, exit codes 0/1/2
-- [ ] **FOUND-02**: `pilot status` — cross-reference sessions with PID files, show running/stuck/queued/completed
-- [ ] **FOUND-03**: `pilot queue` — parse QUEUE.md v5 format, display grouped by status
-- [ ] **FOUND-04**: `pilot stuck` — weighted multi-signal stuck detection (log staleness, CPU, messages, memory, /proc state)
-- [ ] **FOUND-05**: `pilot log <session>` — fuzzy match session, export and format transcript
-- [ ] **FOUND-06**: `pilot tail <session>` — native fs.watch live log following
-- [ ] **FOUND-07**: `pilot projects` — scan project dirs, show git state and .planning progress
-- [ ] **FOUND-08**: `pilot progress [project]` — deep phase-by-phase progress analysis
-- [ ] **FOUND-09**: `pilot setup <dir>` — symlink pilot-gsd definitions, create opencode.json, init git
-- [ ] **FOUND-10**: `pilot update` — git pull pilot-gsd repo
-- [ ] **FOUND-11**: `pilot config` — display resolved env vars and paths
+- [x] **FOUND-01**: CLI entry point with commander, global --json flag, exit codes 0/1/2
+- [x] **FOUND-02**: `pilot status` — cross-reference sessions with PID files, show running/stuck/queued/completed
+- [x] **FOUND-03**: `pilot queue` — parse QUEUE.md v5 format, display grouped by status
+- [x] **FOUND-04**: `pilot stuck` — weighted multi-signal stuck detection (log staleness, CPU, messages, memory, /proc state)
+- [x] **FOUND-05**: `pilot log <session>` — fuzzy match session, export and format transcript
+- [x] **FOUND-06**: `pilot tail <session>` — native fs.watch live log following
+- [x] **FOUND-07**: `pilot projects` — scan project dirs, show git state and .planning progress
+- [x] **FOUND-08**: `pilot progress [project]` — deep phase-by-phase progress analysis
+- [x] **FOUND-09**: `pilot setup <dir>` — symlink pilot-gsd definitions, create opencode.json, init git
+- [x] **FOUND-10**: `pilot update` — git pull pilot-gsd repo
+- [x] **FOUND-11**: `pilot config` — display resolved env vars and paths
 - [x] **FOUND-12**: core/config.ts — env var resolution with defaults, typed PilotConfig
 - [x] **FOUND-13**: core/types.ts — all shared TypeScript interfaces
 - [x] **FOUND-14**: core/queue-parser.ts — QUEUE.md v5 read/write/mark operations
@@ -63,11 +63,11 @@
 
 ### Cross-Cutting
 
-- [ ] **XCUT-01**: --json output on every command with timestamp field
-- [ ] **XCUT-02**: pilot status --json matches the full PilotStatusJson schema
-- [ ] **XCUT-03**: Exit code 0 (success), 1 (runtime error), 2 (usage error) consistently
-- [ ] **XCUT-04**: NO_COLOR support via picocolors wrapper
-- [ ] **XCUT-05**: All tests mock external commands (opencode, git), use temp dirs, test exit codes
+- [x] **XCUT-01**: --json output on every command with timestamp field
+- [x] **XCUT-02**: pilot status --json matches the full PilotStatusJson schema
+- [x] **XCUT-03**: Exit code 0 (success), 1 (runtime error), 2 (usage error) consistently
+- [x] **XCUT-04**: NO_COLOR support via picocolors wrapper
+- [x] **XCUT-05**: All tests mock external commands (opencode, git), use temp dirs, test exit codes
 
 ## v2 Requirements
 
@@ -87,17 +87,17 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
-| FOUND-02 | Phase 1 | Pending |
-| FOUND-03 | Phase 1 | Pending |
-| FOUND-04 | Phase 1 | Pending |
-| FOUND-05 | Phase 1 | Pending |
-| FOUND-06 | Phase 1 | Pending |
-| FOUND-07 | Phase 1 | Pending |
-| FOUND-08 | Phase 1 | Pending |
-| FOUND-09 | Phase 1 | Pending |
-| FOUND-10 | Phase 1 | Pending |
-| FOUND-11 | Phase 1 | Pending |
+| FOUND-01 | Phase 2 | Complete |
+| FOUND-02 | Phase 2 | Complete |
+| FOUND-03 | Phase 2 | Complete |
+| FOUND-04 | Phase 2 | Complete |
+| FOUND-05 | Phase 2 | Complete |
+| FOUND-06 | Phase 2 | Complete |
+| FOUND-07 | Phase 2 | Complete |
+| FOUND-08 | Phase 2 | Complete |
+| FOUND-09 | Phase 2 | Complete |
+| FOUND-10 | Phase 2 | Complete |
+| FOUND-11 | Phase 2 | Complete |
 | FOUND-12 | Phase 1 | Complete |
 | FOUND-13 | Phase 1 | Complete |
 | FOUND-14 | Phase 1 | Complete |
@@ -134,11 +134,11 @@
 | TUI-03 | Phase 3 | Pending |
 | TUI-04 | Phase 3 | Pending |
 | TUI-05 | Phase 3 | Pending |
-| XCUT-01 | Phase 1 | Pending |
-| XCUT-02 | Phase 1 | Pending |
-| XCUT-03 | Phase 1 | Pending |
-| XCUT-04 | Phase 1 | Pending |
-| XCUT-05 | Phase 1 | Pending |
+| XCUT-01 | Phase 2 | Complete |
+| XCUT-02 | Phase 2 | Complete |
+| XCUT-03 | Phase 2 | Complete |
+| XCUT-04 | Phase 2 | Complete |
+| XCUT-05 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 52 total
@@ -147,4 +147,4 @@
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after initial definition*
+*Last updated: 2026-02-20 after Phase 2 completion*
