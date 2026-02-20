@@ -72,8 +72,8 @@ program.configureHelp({
         commands: [
           ['run [options]', 'Start queue runner'],
           ['stop [options]', 'Stop queue runner'],
-          ['add <project> <mode>', 'Add to queue'],
-          ['build <project> [desc]', 'Queue + run'],
+          ['add <project> <req>', 'Smart add to queue'],
+          ['build <project> [req]', 'Smart add + run'],
         ],
       },
       {
@@ -277,26 +277,34 @@ program
 program
   .command('add')
   .argument('<project>', 'Project name')
-  .argument('<mode>', 'Queue mode')
-  .argument('[args...]', 'Additional arguments')
-  .description('Add to queue')
-  .option('--dry-run', 'Show what would be added')
-  .action(async (project: string, mode: string, args: string[], localOpts: Record<string, unknown>) => {
+  .argument('<requirement>', 'Requirements file, directory, or description')
+  .description('Smart add: auto-detects scope and queues work')
+  .option('--dry-run', 'Show what would happen')
+  .option('--as <scope>', 'Override scope: quick, phase, milestone')
+  .action(async (project: string, input: string, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { addCommand } = await import('./commands/add.js');
-    await addCommand(project, mode, args, opts);
+    const result = await addCommand(project, input, opts);
+    if (opts.json) {
+      const { outputJson } = await import('./util/output.js');
+      outputJson({
+        action: result.dryRun ? 'dry-run' : 'added',
+        ...result,
+      });
+    }
   });
 
 program
   .command('build')
   .argument('<project>', 'Project name')
-  .argument('[desc]', 'Project description')
-  .description('Queue + run')
+  .argument('[requirement]', 'Requirements file, directory, or description')
+  .description('Smart add + run (convenience)')
   .option('--no-run', 'Add to queue without starting runner')
-  .action(async (project: string, desc: string | undefined, localOpts: Record<string, unknown>) => {
+  .option('--as <scope>', 'Override scope: quick, phase, milestone')
+  .action(async (project: string, input: string | undefined, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { buildCommand } = await import('./commands/build.js');
-    await buildCommand(project, desc, opts);
+    await buildCommand(project, input, opts);
   });
 
 // ── Project Lifecycle (Phase 2 stubs) ──────────────────────────────────────

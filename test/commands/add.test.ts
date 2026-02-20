@@ -1,0 +1,333 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// ── Mock all external dependencies ──────────────────────────────────────────
+
+vi.mock('../../src/core/config.js', () => ({
+  getConfig: vi.fn(() => ({
+    queueFile: '/tmp/test-QUEUE.md',
+    logDir: '/tmp',
+    stuckThreshold: 90,
+    projectDir: '/tmp/projects',
+    gsdDir: '/tmp/gsd',
+    noColor: true,
+  })),
+}));
+
+vi.mock('../../src/core/smart-add.js', () => ({
+  detectScope: vi.fn(),
+  detectProjectState: vi.fn(),
+  generateRequirementsContent: vi.fn(),
+  resolveInternalMode: vi.fn(),
+}));
+
+vi.mock('../../src/core/lock.js', () => ({
+  withQueueLock: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+}));
+
+vi.mock('../../src/core/setup.js', () => ({
+  setupProject: vi.fn(),
+}));
+
+vi.mock('node:fs/promises', () => ({
+  stat: vi.fn(),
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+  readdir: vi.fn(),
+  mkdir: vi.fn(),
+  copyFile: vi.fn(),
+  access: vi.fn(),
+}));
+
+import { stat, readFile, writeFile, readdir, mkdir, copyFile } from 'node:fs/promises';
+import { detectScope, detectProjectState, generateRequirementsContent, resolveInternalMode } from '../../src/core/smart-add.js';
+import { withQueueLock } from '../../src/core/lock.js';
+import { setupProject } from '../../src/core/setup.js';
+import { setJsonMode } from '../../src/util/output.js';
+import { addCommand } from '../../src/commands/add.js';
+import type { ScopeDetectionResult, ProjectStateResult } from '../../src/core/types.js';
+
+const mockedStat = vi.mocked(stat);
+const mockedReadFile = vi.mocked(readFile);
+const mockedWriteFile = vi.mocked(writeFile);
+const mockedReaddir = vi.mocked(readdir);
+const mockedMkdir = vi.mocked(mkdir);
+const mockedCopyFile = vi.mocked(copyFile);
+const mockedDetectScope = vi.mocked(detectScope);
+const mockedDetectProjectState = vi.mocked(detectProjectState);
+const mockedGenerateRequirementsContent = vi.mocked(generateRequirementsContent);
+const mockedResolveInternalMode = vi.mocked(resolveInternalMode);
+const mockedWithQueueLock = vi.mocked(withQueueLock);
+const mockedSetupProject = vi.mocked(setupProject);
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeProjectState(overrides: Partial<ProjectStateResult> = {}): ProjectStateResult {
+  return {
+    exists: true,
+    hasOpencode: true,
+    hasPlanning: true,
+    allPhasesDone: true,
+    phasesIncomplete: false,
+    isQueued: false,
+    isRunning: false,
+    queuedMode: null,
+    runningPhase: null,
+    needsSetup: false,
+    needsInit: false,
+    ...overrides,
+  };
+}
+
+function makeScopeResult(overrides: Partial<ScopeDetectionResult> = {}): ScopeDetectionResult {
+  return {
+    scope: 'phase',
+    itemCount: 5,
+    hasPhaseHeaders: false,
+    isDirectory: false,
+    rationale: '5 requirement items (focused feature)',
+    ...overrides,
+  };
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+describe('addCommand', () => {
+  let output: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let stdoutSpy: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let exitSpy: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    output = '';
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      output += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
+      return true;
+    }) as typeof process.stdout.write);
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    setJsonMode(false);
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+    exitSpy.mockRestore();
+    setJsonMode(false);
+  });
+
+  it('add with requirements file detects scope and queues', async () => {
+    // Mock: stat returns file
+    mockedStat.mockResolvedValue({ isDirectory: () => false, isFile: () => true } as never);
+    // Mock: readFile returns markdown content with heading
+    mockedReadFile.mockImplementation(async (filePath: unknown) => {
+      if (typeof filePath === 'string' && filePath.includes('QUEUE')) {
+        return '';
+      }
+      return '# Dark Mode\n\n## Requirements\n### Must Have\n- [ ] item 1\n- [ ] item 2\n- [ ] item 3\n- [ ] item 4\n- [ ] item 5';
+    });
+    mockedWriteFile.mockResolvedValue(undefined);
+
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'phase', rationale: '5 items' }));
+    mockedResolveInternalMode.mockReturnValue('add-and-build');
+
+    const result = await addCommand('resume-roast', '/external/requirements/dark-mode.md', {});
+
+    // withQueueLock was called (queue write happened)
+    expect(mockedWithQueueLock).toHaveBeenCalled();
+
+    // writeFile was called with queue content containing the entry
+    const writeFileCalls = mockedWriteFile.mock.calls;
+    const queueWriteCall = writeFileCalls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('QUEUE'),
+    );
+    expect(queueWriteCall).toBeDefined();
+    expect(queueWriteCall![1]).toContain('## resume-roast | add-and-build');
+
+    expect(result.project).toBe('resume-roast');
+    expect(result.scope).toBe('phase');
+    expect(result.internalMode).toBe('add-and-build');
+    expect(result.dryRun).toBe(false);
+  });
+
+  it('add with string description queues as quick', async () => {
+    // Mock: stat throws (not a file/dir)
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick', rationale: 'String description' }));
+    mockedResolveInternalMode.mockReturnValue('quick');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+
+    const result = await addCommand('resume-roast', 'fix the favicon', {});
+
+    expect(mockedWithQueueLock).toHaveBeenCalled();
+
+    const writeFileCalls = mockedWriteFile.mock.calls;
+    const queueWriteCall = writeFileCalls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('QUEUE'),
+    );
+    expect(queueWriteCall).toBeDefined();
+    expect(queueWriteCall![1]).toContain('## resume-roast | quick');
+
+    expect(result.scope).toBe('quick');
+    expect(result.internalMode).toBe('quick');
+  });
+
+  it('add with directory queues as milestone', async () => {
+    // Mock: stat returns directory
+    mockedStat.mockResolvedValue({ isDirectory: () => true, isFile: () => false } as never);
+    mockedReaddir.mockResolvedValue(['phase1.md', 'phase2.md', 'readme.txt'] as never);
+
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'milestone', isDirectory: true, rationale: 'Directory detected' }));
+    mockedResolveInternalMode.mockReturnValue('build-full');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+
+    const result = await addCommand('resume-roast', '/path/to/requirements/v2/', {});
+
+    expect(mockedWithQueueLock).toHaveBeenCalled();
+
+    const writeFileCalls = mockedWriteFile.mock.calls;
+    const queueWriteCall = writeFileCalls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('QUEUE'),
+    );
+    expect(queueWriteCall).toBeDefined();
+    expect(queueWriteCall![1]).toContain('## resume-roast | build-full');
+
+    expect(result.scope).toBe('milestone');
+    expect(result.internalMode).toBe('build-full');
+  });
+
+  it('add --dry-run does not write to QUEUE.md', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    const result = await addCommand('resume-roast', 'fix bug', { dryRun: true });
+
+    // withQueueLock should NOT be called
+    expect(mockedWithQueueLock).not.toHaveBeenCalled();
+    // writeFile should NOT be called for queue
+    const queueWriteCalls = mockedWriteFile.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('QUEUE'),
+    );
+    expect(queueWriteCalls).toHaveLength(0);
+
+    expect(result.dryRun).toBe(true);
+  });
+
+  it('add --as phase overrides detection', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('add-and-build');
+    mockedGenerateRequirementsContent.mockReturnValue('# Generated\n\n- [ ] task');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+    mockedMkdir.mockResolvedValue(undefined);
+
+    const result = await addCommand('resume-roast', 'add dark mode', { as: 'phase' });
+
+    // detectScope should NOT be called (override bypasses it)
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+    // resolveInternalMode should be called with scope='phase'
+    expect(mockedResolveInternalMode).toHaveBeenCalledWith('phase', expect.anything());
+
+    expect(result.scope).toBe('phase');
+    expect(result.internalMode).toBe('add-and-build');
+  });
+
+  it('add to project without .opencode runs setup', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState({
+      hasOpencode: false,
+      needsSetup: true,
+    }));
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
+    mockedResolveInternalMode.mockReturnValue('quick');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+    mockedSetupProject.mockResolvedValue({ created: [], skipped: [], errors: [] });
+
+    await addCommand('resume-roast', 'fix bug', {});
+
+    // setupProject should be called
+    expect(mockedSetupProject).toHaveBeenCalledWith('/tmp/projects/resume-roast');
+  });
+
+  it('add warns when project already queued', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState({
+      isQueued: true,
+      queuedMode: 'build-full',
+    }));
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
+    mockedResolveInternalMode.mockReturnValue('quick');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+
+    await addCommand('resume-roast', 'fix bug', {});
+
+    // Output should contain a warning about already queued
+    expect(output).toContain('already queued');
+    expect(output).toContain('build-full');
+  });
+
+  it('add exits 1 for non-existent project', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState({
+      exists: false,
+    }));
+
+    await expect(
+      addCommand('nonexistent', 'fix bug', {}),
+    ).rejects.toThrow('process.exit called');
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('add generates requirements file for non-quick scope with string input', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'phase' }));
+    mockedResolveInternalMode.mockReturnValue('add-and-build');
+    mockedGenerateRequirementsContent.mockReturnValue('# Add Dark Mode\n\n## Requirements\n### Must Have\n- [ ] add dark mode');
+    mockedReadFile.mockImplementation(async () => '');
+    mockedWriteFile.mockResolvedValue(undefined);
+    mockedMkdir.mockResolvedValue(undefined);
+
+    const result = await addCommand('resume-roast', 'add dark mode', {});
+
+    // mkdir should be called for requirements dir
+    expect(mockedMkdir).toHaveBeenCalledWith(
+      expect.stringContaining('requirements'),
+      expect.objectContaining({ recursive: true }),
+    );
+    // generateRequirementsContent should be called
+    expect(mockedGenerateRequirementsContent).toHaveBeenCalledWith('add dark mode');
+    // writeFile should be called for requirements file
+    const reqWriteCalls = mockedWriteFile.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('requirements'),
+    );
+    expect(reqWriteCalls.length).toBeGreaterThan(0);
+
+    expect(result.requirementsPath).toContain('requirements');
+    expect(result.requirementsPath).toContain('add-dark-mode');
+  });
+
+  it('add exits 2 for invalid --as scope', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+
+    await expect(
+      addCommand('resume-roast', 'fix bug', { as: 'invalid-scope' }),
+    ).rejects.toThrow('process.exit called');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+  });
+});
