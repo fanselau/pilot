@@ -18,18 +18,18 @@
 - [ ] **FOUND-09**: `pilot setup <dir>` — symlink pilot-gsd definitions, create opencode.json, init git
 - [ ] **FOUND-10**: `pilot update` — git pull pilot-gsd repo
 - [ ] **FOUND-11**: `pilot config` — display resolved env vars and paths
-- [ ] **FOUND-12**: core/config.ts — env var resolution with defaults, typed PilotConfig
-- [ ] **FOUND-13**: core/types.ts — all shared TypeScript interfaces
-- [ ] **FOUND-14**: core/queue-parser.ts — QUEUE.md v5 read/write/mark operations
-- [ ] **FOUND-15**: core/stuck.ts — stuck scoring algorithm with 5 signal types
-- [ ] **FOUND-16**: core/sessions.ts — session list/export wrappers with fuzzy matching
-- [ ] **FOUND-17**: core/projects.ts — project scanning, git state, .planning state detection
-- [ ] **FOUND-18**: core/progress.ts — deep project progress analysis
-- [ ] **FOUND-19**: core/setup.ts — symlink creation, opencode.json generation
-- [ ] **FOUND-20**: core/process.ts — PID file management, process spawning helpers
-- [ ] **FOUND-21**: util/output.ts — JSON/human output helpers, --json branching
-- [ ] **FOUND-22**: util/format.ts — duration formatting, string truncation
-- [ ] **FOUND-23**: util/colors.ts — picocolors wrapper with NO_COLOR support
+- [x] **FOUND-12**: core/config.ts — env var resolution with defaults, typed PilotConfig
+- [x] **FOUND-13**: core/types.ts — all shared TypeScript interfaces
+- [x] **FOUND-14**: core/queue-parser.ts — QUEUE.md v5 read/write/mark operations
+- [x] **FOUND-15**: core/stuck.ts — stuck scoring algorithm with 5 signal types
+- [x] **FOUND-16**: core/sessions.ts — session list/export wrappers with fuzzy matching
+- [x] **FOUND-17**: core/projects.ts — project scanning, git state, .planning state detection
+- [x] **FOUND-18**: core/progress.ts — deep project progress analysis
+- [x] **FOUND-19**: core/setup.ts — symlink creation, opencode.json generation
+- [x] **FOUND-20**: core/process.ts — PID file management, process spawning helpers
+- [x] **FOUND-21**: util/output.ts — JSON/human output helpers, --json branching
+- [x] **FOUND-22**: util/format.ts — duration formatting, string truncation
+- [x] **FOUND-23**: util/colors.ts — picocolors wrapper with NO_COLOR support
 
 ### Automation (Queue Runner + Lifecycle)
 
@@ -98,18 +98,18 @@
 | FOUND-09 | Phase 1 | Pending |
 | FOUND-10 | Phase 1 | Pending |
 | FOUND-11 | Phase 1 | Pending |
-| FOUND-12 | Phase 1 | Pending |
-| FOUND-13 | Phase 1 | Pending |
-| FOUND-14 | Phase 1 | Pending |
-| FOUND-15 | Phase 1 | Pending |
-| FOUND-16 | Phase 1 | Pending |
-| FOUND-17 | Phase 1 | Pending |
-| FOUND-18 | Phase 1 | Pending |
-| FOUND-19 | Phase 1 | Pending |
-| FOUND-20 | Phase 1 | Pending |
-| FOUND-21 | Phase 1 | Pending |
-| FOUND-22 | Phase 1 | Pending |
-| FOUND-23 | Phase 1 | Pending |
+| FOUND-12 | Phase 1 | Complete |
+| FOUND-13 | Phase 1 | Complete |
+| FOUND-14 | Phase 1 | Complete |
+| FOUND-15 | Phase 1 | Complete |
+| FOUND-16 | Phase 1 | Complete |
+| FOUND-17 | Phase 1 | Complete |
+| FOUND-18 | Phase 1 | Complete |
+| FOUND-19 | Phase 1 | Complete |
+| FOUND-20 | Phase 1 | Complete |
+| FOUND-21 | Phase 1 | Complete |
+| FOUND-22 | Phase 1 | Complete |
+| FOUND-23 | Phase 1 | Complete |
 | AUTO-01 | Phase 2 | Pending |
 | AUTO-02 | Phase 2 | Pending |
 | AUTO-03 | Phase 2 | Pending |
