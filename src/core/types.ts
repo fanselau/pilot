@@ -212,3 +212,14 @@ export interface SmartAddDecision {
 // ── Verify Routing ──────────────────────────────────────────────────────
 export type ProjectType = 'web' | 'cli' | 'file-content';
 export type VerifyStrategy = 'auto' | 'browser' | 'file' | 'cli';
+
+export interface VerifyResult {
+  strategy: ProjectType;
+  passed: boolean;
+  totalChecks: number;
+  passedChecks: number;
+  failedChecks: number;
+  issues: string[];
+  testsRan: boolean;
+  testsPassed: boolean | null;  // null if no tests found
+}
