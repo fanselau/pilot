@@ -99,3 +99,14 @@ Plans:
 - Responsive to terminal size
 - React/Ink lazy-loaded only for this command
 - ink-testing-library tests for components
+
+### Phase 5: Integration fixes per requirements/integration-fixes.md
+**Goal:** [To be planned]
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 5 to break down)
+
+**Details:**
+[To be added during planning]

@@ -5,10 +5,11 @@
 
 ## Current Position
 
-Phase: 4 of 4 (TUI Dashboard)
+Phase: 4 of 5 (TUI Dashboard)
 Plan: 5 of 5 in current phase (all plans complete)
 Status: Phase complete, verified ✓ (10/10 must-haves)
 Last activity: 2026-02-20 - Phase 4 complete, verified 10/10 must-haves
+**Next Phase:** Phase 5 — Integration fixes per requirements/integration-fixes.md
 
 Progress: ████████████████████ 100% (20/20 plans)
 
@@ -30,6 +31,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 4: TUI Dashboard
 - **Status:** complete (5/5 plans, verified ✓)
+
+### Phase 5: Integration fixes per requirements/integration-fixes.md
+- **Status:** not planned (0/0 plans)
+
+## Accumulated Context
+
+### Roadmap Evolution
+- Phase 5 added: Integration fixes per requirements/integration-fixes.md
 
 ## Decisions
 
