@@ -30,6 +30,11 @@ Plans:
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 **Goal:** Implement all Phase 1 CLI commands that render core/ data as human-readable and JSON output. The user can run `pilot status`, `pilot queue`, `pilot stuck`, etc.
 **Requirements:** FOUND-01, FOUND-02, FOUND-03, FOUND-04, FOUND-05, FOUND-06, FOUND-07, FOUND-08, FOUND-09, FOUND-10, FOUND-11, XCUT-01, XCUT-02, XCUT-03, XCUT-04, XCUT-05
+**Plans:** 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Entry point + status/queue/stuck/config commands
+- [ ] 02-02-PLAN.md — Log/tail/projects/progress commands
+- [ ] 02-03-PLAN.md — Setup/update commands + command tests
 **Success Criteria:**
 - src/index.ts entry point with commander, global --json, grouped help output
 - `pilot status` shows running/stuck/queued/completed matching spec format
