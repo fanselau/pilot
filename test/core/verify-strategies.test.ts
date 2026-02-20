@@ -58,6 +58,11 @@ describe('runFileContentVerification', () => {
       '- src/core/config.ts resolves all env vars',
       '- core/types.ts exports all interfaces',
     ].join('\n'));
+
+    // Create matching source files so criteria grep passes
+    await mkdir(join(dir, 'src', 'core'), { recursive: true });
+    await writeFile(join(dir, 'src', 'core', 'config.ts'), 'export function getConfig() {}');
+    await writeFile(join(dir, 'src', 'core', 'types.ts'), 'export interface PilotConfig {}');
   }
 
   beforeEach(() => {
