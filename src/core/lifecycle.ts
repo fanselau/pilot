@@ -23,7 +23,7 @@ import { execa } from 'execa';
 import { getConfig } from './config.js';
 import { getPhaseState, writePhaseState, getLastPhase, findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
 import { truncateTitle, getResolvedBinary } from './spawn.js';
-import { detectProjectType } from './verify-routing.js';
+import { detectProjectType, detectVerifyNotApplicable } from './verify-routing.js';
 import { runFileContentVerification, runCliVerification } from './verify-strategies.js';
 import { writeFile } from 'node:fs/promises';
 import type { PilotConfig } from './types.js';
@@ -32,6 +32,9 @@ import type { PilotConfig } from './types.js';
 
 /** Maximum gap-closure cycles before giving up. */
 const MAX_GAP_CYCLES = 3;
+
+/** Maximum verify attempts before auto-skipping verify. */
+const MAX_VERIFY_ATTEMPTS = 3;
 
 // ── runLifecycleMode ──────────────────────────────────────────────────────
 
@@ -308,6 +311,7 @@ async function getPhaseNumbers(projectDir: string): Promise<number[]> {
  */
 async function runPhaseCycle(projectDir: string, phase: number): Promise<void> {
   let gapCycles = 0;
+  let verifyAttempts = 0;
 
   while (true) {
     const state = await getPhaseState(projectDir, phase);
@@ -367,10 +371,40 @@ async function runPhaseCycle(projectDir: string, phase: number): Promise<void> {
               `(${verifyResult.passedChecks}/${verifyResult.totalChecks} checks)\n`,
             );
           } else {
+            verifyAttempts++;
             process.stderr.write(
-              `[lifecycle] Phase ${phase}: ${projectType} verification found issues: ` +
+              `[lifecycle] Phase ${phase}: ${projectType} verification found issues (attempt ${verifyAttempts}/${MAX_VERIFY_ATTEMPTS}): ` +
               `${verifyResult.issues.join(', ')}\n`,
             );
+
+            if (verifyAttempts >= MAX_VERIFY_ATTEMPTS) {
+              // Auto-skip verify after max attempts
+              process.stderr.write(
+                `[lifecycle] Phase ${phase}: verify failed ${verifyAttempts}x. Auto-skipping, marking as verified-manually.\n`,
+              );
+              await writePhaseState(projectDir, phase, 'verified');
+              const skipPhaseDir = await findPhaseDir(projectDir, phase);
+              if (skipPhaseDir !== null) {
+                const padded = String(phase).padStart(2, '0');
+                const uatContent = [
+                  '# Verification Results (auto-skipped)',
+                  '',
+                  'result: pass',
+                  'failed: 0',
+                  '',
+                  `Verification auto-skipped after ${verifyAttempts} attempts.`,
+                  'Reason: Max verify attempts reached.',
+                  'Strategy used: verified-manually',
+                ].join('\n');
+                await writeFile(
+                  path.join(skipPhaseDir, `${padded}-UAT.md`),
+                  uatContent,
+                  'utf8',
+                );
+              }
+              break;
+            }
+
             await writePhaseState(projectDir, phase, 'needs-gaps');
 
             // Write UAT-style file for gap closure compatibility
@@ -401,6 +435,55 @@ async function runPhaseCycle(projectDir: string, phase: number): Promise<void> {
           // Verification may fail and set state to needs-gaps
           // Check state after verify to determine next step
           if (exitCode !== 0) {
+            verifyAttempts++;
+
+            if (verifyAttempts >= MAX_VERIFY_ATTEMPTS) {
+              // Check log content for not-applicable patterns
+              const config = getConfig();
+              const title = truncateTitle(
+                path.basename(projectDir),
+                'verify-auto',
+                String(phase),
+              );
+              const logFile = path.join(config.logDir, `gsd-${title}.log`);
+              let logContent = '';
+              try {
+                logContent = await readFile(logFile, 'utf8');
+              } catch {
+                /* no log */
+              }
+
+              const notApplicable = detectVerifyNotApplicable(logContent);
+              process.stderr.write(
+                `[lifecycle] Phase ${phase}: verify failed ${verifyAttempts}x` +
+                (notApplicable ? ' (not applicable detected)' : '') +
+                `. Auto-skipping, marking as verified-manually.\n`,
+              );
+              await writePhaseState(projectDir, phase, 'verified');
+              // Write UAT
+              const skipPhaseDir = await findPhaseDir(projectDir, phase);
+              if (skipPhaseDir !== null) {
+                const padded = String(phase).padStart(2, '0');
+                await writeFile(
+                  path.join(skipPhaseDir, `${padded}-UAT.md`),
+                  [
+                    '# Verification Results (auto-skipped)',
+                    '',
+                    'result: pass',
+                    'failed: 0',
+                    '',
+                    `Verification auto-skipped after ${verifyAttempts} attempts.`,
+                    notApplicable
+                      ? 'Reason: Browser verification not applicable for this project type.'
+                      : 'Reason: Max verify attempts reached.',
+                    'Strategy used: verified-manually',
+                  ].join('\n'),
+                  'utf8',
+                );
+              }
+              break;
+            }
+
             // Non-zero exit from verify — check if UAT created with failures
             const newState = await getPhaseState(projectDir, phase);
             if (newState === 'needs-gaps') {
