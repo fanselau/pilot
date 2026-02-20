@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 3 of 4 (Queue Runner + Lifecycle Automation)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-20 - Completed 03-03-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-20 - Completed 03-04-PLAN.md
 
-Progress: ███████████░░░░░░░░░ 55% (11/20 plans)
+Progress: ████████████░░░░░░░░ 60% (12/20 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 3 — Queue Runner + Lifecycle Automation
+**Current focus:** Phase 3 complete — ready for Phase 4 TUI Dashboard
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
-- **Status:** in_progress (3/4 plans)
+- **Status:** complete (4/4 plans)
 
 ### Phase 4: TUI Dashboard
 - **Status:** not_started
@@ -60,14 +60,15 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 03-02 | Inline truncateTitle/sanitizeArgs per command file | spawn.ts from Plan 01 has errors; avoid cross-dependency in parallel wave |
 | 03-02 | void opts for no-flag commands | Consistent signature without unused-param warnings |
 | 03-02 | reject: false on execa calls | Manual exit code propagation instead of throwing on non-zero |
-| 03-02 | scope --build deferred to Plan 04 | Queue runner not yet implemented |
 | 03-03 | Polling-based reap for detached processes | Exit events not reliable for detached processes |
 | 03-03 | markEntryPending helper in runner.ts | queue-parser markEntry only supports running/done/failed |
 | 03-03 | Synchronous spawnAndWait for lifecycle inner steps | Phase cycle steps must complete before next state transition |
 | 03-03 | MAX_GAP_CYCLES=3 with best-effort acceptance | Prevents infinite gap closure loops |
+| 03-04 | Detached execa spawn for runner from build command | Runner survives parent exit; uses process.argv[1] for self-reference |
+| 03-04 | scope --build wired as add-and-build mode | Matches spec §9 lifecycle mode; deferred from 03-02 now that runner exists |
 
 ## Session Continuity
 
-Last session: 2026-02-20T17:19:53Z
-Stopped at: Completed 03-03-PLAN.md — queue runner + lifecycle modes
+Last session: 2026-02-20T17:26:18Z
+Stopped at: Completed 03-04-PLAN.md — queue management commands
 Resume file: None

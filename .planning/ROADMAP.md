@@ -59,9 +59,9 @@ Plans:
 **Plans:** 4 plans
 Plans:
 - [x] 03-01-PLAN.md — Core infrastructure: lock, spawn, phase-state, postmortem
-- [ ] 03-02-PLAN.md — All lifecycle command wrappers (13 commands)
+- [x] 03-02-PLAN.md — All lifecycle command wrappers (13 commands)
 - [x] 03-03-PLAN.md — Queue runner state machine + lifecycle modes
-- [ ] 03-04-PLAN.md — Queue management commands: run, stop, add, build
+- [x] 03-04-PLAN.md — Queue management commands: run, stop, add, build
 **Success Criteria:**
 - `pilot run` processes QUEUE.md entries with state machine (scan -> launch -> reap)
 - Same-project entries run sequentially, cross-project entries parallel up to --max-parallel
