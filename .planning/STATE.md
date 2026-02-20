@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 4 of 4 (TUI Dashboard)
-Plan: 2 of 3 in current phase (gap closure plans: 03, 04, 05)
-Status: In progress
-Last activity: 2026-02-20 - Completed 04-04-PLAN.md
+Plan: 3 of 3 in current phase (gap closure plans: 03, 04, 05)
+Status: Phase complete
+Last activity: 2026-02-20 - Completed 04-05-PLAN.md
 
-Progress: ██████████████░░░░░░ 70% (14/20 plans)
+Progress: ███████████████░░░░░ 75% (15/20 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 4 TUI Dashboard — panels built, command wired, testing next
+**Current focus:** Phase 4 TUI Dashboard — complete (all components, command wiring, tests)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 4: TUI Dashboard
-- **Status:** in progress (2/3 gap closure plans complete)
+- **Status:** complete (3/3 gap closure plans complete)
 
 ## Decisions
 
@@ -70,9 +70,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 04-04 | createElement() in tui.ts instead of JSX | Keeps file as .ts matching existing index.ts import path |
 | 04-04 | Dynamic import for tree-kill in kill handler | Avoids loading tree-kill at startup for non-TUI commands |
 | 04-04 | Log panel 3s interval when expanded | Balances freshness vs performance; clears when collapsed |
+| 04-05 | afterEach cleanup for Ink component unmount | Prevents interval leaks in TUI tests |
+| 04-05 | 60s intervalMs for Dashboard tests | Prevents re-fetches during short test window |
 
 ## Session Continuity
 
-Last session: 2026-02-20T18:35:32Z
-Stopped at: Completed 04-04-PLAN.md — Dashboard panels + command wiring
+Last session: 2026-02-20T18:41:40Z
+Stopped at: Completed 04-05-PLAN.md — TUI component tests (panels + Dashboard)
 Resume file: None
