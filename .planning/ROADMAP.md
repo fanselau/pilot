@@ -101,12 +101,12 @@ Plans:
 - ink-testing-library tests for components
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
-**Goal:** [To be planned]
+**Goal:** Fix 6 integration bugs discovered during testing that prevent pilot from replacing the bash queue runner: setup creates wrong directory/config, status hangs 30s, run-command wrong dispatch, --once exits early, update fails without upstream.
 **Depends on:** Phase 4
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 5 to break down)
-
-**Details:**
-[To be added during planning]
+- [ ] 05-01-PLAN.md — Fix setup: .opencode/ symlinks + opencode.json correct format
+- [ ] 05-02-PLAN.md — Fix status: skip queue runner PID, fast stuck scoring
+- [ ] 05-03-PLAN.md — Fix runner --once wait + update explicit remote/branch
+- [ ] 05-04-PLAN.md — Regression tests for all integration fixes

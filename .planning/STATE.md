@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
-- **Status:** not planned (0/0 plans)
+- **Status:** planned (0/4 plans complete)
 
 ## Accumulated Context
 
