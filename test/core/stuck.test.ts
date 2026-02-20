@@ -22,7 +22,7 @@ function healthyInput() {
     processRss: 256,       // MB — normal
     systemFreeMb: 4096,    // plenty of free memory
     procState: 'S' as string | null,  // sleeping (normal)
-    wchan: 'ep_poll' as string | null, // normal wait channel
+    wchan: 'do_nanosleep' as string | null, // normal wait channel (non-matching)
   };
 }
 
