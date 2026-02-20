@@ -9,7 +9,7 @@
 Plans:
 - [x] 01-01-PLAN.md — Project scaffolding + types + utilities + config
 - [ ] 01-02-PLAN.md — Queue parser (TDD)
-- [ ] 01-03-PLAN.md — Process management + sessions
+- [x] 01-03-PLAN.md — Process management + sessions
 - [ ] 01-04-PLAN.md — Stuck detection algorithm (TDD)
 - [ ] 01-05-PLAN.md — Projects + progress + setup
 **Success Criteria:**
