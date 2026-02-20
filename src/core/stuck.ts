@@ -16,6 +16,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { StuckAssessment, StuckSignal } from './types.js';
 import { getConfig } from './config.js';
+import { findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -377,6 +378,76 @@ async function computeStuckScore(pid: number, session: string): Promise<StuckAss
   };
 }
 
+// ── Gap Closure Misconfiguration Detection ─────────────────────────────────
+
+export interface GapClosureMisconfig {
+  session: string;
+  project: string;
+  phase: number;
+  summaryCount: number;
+  originalPlanCount: number;
+  detail: string;
+}
+
+/**
+ * Detect if a session is running gap closure on an unexecuted phase.
+ *
+ * Parses the session title for gap closure patterns (--gaps, --gaps-only),
+ * extracts the phase number, and checks whether the phase has enough
+ * SUMMARY files to justify gap closure.
+ *
+ * Returns a GapClosureMisconfig if the phase lacks execution evidence,
+ * or null if the session is not a gap closure session or the phase is valid.
+ */
+async function detectGapClosureMisconfig(
+  session: string,
+  projectDir: string,
+): Promise<GapClosureMisconfig | null> {
+  // Step 1: Check if session title matches gap closure patterns
+  const isGapPlanning = session.includes('plan-phase') && session.includes('--gaps');
+  const isGapExecution = session.includes('execute-phase') && session.includes('--gaps-only');
+
+  if (!isGapPlanning && !isGapExecution) {
+    return null; // Not a gap closure session
+  }
+
+  // Step 2: Extract phase number from session title
+  const phaseMatch = /(?:plan-phase|execute-phase)\D*(\d+)/.exec(session);
+  if (phaseMatch === null) {
+    return null; // No phase number found
+  }
+  const phase = parseInt(phaseMatch[1]!, 10);
+
+  // Step 3: Extract project name (everything before first -plan-phase or -execute-phase)
+  const projectMatch = /^(.+?)-(?:plan-phase|execute-phase)/.exec(session);
+  const extractedProject = projectMatch !== null ? projectMatch[1]! : session;
+
+  // Step 4: Find phase directory
+  const phaseDir = await findPhaseDir(projectDir, phase);
+  if (phaseDir === null) {
+    return null; // No phase dir found
+  }
+
+  // Step 5: Count non-gap plan files and summaries
+  const originalPlanCount = await countNonGapPlanFiles(phaseDir);
+  const summaryCount = await countSummaryFiles(phaseDir);
+
+  // Step 6: If summaries < original plans → misconfiguration
+  if (summaryCount < originalPlanCount) {
+    return {
+      session,
+      project: extractedProject,
+      phase,
+      summaryCount,
+      originalPlanCount,
+      detail: `Gap closure on phase ${phase} but only ${summaryCount}/${originalPlanCount} original plans executed`,
+    };
+  }
+
+  // Execution evidence exists, gap closure is valid
+  return null;
+}
+
 // ── Exports ────────────────────────────────────────────────────────────────
 
 export {
@@ -388,4 +459,5 @@ export {
   readProcState,
   readProcWchan,
   computeStuckScore,
+  detectGapClosureMisconfig,
 };
