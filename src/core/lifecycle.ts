@@ -23,6 +23,9 @@ import { execa } from 'execa';
 import { getConfig } from './config.js';
 import { getPhaseState, writePhaseState, getLastPhase, findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
 import { truncateTitle, getResolvedBinary } from './spawn.js';
+import { detectProjectType } from './verify-routing.js';
+import { runFileContentVerification, runCliVerification } from './verify-strategies.js';
+import { writeFile } from 'node:fs/promises';
 import type { PilotConfig } from './types.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -343,20 +346,70 @@ async function runPhaseCycle(projectDir: string, phase: number): Promise<void> {
 
       case 'needs-verify': {
         await writePhaseState(projectDir, phase, 'verifying');
-        const exitCode = await spawnAndWait(
-          projectDir,
-          'verify-auto',
-          String(phase),
+
+        // Smart verify routing: detect project type before spawning
+        const projectType = await detectProjectType(projectDir);
+        process.stderr.write(
+          `[lifecycle] Phase ${phase}: verify strategy=${projectType}\n`,
         );
-        // Verification may fail and set state to needs-gaps
-        // Check state after verify to determine next step
-        if (exitCode !== 0) {
-          // Non-zero exit from verify — check if UAT created with failures
-          const newState = await getPhaseState(projectDir, phase);
-          if (newState === 'needs-gaps') {
+
+        if (projectType === 'file-content' || projectType === 'cli') {
+          // Non-web: run verification directly (no AI agent spawn)
+          const verifyResult =
+            projectType === 'cli'
+              ? await runCliVerification(projectDir, phase)
+              : await runFileContentVerification(projectDir, phase);
+
+          if (verifyResult.passed) {
+            await writePhaseState(projectDir, phase, 'verified');
+            process.stderr.write(
+              `[lifecycle] Phase ${phase}: ${projectType} verification passed ` +
+              `(${verifyResult.passedChecks}/${verifyResult.totalChecks} checks)\n`,
+            );
+          } else {
+            process.stderr.write(
+              `[lifecycle] Phase ${phase}: ${projectType} verification found issues: ` +
+              `${verifyResult.issues.join(', ')}\n`,
+            );
             await writePhaseState(projectDir, phase, 'needs-gaps');
-          } else if (newState !== 'done') {
-            throw new Error(`gsd-verify-auto ${phase} failed with exit code ${exitCode}`);
+
+            // Write UAT-style file for gap closure compatibility
+            const phaseDir = await findPhaseDir(projectDir, phase);
+            if (phaseDir !== null) {
+              const padded = String(phase).padStart(2, '0');
+              const uatContent =
+                `# Verification Results (${projectType} strategy)\n` +
+                `result: ${verifyResult.passed ? 'pass' : 'fail'}\n` +
+                `failed: ${verifyResult.failedChecks}\n` +
+                `## Issues\n` +
+                verifyResult.issues.map((i) => `- ${i}`).join('\n') +
+                '\n';
+              await writeFile(
+                path.join(phaseDir, `${padded}-UAT.md`),
+                uatContent,
+                'utf8',
+              );
+            }
+          }
+        } else {
+          // Web project: existing gsd-verify-auto spawn (unchanged)
+          const exitCode = await spawnAndWait(
+            projectDir,
+            'verify-auto',
+            String(phase),
+          );
+          // Verification may fail and set state to needs-gaps
+          // Check state after verify to determine next step
+          if (exitCode !== 0) {
+            // Non-zero exit from verify — check if UAT created with failures
+            const newState = await getPhaseState(projectDir, phase);
+            if (newState === 'needs-gaps') {
+              await writePhaseState(projectDir, phase, 'needs-gaps');
+            } else if (newState !== 'done') {
+              throw new Error(
+                `gsd-verify-auto ${phase} failed with exit code ${exitCode}`,
+              );
+            }
           }
         }
         break;
