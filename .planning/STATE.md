@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 1 of 4 (Project Scaffolding + Core Data Layer)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-20 - Completed 01-03-PLAN.md
+Last activity: 2026-02-20 - Completed 01-04-PLAN.md
 
-Progress: ███░░░░░░░░░░░░░░░░░ 15% (3/20 plans)
+Progress: ████░░░░░░░░░░░░░░░░ 20% (4/20 plans)
 
 ## Project Reference
 
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 **Current focus:** Phase 1 — Project Scaffolding + Core Data Layer
 
 ### Phase 1: Project Scaffolding + Core Data Layer
-- **Status:** in_progress (3/5 plans complete)
+- **Status:** in_progress (4/5 plans complete)
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 - **Status:** not_started
@@ -41,9 +41,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 01-02 | Description lines identified by metadata exclusion | Simpler than positive matching against free-form text |
 | 01-03 | getProcessRuntime is async (reads /proc files) | Consistent with spec guidance against sync fs in hot paths |
 | 01-03 | Module-level Map cache with 60s TTL for session message counts | Avoids repeated CLI calls during stuck scoring cycles |
+| 01-04 | Pure scoring function separated from I/O helpers | Enables testing without mocking /proc filesystem |
+| 01-04 | CPU sampling via /proc/pid/stat delta, not ps -o %cpu | ps gives lifetime average; delta gives current usage per spec |
 
 ## Session Continuity
 
-Last session: 2026-02-20T15:14:54Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-02-20T15:16:16Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
