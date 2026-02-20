@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 1 of 4 (Project Scaffolding + Core Data Layer)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-20 - Completed 01-04-PLAN.md
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-20 - Completed 01-05-PLAN.md
 
-Progress: ████░░░░░░░░░░░░░░░░ 20% (4/20 plans)
+Progress: █████░░░░░░░░░░░░░░░ 25% (5/20 plans)
 
 ## Project Reference
 
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 **Current focus:** Phase 1 — Project Scaffolding + Core Data Layer
 
 ### Phase 1: Project Scaffolding + Core Data Layer
-- **Status:** in_progress (4/5 plans complete)
+- **Status:** complete (5/5 plans complete)
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 - **Status:** not_started
@@ -43,9 +43,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 01-03 | Module-level Map cache with 60s TTL for session message counts | Avoids repeated CLI calls during stuck scoring cycles |
 | 01-04 | Pure scoring function separated from I/O helpers | Enables testing without mocking /proc filesystem |
 | 01-04 | CPU sampling via /proc/pid/stat delta, not ps -o %cpu | ps gives lifetime average; delta gives current usage per spec |
+| 01-05 | PlanningStateResult kept as local interface in projects.ts | Implementation detail, not a cross-module contract |
+| 01-05 | Phase completion = all plans have matching summaries | Simple ratio check avoids complex state inference |
+| 01-05 | setupProject uses absolute symlink targets | More reliable across working directories than relative paths |
 
 ## Session Continuity
 
-Last session: 2026-02-20T15:16:16Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-02-20T15:17:00Z
+Stopped at: Completed 01-05-PLAN.md — Phase 1 complete
 Resume file: None

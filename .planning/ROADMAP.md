@@ -8,10 +8,10 @@
 **Plans:** 5 plans
 Plans:
 - [x] 01-01-PLAN.md — Project scaffolding + types + utilities + config
-- [ ] 01-02-PLAN.md — Queue parser (TDD)
+- [x] 01-02-PLAN.md — Queue parser (TDD)
 - [x] 01-03-PLAN.md — Process management + sessions
-- [ ] 01-04-PLAN.md — Stuck detection algorithm (TDD)
-- [ ] 01-05-PLAN.md — Projects + progress + setup
+- [x] 01-04-PLAN.md — Stuck detection algorithm (TDD)
+- [x] 01-05-PLAN.md — Projects + progress + setup
 **Success Criteria:**
 - package.json, tsconfig.json, vitest.config.ts configured per spec
 - `npm run build` produces dist/ with no errors
