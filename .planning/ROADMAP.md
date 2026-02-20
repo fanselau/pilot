@@ -174,7 +174,7 @@ Plans:
 Plans:
 - [ ] 09-01-PLAN.md — Core gap closure guard: summary counting, lifecycle guard, postmortem field (TDD) [original — superseded by 09-03]
 - [ ] 09-02-PLAN.md — Stuck detection: gap closure misconfiguration detection for pilot stuck [original — superseded by 09-04]
-- [ ] 09-03-PLAN.md — Gap closure: Core gap closure guard with TDD (summary counting, lifecycle guard, postmortem field)
+- [x] 09-03-PLAN.md — Gap closure: Core gap closure guard with TDD (summary counting, lifecycle guard, postmortem field)
 - [ ] 09-04-PLAN.md — Gap closure: Stuck detection gap closure misconfiguration detection
 
 **Success Criteria:**
