@@ -112,12 +112,25 @@ Plans:
 - [ ] 05-04-PLAN.md — Regression tests for all integration fixes
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
-**Goal:** [To be planned]
+**Goal:** Replace QUEUE.md with structured JSON storage at ~/.pilot/queue.json. CLI becomes the only queue interface with nanoid IDs, timestamps, dependency tracking, and capped history.
 **Depends on:** Phase 5
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 6 to break down)
+- [ ] 06-01-PLAN.md — Foundation: types, nanoid dep, queue-store.ts, tests
+- [ ] 06-02-PLAN.md — Runner migration to queue-store
+- [ ] 06-03-PLAN.md — Command layer migration (add/build/scope/queue/status/config/import)
+- [ ] 06-04-PLAN.md — TUI migration, test updates, legacy code cleanup
 
-**Details:**
-[To be added during planning]
+**Success Criteria:**
+- Queue stored as ~/.pilot/queue.json with version 1 schema
+- Items have nanoid IDs, timestamps, status (queued/running/completed/failed)
+- pilot add returns item ID, pilot queue reads from JSON
+- pilot queue --history shows completed/failed from history array
+- pilot queue remove <id> removes queued items
+- pilot run reads JSON, marks items via queue-store CRUD
+- pilot import converts QUEUE.md to queue.json (one-time migration)
+- History capped at 100 entries
+- dependsOn with circular detection
+- pilot queue --json backward compat preserved
+- QUEUE.md only read by import command
