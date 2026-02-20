@@ -184,3 +184,14 @@ Plans:
 - pilot stuck detects gap closure on unexecuted phases as misconfiguration
 - PostmortemEntry tracks gap_closure_attempts
 - All existing tests pass with no regressions
+
+### Phase 10: Smart verify routing per requirements/smart-verify-routing.md
+**Goal:** [To be planned]
+**Depends on:** Phase 9
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 10 to break down)
+
+**Details:**
+[To be added during planning]
