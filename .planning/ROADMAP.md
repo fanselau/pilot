@@ -208,12 +208,12 @@ Plans:
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
 
-**Goal:** [To be planned]
+**Goal:** Polish, DX, and production readiness — doctor health check, notifications, runner logging, cleanup command, setup validation, global install verification, TUI smoke test, and cross-project parallel build validation.
 **Depends on:** Phase 10
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 11 to break down)
-
-**Details:**
-[To be added during planning]
+- [ ] 11-01-PLAN.md — `pilot doctor` health check command (9 checks, --fix, --json)
+- [ ] 11-02-PLAN.md — Notifications on build complete/fail + runner logging with rotation
+- [ ] 11-03-PLAN.md — `pilot cleanup` maintenance command + `pilot setup --verify` validation
+- [ ] 11-04-PLAN.md — Global install verification, --no-tui flag, parallel build tests, TUI smoke test
