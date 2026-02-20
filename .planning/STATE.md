@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 3 of 4 (Queue Runner + Lifecycle Automation)
-Plan: 0 of ? in current phase
-Status: Not started
-Last activity: 2026-02-20 - Phase 2 complete, verified 15/15 must-haves
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-20 - Completed 03-01-PLAN.md
 
-Progress: ████████░░░░░░░░░░░░ 40% (8/20 plans)
+Progress: █████████░░░░░░░░░░░ 45% (9/20 plans)
 
 ## Project Reference
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
-- **Status:** not_started
+- **Status:** in_progress (1/4 plans)
 
 ### Phase 4: TUI Dashboard
 - **Status:** not_started
@@ -54,9 +54,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 02-02 | Content truncation at 500 chars in non-verbose log mode | Keeps transcript readable without overwhelming output |
 | 02-03 | stdout spy with type cast for vi.mock of process.stdout.write | Complex overload types require cast for test compatibility |
 | 02-03 | Queue ENOENT graceful in status, exit 1 in queue | Status is dashboard (soft fail), queue is explicit command (hard fail) |
+| 03-01 | execa v9 file redirect for log appending | Cleaner than manual FD management; execa handles lifecycle |
+| 03-01 | STATE file priority over inference fallback | Explicit state is authoritative; inference for backward compat only |
+| 03-01 | Module-level resolvedBinary cache in spawn.ts | Avoids repeated which calls across multiple spawn cycles |
 
 ## Session Continuity
 
-Last session: 2026-02-20T16:31:18Z
-Stopped at: Completed 02-03-PLAN.md — setup/update + command tests (Phase 2 complete)
+Last session: 2026-02-20T17:08:17Z
+Stopped at: Completed 03-01-PLAN.md — core infrastructure: lock, spawn, phase-state, postmortem
 Resume file: None
