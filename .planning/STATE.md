@@ -1,26 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 4
+## Current Phase: 7
 
 ## Current Position
 
-Phase: 4 of 7 (TUI Dashboard)
-Plan: 5 of 5 in current phase (all plans complete)
-Status: Phase complete, verified ✓ (10/10 must-haves)
-Last activity: 2026-02-20 - Phase 4 complete, verified 10/10 must-haves
-**Next Phase:** Phase 5 — Integration fixes per requirements/integration-fixes.md
-**Future Phase:** Phase 6 — Queue storage migration per requirements/queue-storage-migration.md
-**Future Phase:** Phase 7 — Smart add per requirements/smart-add.md
+Phase: 7 of 7 (Smart add)
+Plan: 3 of 4 in current phase (gap closure plan 03 complete)
+Status: In progress
+Last activity: 2026-02-20 - Completed 07-03-PLAN.md
 
-Progress: ████████████████████ 100% (20/20 plans)
+Progress: █████████████████████░░░ 87% (21/24 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** All phases complete — milestone launch-v1 ready for audit
+**Current focus:** Smart add — intelligent task routing for pilot add command
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -41,7 +38,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** not planned (0/0 plans)
 
 ### Phase 7: Smart add per requirements/smart-add.md
-- **Status:** not planned (0/0 plans)
+- **Status:** in progress (1/4 plans complete)
 
 ## Accumulated Context
 
@@ -49,6 +46,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 5 added: Integration fixes per requirements/integration-fixes.md
 - Phase 6 added: Queue storage migration per requirements/queue-storage-migration.md
 - Phase 7 added: Smart add per requirements/smart-add.md
+- Phase 6 skipped: queue-store.ts never built; Phase 7 adapted to use QUEUE.md
 
 ## Decisions
 
@@ -91,9 +89,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 04-04 | Log panel 3s interval when expanded | Balances freshness vs performance; clears when collapsed |
 | 04-05 | afterEach cleanup for Ink component unmount | Prevents interval leaks in TUI tests |
 | 04-05 | 60s intervalMs for Dashboard tests | Prevents re-fetches during short test window |
+| 07-03 | Optional PilotConfig param in detectProjectState | Clean test injection without fragile vi.mock on config.js |
+| 07-03 | Multiple Must Have sections (>=2) = phase headers | Indicates milestone-level multi-section scope |
+| 07-03 | Uses parseQueueFile not queue-store.ts | Phase 6 queue-store.ts was never built |
 
 ## Session Continuity
 
-Last session: 2026-02-20T18:50:00Z
-Stopped at: All phases complete — milestone launch-v1 ready for audit
+Last session: 2026-02-20T21:11:05Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
