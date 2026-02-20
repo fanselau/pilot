@@ -167,12 +167,18 @@ Plans:
 - [ ] 08-02-PLAN.md — Command layer: tail --smart highlighting + stuck reason field display
 
 ### Phase 9: Gap closure resilience per requirements/gap-closure-resilience.md
-**Goal:** [To be planned]
+**Goal:** Prevent broken gap closure loops by checking execution evidence (SUMMARY.md files) before entering --gaps-only mode. When original plans haven't been executed, run full execute instead.
 **Depends on:** Phase 8
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 9 to break down)
+- [ ] 09-01-PLAN.md — Core gap closure guard: summary counting, lifecycle guard, postmortem field (TDD)
+- [ ] 09-02-PLAN.md — Stuck detection: gap closure misconfiguration detection for pilot stuck
 
-**Details:**
-[To be added during planning]
+**Success Criteria:**
+- Gap closure only runs when original plans have SUMMARY.md files
+- When needs-gaps fires but no summaries exist, full execute runs instead
+- Log message clearly states why gap closure was skipped
+- pilot stuck detects gap closure on unexecuted phases as misconfiguration
+- PostmortemEntry tracks gap_closure_attempts
+- All existing tests pass with no regressions
