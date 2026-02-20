@@ -369,8 +369,9 @@ class Runner extends EventEmitter<RunnerEvents> {
     const spawnOpts: SpawnOptions = {
       project: entry.project,
       projectDir,
-      command: entry.mode,
-      args: entry.args || undefined,
+      // run-command mode: the actual command is in args, not mode
+      command: entry.mode === 'run-command' && entry.args ? entry.args.split(' ')[0] : entry.mode,
+      args: entry.mode === 'run-command' && entry.args ? entry.args.split(' ').slice(1).join(' ') || undefined : entry.args || undefined,
       title,
       logFile,
     };
