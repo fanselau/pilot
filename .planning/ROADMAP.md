@@ -5,6 +5,13 @@
 ### Phase 1: Project Scaffolding + Core Data Layer
 **Goal:** Set up the TypeScript project structure, build toolchain, and implement the pure core/ data layer that all commands depend on. No CLI rendering yet — just the foundation.
 **Requirements:** FOUND-12, FOUND-13, FOUND-14, FOUND-15, FOUND-16, FOUND-17, FOUND-18, FOUND-19, FOUND-20, FOUND-21, FOUND-22, FOUND-23
+**Plans:** 5 plans
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffolding + types + utilities + config
+- [ ] 01-02-PLAN.md — Queue parser (TDD)
+- [ ] 01-03-PLAN.md — Process management + sessions
+- [ ] 01-04-PLAN.md — Stuck detection algorithm (TDD)
+- [ ] 01-05-PLAN.md — Projects + progress + setup
 **Success Criteria:**
 - package.json, tsconfig.json, vitest.config.ts configured per spec
 - `npm run build` produces dist/ with no errors
