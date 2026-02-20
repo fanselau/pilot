@@ -138,11 +138,13 @@ Plans:
 ### Phase 7: Smart add per requirements/smart-add.md
 **Goal:** Replace mode-based `pilot add` with intelligent task routing that auto-detects scope (milestone/phase/quick) from requirements files or descriptions, handles project state detection, and queues the right internal mode automatically.
 **Depends on:** Phase 6
-**Plans:** 2 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Core smart-add logic: scope detection, project state detection, requirements parsing (TDD)
-- [ ] 07-02-PLAN.md — Rewrite add/build commands with smart routing, update CLI registration, integration tests
+- [ ] 07-01-PLAN.md — Core smart-add logic: scope detection, project state detection, requirements parsing (TDD) [original — superseded by 07-03]
+- [ ] 07-02-PLAN.md — Rewrite add/build commands with smart routing, update CLI registration, integration tests [original — superseded by 07-04]
+- [ ] 07-03-PLAN.md — Gap closure: Core smart-add logic adapted for QUEUE.md infrastructure (TDD)
+- [ ] 07-04-PLAN.md — Gap closure: Rewrite add/build commands with QUEUE.md integration, update CLI, tests
 
 **Success Criteria:**
 - `pilot add <project> <requirements-file>` detects scope (milestone/phase/quick) and queues correct internal mode
