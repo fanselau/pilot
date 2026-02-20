@@ -158,12 +158,10 @@ Plans:
 - All tests pass with no regressions
 
 ### Phase 8: Smart tail stuck detection per requirements/smart-tail-stuck-detection.md
-**Goal:** [To be planned]
+**Goal:** Add log content analysis as a 6th stuck detection signal so pilot can detect "semantically stuck" processes — where the log itself reveals the process is confused, waiting for input, or has finished work but hasn't exited.
 **Depends on:** Phase 7
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 8 to break down)
-
-**Details:**
-[To be added during planning]
+- [ ] 08-01-PLAN.md — Core log content analyzer + Signal 6 stuck scoring integration (TDD)
+- [ ] 08-02-PLAN.md — Command layer: tail --smart highlighting + stuck reason field display
