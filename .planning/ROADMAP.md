@@ -165,3 +165,14 @@ Plans:
 Plans:
 - [ ] 08-01-PLAN.md — Core log content analyzer + Signal 6 stuck scoring integration (TDD)
 - [ ] 08-02-PLAN.md — Command layer: tail --smart highlighting + stuck reason field display
+
+### Phase 9: Gap closure resilience per requirements/gap-closure-resilience.md
+**Goal:** [To be planned]
+**Depends on:** Phase 8
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 9 to break down)
+
+**Details:**
+[To be added during planning]
