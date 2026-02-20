@@ -27,6 +27,7 @@ import { withQueueLock } from './lock.js';
 import { preSpawnChecks, spawnSession, truncateTitle } from './spawn.js';
 import { writePidFile, removePidFile, isProcessAlive } from './process.js';
 import { logPostmortem } from './postmortem.js';
+import { runLifecycleMode } from './lifecycle.js';
 import type {
   QueueEntry,
   RunnerJob,
@@ -34,6 +35,25 @@ import type {
   SpawnOptions,
   PilotConfig,
 } from './types.js';
+
+// ── Lifecycle mode set ────────────────────────────────────────────────────
+
+/** Modes handled by the lifecycle engine (NOT direct session spawning). */
+const LIFECYCLE_MODES = new Set([
+  'build-full',
+  'continue',
+  'continue-all',
+  'build-to-phase',
+  'add-and-build',
+]);
+
+/**
+ * Counter for synthetic PIDs used to track lifecycle mode jobs.
+ * Lifecycle modes are not a single detached process; they are
+ * multi-step async operations managed by runLifecycleMode.
+ * We assign negative PIDs so they never collide with real OS PIDs.
+ */
+let syntheticPidCounter = -1;
 
 // ── Runner events ─────────────────────────────────────────────────────────
 
@@ -231,15 +251,14 @@ class Runner extends EventEmitter<RunnerEvents> {
   // ── Launch ────────────────────────────────────────────────────────────
 
   /**
-   * Launch a queue entry as a background AI session.
+   * Launch a queue entry.
    *
-   * 1. Resolve project directory
-   * 2. Run preSpawnChecks
-   * 3. Count git commits before spawn (for success detection)
-   * 4. Mark entry as running in QUEUE.md
-   * 5. Spawn session
-   * 6. Track in activeJobs
-   * 7. Set up per-job timeout
+   * Dispatches based on mode:
+   * - Lifecycle modes (build-full, continue, continue-all, etc.) →
+   *   run via runLifecycleMode (multi-step, synchronous internally).
+   *   Tracked with a synthetic PID since it's not a single OS process.
+   * - run-command → direct session spawn via spawnSession (single
+   *   detached process tracked by real OS PID).
    */
   private async launch(entry: QueueEntry): Promise<void> {
     const projectDir = path.join(this.config.projectDir, entry.project);
@@ -265,10 +284,88 @@ class Runner extends EventEmitter<RunnerEvents> {
       return;
     }
 
-    // Build spawn options
     const title = truncateTitle(entry.project, entry.mode, entry.args || undefined);
     const logFile = path.join(this.config.logDir, `gsd-${title}.log`);
 
+    if (LIFECYCLE_MODES.has(entry.mode)) {
+      // ── Lifecycle mode: delegate to runLifecycleMode ──
+      await this.launchLifecycleMode(entry, projectDir, title, logFile, preCommitCount);
+    } else {
+      // ── run-command or unknown: direct session spawn ──
+      await this.launchDirectSpawn(entry, projectDir, title, logFile, preCommitCount);
+    }
+  }
+
+  /**
+   * Launch a lifecycle mode (build-full, continue, continue-all, etc.).
+   *
+   * Lifecycle modes are multi-step operations managed by runLifecycleMode.
+   * They internally spawn and await multiple AI sessions. We track them
+   * with a synthetic negative PID so the runner's reap/scan loop can
+   * handle them uniformly.
+   *
+   * The lifecycle runs as an async fire-and-forget promise. When it
+   * completes (or fails), we store the exit code for the reap cycle.
+   */
+  private async launchLifecycleMode(
+    entry: QueueEntry,
+    projectDir: string,
+    title: string,
+    logFile: string,
+    preCommitCount: number,
+  ): Promise<void> {
+    const syntheticPid = syntheticPidCounter--;
+
+    const job: RunnerJob = {
+      entry,
+      pid: syntheticPid,
+      title,
+      logFile,
+      startTime: Date.now(),
+      preCommitCount,
+      retries: 0,
+    };
+
+    this.state.activeJobs.set(syntheticPid, job);
+    this.emit('launch', entry, syntheticPid);
+
+    // Per-job timeout
+    const timeoutMinutes = entry.timeout ?? 60;
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    const timeoutId = setTimeout(() => {
+      // For lifecycle modes, timeout means we mark as failed
+      if (this.state.activeJobs.has(syntheticPid)) {
+        this.state.exitCodes.set(syntheticPid, -1);
+        this.emit('error', `Job ${title} timed out after ${timeoutMinutes} minutes`);
+      }
+    }, timeoutMs);
+
+    // Fire and forget — lifecycle runs in background, stores exit code on completion
+    void (async () => {
+      try {
+        await runLifecycleMode(projectDir, entry.mode, entry.args || '');
+        this.state.exitCodes.set(syntheticPid, 0);
+      } catch (err) {
+        this.emit('error', `Lifecycle mode ${entry.mode} failed for ${entry.project}: ${String(err)}`);
+        this.state.exitCodes.set(syntheticPid, 1);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    })();
+  }
+
+  /**
+   * Launch a direct session spawn (run-command mode or any non-lifecycle mode).
+   *
+   * Spawns a single detached AI session and tracks it by real OS PID.
+   */
+  private async launchDirectSpawn(
+    entry: QueueEntry,
+    projectDir: string,
+    title: string,
+    logFile: string,
+    preCommitCount: number,
+  ): Promise<void> {
     const spawnOpts: SpawnOptions = {
       project: entry.project,
       projectDir,
@@ -278,7 +375,6 @@ class Runner extends EventEmitter<RunnerEvents> {
       logFile,
     };
 
-    // Spawn session
     let pid: number;
     let childProcess: unknown;
     try {
@@ -287,10 +383,9 @@ class Runner extends EventEmitter<RunnerEvents> {
       childProcess = result.process;
     } catch (err) {
       this.emit('error', `Failed to spawn session for ${entry.project}: ${String(err)}`);
-      // Mark back to pending on spawn failure
       try {
         await withQueueLock(async () => {
-          await markEntry(this.config.queueFile, entry.lineNum, 'pending' as 'running');
+          await markEntryPending(this.config.queueFile, entry.lineNum);
         });
       } catch {
         // Best effort
@@ -298,7 +393,6 @@ class Runner extends EventEmitter<RunnerEvents> {
       return;
     }
 
-    // Create RunnerJob
     const job: RunnerJob = {
       entry,
       pid,
@@ -309,7 +403,6 @@ class Runner extends EventEmitter<RunnerEvents> {
       retries: 0,
     };
 
-    // Track in activeJobs
     this.state.activeJobs.set(pid, job);
 
     // Listen for exit event on child process to capture exit code
@@ -337,15 +430,24 @@ class Runner extends EventEmitter<RunnerEvents> {
    * Check all active PIDs and handle completions.
    *
    * For each active job:
-   *   - Check if PID is still alive
-   *   - If dead: get exit code, handle completion, remove from activeJobs
+   *   - Real PIDs (> 0): check if process is still alive
+   *   - Synthetic PIDs (< 0): check if exit code has been stored
+   *   - If dead/completed: get exit code, handle completion, remove from activeJobs
    */
   private async reap(): Promise<void> {
     const deadPids: number[] = [];
 
     for (const [pid] of this.state.activeJobs) {
-      if (!isProcessAlive(pid)) {
-        deadPids.push(pid);
+      if (pid < 0) {
+        // Synthetic PID (lifecycle mode) — check if exit code is stored
+        if (this.state.exitCodes.has(pid)) {
+          deadPids.push(pid);
+        }
+      } else {
+        // Real PID — check if process is still alive
+        if (!isProcessAlive(pid)) {
+          deadPids.push(pid);
+        }
       }
     }
 
@@ -464,6 +566,8 @@ class Runner extends EventEmitter<RunnerEvents> {
 
   /**
    * Handle a per-job timeout. Kill the process tree and treat as failure.
+   * For real PIDs, kills the process tree. For synthetic PIDs (lifecycle
+   * modes), the timeout handler in launchLifecycleMode sets the exit code.
    */
   private async handleJobTimeout(job: RunnerJob): Promise<void> {
     // Only if still active
@@ -473,10 +577,12 @@ class Runner extends EventEmitter<RunnerEvents> {
 
     this.emit('error', `Job ${job.title} timed out after ${job.entry.timeout ?? 60} minutes`);
 
-    // Kill the process tree
-    await killProcessTree(job.pid);
-
-    // Will be reaped in next cycle as dead process
+    if (job.pid > 0) {
+      // Real PID — kill the process tree
+      await killProcessTree(job.pid);
+      // Will be reaped in next cycle as dead process
+    }
+    // Synthetic PIDs: timeout handled in launchLifecycleMode
   }
 
   // ── Graceful shutdown ─────────────────────────────────────────────────
@@ -501,21 +607,23 @@ class Runner extends EventEmitter<RunnerEvents> {
 
     const activeJobs = [...this.state.activeJobs.values()];
 
-    // Step 1: Send SIGTERM to all active children
+    // Step 1: Send SIGTERM to all active children (real PIDs only)
     for (const job of activeJobs) {
-      try {
-        process.kill(job.pid, 'SIGTERM');
-      } catch {
-        // Process may already be dead
+      if (job.pid > 0) {
+        try {
+          process.kill(job.pid, 'SIGTERM');
+        } catch {
+          // Process may already be dead
+        }
       }
     }
 
     // Step 2: Wait 15 seconds
     await sleep(15_000);
 
-    // Step 3: SIGKILL survivors via tree-kill
+    // Step 3: SIGKILL survivors via tree-kill (real PIDs only)
     for (const job of activeJobs) {
-      if (isProcessAlive(job.pid)) {
+      if (job.pid > 0 && isProcessAlive(job.pid)) {
         await killProcessTree(job.pid);
       }
     }
@@ -586,7 +694,7 @@ class Runner extends EventEmitter<RunnerEvents> {
 
   /**
    * Wait for any active job to complete (polling).
-   * Returns when at least one job has died.
+   * Returns when at least one job has died or a lifecycle mode has finished.
    */
   private async waitForAnyCompletion(): Promise<void> {
     const maxWaitMs = 300_000; // 5 minutes max wait
@@ -594,8 +702,16 @@ class Runner extends EventEmitter<RunnerEvents> {
 
     while (Date.now() - start < maxWaitMs) {
       for (const [pid] of this.state.activeJobs) {
-        if (!isProcessAlive(pid)) {
-          return; // Found a dead one — caller will reap
+        if (pid < 0) {
+          // Synthetic PID — check if exit code stored (lifecycle mode completed)
+          if (this.state.exitCodes.has(pid)) {
+            return;
+          }
+        } else {
+          // Real PID — check if process died
+          if (!isProcessAlive(pid)) {
+            return;
+          }
         }
       }
       await sleep(2000); // Poll every 2 seconds
