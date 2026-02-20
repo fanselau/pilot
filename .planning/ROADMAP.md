@@ -81,6 +81,10 @@ Plans:
 ### Phase 4: TUI Dashboard
 **Goal:** Implement the full-screen Ink/React TUI dashboard that provides a live view of the pipeline.
 **Requirements:** TUI-01, TUI-02, TUI-03, TUI-04, TUI-05
+**Plans:** 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — TUI components: App, Dashboard, 4 panels, data hook
+- [ ] 04-02-PLAN.md — Command wiring (lazy import), package.json update, tests
 **Success Criteria:**
 - `pilot tui` enters alternate screen buffer with 4-panel layout
 - Running panel shows active sessions with runtime and log activity
