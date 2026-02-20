@@ -311,7 +311,7 @@ async function spawnSession(opts: SpawnOptions): Promise<SpawnResult> {
     'run',
     '--format', 'default',
     '--title', opts.title,
-    '--command', `gsd-${opts.command}`,
+    '--command', opts.command.startsWith('gsd-') ? opts.command : `gsd-${opts.command}`,
     ...(opts.args ? [opts.args] : []),
   ];
 
