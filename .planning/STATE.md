@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 2 of 4 (CLI Commands — Phase 1 Monitoring + Setup)
-Plan: 0 of ? in current phase
-Status: Not started
-Last activity: 2026-02-20 - Phase 1 complete, verified 14/14 must-haves
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-20 - Completed 02-01-PLAN.md (entry point + core commands)
 
-Progress: █████░░░░░░░░░░░░░░░ 25% (5/20 plans)
+Progress: ██████░░░░░░░░░░░░░░ 30% (6/20 plans)
 
 ## Project Reference
 
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
-- **Status:** not_started
+- **Status:** in_progress (1/3 plans complete)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
 - **Status:** not_started
@@ -46,9 +46,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 01-05 | PlanningStateResult kept as local interface in projects.ts | Implementation detail, not a cross-module contract |
 | 01-05 | Phase completion = all plans have matching summaries | Simple ratio check avoids complex state inference |
 | 01-05 | setupProject uses absolute symlink targets | More reliable across working directories than relative paths |
+| 02-01 | Custom formatHelp override for grouped help | Avoids brittle addHelpText ordering |
+| 02-01 | Stub files for all future commands | tsc strict module resolution requires import targets to exist |
+| 02-01 | computeStuckScore called sequentially per PID | CPU sampling is inherently serial (3×10s) |
 
 ## Session Continuity
 
-Last session: 2026-02-20T15:17:00Z
-Stopped at: Completed 01-05-PLAN.md — Phase 1 complete
+Last session: 2026-02-20T16:22:00Z
+Stopped at: Completed 02-01-PLAN.md — entry point + core commands
 Resume file: None
