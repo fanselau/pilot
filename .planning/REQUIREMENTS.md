@@ -55,11 +55,11 @@
 
 ### TUI Dashboard
 
-- [ ] **TUI-01**: `pilot tui` — full-screen Ink/React dashboard with 4 panels
-- [ ] **TUI-02**: Auto-refresh with configurable interval
-- [ ] **TUI-03**: Keyboard navigation (q, arrows, Enter, K, r, Tab)
-- [ ] **TUI-04**: Responsive to terminal size
-- [ ] **TUI-05**: Lazy-loaded — React/Ink not imported for any other command
+- [x] **TUI-01**: `pilot tui` — full-screen Ink/React dashboard with 4 panels
+- [x] **TUI-02**: Auto-refresh with configurable interval
+- [x] **TUI-03**: Keyboard navigation (q, arrows, Enter, K, r, Tab)
+- [x] **TUI-04**: Responsive to terminal size
+- [x] **TUI-05**: Lazy-loaded — React/Ink not imported for any other command
 
 ### Cross-Cutting
 
@@ -129,11 +129,11 @@
 | AUTO-17 | Phase 3 | Complete |
 | AUTO-18 | Phase 3 | Complete |
 | AUTO-19 | Phase 3 | Complete |
-| TUI-01 | Phase 4 | Pending |
-| TUI-02 | Phase 4 | Pending |
-| TUI-03 | Phase 4 | Pending |
-| TUI-04 | Phase 4 | Pending |
-| TUI-05 | Phase 4 | Pending |
+| TUI-01 | Phase 4 | Complete |
+| TUI-02 | Phase 4 | Complete |
+| TUI-03 | Phase 4 | Complete |
+| TUI-04 | Phase 4 | Complete |
+| TUI-05 | Phase 4 | Complete |
 | XCUT-01 | Phase 2 | Complete |
 | XCUT-02 | Phase 2 | Complete |
 | XCUT-03 | Phase 2 | Complete |
@@ -147,4 +147,4 @@
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after Phase 3 completion*
+*Last updated: 2026-02-20 after Phase 4 completion — all v1 requirements complete*

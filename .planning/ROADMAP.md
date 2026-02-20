@@ -83,8 +83,8 @@ Plans:
 **Requirements:** TUI-01, TUI-02, TUI-03, TUI-04, TUI-05
 **Plans:** 5 plans
 Plans:
-- [ ] 04-01-PLAN.md — TUI components: App, Dashboard, 4 panels, data hook (original, not executed)
-- [ ] 04-02-PLAN.md — Command wiring (lazy import), package.json update, tests (original, not executed)
+- [x] 04-01-PLAN.md — TUI components: App, Dashboard, 4 panels, data hook (superseded by 04-03/04-04)
+- [x] 04-02-PLAN.md — Command wiring (lazy import), package.json update, tests (superseded by 04-04/04-05)
 - [x] 04-03-PLAN.md — Gap closure: package.json deps + vitest config + data hook + App shell
 - [x] 04-04-PLAN.md — Gap closure: Dashboard + 4 panels + tui command wiring
 - [x] 04-05-PLAN.md — Gap closure: TUI component tests (panels + Dashboard)
