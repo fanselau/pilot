@@ -9,7 +9,7 @@
 import { createRunner } from '../core/runner.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { getConfig } from '../core/config.js';
-import type { RunnerOptions, QueueEntry } from '../core/types.js';
+import type { RunnerOptions, QueueJsonItem } from '../core/types.js';
 
 function formatTime(): string {
   const now = new Date();
@@ -33,11 +33,11 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   if (runnerOpts.dryRun && isJsonMode()) {
     const dryRunEntries: Array<{ project: string; mode: string; args: string }> = [];
 
-    runner.on('dry-run', (entry: QueueEntry) => {
+    runner.on('dry-run', (item: QueueJsonItem) => {
       dryRunEntries.push({
-        project: entry.project,
-        mode: entry.mode,
-        args: entry.args,
+        project: item.project,
+        mode: item.mode,
+        args: item.description,
       });
     });
 
@@ -70,21 +70,21 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     }
   });
 
-  runner.on('launch', (entry: QueueEntry, pid: number) => {
+  runner.on('launch', (item: QueueJsonItem, pid: number) => {
     if (!isJsonMode()) {
-      outputHuman(`[${formatTime()}] Launching: ${entry.project} | ${entry.mode} (PID ${pid})`);
+      outputHuman(`[${formatTime()}] Launching: ${item.project} | ${item.mode} (PID ${pid})`);
     }
   });
 
-  runner.on('dry-run', (entry: QueueEntry) => {
+  runner.on('dry-run', (item: QueueJsonItem) => {
     if (!isJsonMode()) {
-      outputHuman(`[${formatTime()}] Would launch: ${entry.project} | ${entry.mode}${entry.args ? ' | ' + entry.args : ''}`);
+      outputHuman(`[${formatTime()}] Would launch: ${item.project} | ${item.mode}${item.description ? ' | ' + item.description : ''}`);
     }
   });
 
-  runner.on('complete', (entry: QueueEntry, result: string) => {
+  runner.on('complete', (item: QueueJsonItem, result: string) => {
     if (!isJsonMode()) {
-      outputHuman(`[${formatTime()}] Completed: ${entry.project} (${result})`);
+      outputHuman(`[${formatTime()}] Completed: ${item.project} (${result})`);
     }
   });
 
