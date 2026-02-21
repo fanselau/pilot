@@ -1,5 +1,10 @@
 /**
- * proper-lockfile wrapper for QUEUE.md.
+ * @deprecated Use queue-store.ts withQueueJsonLock instead.
+ * This module locks QUEUE.md for legacy markdown queue operations.
+ * Will be removed after all consumers migrate to queue-store.
+ *
+ * Remaining consumers: src/commands/add.ts, src/commands/scope.ts
+ * (will be migrated in Plan 03).
  *
  * Wraps any async callback with file locking on the QUEUE.md path.
  * Stale timeout: 30s. Retry with exponential backoff for contention.

@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock all core module dependencies ──────────────────────────────────────
 
 vi.mock('../../src/core/config.js', () => ({
   getConfig: vi.fn(() => ({
     queueFile: '/tmp/QUEUE.md',
+    pilotDir: '/tmp/.pilot',
+    queueJsonFile: '/tmp/.pilot/queue.json',
     logDir: '/tmp',
     stuckThreshold: 90,
     projectDir: '/tmp/projects',
@@ -13,13 +15,12 @@ vi.mock('../../src/core/config.js', () => ({
   })),
 }));
 
-vi.mock('../../src/core/queue-parser.js', () => ({
-  parseQueueFile: vi.fn(),
-  markEntry: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../../src/core/lock.js', () => ({
-  withQueueLock: vi.fn(async (fn: () => Promise<void>) => fn()),
+vi.mock('../../src/core/queue-store.js', () => ({
+  findLaunchable: vi.fn(),
+  markRunning: vi.fn().mockResolvedValue(undefined),
+  markCompleted: vi.fn().mockResolvedValue(undefined),
+  markFailed: vi.fn().mockResolvedValue(undefined),
+  markQueued: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../src/core/spawn.js', () => ({
@@ -50,7 +51,7 @@ vi.mock('tree-kill', () => ({
   default: vi.fn((_pid: number, _signal: string, cb: () => void) => cb()),
 }));
 
-// Mock node:fs/promises — needed for checkExistingRunner and markEntryPending
+// Mock node:fs/promises — needed for checkExistingRunner
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
   return {
@@ -60,15 +61,40 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-import { parseQueueFile } from '../../src/core/queue-parser.js';
+import { findLaunchable, markRunning, markCompleted, markQueued } from '../../src/core/queue-store.js';
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
 import { createRunner } from '../../src/core/runner.js';
-import type { QueueEntry } from '../../src/core/types.js';
+import type { QueueJsonItem } from '../../src/core/types.js';
 
-const mockedParseQueueFile = vi.mocked(parseQueueFile);
+const mockedFindLaunchable = vi.mocked(findLaunchable);
+const mockedMarkRunning = vi.mocked(markRunning);
+const mockedMarkCompleted = vi.mocked(markCompleted);
+const mockedMarkQueued = vi.mocked(markQueued);
 const mockedSpawnSession = vi.mocked(spawnSession);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
+
+// ── Helper: create a mock QueueJsonItem ────────────────────────────────────
+
+function makeItem(overrides: Partial<QueueJsonItem> = {}): QueueJsonItem {
+  return {
+    id: 'test-id-1234',
+    project: 'myproject',
+    mode: 'run-command',
+    description: 'quick fix something',
+    status: 'queued',
+    addedAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
+    phase: null,
+    attempts: 0,
+    maxAttempts: 3,
+    dependsOn: null,
+    error: null,
+    meta: {},
+    ...overrides,
+  };
+}
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -78,23 +104,17 @@ describe('Runner', () => {
   });
 
   it('--once waits for launched jobs to complete before exiting', async () => {
-    const pendingEntry: QueueEntry = {
-      lineNum: 1,
-      project: 'myproject',
-      mode: 'run-command',
-      args: 'quick fix something',
-      status: 'pending',
-    };
+    const item = makeItem();
 
-    // First call: return one pending entry
-    // Subsequent calls: return empty (nothing more to launch)
+    // First call: return the item (launchable)
+    // Subsequent calls: return null (nothing more to launch)
     let scanCount = 0;
-    mockedParseQueueFile.mockImplementation(async () => {
+    mockedFindLaunchable.mockImplementation(async () => {
       scanCount++;
       if (scanCount === 1) {
-        return [pendingEntry];
+        return item;
       }
-      return [];
+      return null;
     });
 
     // Mock spawnSession: returns a mock process with PID
@@ -116,7 +136,6 @@ describe('Runner', () => {
     });
 
     // isProcessAlive returns false — the process "died"
-    // (exit event fires quickly, and by the time reap runs, process is gone)
     mockedIsProcessAlive.mockReturnValue(false);
 
     const runner = createRunner({
@@ -129,41 +148,32 @@ describe('Runner', () => {
 
     await runner.start();
 
+    // Assert markRunning was called with the item ID
+    expect(mockedMarkRunning).toHaveBeenCalledWith('test-id-1234');
+
     // Assert spawnSession was called (job was launched)
     expect(mockedSpawnSession).toHaveBeenCalledTimes(1);
 
     // Assert that isProcessAlive was called (reap checks the process)
     expect(mockedIsProcessAlive).toHaveBeenCalled();
 
-    // The fact that start() resolved means it:
-    // 1. Launched the job
-    // 2. Found no more entries (--once scan complete)
-    // 3. Waited in the wait-for-all block
-    // 4. Reaped the completed job
-    // 5. Exited cleanly
+    // Assert markCompleted was called (job completed successfully with exit 0)
+    expect(mockedMarkCompleted).toHaveBeenCalledWith('test-id-1234');
   }, 15000);
 
-  it('run-command mode extracts command from args correctly', async () => {
-    const runCommandEntry: QueueEntry = {
-      lineNum: 1,
-      project: 'myproject',
+  it('run-command mode extracts command from description correctly', async () => {
+    const item = makeItem({
       mode: 'run-command',
-      args: 'quick fix navbar',
-      status: 'pending',
-    };
-
-    // First call: return the run-command entry
-    // Subsequent calls: return empty
-    let scanCount = 0;
-    mockedParseQueueFile.mockImplementation(async () => {
-      scanCount++;
-      if (scanCount === 1) {
-        return [runCommandEntry];
-      }
-      return [];
+      description: 'quick fix navbar',
     });
 
-    // Mock spawnSession to capture the SpawnOptions passed to it
+    let scanCount = 0;
+    mockedFindLaunchable.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return item;
+      return null;
+    });
+
     const mockProcess = {
       on: vi.fn(),
       unref: vi.fn(),
@@ -175,7 +185,6 @@ describe('Runner', () => {
       logFile: '/tmp/test.log',
     });
 
-    // Process dies immediately on first check
     mockedIsProcessAlive.mockReturnValue(false);
 
     const runner = createRunner({
@@ -188,35 +197,25 @@ describe('Runner', () => {
 
     await runner.start();
 
-    // Assert spawnSession was called
     expect(mockedSpawnSession).toHaveBeenCalledTimes(1);
-
-    // Extract the SpawnOptions passed to spawnSession
     const spawnArgs = mockedSpawnSession.mock.calls[0]![0];
 
-    // run-command mode should extract 'quick' as the command
+    // run-command mode should extract 'quick' as the command from description
     expect(spawnArgs.command).toBe('quick');
-
-    // The remaining args should be 'fix navbar'
     expect(spawnArgs.args).toBe('fix navbar');
   });
 
-  it('run-command mode with single-word args uses it as command with no args', async () => {
-    const runCommandEntry: QueueEntry = {
-      lineNum: 1,
-      project: 'myproject',
+  it('run-command mode with single-word description uses it as command with no args', async () => {
+    const item = makeItem({
       mode: 'run-command',
-      args: 'debug',
-      status: 'pending',
-    };
+      description: 'debug',
+    });
 
     let scanCount = 0;
-    mockedParseQueueFile.mockImplementation(async () => {
+    mockedFindLaunchable.mockImplementation(async () => {
       scanCount++;
-      if (scanCount === 1) {
-        return [runCommandEntry];
-      }
-      return [];
+      if (scanCount === 1) return item;
+      return null;
     });
 
     const mockProcess = { on: vi.fn(), unref: vi.fn() };
@@ -242,8 +241,48 @@ describe('Runner', () => {
     expect(mockedSpawnSession).toHaveBeenCalledTimes(1);
     const spawnArgs = mockedSpawnSession.mock.calls[0]![0];
 
-    // Single word: command = 'debug', args = undefined (empty string becomes undefined)
+    // Single word: command = 'debug', args = undefined
     expect(spawnArgs.command).toBe('debug');
     expect(spawnArgs.args).toBeUndefined();
+  });
+
+  it('spawn failure marks item back to queued via markQueued', async () => {
+    const item = makeItem({
+      mode: 'run-command',
+      description: 'quick fix',
+    });
+
+    let scanCount = 0;
+    mockedFindLaunchable.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return item;
+      return null;
+    });
+
+    // spawnSession throws an error
+    mockedSpawnSession.mockRejectedValue(new Error('spawn failed'));
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+    });
+
+    // Must add error listener — EventEmitter throws on unhandled 'error' events
+    const errors: string[] = [];
+    runner.on('error', (msg: string) => errors.push(msg));
+
+    await runner.start();
+
+    // markRunning should have been called before spawn attempt
+    expect(mockedMarkRunning).toHaveBeenCalledWith('test-id-1234');
+
+    // After spawn failure, markQueued should be called to revert
+    expect(mockedMarkQueued).toHaveBeenCalledWith('test-id-1234');
+
+    // Error should have been emitted
+    expect(errors.some(e => e.includes('spawn failed'))).toBe(true);
   });
 });
