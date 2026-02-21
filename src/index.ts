@@ -67,6 +67,7 @@ program.configureHelp({
           ['config', 'Show configuration'],
           ['import [file]', 'Import QUEUE.md into queue.json'],
           ['doctor [options]', 'Health check: validate setup'],
+          ['cleanup [options]', 'Clean stale PIDs, old logs, orphans'],
         ],
       },
       {
@@ -237,6 +238,7 @@ program
   .command('setup')
   .argument('<dir>', 'Project directory')
   .description('Set up project for Pilot')
+  .option('--verify', 'Re-check existing setup')
   .action(async (dir: string, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { setupCommand } = await import('./commands/setup.js');
@@ -280,6 +282,18 @@ program
     const opts = mergeOpts(localOpts);
     const { doctorCommand } = await import('./commands/doctor.js');
     await doctorCommand(opts);
+  });
+
+program
+  .command('cleanup')
+  .description('Clean stale PIDs, old logs, orphans')
+  .option('--dry-run', 'Show what would be cleaned')
+  .option('--all', 'Aggressive mode (also clean history)')
+  .option('--keep-days <days>', 'Keep files newer than N days', '7')
+  .action(async (localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    const { cleanupCommand } = await import('./commands/cleanup.js');
+    await cleanupCommand(opts);
   });
 
 // ── Queue Management (Phase 2 stubs) ──────────────────────────────────────
