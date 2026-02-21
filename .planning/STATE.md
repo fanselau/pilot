@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 11 of 15 (Finishing touches per requirements/finishing-touches.md)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 11-02-PLAN.md
+Last activity: 2026-02-21 - Completed 11-03-PLAN.md
 
-Progress: █████████████████████████ 100% (42/42 plans)
+Progress: █████████████████████████ 100% (43/43 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 11 in progress — finishing touches (2/4 plans)
+**Current focus:** Phase 11 in progress — finishing touches (3/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -50,7 +50,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
-- **Status:** in progress (2/4 plans complete)
+- **Status:** in progress (3/4 plans complete)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 - **Status:** complete (3/3 plans, verified ✓)
@@ -168,9 +168,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 11-02 | Sync appendFileSync for runner log | Infrequent writes, simplicity over async |
 | 11-02 | Filename date rotation not mtime | Deterministic and testable |
 | 11-02 | Notifications never throw | Fire-and-forget with stderr logging on failure |
+| 11-03 | Orphan detection via pgrep with self/parent PID exclusion | Avoids false positives from current process |
+| 11-03 | History truncation keeps last 100 entries | Newest entries are most useful; prevents unbounded growth |
+| 11-03 | Queue cleanup is read-only reporting | Modifying queue.json during cleanup is too risky |
+| 11-03 | verifySetup uses realpath for symlink resolution | Catches broken symlinks that lstat alone would miss |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:37:29Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-02-21T11:45:38Z
+Stopped at: Completed 11-03-PLAN.md
 Resume file: None
