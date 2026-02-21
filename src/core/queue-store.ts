@@ -396,4 +396,5 @@ export {
   getHistory,
   getItems,
   getItemById,
+  detectCircularDep,
 };
