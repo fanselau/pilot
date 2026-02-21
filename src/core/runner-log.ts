@@ -1,21 +1,32 @@
 /**
- * Runner log writer with date-based rotation.
+ * Runner log writer with structured logging levels and size-based rotation.
  *
- * Writes timestamped log lines to ~/.pilot/logs/runner-YYYY-MM-DD.log.
- * Rotation deletes files older than `keepDays` based on filename date
- * (deterministic, not mtime).
+ * Writes structured log lines to ~/.pilot/logs/runner-YYYY-MM-DD.log.
+ * Format: [YYYY-MM-DDTHH:MM:SS] [LEVEL] message
+ *
+ * Features:
+ * - Log levels: DEBUG < INFO < WARN < ERROR (configurable minimum)
+ * - Size-based rotation at 10MB with max 3 rotations (~40MB total)
+ * - Date-based rotation deletes files older than `keepDays`
+ * - Backward compat: log() maps to info()
  *
  * Pure core module — no UI dependencies.
  */
 
-import { mkdirSync, appendFileSync, readdirSync, unlinkSync, statSync } from 'node:fs';
+import { mkdirSync, appendFileSync, readdirSync, unlinkSync, statSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
 export interface RunnerLogger {
-  log(message: string): void;
+  debug(message: string): void;
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+  log(message: string): void;   // backward compat — same as info()
   getPath(): string;
   close(): void;
 }
@@ -26,6 +37,19 @@ const LOGS_DIR = path.join(os.homedir(), '.pilot', 'logs');
 const RUNNER_LOG_PREFIX = 'runner-';
 const RUNNER_LOG_SUFFIX = '.log';
 
+/** 10MB max log file size before rotation. */
+const MAX_LOG_SIZE = 10 * 1024 * 1024;
+
+/** Maximum number of rotated files to keep. */
+const MAX_ROTATIONS = 3;
+
+const LEVEL_ORDER: Record<LogLevel, number> = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDate(d: Date): string {
@@ -35,11 +59,17 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Format ISO-8601 local timestamp: YYYY-MM-DDTHH:MM:SS
+ */
 function formatTimestamp(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   const s = String(d.getSeconds()).padStart(2, '0');
-  return `${h}:${min}:${s}`;
+  return `${y}-${mo}-${day}T${h}:${min}:${s}`;
 }
 
 function ensureLogsDir(logsDir: string = LOGS_DIR): void {
@@ -57,6 +87,31 @@ function parseDateFromFilename(filename: string): Date | null {
   return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
 }
 
+/**
+ * Rotate log file by size: current → .log.1 → .log.2 → .log.3 (deleted).
+ *
+ * After rotation, the next appendFileSync creates a fresh file at logPath.
+ */
+function rotateBySize(logPath: string): void {
+  try {
+    // Delete oldest rotation if it exists
+    const oldest = `${logPath}.${MAX_ROTATIONS}`;
+    try { unlinkSync(oldest); } catch { /* may not exist */ }
+
+    // Shift existing rotations: .2→.3, .1→.2
+    for (let i = MAX_ROTATIONS - 1; i >= 1; i--) {
+      const from = `${logPath}.${i}`;
+      const to = `${logPath}.${i + 1}`;
+      try { renameSync(from, to); } catch { /* may not exist */ }
+    }
+
+    // Move current log to .1
+    try { renameSync(logPath, `${logPath}.1`); } catch { /* may not exist */ }
+  } catch {
+    // Best effort — rotation failure shouldn't crash anything
+  }
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -65,9 +120,12 @@ function parseDateFromFilename(filename: string): Date | null {
  * Uses sync writes (appendFileSync) because runner log writes are infrequent
  * and small — no interleaving risk with sync approach.
  *
+ * Log format: [YYYY-MM-DDTHH:MM:SS] [LEVEL] message
+ *
  * @param logsDir - Override logs directory (for testing). Defaults to ~/.pilot/logs/
+ * @param level - Minimum log level to write. Defaults to 'INFO'.
  */
-function createRunnerLogger(logsDir: string = LOGS_DIR): RunnerLogger {
+function createRunnerLogger(logsDir: string = LOGS_DIR, level: LogLevel = 'INFO'): RunnerLogger {
   try {
     ensureLogsDir(logsDir);
   } catch {
@@ -76,16 +134,46 @@ function createRunnerLogger(logsDir: string = LOGS_DIR): RunnerLogger {
 
   const date = formatDate(new Date());
   const logPath = path.join(logsDir, `${RUNNER_LOG_PREFIX}${date}${RUNNER_LOG_SUFFIX}`);
+  const minLevel = LEVEL_ORDER[level];
+
+  function writeLog(msgLevel: LogLevel, message: string): void {
+    if (LEVEL_ORDER[msgLevel] < minLevel) return;
+
+    // Check file size before writing — rotate if > MAX_LOG_SIZE
+    try {
+      const st = statSync(logPath);
+      if (st.size > MAX_LOG_SIZE) {
+        rotateBySize(logPath);
+      }
+    } catch {
+      // File may not exist yet — that's fine
+    }
+
+    const ts = formatTimestamp(new Date());
+    const line = `[${ts}] [${msgLevel}] ${message}\n`;
+    try {
+      appendFileSync(logPath, line, 'utf8');
+    } catch {
+      // Best effort — don't crash the runner over a log write failure
+    }
+  }
 
   return {
+    debug(message: string): void {
+      writeLog('DEBUG', message);
+    },
+    info(message: string): void {
+      writeLog('INFO', message);
+    },
+    warn(message: string): void {
+      writeLog('WARN', message);
+    },
+    error(message: string): void {
+      writeLog('ERROR', message);
+    },
     log(message: string): void {
-      const ts = formatTimestamp(new Date());
-      const line = `[${ts}] ${message}\n`;
-      try {
-        appendFileSync(logPath, line, 'utf8');
-      } catch {
-        // Best effort — don't crash the runner over a log write failure
-      }
+      // Backward compat — maps to info()
+      writeLog('INFO', message);
     },
     getPath(): string {
       return logPath;

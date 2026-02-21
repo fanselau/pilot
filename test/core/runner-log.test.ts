@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readdir, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile, rm, mkdir, stat } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -21,7 +22,7 @@ afterEach(async () => {
 });
 
 describe('createRunnerLogger', () => {
-  it('creates logs directory and writes timestamped lines', async () => {
+  it('creates logs directory and writes structured [ISO] [LEVEL] lines', async () => {
     const logsDir = path.join(tmpDir, 'logs');
     const logger = createRunnerLogger(logsDir);
 
@@ -32,9 +33,9 @@ describe('createRunnerLogger', () => {
     const lines = content.trim().split('\n');
 
     expect(lines).toHaveLength(2);
-    // Each line should have timestamp format [HH:MM:SS]
-    expect(lines[0]).toMatch(/^\[\d{2}:\d{2}:\d{2}\] Runner started$/);
-    expect(lines[1]).toMatch(/^\[\d{2}:\d{2}:\d{2}\] Scanning queue$/);
+    // New format: [YYYY-MM-DDTHH:MM:SS] [INFO] message
+    expect(lines[0]).toMatch(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\] \[INFO\] Runner started$/);
+    expect(lines[1]).toMatch(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\] \[INFO\] Scanning queue$/);
   });
 
   it('generates date-stamped filename', () => {
@@ -59,6 +60,198 @@ describe('createRunnerLogger', () => {
     const logger = createRunnerLogger('/nonexistent/deeply/nested/path');
     // Should not throw
     expect(() => logger.log('test message')).not.toThrow();
+  });
+});
+
+describe('log levels', () => {
+  it('has debug/info/warn/error methods', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    const logger = createRunnerLogger(logsDir, 'DEBUG');
+
+    logger.debug('debug msg');
+    logger.info('info msg');
+    logger.warn('warn msg');
+    logger.error('error msg');
+
+    const content = await readFile(logger.getPath(), 'utf8');
+    const lines = content.trim().split('\n');
+
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toContain('[DEBUG] debug msg');
+    expect(lines[1]).toContain('[INFO] info msg');
+    expect(lines[2]).toContain('[WARN] warn msg');
+    expect(lines[3]).toContain('[ERROR] error msg');
+  });
+
+  it('filters below minimum level', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    const logger = createRunnerLogger(logsDir, 'WARN');
+
+    logger.debug('should be filtered');
+    logger.info('should be filtered');
+    logger.warn('should appear');
+    logger.error('should appear');
+
+    const content = await readFile(logger.getPath(), 'utf8');
+    const lines = content.trim().split('\n');
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('[WARN] should appear');
+    expect(lines[1]).toContain('[ERROR] should appear');
+  });
+
+  it('ERROR level only shows errors', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    const logger = createRunnerLogger(logsDir, 'ERROR');
+
+    logger.debug('no');
+    logger.info('no');
+    logger.warn('no');
+    logger.error('yes');
+
+    const content = await readFile(logger.getPath(), 'utf8');
+    const lines = content.trim().split('\n');
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('[ERROR] yes');
+  });
+
+  it('default level is INFO (filters DEBUG)', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    const logger = createRunnerLogger(logsDir); // default = INFO
+
+    logger.debug('filtered');
+    logger.info('visible');
+
+    const content = await readFile(logger.getPath(), 'utf8');
+    const lines = content.trim().split('\n');
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('[INFO] visible');
+  });
+
+  it('log() maps to info() for backward compat', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    const logger = createRunnerLogger(logsDir);
+
+    logger.log('backward compat message');
+
+    const content = await readFile(logger.getPath(), 'utf8');
+    expect(content).toContain('[INFO] backward compat message');
+  });
+});
+
+describe('size-based rotation', () => {
+  it('rotates when file exceeds 10MB', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    await mkdir(logsDir, { recursive: true });
+
+    // Create the logger
+    const logger = createRunnerLogger(logsDir);
+    const logPath = logger.getPath();
+
+    // Pre-fill the file to just over 10MB
+    const bigContent = 'x'.repeat(10 * 1024 * 1024 + 1);
+    writeFileSync(logPath, bigContent);
+
+    // Writing a new message should trigger rotation
+    logger.info('post-rotation message');
+
+    // The original file should now be rotated to .1
+    const rotated = logPath + '.1';
+    const rotatedExists = await stat(rotated).then(() => true).catch(() => false);
+    expect(rotatedExists).toBe(true);
+
+    // Current file should contain the new message
+    const content = await readFile(logPath, 'utf8');
+    expect(content).toContain('[INFO] post-rotation message');
+
+    // Rotated file should contain the old big content
+    const rotatedContent = await readFile(rotated, 'utf8');
+    expect(rotatedContent.length).toBeGreaterThan(10 * 1024 * 1024);
+  });
+
+  it('cascades rotations: .1 → .2 → .3', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    await mkdir(logsDir, { recursive: true });
+
+    const logger = createRunnerLogger(logsDir);
+    const logPath = logger.getPath();
+
+    // Create existing rotation files
+    writeFileSync(logPath + '.1', 'rotation-1');
+    writeFileSync(logPath + '.2', 'rotation-2');
+
+    // Pre-fill main file over 10MB
+    writeFileSync(logPath, 'x'.repeat(10 * 1024 * 1024 + 1));
+
+    // Write triggers rotation cascade
+    logger.info('new message');
+
+    // .1 should now be the previous main file (big)
+    const r1 = await readFile(logPath + '.1', 'utf8');
+    expect(r1.length).toBeGreaterThan(10 * 1024 * 1024);
+
+    // .2 should be old .1
+    const r2 = await readFile(logPath + '.2', 'utf8');
+    expect(r2).toBe('rotation-1');
+
+    // .3 should be old .2
+    const r3 = await readFile(logPath + '.3', 'utf8');
+    expect(r3).toBe('rotation-2');
+
+    // Current file has new message
+    const content = await readFile(logPath, 'utf8');
+    expect(content).toContain('[INFO] new message');
+  });
+
+  it('deletes .3 when rotating beyond max', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    await mkdir(logsDir, { recursive: true });
+
+    const logger = createRunnerLogger(logsDir);
+    const logPath = logger.getPath();
+
+    // Create existing rotation files at max
+    writeFileSync(logPath + '.1', 'rot-1');
+    writeFileSync(logPath + '.2', 'rot-2');
+    writeFileSync(logPath + '.3', 'rot-3-should-be-deleted');
+
+    // Pre-fill main file over 10MB
+    writeFileSync(logPath, 'x'.repeat(10 * 1024 * 1024 + 1));
+
+    // Write triggers rotation — .3 should be deleted, everything shifts
+    logger.info('fresh');
+
+    // .3 should now be old .2 (not the original .3 which was deleted)
+    const r3 = await readFile(logPath + '.3', 'utf8');
+    expect(r3).toBe('rot-2');
+
+    // .2 should be old .1
+    const r2 = await readFile(logPath + '.2', 'utf8');
+    expect(r2).toBe('rot-1');
+  });
+
+  it('does not rotate when under 10MB', async () => {
+    const logsDir = path.join(tmpDir, 'logs');
+    await mkdir(logsDir, { recursive: true });
+
+    const logger = createRunnerLogger(logsDir);
+    const logPath = logger.getPath();
+
+    // Write some content (well under 10MB)
+    writeFileSync(logPath, 'initial content\n');
+    logger.info('another line');
+
+    // No rotation files should exist
+    const rotated = logPath + '.1';
+    const exists = await stat(rotated).then(() => true).catch(() => false);
+    expect(exists).toBe(false);
+
+    // Content should be appended
+    const content = await readFile(logPath, 'utf8');
+    expect(content).toContain('initial content');
+    expect(content).toContain('[INFO] another line');
   });
 });
 
