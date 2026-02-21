@@ -56,23 +56,23 @@ describe('sessions', () => {
         title: 'resume-roast-execute-phase-3',
         updated: 1708436400000,
         created: 1708432800000,
-        message_count: 42,
+        message_count: undefined,
       } satisfies SessionInfo);
     });
 
-    it('calls claude with correct arguments', async () => {
+    it('calls opencode with correct arguments', async () => {
       mockedExeca.mockResolvedValueOnce({
         stdout: '[]',
       } as never);
 
       await listSessions();
 
-      expect(mockedExeca).toHaveBeenCalledWith('claude', [
+      expect(mockedExeca).toHaveBeenCalledWith('opencode', [
         'session',
         'list',
         '--format',
         'json',
-      ]);
+      ], { timeout: 5000 });
     });
 
     it('returns empty array when claude binary not found', async () => {
@@ -105,9 +105,9 @@ describe('sessions', () => {
     it('filters out malformed session entries', async () => {
       mockedExeca.mockResolvedValueOnce({
         stdout: JSON.stringify([
-          { id: 'valid', title: 'test', updated: 100, created: 50, message_count: 5 },
-          { id: 'missing-title', updated: 100, created: 50, message_count: 5 },
-          { id: 'wrong-type', title: 123, updated: 100, created: 50, message_count: 5 },
+          { id: 'valid', title: 'test', updated: 100, created: 50 },
+          { id: 'missing-title', updated: 100, created: 50 },
+          { id: 'wrong-type', title: 123, updated: 100, created: 50 },
           null,
           'not an object',
         ]),
@@ -193,17 +193,17 @@ describe('sessions', () => {
       expect(result).toEqual(JSON.parse(exportFixture));
     });
 
-    it('calls claude with correct arguments', async () => {
+    it('calls opencode with correct arguments', async () => {
       mockedExeca.mockResolvedValueOnce({
         stdout: exportFixture,
       } as never);
 
       await exportSession('sess-001');
 
-      expect(mockedExeca).toHaveBeenCalledWith('claude', [
+      expect(mockedExeca).toHaveBeenCalledWith('opencode', [
         'export',
         'sess-001',
-      ]);
+      ], { timeout: 5000 });
     });
 
     it('throws descriptive error on failure', async () => {
