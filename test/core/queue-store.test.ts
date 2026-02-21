@@ -30,6 +30,7 @@ import {
   saveQueue,
   addItem,
   removeItem,
+  moveItem,
   findLaunchable,
   findLaunchableAtomic,
   markRunning,
@@ -974,5 +975,186 @@ describe('history cap via saveQueue', () => {
     // We already have a test for 205 items. Let's verify the data integrity.
     const data = await loadQueue();
     expect(data.items).toEqual([]); // Fresh queue
+  });
+});
+
+// ── Position insertion ─────────────────────────────────────────────────────
+
+describe('position insertion', () => {
+  it('addItem with position.next inserts before first queued item', async () => {
+    // Add 3 items, mark first as running so it's not queued
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+    await markRunning(id1);
+
+    // Add with next=true — should insert before id2 (first queued)
+    const idNext = await addItem({ project: 'next', mode: 'm', position: { next: true } });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    // Order: id1 (running), idNext (queued, inserted before first queued), id2, id3
+    expect(ids).toEqual([id1, idNext, id2, id3]);
+  });
+
+  it('addItem with position.next appends to end when no queued items', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    await markRunning(id1);
+
+    // No queued items — should append
+    const idNext = await addItem({ project: 'next', mode: 'm', position: { next: true } });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, idNext]);
+  });
+
+  it('addItem with position.before inserts before target', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+
+    const idNew = await addItem({ project: 'new', mode: 'm', position: { before: id2 } });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, idNew, id2]);
+  });
+
+  it('addItem with position.after inserts after target', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+
+    const idNew = await addItem({ project: 'new', mode: 'm', position: { after: id1 } });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, idNew, id2]);
+  });
+
+  it('addItem with position.before throws on non-existent target', async () => {
+    await addItem({ project: 'a', mode: 'm' });
+    await expect(
+      addItem({ project: 'b', mode: 'm', position: { before: 'nonexistent' } }),
+    ).rejects.toThrow('Item not found: nonexistent');
+  });
+
+  it('addItem with position.after throws on non-existent target', async () => {
+    await addItem({ project: 'a', mode: 'm' });
+    await expect(
+      addItem({ project: 'b', mode: 'm', position: { after: 'nonexistent' } }),
+    ).rejects.toThrow('Item not found: nonexistent');
+  });
+
+  it('addItem without position appends to end', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, id2, id3]);
+  });
+});
+
+// ── moveItem ───────────────────────────────────────────────────────────────
+
+describe('moveItem', () => {
+  it('moveItem with next moves to front of queued items', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+
+    // Move id3 to next (first queued position)
+    await moveItem(id3, { next: true });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id3, id1, id2]);
+  });
+
+  it('moveItem with next respects running items at front', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+    await markRunning(id1);
+
+    // Move id3 to next — should go after running id1 but before queued id2
+    await moveItem(id3, { next: true });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, id3, id2]);
+  });
+
+  it('moveItem with before moves before target', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+
+    // Move id3 before id2
+    await moveItem(id3, { before: id2 });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id1, id3, id2]);
+  });
+
+  it('moveItem with after moves after target', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+    const id3 = await addItem({ project: 'c', mode: 'm' });
+
+    // Move id1 after id2
+    await moveItem(id1, { after: id2 });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual([id2, id1, id3]);
+  });
+
+  it('moveItem throws on non-existent item', async () => {
+    await expect(moveItem('nonexistent', { next: true })).rejects.toThrow(
+      'Item not found: nonexistent',
+    );
+  });
+
+  it('moveItem throws on running item', async () => {
+    const id = await addItem({ project: 'a', mode: 'm' });
+    await markRunning(id);
+
+    await expect(moveItem(id, { next: true })).rejects.toThrow(
+      "Cannot move item with status 'running' — only queued items can be moved",
+    );
+  });
+
+  it('moveItem throws on non-existent target for before', async () => {
+    const id = await addItem({ project: 'a', mode: 'm' });
+
+    await expect(moveItem(id, { before: 'nonexistent' })).rejects.toThrow(
+      'Target item not found: nonexistent',
+    );
+  });
+
+  it('moveItem throws on non-existent target for after', async () => {
+    const id = await addItem({ project: 'a', mode: 'm' });
+
+    await expect(moveItem(id, { after: 'nonexistent' })).rejects.toThrow(
+      'Target item not found: nonexistent',
+    );
+  });
+
+  it('moveItem with next appends to end when no other queued items', async () => {
+    const id1 = await addItem({ project: 'a', mode: 'm' });
+    await markRunning(id1);
+
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+
+    // id2 is the only queued item — move with next should still work
+    await moveItem(id2, { next: true });
+
+    const items = await getItems();
+    const ids = items.map((i) => i.id);
+    // id1 is running, id2 is the only queued item — after move it's still after id1
+    expect(ids).toEqual([id1, id2]);
   });
 });

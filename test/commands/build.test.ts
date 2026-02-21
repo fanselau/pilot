@@ -25,9 +25,13 @@ vi.mock('../../src/commands/add.js', () => ({
 }));
 
 // Mock queue-store
-vi.mock('../../src/core/queue-store.js', () => ({
-  getItemById: vi.fn(),
-}));
+vi.mock('../../src/core/queue-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/core/queue-store.js')>();
+  return {
+    ...actual,
+    getItemById: vi.fn(),
+  };
+});
 
 // Mock runner — we don't want to actually start a runner
 vi.mock('../../src/core/runner.js', () => ({

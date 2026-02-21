@@ -1,14 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import Database from 'better-sqlite3';
 
-// Mock execa before importing sessions module
-vi.mock('execa', () => ({
-  execa: vi.fn(),
+// Mock opencode-db before importing sessions module
+vi.mock('../../src/core/opencode-db.js', () => ({
+  listSessionsFromDb: vi.fn(),
+  findSessionFromDb: vi.fn(),
+  exportSessionFromDb: vi.fn(),
+  getSessionMessageCountFromDb: vi.fn(),
 }));
 
-import { execa } from 'execa';
+import {
+  listSessionsFromDb,
+  findSessionFromDb,
+  exportSessionFromDb,
+  getSessionMessageCountFromDb,
+} from '../../src/core/opencode-db.js';
 import {
   listSessions,
   findSession,
@@ -18,19 +24,19 @@ import {
 } from '../../src/core/sessions.js';
 import type { SessionInfo } from '../../src/core/types.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturesDir = path.join(__dirname, '..', 'fixtures');
+const mockedListSessions = vi.mocked(listSessionsFromDb);
+const mockedFindSession = vi.mocked(findSessionFromDb);
+const mockedExportSession = vi.mocked(exportSessionFromDb);
+const mockedGetMessageCount = vi.mocked(getSessionMessageCountFromDb);
 
-const sessionsFixture = readFileSync(
-  path.join(fixturesDir, 'sessions.json'),
-  'utf8',
-);
-const exportFixture = readFileSync(
-  path.join(fixturesDir, 'export.json'),
-  'utf8',
-);
-
-const mockedExeca = vi.mocked(execa);
+// Sample test data
+const sampleSessions: SessionInfo[] = [
+  { id: 'sess-001', title: 'resume-roast-execute-phase-3', updated: 1708436400000, created: 1708432800000 },
+  { id: 'sess-002', title: 'pet-portraits-plan-phase-2', updated: 1708435500000, created: 1708432200000 },
+  { id: 'sess-003', title: 'baby-predictor-verify-auto-1', updated: 1708434000000, created: 1708431600000 },
+  { id: 'sess-004', title: 'resume-roast-plan-phase-3', updated: 1708430000000, created: 1708428000000 },
+  { id: 'sess-005', title: 'pet-portraits-new-project', updated: 1708425000000, created: 1708423000000 },
+];
 
 describe('sessions', () => {
   beforeEach(() => {
@@ -43,10 +49,8 @@ describe('sessions', () => {
   });
 
   describe('listSessions', () => {
-    it('returns parsed SessionInfo[] from claude CLI output', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: sessionsFixture,
-      } as never);
+    it('returns SessionInfo[] from DB', async () => {
+      mockedListSessions.mockReturnValue(sampleSessions);
 
       const sessions = await listSessions();
 
@@ -56,226 +60,94 @@ describe('sessions', () => {
         title: 'resume-roast-execute-phase-3',
         updated: 1708436400000,
         created: 1708432800000,
-        message_count: undefined,
       } satisfies SessionInfo);
     });
 
-    it('calls opencode with correct arguments', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: '[]',
-      } as never);
+    it('delegates to listSessionsFromDb', async () => {
+      mockedListSessions.mockReturnValue([]);
 
       await listSessions();
 
-      expect(mockedExeca).toHaveBeenCalledWith('opencode', [
-        'session',
-        'list',
-        '--format',
-        'json',
-      ], { timeout: 5000 });
+      expect(mockedListSessions).toHaveBeenCalledOnce();
     });
 
-    it('returns empty array when claude binary not found', async () => {
-      mockedExeca.mockRejectedValueOnce(
-        new Error('ENOENT: claude not found'),
-      );
+    it('returns empty array when DB returns empty', async () => {
+      mockedListSessions.mockReturnValue([]);
 
       const sessions = await listSessions();
       expect(sessions).toEqual([]);
-    });
-
-    it('returns empty array on invalid JSON output', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: 'not json',
-      } as never);
-
-      const sessions = await listSessions();
-      expect(sessions).toEqual([]);
-    });
-
-    it('returns empty array when output is not an array', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: '{"not": "an array"}',
-      } as never);
-
-      const sessions = await listSessions();
-      expect(sessions).toEqual([]);
-    });
-
-    it('filters out malformed session entries', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          { id: 'valid', title: 'test', updated: 100, created: 50 },
-          { id: 'missing-title', updated: 100, created: 50 },
-          { id: 'wrong-type', title: 123, updated: 100, created: 50 },
-          null,
-          'not an object',
-        ]),
-      } as never);
-
-      const sessions = await listSessions();
-      expect(sessions).toHaveLength(1);
-      expect(sessions[0].id).toBe('valid');
     });
   });
 
   describe('findSession', () => {
-    beforeEach(() => {
-      mockedExeca.mockResolvedValue({
-        stdout: sessionsFixture,
-      } as never);
-    });
+    it('delegates to findSessionFromDb', async () => {
+      mockedFindSession.mockReturnValue(sampleSessions[0]!);
 
-    it('returns exact title match (case-sensitive)', async () => {
       const result = await findSession('resume-roast-execute-phase-3');
 
-      expect(result).not.toBeNull();
-      expect(result!.id).toBe('sess-001');
-    });
-
-    it('returns contains match when no exact match', async () => {
-      const result = await findSession('resume-roast');
-
-      expect(result).not.toBeNull();
-      // Should be sess-001 as it has the most recent updated timestamp
-      expect(result!.id).toBe('sess-001');
-    });
-
-    it('picks most recently updated on multiple contains matches', async () => {
-      // "resume-roast" matches sess-001 (updated: 1708436400000) and
-      // sess-004 (updated: 1708430000000). Should pick sess-001.
-      const result = await findSession('resume-roast');
-
-      expect(result).not.toBeNull();
-      expect(result!.id).toBe('sess-001');
-      expect(result!.updated).toBe(1708436400000);
-    });
-
-    it('performs case-insensitive contains matching', async () => {
-      const result = await findSession('RESUME-ROAST');
-
+      expect(mockedFindSession).toHaveBeenCalledWith('resume-roast-execute-phase-3');
       expect(result).not.toBeNull();
       expect(result!.id).toBe('sess-001');
     });
 
     it('returns null when no match found', async () => {
+      mockedFindSession.mockReturnValue(null);
+
       const result = await findSession('nonexistent-session');
-
       expect(result).toBeNull();
-    });
-
-    it('returns null when sessions list is empty', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: '[]',
-      } as never);
-
-      const result = await findSession('anything');
-      expect(result).toBeNull();
-    });
-
-    it('prefers exact match over contains match', async () => {
-      // "pet-portraits-new-project" is an exact match for sess-005
-      const result = await findSession('pet-portraits-new-project');
-
-      expect(result).not.toBeNull();
-      expect(result!.id).toBe('sess-005');
     });
   });
 
   describe('exportSession', () => {
-    it('returns parsed export data', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: exportFixture,
-      } as never);
+    it('returns parsed export data from DB', async () => {
+      const exportData = { messages: [{ role: 'user', content: 'Hello' }] };
+      mockedExportSession.mockReturnValue(exportData);
 
       const result = await exportSession('sess-001');
 
-      expect(result).toEqual(JSON.parse(exportFixture));
-    });
-
-    it('calls opencode with correct arguments', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: exportFixture,
-      } as never);
-
-      await exportSession('sess-001');
-
-      expect(mockedExeca).toHaveBeenCalledWith('opencode', [
-        'export',
-        'sess-001',
-      ], { timeout: 5000 });
+      expect(result).toEqual(exportData);
+      expect(mockedExportSession).toHaveBeenCalledWith('sess-001');
     });
 
     it('throws descriptive error on failure', async () => {
-      mockedExeca.mockRejectedValueOnce(
-        new Error('Command failed'),
-      );
+      mockedExportSession.mockImplementation(() => {
+        throw new Error('Failed to export session: sess-999: DB not available');
+      });
 
       await expect(exportSession('sess-999')).rejects.toThrow(
-        'Failed to export session: sess-999: Command failed',
+        'Failed to export session: sess-999',
       );
     });
   });
 
   describe('getSessionMessageCount', () => {
-    it('returns message count from exported session', async () => {
-      // First call: listSessions for findSession
-      mockedExeca.mockResolvedValueOnce({
-        stdout: sessionsFixture,
-      } as never);
-      // Second call: exportSession
-      mockedExeca.mockResolvedValueOnce({
-        stdout: exportFixture,
-      } as never);
+    it('returns message count from DB', async () => {
+      mockedFindSession.mockReturnValue(sampleSessions[0]!);
+      mockedGetMessageCount.mockReturnValue(4);
 
       const count = await getSessionMessageCount(
         'resume-roast-execute-phase-3',
       );
-      expect(count).toBe(4); // 4 messages in export fixture
+      expect(count).toBe(4);
     });
 
-    it('returns cached result within TTL', async () => {
-      // First call
-      mockedExeca.mockResolvedValueOnce({
-        stdout: sessionsFixture,
-      } as never);
-      mockedExeca.mockResolvedValueOnce({
-        stdout: exportFixture,
-      } as never);
+    it('does not use caching (direct DB query each time)', async () => {
+      mockedFindSession.mockReturnValue(sampleSessions[0]!);
+      mockedGetMessageCount.mockReturnValue(4);
 
-      const count1 = await getSessionMessageCount(
-        'resume-roast-execute-phase-3',
-      );
-
-      // Second call — should use cache, no additional execa calls
-      const count2 = await getSessionMessageCount(
-        'resume-roast-execute-phase-3',
-      );
+      const count1 = await getSessionMessageCount('resume-roast-execute-phase-3');
+      const count2 = await getSessionMessageCount('resume-roast-execute-phase-3');
 
       expect(count1).toBe(4);
       expect(count2).toBe(4);
-      // execa should have been called exactly twice (listSessions + exportSession)
-      expect(mockedExeca).toHaveBeenCalledTimes(2);
+      // Should call findSessionFromDb each time (no caching)
+      expect(mockedFindSession).toHaveBeenCalledTimes(2);
     });
 
     it('returns null when session not found', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: sessionsFixture,
-      } as never);
+      mockedFindSession.mockReturnValue(null);
 
       const count = await getSessionMessageCount('nonexistent');
-      expect(count).toBeNull();
-    });
-
-    it('returns null when export fails', async () => {
-      mockedExeca.mockResolvedValueOnce({
-        stdout: sessionsFixture,
-      } as never);
-      mockedExeca.mockRejectedValueOnce(new Error('Export failed'));
-
-      const count = await getSessionMessageCount(
-        'resume-roast-execute-phase-3',
-      );
       expect(count).toBeNull();
     });
   });

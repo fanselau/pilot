@@ -30,15 +30,20 @@ vi.mock('../../src/core/config.js', () => ({
   })),
 }));
 
-vi.mock('../../src/core/queue-store.js', () => ({
-  findLaunchableAtomic: vi.fn(),
-  cascadeFailure: vi.fn().mockResolvedValue([]),
-  markCompleted: vi.fn().mockResolvedValue(undefined),
-  markFailed: vi.fn().mockResolvedValue(undefined),
-  markQueued: vi.fn().mockResolvedValue(undefined),
-  loadQueue: vi.fn().mockResolvedValue({ version: 1, items: [], history: [], completedIds: [] }),
-  ensurePilotDir: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../../src/core/queue-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/core/queue-store.js')>();
+  return {
+    ...actual,
+    findLaunchable: vi.fn().mockResolvedValue(null),
+    findLaunchableAtomic: vi.fn(),
+    cascadeFailure: vi.fn().mockResolvedValue([]),
+    markCompleted: vi.fn().mockResolvedValue(undefined),
+    markFailed: vi.fn().mockResolvedValue(undefined),
+    markQueued: vi.fn().mockResolvedValue(undefined),
+    loadQueue: vi.fn().mockResolvedValue({ version: 1, items: [], history: [], completedIds: [] }),
+    ensurePilotDir: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock('../../src/core/spawn.js', () => ({
   preSpawnChecks: vi.fn().mockResolvedValue(undefined),
@@ -99,12 +104,13 @@ vi.mock('node:fs', async () => {
   };
 });
 
-import { findLaunchableAtomic } from '../../src/core/queue-store.js';
+import { findLaunchable, findLaunchableAtomic } from '../../src/core/queue-store.js';
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
 import { createRunner } from '../../src/core/runner.js';
 import type { QueueJsonItem } from '../../src/core/types.js';
 
+const mockedFindLaunchable = vi.mocked(findLaunchable);
 const mockedFindLaunchableAtomic = vi.mocked(findLaunchableAtomic);
 const mockedSpawnSession = vi.mocked(spawnSession);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
@@ -357,7 +363,7 @@ describe('Cross-project parallel builds', () => {
     const itemB = makeItem({ id: 'id-dry2', project: 'dry-b' });
 
     let scanCount = 0;
-    mockedFindLaunchableAtomic.mockImplementation(async () => {
+    mockedFindLaunchable.mockImplementation(async () => {
       scanCount++;
       if (scanCount === 1) return { ...itemA, status: 'running' as const, attempts: 1 };
       if (scanCount === 2) return { ...itemB, status: 'running' as const, attempts: 1 };

@@ -30,6 +30,11 @@ vi.mock('../../src/core/setup.js', () => ({
   setupProject: vi.fn(),
 }));
 
+vi.mock('../../src/core/process.js', () => ({
+  readPidFile: vi.fn(async () => null),
+  isProcessAlive: vi.fn(() => false),
+}));
+
 vi.mock('node:fs/promises', () => ({
   stat: vi.fn(),
   readFile: vi.fn(),
@@ -44,6 +49,7 @@ import { stat, readFile, writeFile, readdir, mkdir, copyFile } from 'node:fs/pro
 import { detectScope, detectProjectState, generateRequirementsContent, resolveInternalMode } from '../../src/core/smart-add.js';
 import { addItem } from '../../src/core/queue-store.js';
 import { setupProject } from '../../src/core/setup.js';
+import { readPidFile, isProcessAlive } from '../../src/core/process.js';
 import { setJsonMode } from '../../src/util/output.js';
 import { addCommand } from '../../src/commands/add.js';
 import type { ScopeDetectionResult, ProjectStateResult } from '../../src/core/types.js';
@@ -60,6 +66,8 @@ const mockedGenerateRequirementsContent = vi.mocked(generateRequirementsContent)
 const mockedResolveInternalMode = vi.mocked(resolveInternalMode);
 const mockedAddItem = vi.mocked(addItem);
 const mockedSetupProject = vi.mocked(setupProject);
+const mockedReadPidFile = vi.mocked(readPidFile);
+const mockedIsProcessAlive = vi.mocked(isProcessAlive);
 
 // Suppress unused var warnings
 void mockedCopyFile;
@@ -116,6 +124,9 @@ describe('addCommand', () => {
       throw new Error('process.exit called');
     }) as typeof process.exit);
     setJsonMode(false);
+    // Default: runner not active
+    mockedReadPidFile.mockResolvedValue(null);
+    mockedIsProcessAlive.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -124,93 +135,82 @@ describe('addCommand', () => {
     setJsonMode(false);
   });
 
-  it('add with requirements file detects scope and queues via addItem', async () => {
-    // Mock: stat returns file
-    mockedStat.mockResolvedValue({ isDirectory: () => false, isFile: () => true } as never);
-    // Mock: readFile returns markdown content with heading
-    mockedReadFile.mockResolvedValue(
-      '# Dark Mode\n\n## Requirements\n### Must Have\n- [ ] item 1\n- [ ] item 2\n- [ ] item 3\n- [ ] item 4\n- [ ] item 5' as never,
-    );
-    mockedWriteFile.mockResolvedValue(undefined);
-
-    mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'phase', rationale: '5 items' }));
-    mockedResolveInternalMode.mockReturnValue('add-and-build');
-
-    const result = await addCommand('resume-roast', '/external/requirements/dark-mode.md', {});
-
-    // addItem was called with correct params
-    expect(mockedAddItem).toHaveBeenCalledWith({
-      project: 'resume-roast',
-      mode: 'add-and-build',
-      description: 'Dark Mode',
-    });
-
-    expect(result.id).toBe('ab12');
-    expect(result.project).toBe('resume-roast');
-    expect(result.scope).toBe('phase');
-    expect(result.internalMode).toBe('add-and-build');
-    expect(result.dryRun).toBe(false);
-  });
-
-  it('add with string description queues as quick', async () => {
-    // Mock: stat throws (not a file/dir)
+  it('add with no scope flag defaults to quick (no heuristic detection)', async () => {
     mockedStat.mockRejectedValue(new Error('ENOENT'));
-
     mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick', rationale: 'String description' }));
     mockedResolveInternalMode.mockReturnValue('quick');
 
     const result = await addCommand('resume-roast', 'fix the favicon', {});
 
-    expect(mockedAddItem).toHaveBeenCalledWith({
+    // detectScope should NOT be called — default is quick, no heuristics
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
       project: 'resume-roast',
       mode: 'quick',
       description: 'fix the favicon',
-    });
+    }));
 
     expect(result.scope).toBe('quick');
     expect(result.internalMode).toBe('quick');
     expect(result.id).toBe('ab12');
   });
 
-  it('add with directory queues as milestone', async () => {
-    // Mock: stat returns directory
-    mockedStat.mockResolvedValue({ isDirectory: () => true, isFile: () => false } as never);
-    mockedReaddir.mockResolvedValue(['phase1.md', 'phase2.md', 'readme.txt'] as never);
+  it('add with requirements file defaults to quick scope (no heuristic)', async () => {
+    // Mock: stat returns file
+    mockedStat.mockResolvedValue({ isDirectory: () => false, isFile: () => true } as never);
+    mockedReadFile.mockResolvedValue(
+      '# Dark Mode\n\n## Requirements\n### Must Have\n- [ ] item 1\n- [ ] item 2' as never,
+    );
+    mockedWriteFile.mockResolvedValue(undefined);
 
     mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'milestone', isDirectory: true, rationale: 'Directory detected' }));
+    // No scope flag → defaults to quick, detectScope NOT called
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    const result = await addCommand('resume-roast', '/external/requirements/dark-mode.md', {});
+
+    // detectScope should NOT be called
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+    expect(result.scope).toBe('quick');
+  });
+
+  it('add with --phase flag sets scope to phase', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('add-and-build');
+    mockedGenerateRequirementsContent.mockReturnValue('# Generated\n\n- [ ] task');
+    mockedWriteFile.mockResolvedValue(undefined);
+    mockedMkdir.mockResolvedValue(undefined);
+
+    const result = await addCommand('resume-roast', 'add dark mode', { phase: true });
+
+    // detectScope should NOT be called (--phase flag bypasses it)
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+    // resolveInternalMode should be called with scope='phase'
+    expect(mockedResolveInternalMode).toHaveBeenCalledWith('phase', expect.anything());
+
+    expect(result.scope).toBe('phase');
+    expect(result.internalMode).toBe('add-and-build');
+  });
+
+  it('add with --milestone flag sets scope to milestone', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
     mockedResolveInternalMode.mockReturnValue('build-full');
+    mockedGenerateRequirementsContent.mockReturnValue('# Generated\n\n- [ ] task');
+    mockedWriteFile.mockResolvedValue(undefined);
+    mockedMkdir.mockResolvedValue(undefined);
 
-    const result = await addCommand('resume-roast', '/path/to/requirements/v2/', {});
+    const result = await addCommand('resume-roast', 'rebuild everything', { milestone: true });
 
-    expect(mockedAddItem).toHaveBeenCalledWith({
-      project: 'resume-roast',
-      mode: 'build-full',
-      description: expect.stringContaining('requirements files'),
-    });
-
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+    expect(mockedResolveInternalMode).toHaveBeenCalledWith('milestone', expect.anything());
     expect(result.scope).toBe('milestone');
     expect(result.internalMode).toBe('build-full');
   });
 
-  it('add --dry-run does not call addItem', async () => {
-    mockedStat.mockRejectedValue(new Error('ENOENT'));
-    mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
-    mockedResolveInternalMode.mockReturnValue('quick');
-
-    const result = await addCommand('resume-roast', 'fix bug', { dryRun: true });
-
-    // addItem should NOT be called
-    expect(mockedAddItem).not.toHaveBeenCalled();
-
-    expect(result.dryRun).toBe(true);
-    expect(result.id).toBeNull();
-  });
-
-  it('add --as phase overrides detection', async () => {
+  it('add --as phase overrides detection (backward compat)', async () => {
     mockedStat.mockRejectedValue(new Error('ENOENT'));
     mockedDetectProjectState.mockResolvedValue(makeProjectState());
     mockedResolveInternalMode.mockReturnValue('add-and-build');
@@ -229,13 +229,111 @@ describe('addCommand', () => {
     expect(result.internalMode).toBe('add-and-build');
   });
 
+  it('add passes position.next to addItem when --next flag set', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    await addCommand('resume-roast', 'urgent fix', { next: true });
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
+      position: { next: true, before: undefined, after: undefined },
+    }));
+  });
+
+  it('add passes position.before to addItem when --before flag set', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    await addCommand('resume-roast', 'fix bug', { before: 'cd34' });
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
+      position: { next: undefined, before: 'cd34', after: undefined },
+    }));
+  });
+
+  it('add passes position.after to addItem when --after flag set', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    await addCommand('resume-roast', 'fix bug', { after: 'ef56' });
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
+      position: { next: undefined, before: undefined, after: 'ef56' },
+    }));
+  });
+
+  it('add passes dependsOn to addItem when --depends-on flag set', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    await addCommand('resume-roast', 'fix bug', { dependsOn: 'ab12' });
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
+      dependsOn: 'ab12',
+    }));
+  });
+
+  it('add does not pass position when no position flags set', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    await addCommand('resume-roast', 'fix bug', {});
+
+    expect(mockedAddItem).toHaveBeenCalledWith(expect.objectContaining({
+      position: undefined,
+    }));
+  });
+
+  it('add shows runner PID when active', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+    mockedReadPidFile.mockResolvedValue(12345);
+    mockedIsProcessAlive.mockReturnValue(true);
+
+    await addCommand('resume-roast', 'fix bug', {});
+
+    expect(output).toContain('Runner active (PID 12345)');
+    // Should NOT show "Runner not active" hint
+    expect(output).not.toContain('Runner not active');
+  });
+
+  it('add shows runner inactive hint when not running', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+    mockedReadPidFile.mockResolvedValue(null);
+
+    await addCommand('resume-roast', 'fix bug', {});
+
+    expect(output).toContain('Runner not active. Start with: pilot run');
+  });
+
+  it('add --dry-run does not call addItem', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    const result = await addCommand('resume-roast', 'fix bug', { dryRun: true });
+
+    // addItem should NOT be called
+    expect(mockedAddItem).not.toHaveBeenCalled();
+
+    expect(result.dryRun).toBe(true);
+    expect(result.id).toBeNull();
+  });
+
   it('add to project without .opencode runs setup', async () => {
     mockedStat.mockRejectedValue(new Error('ENOENT'));
     mockedDetectProjectState.mockResolvedValue(makeProjectState({
       hasOpencode: false,
       needsSetup: true,
     }));
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
     mockedResolveInternalMode.mockReturnValue('quick');
     mockedSetupProject.mockResolvedValue({ created: [], skipped: [], errors: [] });
 
@@ -251,7 +349,6 @@ describe('addCommand', () => {
       isQueued: true,
       queuedMode: 'build-full',
     }));
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
     mockedResolveInternalMode.mockReturnValue('quick');
 
     await addCommand('resume-roast', 'fix bug', {});
@@ -277,13 +374,13 @@ describe('addCommand', () => {
   it('add generates requirements file for non-quick scope with string input', async () => {
     mockedStat.mockRejectedValue(new Error('ENOENT'));
     mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'phase' }));
+    // Use --phase flag to force phase scope (since default is now quick)
     mockedResolveInternalMode.mockReturnValue('add-and-build');
     mockedGenerateRequirementsContent.mockReturnValue('# Add Dark Mode\n\n## Requirements\n### Must Have\n- [ ] add dark mode');
     mockedWriteFile.mockResolvedValue(undefined);
     mockedMkdir.mockResolvedValue(undefined);
 
-    const result = await addCommand('resume-roast', 'add dark mode', {});
+    const result = await addCommand('resume-roast', 'add dark mode', { phase: true });
 
     // mkdir should be called for requirements dir
     expect(mockedMkdir).toHaveBeenCalledWith(
@@ -316,7 +413,6 @@ describe('addCommand', () => {
   it('add does not start runner (fire-and-forget)', async () => {
     mockedStat.mockRejectedValue(new Error('ENOENT'));
     mockedDetectProjectState.mockResolvedValue(makeProjectState());
-    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
     mockedResolveInternalMode.mockReturnValue('quick');
 
     const result = await addCommand('resume-roast', 'fix bug', {});
@@ -328,9 +424,20 @@ describe('addCommand', () => {
     // No runner-related modules should be imported or called for spawning
     // The add command only reads PID to show "runner not active" hint
     // It does NOT call createRunner, execa to spawn runner, etc.
-    // Verify by checking that no process spawning occurred
-    // (the mock setup doesn't include runner.js or execa — if add tried
-    //  to import/call them, it would fail)
     expect(result.dryRun).toBe(false);
+  });
+
+  it('add with directory and no scope flag defaults to quick', async () => {
+    mockedStat.mockResolvedValue({ isDirectory: () => true, isFile: () => false } as never);
+    mockedReaddir.mockResolvedValue(['phase1.md', 'phase2.md', 'readme.txt'] as never);
+
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    // No scope flag → defaults to quick, detectScope NOT called
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    const result = await addCommand('resume-roast', '/path/to/requirements/v2/', {});
+
+    expect(mockedDetectScope).not.toHaveBeenCalled();
+    expect(result.scope).toBe('quick');
   });
 });
