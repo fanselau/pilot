@@ -118,9 +118,9 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — Foundation: types, nanoid dep, queue-store.ts, tests
-- [ ] 06-02-PLAN.md — Runner migration to queue-store
-- [ ] 06-03-PLAN.md — Command layer migration (add/build/scope/queue/status/config/import)
-- [ ] 06-04-PLAN.md — TUI migration, test updates, legacy code cleanup
+- [x] 06-02-PLAN.md — Runner migration to queue-store
+- [x] 06-03-PLAN.md — Command layer migration (add/build/scope/queue/status/config/import)
+- [x] 06-04-PLAN.md — TUI migration, test updates, legacy code cleanup
 
 **Success Criteria:**
 - Queue stored as ~/.pilot/queue.json with version 1 schema

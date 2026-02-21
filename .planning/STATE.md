@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 6 of 13 (Queue storage migration per requirements/queue-storage-migration.md)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-21 - Completed 06-03-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-21 - Completed 06-04-PLAN.md
 
-Progress: █████████████████████████ 100% (39/40 plans)
+Progress: █████████████████████████ 100% (40/40 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 6 in progress — queue storage migration (3/4 plans)
+**Current focus:** Phase 6 complete — queue storage migration (4/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
-- **Status:** in progress (3/4 plans complete)
+- **Status:** complete (4/4 plans)
 
 ### Phase 7: Smart add per requirements/smart-add.md
 - **Status:** complete (2/4 plans executed [gap closure 03+04], verified ✓)
@@ -159,9 +159,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 06-03 | JSON backward compat: queued→pending, description→args, line_num=0 | Preserve external consumer contracts during migration |
 | 06-03 | Queue --history for completed/failed, inline only shows running/queued | Clean separation of active vs historical items |
 | 06-03 | import.ts uses local shortId matching queue-store | Avoids exposing internal ID generator |
+| 06-04 | smart-add.ts migrated from parseQueueFile to getItems | Was reading stale QUEUE.md instead of queue.json |
+| 06-04 | TUI migration already done in non-plan commits | Prior commits a6003cc and 38cd6ef handled useStatusData/QueuePanel/Dashboard |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:06:14Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-02-21T11:16:29Z
+Stopped at: Completed 06-04-PLAN.md (Phase 6 complete)
 Resume file: None
