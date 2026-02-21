@@ -238,10 +238,19 @@ Plans:
 Plans:
 (to be planned)
 
-### Phase 14: E2E test suite per requirements/e2e-test-suite.md
+### Phase 14: Production hardening per requirements/production-hardening.md
+
+**Goal:** Make the daemon bulletproof for multi-day unsupervised operation. Crash recovery, resource management, stuck auto-recovery, log rotation, atomic writes, disk/memory guards. Every failure mode from the bash runner era must be handled automatically.
+**Depends on:** Phase 13
+**Plans:** 0 plans
+
+Plans:
+(to be planned)
+
+### Phase 15: E2E test suite per requirements/e2e-test-suite.md
 
 **Goal:** Comprehensive end-to-end test suite that exercises every CLI command as a subprocess against real (temp) project directories. Final gate before replacing the bash queue runner.
-**Depends on:** Phase 13
+**Depends on:** Phase 14
 **Plans:** 0 plans
 
 Plans:

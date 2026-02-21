@@ -11,9 +11,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import type { QueueEntry, SessionInfo } from '../core/types.js';
+import type { QueueJsonItem, QueueHistoryItem, SessionInfo } from '../core/types.js';
 import { listSessions } from '../core/sessions.js';
-import { parseQueueFile } from '../core/queue-parser.js';
+import { getItems, getHistory } from '../core/queue-store.js';
 import { scanPidFiles, readPidFile, isProcessAlive, getProcessRuntime } from '../core/process.js';
 import { scoreFromSignals, getLogStaleness, getProcessRss, getSystemFreeMem } from '../core/stuck.js';
 import type { StuckScoreResult } from '../core/stuck.js';
@@ -46,7 +46,7 @@ export interface StatusSummary {
 
 export interface StatusData {
   running: RunningSession[];
-  queue: QueueEntry[];
+  queue: QueueJsonItem[];
   completed: SessionInfo[];
   runner: RunnerStatus;
   summary: StatusSummary;
@@ -65,7 +65,7 @@ export interface StatusData {
  */
 export function useStatusData(opts: { intervalMs: number }): StatusData {
   const [running, setRunning] = useState<RunningSession[]>([]);
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [queue, setQueue] = useState<QueueJsonItem[]>([]);
   const [completed, setCompleted] = useState<SessionInfo[]>([]);
   const [runner, setRunner] = useState<RunnerStatus>({ active: false, pid: null });
   const [summary, setSummary] = useState<StatusSummary>({
@@ -78,11 +78,12 @@ export function useStatusData(opts: { intervalMs: number }): StatusData {
     try {
       const config = getConfig();
 
-      // Fetch sessions + PID entries + queue in parallel
-      const [sessions, pidEntries, queueEntries] = await Promise.all([
+      // Fetch sessions + PID entries + queue items + history in parallel
+      const [sessions, pidEntries, queueEntries, history] = await Promise.all([
         listSessions().catch((): SessionInfo[] => []),
         scanPidFiles().catch((): Array<{ session: string; pid: number }> => []),
-        parseQueueFile(config.queueFile).catch((): QueueEntry[] => []),
+        getItems().catch((): QueueJsonItem[] => []),
+        getHistory(100).catch((): QueueHistoryItem[] => []),
       ]);
 
       // Check runner status
@@ -145,9 +146,10 @@ export function useStatusData(opts: { intervalMs: number }): StatusData {
 
       // Build summary counts
       const stuckCount = runningResults.filter((r) => r.verdict === 'stuck').length;
-      const queuedCount = queueEntries.filter((e) => e.status === 'pending').length;
-      const doneCount = queueEntries.filter((e) => e.status === 'done').length;
-      const failedCount = queueEntries.filter((e) => e.status === 'failed').length;
+      const queuedCount = queueEntries.filter((e) => e.status === 'queued').length;
+      // Done/failed items are in history, not in active items
+      const doneCount = history.filter((h) => h.status === 'completed').length;
+      const failedCount = history.filter((h) => h.status === 'failed').length;
 
       setSummary({
         running: runningResults.length,
