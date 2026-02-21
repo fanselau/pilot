@@ -306,6 +306,7 @@ program
   .option('--once', 'Process queue once then exit')
   .option('--dry-run', 'Show what would run')
   .option('--force', 'Ignore stale PID file')
+  .option('--no-tui', 'Run in headless mode (no TUI)')
   .option('--notify', 'Enable notifications')
   .option('--quiet', 'Suppress notifications')
   .action(async (localOpts: Record<string, unknown>) => {
