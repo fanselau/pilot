@@ -725,15 +725,48 @@ class Runner extends EventEmitter<RunnerEvents> {
     // Determine result — uses per-item maxAttempts (attempts already incremented
     // by findLaunchableAtomic on launch)
     let result: 'success' | 'success_no_artifacts' | 'retry' | 'failed';
+    let failureCategory: string | undefined;
+
+    // Flaky detection: job failed quickly with tiny log output
+    let logSize = 0;
+    try {
+      const logStat = statSync(job.logFile);
+      logSize = logStat.size;
+    } catch { /* file may not exist */ }
+    const isFlaky = exitCode !== 0 && duration < 5 * 60 * 1000 && logSize < 4096;
 
     if (newCommits > 0 || planningChanges) {
       result = 'success';
     } else if (exitCode === 0) {
       result = 'success_no_artifacts';
-    } else if (job.item.attempts < job.item.maxAttempts) {
-      result = 'retry';
-    } else {
+    } else if (job.item.attempts >= job.item.maxAttempts) {
+      // Normal attempts exhausted — check if we tracked flaky retries
+      const flakyCount = this.flakyAttempts.get(job.item.id) ?? 0;
+      if (isFlaky && flakyCount > 0) {
+        failureCategory = 'consistently_flaky';
+        this.emit('error',
+          `Job ${job.title} consistently flaky after ${flakyCount} flaky retries — marking failed`,
+        );
+      }
       result = 'failed';
+    } else if (isFlaky && (this.flakyAttempts.get(job.item.id) ?? 0) < 3) {
+      // Flaky job — retry immediately
+      result = 'retry';
+      this.flakyAttempts.set(job.item.id, (this.flakyAttempts.get(job.item.id) ?? 0) + 1);
+      this.emit('error',
+        `Job ${job.title} detected as flaky (attempt ${this.flakyAttempts.get(job.item.id)}/3, ` +
+        `duration ${Math.round(duration / 1000)}s, log ${logSize} bytes) — retrying`,
+      );
+    } else if (isFlaky) {
+      // 3 flaky failures — consistently flaky, mark failed
+      result = 'failed';
+      failureCategory = 'consistently_flaky';
+      this.emit('error',
+        `Job ${job.title} consistently flaky after 3 flaky retries — marking failed`,
+      );
+    } else {
+      // Normal retry (still has attempts left)
+      result = 'retry';
     }
 
     // Update queue via queue-store (no manual locking needed — store handles it)
@@ -743,7 +776,9 @@ class Runner extends EventEmitter<RunnerEvents> {
       } else if (result === 'retry') {
         await markQueued(job.item.id);
       } else {
-        await markFailed(job.item.id, `exit code ${exitCode}`);
+        await markFailed(job.item.id, failureCategory === 'consistently_flaky'
+          ? 'consistently flaky after 3 attempts'
+          : `exit code ${exitCode}`);
         // Cascade failure to transitive dependents
         try {
           const blockedIds = await cascadeFailure(job.item.id);
@@ -770,7 +805,7 @@ class Runner extends EventEmitter<RunnerEvents> {
         result,
         commits: newCommits,
         messages: 0, // We don't track message count (no ≥8 messages heuristic)
-        ...(result === 'failed' ? { failure_category: `exit_${exitCode}` } : {}),
+        ...(result === 'failed' ? { failure_category: failureCategory ?? `exit_${exitCode}` } : {}),
       });
     } catch (err) {
       this.emit('error', `Failed to log postmortem: ${String(err)}`);
@@ -826,6 +861,110 @@ class Runner extends EventEmitter<RunnerEvents> {
         // For synthetic PIDs (lifecycle modes), set exit code to trigger reap
         this.state.exitCodes.set(pid, -1);
       }
+    }
+  }
+
+  // ── Stuck detection ─────────────────────────────────────────────────
+
+  /**
+   * Check all active jobs for stuck signals.
+   *
+   * Called every 60 seconds from the main loop. Uses the daemon-optimized
+   * stuck scorer (no CPU sampling — instant results).
+   *
+   * Stuck jobs are killed (SIGTERM → tree-kill) and their exit code is
+   * set to -1 so they are reaped and retried via the normal completion flow.
+   *
+   * Skips synthetic PIDs (lifecycle modes) — they manage their own steps.
+   */
+  private async checkStuckJobs(): Promise<void> {
+    for (const [pid, job] of this.state.activeJobs) {
+      // Skip synthetic PIDs (lifecycle modes — managed differently)
+      if (pid < 0) continue;
+
+      const runtimeSeconds = Math.round((Date.now() - job.startTime) / 1000);
+
+      try {
+        const assessment = await computeDaemonStuckScore(
+          pid, job.title, job.logFile, runtimeSeconds,
+        );
+
+        if (assessment.verdict === 'stuck') {
+          this.emit('error',
+            `Job ${job.title} is stuck (score ${assessment.score}): ` +
+            assessment.signals.map(s => s.detail).join(', '),
+          );
+
+          // Kill the process tree
+          try { process.kill(-pid, 'SIGTERM'); } catch { /* group may not exist */ }
+          await sleep(5000);
+          if (isProcessAlive(pid)) {
+            await killProcessTree(pid);
+          }
+
+          // Set exit code to trigger reap → handleJobCompletion handles retry
+          this.state.exitCodes.set(pid, -1);
+        }
+      } catch {
+        // Stuck check failure for individual job must not crash daemon
+      }
+    }
+  }
+
+  // ── Periodic orphan cleanup ───────────────────────────────────────────
+
+  /**
+   * Find and kill orphaned opencode processes not tracked by the daemon.
+   *
+   * Called every 30 minutes from the main loop. Finds running opencode
+   * processes via pgrep, cross-references with activeJobs PIDs, and kills
+   * any that have been running for > 2 hours without being tracked.
+   *
+   * This catches processes from crashed daemon runs that weren't cleaned up.
+   */
+  private async cleanOrphanPeriodic(): Promise<void> {
+    try {
+      const result = await execa('pgrep', ['-f', 'opencode'], { reject: false });
+      if (result.exitCode !== 0 || !result.stdout.trim()) {
+        return; // No opencode processes found
+      }
+
+      const pids = result.stdout.trim().split('\n')
+        .map((p) => parseInt(p.trim(), 10))
+        .filter((p) => !Number.isNaN(p) && p > 0);
+
+      if (pids.length === 0) return;
+
+      // Build set of tracked PIDs
+      const trackedPids = new Set<number>();
+      for (const pid of this.state.activeJobs.keys()) {
+        if (pid > 0) trackedPids.add(pid);
+      }
+
+      // Exclude our own PID and parent PID
+      const selfPid = process.pid;
+      const parentPid = process.ppid;
+
+      for (const pid of pids) {
+        // Skip self, parent, and tracked PIDs
+        if (pid === selfPid || pid === parentPid) continue;
+        if (trackedPids.has(pid)) continue;
+
+        // Check runtime — only kill if > 2 hours old
+        try {
+          const runtime = await getProcessRuntime(pid);
+          if (runtime !== null && runtime > 2 * 60 * 60) {
+            this.emit('error',
+              `Killing orphan opencode process ${pid} (running ${Math.round(runtime / 60)}min, not tracked by daemon)`,
+            );
+            await killProcessTree(pid);
+          }
+        } catch {
+          // Can't check runtime — skip this PID
+        }
+      }
+    } catch {
+      // pgrep unavailable or error — non-critical
     }
   }
 
