@@ -12,7 +12,21 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import type { QueueEntry } from './types.js';
+
+/**
+ * Legacy queue entry type — local to queue-parser.
+ * Only used by QUEUE.md parsing (import command). Not part of the runtime contract.
+ */
+export interface QueueEntry {
+  lineNum: number;
+  project: string;
+  mode: string;
+  args: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  description?: string;
+  dependsOn?: string[];
+  timeout?: number;
+}
 
 // ── Status prefix patterns ─────────────────────────────────────────────────
 

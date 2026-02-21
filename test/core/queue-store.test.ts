@@ -501,6 +501,7 @@ describe('circular dependency detection', () => {
       version: 1,
       items: [makeItem('B', fakeNewId)],
       history: [],
+      completedIds: [],
     });
 
     // Now if addItem generates id=fakeNewId and depends on B, it would cycle
@@ -575,6 +576,7 @@ describe('loadQueue', () => {
         meta: {},
       }],
       history: [],
+      completedIds: [],
     });
 
     const data = await loadQueue();
@@ -585,7 +587,7 @@ describe('loadQueue', () => {
 
 describe('saveQueue', () => {
   it('writes valid JSON with 2-space indent', async () => {
-    await saveQueue({ version: 1, items: [], history: [] });
+    await saveQueue({ version: 1, items: [], history: [], completedIds: [] });
 
     const queueFile = (globalThis as Record<string, unknown>).__TEST_QUEUE_JSON__ as string;
     const raw = await readFile(queueFile, 'utf8');
