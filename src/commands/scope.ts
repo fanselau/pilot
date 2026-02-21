@@ -2,14 +2,14 @@
  * pilot scope <project> <desc> — Add phase to roadmap.
  *
  * Resolves project dir, spawns gsd-add-phase with stdio: 'inherit'.
- * With --build flag: also adds to queue and starts runner.
+ * With --build flag: also adds to queue.json and starts runner.
  */
 
 import { execa } from 'execa';
 import path from 'node:path';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { getConfig } from '../core/config.js';
-import { withQueueLock } from '../core/lock.js';
+import { addItem } from '../core/queue-store.js';
 import { readPidFile, isProcessAlive } from '../core/process.js';
 
 function truncateTitle(title: string, max = 80): string {
@@ -50,14 +50,12 @@ export async function scopeCommand(
     process.exit(result.exitCode ?? 1);
   }
 
-  // --build: also add to queue and start runner
+  // --build: also add to queue.json and start runner
   if (opts['build'] === true) {
-    const entryLine = `## ${project} | add-and-build | ${desc}`;
-
-    await withQueueLock(async () => {
-      const content = await readFile(config.queueFile, 'utf8').catch(() => '');
-      const newContent = content.trimEnd() + '\n\n' + entryLine + '\n';
-      await writeFile(config.queueFile, newContent);
+    await addItem({
+      project,
+      mode: 'add-and-build',
+      description: desc,
     });
 
     // Start runner if not active

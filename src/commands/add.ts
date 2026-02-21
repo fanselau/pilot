@@ -4,7 +4,7 @@
  * Reads input (file, directory, or description string), detects scope
  * (milestone/phase/quick) via smart-add core logic, resolves the correct
  * internal GSD mode, handles project setup if needed, and writes to
- * QUEUE.md via withQueueLock.
+ * queue.json via queue-store.
  *
  * Users never see GSD modes — scope detection and mode resolution are
  * internal implementation details.
@@ -19,7 +19,7 @@ import {
   generateRequirementsContent,
   resolveInternalMode,
 } from '../core/smart-add.js';
-import { withQueueLock } from '../core/lock.js';
+import { addItem } from '../core/queue-store.js';
 import { setupProject } from '../core/setup.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { dim, yellow } from '../util/colors.js';
@@ -28,6 +28,7 @@ import type { SmartAddScope, ScopeDetectionResult } from '../core/types.js';
 // ── AddResult type ─────────────────────────────────────────────────────────
 
 export interface AddResult {
+  id: string | null;
   project: string;
   scope: SmartAddScope;
   internalMode: string;
@@ -219,6 +220,7 @@ export async function addCommand(
       }
     }
     return {
+      id: null,
       project,
       scope: scopeResult.scope,
       internalMode,
@@ -228,23 +230,18 @@ export async function addCommand(
     };
   }
 
-  // ── Step 13: Write to QUEUE.md ──────────────────────────────────────────
+  // ── Step 13: Write to queue.json ────────────────────────────────────────
 
-  const argsStr = description || '';
-  const entryLine = argsStr.length > 0
-    ? `## ${project} | ${internalMode} | ${argsStr}`
-    : `## ${project} | ${internalMode}`;
-
-  await withQueueLock(async () => {
-    const queueContent = await readFile(config.queueFile, 'utf8').catch(() => '');
-    const newContent = queueContent.trimEnd() + '\n\n' + entryLine + '\n';
-    await writeFile(config.queueFile, newContent);
+  const id = await addItem({
+    project,
+    mode: internalMode,
+    description: description || '',
   });
 
   // ── Step 14: Output result ──────────────────────────────────────────────
 
   if (!isJsonMode()) {
-    outputHuman(`✓ Queued: ${project} | ${scopeResult.scope} → ${internalMode}`);
+    outputHuman(`✓ Queued (${id}): ${project} | ${scopeResult.scope} → ${internalMode}`);
     if (requirementsPath) {
       outputHuman(`  Requirements: ${requirementsPath}`);
     }
@@ -252,6 +249,7 @@ export async function addCommand(
   }
 
   return {
+    id,
     project,
     scope: scopeResult.scope,
     internalMode,
