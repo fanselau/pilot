@@ -8,7 +8,7 @@
 import Table from 'cli-table3';
 import { getConfig } from '../core/config.js';
 import { listSessions } from '../core/sessions.js';
-import { parseQueueFile } from '../core/queue-parser.js';
+import { getItems } from '../core/queue-store.js';
 import { scanPidFiles, readPidFile, isProcessAlive, getProcessRuntime } from '../core/process.js';
 import { computeStuckScoreFast } from '../core/stuck.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
@@ -19,7 +19,7 @@ import type {
   SessionInfo,
   StuckSession,
   StuckAssessment,
-  QueueEntry,
+  QueueJsonItem,
   QueueItem,
 } from '../core/types.js';
 
@@ -52,14 +52,14 @@ async function statusCommand(opts: StatusOpts): Promise<void> {
     }
   }
 
-  // 4. Parse queue
-  let queueEntries: QueueEntry[] = [];
+  // 4. Read queue from queue.json
+  let queueEntries: QueueJsonItem[] = [];
   try {
-    queueEntries = await parseQueueFile(config.queueFile);
+    queueEntries = await getItems();
   } catch {
     // Queue file may not exist — that's fine
   }
-  const pendingEntries = queueEntries.filter((e) => e.status === 'pending');
+  const pendingEntries = queueEntries.filter((e) => e.status === 'queued');
 
   // 5. Runner status — check BEFORE stuck detection to exclude runner PID
   let runnerActive = false;
@@ -103,13 +103,14 @@ async function statusCommand(opts: StatusOpts): Promise<void> {
 
   // ── JSON mode ────────────────────────────────────────────────────────
   if (isJsonMode()) {
+    // Backward compat: map queue-store statuses to legacy QueueItem shape
     const queueItems: QueueItem[] = queueEntries.map((e) => ({
-      status: e.status,
+      status: (e.status === 'queued' ? 'pending' : e.status === 'completed' ? 'done' : e.status) as QueueItem['status'],
       project: e.project,
       mode: e.mode,
-      args: e.args,
-      description: e.description ?? '',
-      line_num: e.lineNum,
+      args: e.description,        // old 'args' maps to 'description'
+      description: e.description,
+      line_num: 0,                // deprecated — always 0
     }));
 
     const stuckSessions: StuckSession[] = stuckProcesses.map((r) => {

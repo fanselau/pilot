@@ -68,16 +68,31 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
     }
   }
 
+  // Check if queue.json exists
+  let queueJsonExists = false;
+  try {
+    await access(config.queueJsonFile);
+    queueJsonExists = true;
+  } catch {
+    // Does not exist
+  }
+
   // ── JSON mode ────────────────────────────────────────────────────────
   if (isJsonMode()) {
     outputJson({
       config: {
+        PILOT_DIR: config.pilotDir,
+        PILOT_QUEUE_JSON: config.queueJsonFile,
         PILOT_QUEUE_FILE: config.queueFile,
         PILOT_LOG_DIR: config.logDir,
         PILOT_STUCK_THRESHOLD: config.stuckThreshold,
         PILOT_PROJECT_DIR: config.projectDir,
         PILOT_GSD_DIR: config.gsdDir,
         NO_COLOR: config.noColor ? 'set' : null,
+      },
+      queue_json: {
+        path: config.queueJsonFile,
+        exists: queueJsonExists,
       },
       opencode_binary: {
         found: binaryFound,
@@ -94,7 +109,10 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
   outputHuman(bold('Pilot Configuration'));
   outputHuman(sep);
 
-  outputHuman(`${'PILOT_QUEUE_FILE'.padEnd(COL)}${config.queueFile}`);
+  outputHuman(`${'PILOT_DIR'.padEnd(COL)}${config.pilotDir}`);
+  const queueJsonStatus = queueJsonExists ? dim('(exists)') : dim('(not created)');
+  outputHuman(`${'queue.json'.padEnd(COL)}${config.queueJsonFile} ${queueJsonStatus}`);
+  outputHuman(`${'PILOT_QUEUE_FILE'.padEnd(COL)}${config.queueFile} ${dim('(legacy)')}`);
   outputHuman(`${'PILOT_LOG_DIR'.padEnd(COL)}${config.logDir}`);
   outputHuman(
     `${'PILOT_STUCK_THRESHOLD'.padEnd(COL)}${config.stuckThreshold} ${dim('(minutes)')}`,

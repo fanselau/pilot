@@ -51,7 +51,7 @@ program.configureHelp({
         name: 'Monitoring',
         commands: [
           ['status [options]', 'Dashboard (default command)'],
-          ['queue [options]', 'Pretty-print QUEUE.md'],
+          ['queue [options]', 'Show queue items'],
           ['stuck [options]', 'Find stuck processes'],
           ['log <session>', 'Session transcript'],
           ['tail <session>', 'Live-follow session'],
@@ -65,6 +65,7 @@ program.configureHelp({
           ['setup <dir>', 'Set up project for Pilot'],
           ['update', 'Update pilot-gsd definitions'],
           ['config', 'Show configuration'],
+          ['import [file]', 'Import QUEUE.md into queue.json'],
         ],
       },
       {
@@ -155,14 +156,25 @@ program
     await statusCommand(opts);
   });
 
-program
+const queueCmd = program
   .command('queue')
   .alias('q')
-  .description('Pretty-print QUEUE.md')
+  .description('Show queue items')
+  .option('--history', 'Show completed/failed history')
   .action(async (localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { queueCommand } = await import('./commands/queue.js');
     await queueCommand(opts);
+  });
+
+queueCmd.command('remove')
+  .argument('<id>', 'Queue item ID')
+  .description('Remove a queued item')
+  .action(async (id: string, localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    void opts;
+    const { queueRemoveCommand } = await import('./commands/queue.js');
+    await queueRemoveCommand(id, { ...program.opts(), ...localOpts });
   });
 
 program
@@ -246,6 +258,17 @@ program
     const opts = mergeOpts(localOpts);
     const { configCommand } = await import('./commands/config.js');
     await configCommand(opts);
+  });
+
+program
+  .command('import')
+  .argument('[file]', 'QUEUE.md path (defaults to PILOT_QUEUE_FILE)')
+  .description('Import QUEUE.md into queue.json')
+  .action(async (file: string | undefined, localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    void opts;
+    const { importCommand } = await import('./commands/import.js');
+    await importCommand(file, { ...program.opts(), ...localOpts });
   });
 
 // ── Queue Management (Phase 2 stubs) ──────────────────────────────────────
