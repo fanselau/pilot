@@ -1,9 +1,9 @@
 /**
  * pilot stop — Stop queue runner.
  *
- * Reads the runner PID from gsd-pilot-runner-pid, sends SIGTERM, waits up
- * to 30s for clean exit.  With --force, sends SIGKILL via tree-kill after
- * timeout.
+ * Reads the runner PID from pilot-runner PID file, sends SIGTERM, waits up
+ * to 15s for clean exit.  With --force, sends immediate SIGKILL via
+ * tree-kill (no SIGTERM, no wait).
  */
 
 import treeKill from 'tree-kill';
@@ -47,7 +47,24 @@ export async function stopCommand(opts: Record<string, unknown>): Promise<void> 
     return;
   }
 
-  // Send SIGTERM
+  // --force: immediate SIGKILL (no SIGTERM, no wait)
+  if (opts['force'] === true) {
+    try {
+      await treeKillAsync(pid, 'SIGKILL');
+    } catch {
+      // Process may have already died
+    }
+    await removePidFile('pilot-runner');
+
+    if (isJsonMode()) {
+      outputJson({ status: 'force_killed', pid });
+    } else {
+      outputHuman(`✓ Runner force-killed (PID ${pid})`);
+    }
+    return;
+  }
+
+  // Normal: send SIGTERM, wait up to 15s for clean exit
   try {
     process.kill(pid, 'SIGTERM');
   } catch (err) {
@@ -55,8 +72,7 @@ export async function stopCommand(opts: Record<string, unknown>): Promise<void> 
     process.exit(1);
   }
 
-  // Wait up to 30s for process to die (poll every 1s)
-  const maxWait = 30;
+  const maxWait = 15;
   for (let i = 0; i < maxWait; i++) {
     await sleep(1000);
     if (!isProcessAlive(pid)) {
@@ -64,22 +80,12 @@ export async function stopCommand(opts: Record<string, unknown>): Promise<void> 
     }
   }
 
-  // Check if still alive
+  // If still alive after 15s, force kill
   if (isProcessAlive(pid)) {
-    if (opts['force'] === true) {
-      // Force kill with tree-kill SIGKILL
-      try {
-        await treeKillAsync(pid, 'SIGKILL');
-      } catch {
-        // Process may have just died
-      }
-    } else {
-      if (isJsonMode()) {
-        outputJson({ status: 'timeout', pid, message: 'Runner still alive after 30s. Use --force to kill.' });
-      } else {
-        outputHuman(`Runner still alive after 30s. Use --force to kill.`);
-      }
-      process.exit(1);
+    try {
+      await treeKillAsync(pid, 'SIGKILL');
+    } catch {
+      // Process may have just died
     }
   }
 
