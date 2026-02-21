@@ -46,6 +46,13 @@
   - When running in foreground (attached terminal), log to stdout (current behavior)
   - Detect via `process.stdout.isTTY`
 
+- [ ] **Per-item timeout enforcement**:
+  - Runner checks `timeoutMinutes` on each active job during reap cycle
+  - If elapsed time > timeout → kill process tree, mark as failed
+  - If attempts remain → auto-retry
+  - Default timeout: 60 min (configurable via `PILOT_DEFAULT_TIMEOUT` env var)
+  - `pilot add --timeout 0` disables timeout for that item
+
 - [ ] **Graceful shutdown**:
   - SIGTERM → stop accepting new jobs, wait for active jobs to complete, exit
   - SIGINT (Ctrl+C) → same as SIGTERM

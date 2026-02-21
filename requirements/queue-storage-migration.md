@@ -36,6 +36,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
       "phase": "number | null",
       "attempts": "number",
       "maxAttempts": "number (default 3)",
+      "timeoutMinutes": "number | null (default: 60, null = no timeout)",
       "dependsOn": "id | null",
       "error": "string | null",
       "meta": {}
@@ -50,6 +51,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
 - [ ] `pilot add --after <id>` — insert after specific item
 - [ ] `pilot add --before <id>` — insert before specific item  
 - [ ] `pilot add --next` — insert at top of pending items (after running/done, before all queued)
+- [ ] `pilot add --timeout <minutes>` — per-item timeout (kills process if exceeded, marks failed, retries if attempts remain). Default: 60 min. `--timeout 0` = no timeout.
 - [ ] `pilot add --depends-on <id>` — set dependency (item waits until dep completes)
 - [ ] `pilot remove <id>` — removes queued item (not running)
 - [ ] `pilot move <id> --after <id>` — reorder existing item

@@ -9,10 +9,10 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { QueueEntry } from '../core/types.js';
+import type { QueueJsonItem } from '../core/types.js';
 
 export interface QueuePanelProps {
-  entries: QueueEntry[];
+  entries: QueueJsonItem[];
   active: boolean;
   selectedIndex: number;
   width: number;
@@ -37,9 +37,9 @@ export function QueuePanel({
   const fill = Math.round(ratio * barWidth);
   const empty = barWidth - fill;
 
-  // Filter to pending and running entries for display
+  // Filter to queued and running entries for display
   const displayEntries = entries.filter(
-    (e) => e.status === 'pending' || e.status === 'running',
+    (e) => e.status === 'queued' || e.status === 'running',
   );
 
   return (
