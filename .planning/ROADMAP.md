@@ -213,7 +213,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — `pilot doctor` health check command (9 checks, --fix, --json)
+- [x] 11-01-PLAN.md — `pilot doctor` health check command (9 checks, --fix, --json)
 - [ ] 11-02-PLAN.md — Notifications on build complete/fail + runner logging with rotation
 - [ ] 11-03-PLAN.md — `pilot cleanup` maintenance command + `pilot setup --verify` validation
 - [ ] 11-04-PLAN.md — Global install verification, --no-tui flag, parallel build tests, TUI smoke test

@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 6
+## Current Phase: 11
 
 ## Current Position
 
-Phase: 6 of 13 (Queue storage migration per requirements/queue-storage-migration.md)
-Plan: 4 of 4 in current phase
-Status: Phase complete, verified ✓ (11/11 must-haves)
-Last activity: 2026-02-21 - Phase 6 complete, verified 11/11 must-haves
+Phase: 11 of 15 (Finishing touches per requirements/finishing-touches.md)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 11-01-PLAN.md
 
-Progress: █████████████████████████ 100% (40/40 plans)
+Progress: █████████████████████████ 100% (41/41 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 6 complete — queue storage migration (4/4 plans)
+**Current focus:** Phase 11 in progress — finishing touches (1/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -50,7 +50,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
-- **Status:** not planned (0/0 plans)
+- **Status:** in progress (1/4 plans complete)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 - **Status:** complete (3/3 plans, verified ✓)
@@ -161,9 +161,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 06-03 | import.ts uses local shortId matching queue-store | Avoids exposing internal ID generator |
 | 06-04 | smart-add.ts migrated from parseQueueFile to getItems | Was reading stale QUEUE.md instead of queue.json |
 | 06-04 | TUI migration already done in non-plan commits | Prior commits a6003cc and 38cd6ef handled useStatusData/QueuePanel/Dashboard |
+| 11-01 | Reuse spawn.ts patterns without shared helpers | Keeps modules independent, avoids refactor scope |
+| 11-01 | Queue check validates queue.json not QUEUE.md | Consistent with Phase 6 migration |
+| 11-01 | Tests account for real filesystem state | Binary and snapshot repos may exist on dev machines |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:16:29Z
-Stopped at: Completed 06-04-PLAN.md (Phase 6 complete)
+Last session: 2026-02-21T11:29:49Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
