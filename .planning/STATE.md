@@ -1,24 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 10
+## Current Phase: 12
 
 ## Current Position
 
-Phase: 10 of 12 (Smart verify routing)
-Plan: 4 of 4 in current phase
-Status: Phase complete, verified ✓ (8/8 must-haves)
-Last activity: 2026-02-20 - Phase 10 complete, verified 8/8 must-haves
-**Next Phase:** Phase 11 — Finishing touches per requirements/finishing-touches.md
+Phase: 12 of 12 (Critical fixes per requirements/overnight-fixes.md)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 12-01-PLAN.md
 
-Progress: █████████████████████████ 100% (29/29 plans)
+Progress: █████████████████████████ 100% (30/32 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** All phases complete — milestone launch-v1
+**Current focus:** Phase 12 critical fixes — opencode binary, config, setup
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -54,7 +53,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** not planned (0/0 plans)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
-- **Status:** not planned (0/0 plans)
+- **Status:** in progress (1/3 plans complete)
 
 ## Accumulated Context
 
@@ -134,9 +133,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 10-04 | verifyAttempts counter persists across loop iterations | Counts through gap closure cycles — prevents infinite loops |
 | 10-04 | Non-web auto-skip on attempt count; web also checks log content | Non-web verify is inline (no log); web has log to analyze |
 | 10-04 | Auto-skip writes UAT with result: pass for state machine compat | Phase moves to done/next-phase without manual intervention |
+| 12-01 | message_count optional (undefined) not default 0 | Preserves distinction between no data and zero messages |
+| 12-01 | 5s timeout on all execa calls to opencode | Prevents indefinite hangs when binary unavailable |
 
 ## Session Continuity
 
-Last session: 2026-02-20T23:15:00Z
-Stopped at: Phase 10 complete — all plans executed, verified ✓
+Last session: 2026-02-21T02:46:29Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
