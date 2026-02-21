@@ -3,9 +3,13 @@
  *
  * Finds a session via fuzzy matching, exports its data, and formats
  * the transcript with role-based styling (user/assistant/tool-use).
+ *
+ * Special case: `pilot log runner` displays the runner log file.
  */
 
+import { readFile } from 'node:fs/promises';
 import { findSession, exportSession } from '../core/sessions.js';
+import { getLatestRunnerLogPath } from '../core/runner-log.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { bold, cyan, green, dim } from '../util/colors.js';
 
@@ -16,6 +20,38 @@ interface LogOpts {
 
 async function logCommand(session: string, opts: LogOpts): Promise<void> {
   void opts; // used via isJsonMode()
+
+  // ── Special case: "runner" displays the runner log file ──────────────
+  if (session.toLowerCase() === 'runner') {
+    const logPath = getLatestRunnerLogPath();
+    if (logPath === null) {
+      process.stderr.write('Error: No runner log found. Run `pilot run` first.\n');
+      process.exit(1);
+    }
+
+    let content: string;
+    try {
+      content = await readFile(logPath, 'utf8');
+    } catch {
+      process.stderr.write(`Error: Could not read runner log: ${logPath}\n`);
+      process.exit(1);
+    }
+
+    if (isJsonMode()) {
+      outputJson({
+        log_path: logPath,
+        content,
+      });
+      return;
+    }
+
+    const sep = '─'.repeat(56);
+    outputHuman(`Runner Log — ${bold(logPath)}`);
+    outputHuman(sep);
+    outputHuman('');
+    outputHuman(content);
+    return;
+  }
 
   // 1. Find session via fuzzy match
   const found = await findSession(session);

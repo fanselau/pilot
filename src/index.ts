@@ -292,6 +292,8 @@ program
   .option('--once', 'Process queue once then exit')
   .option('--dry-run', 'Show what would run')
   .option('--force', 'Ignore stale PID file')
+  .option('--notify', 'Enable notifications')
+  .option('--quiet', 'Suppress notifications')
   .action(async (localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { runCommand } = await import('./commands/run.js');
