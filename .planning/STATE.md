@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 11
+## Current Phase: 13
 
 ## Current Position
 
-Phase: 11 of 15 (Finishing touches per requirements/finishing-touches.md)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-02-21 - Completed 11-04-PLAN.md
+Phase: 13 of 15 (Daemon mode runner per requirements/daemon-mode-runner.md)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 13-01-PLAN.md
 
-Progress: █████████████████████████ 100% (44/44 plans)
+Progress: █████████████████████████ 100% (45/48 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 11 complete — finishing touches (4/4 plans)
+**Current focus:** Phase 13 — daemon mode runner (1/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -54,6 +54,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
+- **Status:** in progress (1/4 plans complete)
 
 ## Accumulated Context
 
@@ -175,9 +178,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 11-04 | postbuild script guarantees shebang + chmod | Defense in depth even if tsc behavior changes |
 | 11-04 | --no-tui is informational flag | Runner already headless by default; flag documents intent |
 | 11-04 | TUI smoke tests in test/commands/ per plan | Complements test/tui/ without duplication |
+| 13-01 | completedIds never pruned in queue.json | Source of truth for dep resolution; history caps at 100 |
+| 13-01 | findLaunchableAtomic holds lock during read+mark | Prevents TOCTOU race where two runners launch same item |
+| 13-01 | Old findLaunchable kept as deprecated | Existing runner.ts uses it; migration deferred to Plan 02 |
+| 13-01 | QueueEntry moved to queue-parser.ts | Legacy QUEUE.md vocabulary, not runtime contract |
+| 13-01 | QueueItem kept in types.ts with blocked | JSON contract vocabulary (pending/done) must be preserved |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:53:00Z
-Stopped at: Completed 11-04-PLAN.md (Phase 11 complete)
+Last session: 2026-02-21T12:25:00Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
