@@ -67,6 +67,17 @@ export interface StuckAssessment {
   log_staleness_seconds: number;
 }
 
+/**
+ * Fast daemon-optimized stuck assessment (no CPU sampling).
+ * Used by the daemon's 60-second check cycle for instant results.
+ */
+export interface DaemonStuckAssessment {
+  score: number;           // 0-100+
+  verdict: 'healthy' | 'suspect' | 'stuck';
+  signals: StuckSignal[];
+  isFlaky: boolean;        // placeholder for flaky detection (caller sets)
+}
+
 export interface StuckSession extends SessionInfo {
   pid: number;
   runtime_seconds: number;
