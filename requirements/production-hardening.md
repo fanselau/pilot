@@ -12,7 +12,7 @@ Zero-touch operation. Pilot daemon starts, processes work, recovers from failure
 
 #### Crash Recovery & Self-Healing
 - [ ] **Stale PID detection**: On startup, check PID file. If PID exists but process is dead → clean up PID file and start normally. Don't refuse to start because of a stale PID from a crash.
-- [ ] **Auto-restart wrapper**: `pilot run` spawns a supervisor that restarts the daemon if it crashes. Max 5 restarts in 10 minutes, then back off exponentially (1min, 5min, 15min, 1hr). Log each restart.
+- [ ] **Crash recovery is systemd's job**: No internal supervisor. `pilot run` is a simple process. Systemd `Restart=on-failure` + `RestartSec=10` handles restarts. Pilot just needs to exit cleanly with correct exit codes (0=clean, 1=error) so systemd knows what to do.
 - [ ] **Queue corruption recovery**: If queue.json is malformed (truncated write, encoding error), attempt to recover:
   1. Try JSON.parse with trailing comma tolerance
   2. Fall back to queue.json.bak (written before every mutation)

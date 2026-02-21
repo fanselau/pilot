@@ -29,7 +29,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
       "project": "string",
       "mode": "build-full | add-and-build | run-command",
       "description": "string",
-      "status": "queued | running | completed | failed",
+      "status": "queued | running | completed | failed | blocked",
       "addedAt": "ISO-8601",
       "startedAt": "ISO-8601 | null",
       "completedAt": "ISO-8601 | null",
