@@ -169,7 +169,19 @@ async function addItem(opts: {
 }): Promise<string> {
   return withQueueJsonLock(async () => {
     const data = await loadQueue();
-    const id = shortId();
+    const existingIds = new Set([
+      ...data.items.map((i) => i.id),
+      ...data.history.map((i) => i.id),
+    ]);
+    let id = shortId();
+    let attempts = 0;
+    while (existingIds.has(id) && attempts < 10) {
+      id = shortId();
+      attempts++;
+    }
+    if (existingIds.has(id)) {
+      throw new Error('Failed to generate unique queue ID after 10 attempts');
+    }
 
     if (opts.dependsOn !== undefined) {
       const depItem = data.items.find((i) => i.id === opts.dependsOn);

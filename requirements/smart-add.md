@@ -1,143 +1,110 @@
-# Smart Add — Intelligent Task Routing
+# Smart Add — Simple Task Routing
 
 ## Problem
-
-Currently adding work to the pipeline requires knowing GSD internals:
-- `build-full` vs `add-and-build` vs `run-command`
-- Whether to create a milestone, add a phase, or run a quick task
-- Whether the project needs `init`, `setup`, or is ready to go
-- How to format queue entries
-
-This is error-prone. Even Gorb (the AI CTO) gets it wrong — using `build-full` on existing projects, `add-and-build` without descriptions, wrong modes causing phantom completions. If an AI agent can't get it right, the interface is wrong.
+Adding work to the pipeline currently requires knowing GSD internals (build-full, add-and-build, run-command). Users shouldn't need to know any of that.
 
 ## Goal
-
-One command: `pilot add <project> <requirements-file-or-description>`. Pilot figures out everything else.
+One command: `pilot add <project> <description-or-file>`. Default is a quick task. Caller explicitly opts into phase/milestone when needed. Simple, predictable, well-documented.
 
 ## The Interface
 
 ```bash
-# Point at a requirements file — pilot handles the rest
-pilot add resume-roast requirements/landing-page-redesign.md
+# Quick task (default) — just describe what you want
+pilot add resume-roast "fix the favicon 404"
+pilot add resume-roast "add dark mode toggle"
 
-# Or just describe what you want
-pilot add resume-roast "add dark mode toggle to settings page"
+# Phase — point at a requirements file
+pilot add resume-roast requirements/dark-mode.md --phase
 
-# Multiple requirements = milestone
-pilot add resume-roast requirements/v2-redesign/
+# Milestone — point at a directory of requirements
+pilot add resume-roast requirements/v2/ --milestone
 
-# New project? Pilot handles init + setup
-pilot add my-new-tool requirements/my-new-tool.md
+# Ordering & dependencies
+pilot add resume-roast "fix X" --next              # top of queue
+pilot add resume-roast "fix Y" --after a3x9        # after specific item
+pilot add resume-roast "fix Z" --depends-on a3x9   # wait for item to complete
+pilot add resume-roast "fix W" --timeout 30         # kill after 30 min
+
+# Dry run
+pilot add resume-roast "fix X" --dry-run
 ```
-
-That's it. No modes. No GSD vocabulary. Just "project + what to build."
 
 ## Requirements
 
-### Must Have — Scope Detection
+### Must Have — Scope (caller decides)
 
-Pilot reads the requirement and determines the right scope:
-
-- [ ] **Milestone** (multi-phase, weeks of work):
-  - Requirements file has multiple `## Phase` or `## Must Have` sections with 10+ items
-  - Or a directory of requirement files is passed
-  - → Creates a new milestone in ROADMAP, plans all phases
-  
-- [ ] **Phase** (single feature, hours-days):
-  - Requirements file has a focused `## Requirements` section with 3-10 items
-  - Project already has a milestone → adds as next phase
-  - → Adds phase to current milestone, plans + executes
-  
-- [ ] **Quick task** (small fix, minutes):
-  - Input is a short string description (no file), or file has <3 items
-  - → Runs `quick` command directly, no phase/milestone overhead
-
-- [ ] Log the decision: "Detected: phase-level task (7 requirements). Adding as Phase 5 to milestone launch-v1."
+- [ ] **Default = quick task**: String description or file → runs `quick` command. No milestone, no phase overhead. This is the 90% case.
+- [ ] **`--phase`**: Requires a requirements .md file as input. Adds a phase to the project's current milestone. Runs plan → execute → verify cycle.
+- [ ] **`--milestone`**: Requires a directory of requirements files. Creates a new milestone with multiple phases. Each .md file = one phase.
+- [ ] Log the decision: "✓ Queued [a3x9] resume-roast | quick | fix the favicon 404"
 
 ### Must Have — Project State Detection
 
-- [ ] **No project directory** → Error: "Project 'x' not found in /home/user/dev/"
+- [ ] **No project directory** → Error: "Project 'x' not found in $PILOT_PROJECT_DIR"
 - [ ] **No `.opencode/`** → Auto-run `pilot setup` first, then continue
-- [ ] **No `.planning/`** → Fresh project. Run `init` (creates planning structure), then add work
-- [ ] **`.planning/` exists, phases incomplete** → Resume: continue building from current phase, THEN add new work after
-- [ ] **`.planning/` exists, all phases done** → Ready for new work: add phase or milestone
-- [ ] **Already queued** → Warn: "resume-roast already queued (build-full). Add anyway? [Y/n]" (auto-yes in non-interactive mode)
-- [ ] **Currently running** → Warn: "resume-roast is currently running (Phase 2 execute). Queuing after completion."
+- [ ] **No `.planning/`** → For `--phase`/`--milestone`: auto-run `pilot init` first
+- [ ] **Already queued** → Warn but proceed: "⚠ resume-roast already queued. Adding anyway."
+- [ ] **Currently running** → Warn but proceed: "⚠ resume-roast is running. Queuing after completion."
 
-### Must Have — Requirements Handling
+### Must Have — Input Handling
 
-- [ ] If requirements file path given → validate it exists, copy/symlink to project's `requirements/` dir if not already there
-- [ ] If string description given → generate a minimal requirements file from the description:
-  ```markdown
-  # <Title from description>
-  
-  ## Problem
-  <extracted from description>
-  
-  ## Requirements
-  ### Must Have
-  - [ ] <parsed from description>
-  
-  ## Do NOT
-  - Break existing functionality
-  ```
-- [ ] If directory of requirements given → treat as milestone, each file = potential phase
+- [ ] **String description** → Pass directly as the task description. Do NOT generate a requirements file from it.
+- [ ] **File path** → Validate it exists. For `--phase`: copy to project's `requirements/` if not already there.
+- [ ] **Directory path** → Only valid with `--milestone`. Each .md file becomes a phase.
 
 ### Must Have — Queue Integration
 
-- [ ] Adds to `~/.pilot/queue.json` (from queue-storage-migration requirement)
-- [ ] Sets correct internal mode based on scope detection (user never sees this)
-- [ ] `pilot add --dry-run` shows what would happen without doing it
-- [ ] Returns the queue item ID for reference
+- [ ] Writes to `~/.pilot/queue.json`
+- [ ] Supports: `--next`, `--before <id>`, `--after <id>`, `--depends-on <id>`, `--timeout <minutes>`
+- [ ] `--dry-run` shows what would happen
+- [ ] Returns the queue item ID
+- [ ] Prints runner status: "Runner active (PID xxx)" or "Runner not active. Start with: pilot run"
 
 ### Nice to Have
 
-- [ ] `pilot add <project> --from-issue <github-url>` — fetch GitHub issue and generate requirements
-- [ ] `pilot add <project> --interactive` — asks clarifying questions to refine scope
-- [ ] Scope override: `pilot add <project> req.md --as quick|phase|milestone` for when auto-detection is wrong
-- [ ] `pilot add` with no args → shows recent projects and prompts for selection
-- [ ] Dependency detection: if requirements reference another project, auto-add `dependsOn`
+- [ ] `pilot add <project> --from-issue <github-url>` — fetch GitHub issue as description
+- [ ] `pilot add <project> --interactive` — asks clarifying questions
 
 ## Examples
 
 ```bash
-# Big redesign with multiple requirement files
-$ pilot add resume-roast requirements/v2/
-→ Detected: milestone (4 requirement files, 23 total items)
-→ Creating milestone "v2" with 4 phases
-→ Queued: resume-roast | milestone-v2 | 4 phases
-→ Run `pilot run` to start building
+$ pilot add resume-roast "fix the favicon 404"
+✓ Queued [a3x9] resume-roast | quick | fix the favicon 404
+Runner active (PID 12345)
 
-# Single feature
-$ pilot add resume-roast requirements/dark-mode.md
-→ Detected: phase (8 requirements)  
-→ Project has milestone launch-v1 (3/3 phases done)
-→ Adding as Phase 4: "Dark Mode"
-→ Queued: resume-roast | phase-4-dark-mode
+$ pilot add resume-roast requirements/dark-mode.md --phase
+✓ Queued [k2m7] resume-roast | phase | Dark Mode
+Runner active (PID 12345)
 
-# Quick fix
-$ pilot add resume-roast "fix the favicon 404 on /roast page"
-→ Detected: quick task (single fix)
-→ Queued: resume-roast | quick | fix favicon 404
+$ pilot add resume-roast requirements/v2/ --milestone
+✓ Queued [b4p2] resume-roast | milestone | v2 (4 phases)
+Runner not active. Start with: pilot run
 
-# New project
-$ pilot add my-new-saas requirements/my-new-saas.md
-→ Project 'my-new-saas' not found. Creating...
-→ Running pilot setup my-new-saas
-→ Running pilot init my-new-saas
-→ Detected: milestone (12 requirements, 3 phases)
-→ Queued: my-new-saas | build-full
+$ pilot add resume-roast "urgent fix" --next --timeout 15
+✓ Queued [c8n1] resume-roast | quick | urgent fix (top of queue, 15min timeout)
+Runner active (PID 12345)
 ```
 
-## Technical Notes
+## Documentation
 
-- Scope detection can be simple heuristic for v1: count requirement items, check for phase headers, measure file size
-- No LLM needed for scope detection — pattern matching on markdown structure
-- The generated requirements file from string descriptions should be minimal but valid for GSD agents to work with
-- `pilot build <project> <req>` = `pilot add` + `pilot run` (convenience)
+The `--phase` and `--milestone` flags must be well-documented in `pilot add --help`:
+
+```
+SCOPE:
+  (default)      Quick task — small fix or feature, runs immediately
+  --phase        Single feature with requirements file, goes through plan→execute→verify
+  --milestone    Multi-phase project from a directory of requirements files
+
+ORDERING:
+  --next         Insert at top of pending queue
+  --before <id>  Insert before specific queue item
+  --after <id>   Insert after specific queue item
+  --depends-on <id>  Wait for item to complete before starting
+  --timeout <min>    Kill if running longer than N minutes (default: 60, 0=no timeout)
+```
 
 ## Do NOT
+- Auto-detect scope from content heuristics — the caller decides
+- Generate requirements files from string descriptions — pass strings directly
 - Expose GSD modes (build-full, add-and-build, run-command) to the user
-- Require the user to know about milestones vs phases vs quick tasks
-- Auto-run without queuing — always queue first, `pilot run` starts execution
-- Over-engineer scope detection — simple heuristics that can be overridden is better than complex ML
+- Auto-start the daemon from `add` — daemon is managed separately (systemd / manual `pilot run`)

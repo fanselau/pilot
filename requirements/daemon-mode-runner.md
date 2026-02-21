@@ -20,13 +20,37 @@
   - Process all queue entries, wait for completion, exit
   - This is what the bash runner does today
 
-- [ ] **`pilot add` auto-starts daemon**:
-  - After writing to queue, check if daemon is running (PID file + process alive check)
-  - If not running → start daemon in background (detached, stdout/stderr to log file)
-  - If running → do nothing (daemon will pick up the new entry on next poll)
-  - Print: "✓ Queued: project | scope" and "✓ Runner started" or "Runner active (PID xxx)"
+- [ ] **`pilot add` is fire-and-forget**:
+  - Writes to queue, prints "✓ Queued [id] project | scope". That's it.
+  - Does NOT start the daemon. The daemon is managed externally (systemd, manual `pilot run`, etc.)
+  - If daemon is running, it picks up the new entry on next poll cycle automatically.
+  - If daemon is not running, item sits in queue until daemon starts. Print hint: "Runner not active. Start with: pilot run"
+
+- [ ] **`pilot build` = synchronous/blocking mode**:
+  - `pilot build` = add to queue + start runner in `--once` mode + wait for that specific item to complete
+  - Blocks until the item finishes (success or failure), prints result, exits
+  - Useful for: "I want to build this one thing right now and see the result"
+  - Different from `add` which is async/fire-and-forget
+
+- [ ] **Systemd service file**: Generate `pilot.service` via `pilot init-service` command:
+  ```ini
+  [Unit]
+  Description=Pilot Queue Runner
+  After=network.target
   
-- [ ] **`pilot build` uses same daemon logic** (already close, align with add)
+  [Service]
+  ExecStart=/path/to/pilot run
+  Restart=on-failure
+  RestartSec=10
+  User=%u
+  Environment=PATH=...
+  
+  [Install]
+  WantedBy=default.target
+  ```
+  - Installs to `~/.config/systemd/user/pilot.service`
+  - `pilot init-service` detects paths, writes file, prints enable/start commands
+  - Systemd handles auto-restart on crash, boot start, journald logging
 
 - [ ] **Daemon PID management**:
   - Write PID to `$PILOT_LOG_DIR/pilot-runner.pid` on start
@@ -82,6 +106,7 @@
 - [ ] **Process tree kill on timeout**: Actually kill the opencode process tree (SIGTERM to process group), don't just mark as failed while the process keeps running
 - [ ] **SIGINT handler**: Treat Ctrl+C same as SIGTERM — graceful shutdown, drain active jobs, clean PID file
 - [ ] **History-safe dependency resolution**: Keep a separate `completedIds: string[]` set in queue.json that never gets pruned, even when history is capped. Check deps against this set, not history array.
+- [ ] **Dependency failure cascading**: When a job fails (all attempts exhausted), ALL items that depend on it (direct and transitive) must be marked as `blocked` with error "dependency [id] failed". Blocked items are NOT retried and NOT launched. `pilot queue` shows them clearly as blocked. User can `pilot retry <id>` the failed dep to unblock the chain.
 - [ ] **`findLaunchable` must hold lock**: Read queue + mark running in a single locked transaction to prevent TOCTOU race where two runners launch the same item
 - [ ] **Kill `pilot build` or differentiate**: Once `add` auto-starts daemon, `build` is redundant. Option A: remove it. Option B: make `build` = synchronous (blocks until job completes), `add` = async (fire-and-forget).
 - [ ] **Unify status vocabulary**: Use `queued/running/completed/failed` everywhere. Remove legacy `QueueEntry` and `QueueItem` types after migration.
