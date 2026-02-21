@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 14 of 15 (Production hardening per requirements/production-hardening.md)
-Plan: 2 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 14-02-PLAN.md
+Last activity: 2026-02-21 - Completed 14-04-PLAN.md
 
-Progress: █████████████████████████░░░░░ 85% (50/59 plans)
+Progress: ██████████████████████████░░░░ 88% (52/59 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 14 — production hardening (2/5 plans complete)
+**Current focus:** Phase 14 — production hardening (4/5 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -59,7 +59,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans)
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
-- **Status:** in progress (2/5 plans complete)
+- **Status:** in progress (4/5 plans complete)
 
 ## Accumulated Context
 
@@ -205,9 +205,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 14-02 | BigInt arithmetic for disk space calculation | bfree * bsize can exceed Number.MAX_SAFE_INTEGER on large filesystems |
 | 14-02 | Spawn rate limiter as module-level state in spawn.ts | Single daemon process means module-level is effectively singleton |
 | 14-02 | validLogLevels cast to readonly string[] for includes() | TypeScript const tuple needs widened type for string.includes() |
+| 14-04 | DaemonStuckAssessment separate from StuckAssessment | Daemon needs isFlaky field and skips CPU sampling |
+| 14-04 | Flaky detection checks attempts >= maxAttempts FIRST | Exhausted attempts always fail regardless of flaky signals |
+| 14-04 | flakyAttempts map entry required for consistently_flaky label | Prevents false positives on first-time failures |
+| 14-04 | Orphan cleanup via pgrep cross-reference | Can't match PIDs to queue items directly; compares count and runtime |
+| 14-04 | statSync for log file size in flaky detection | Single sync call in completion handler is fine |
 
 ## Session Continuity
 
-Last session: 2026-02-21T13:31:00Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-02-21T13:41:00Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
