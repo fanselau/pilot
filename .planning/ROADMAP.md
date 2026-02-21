@@ -258,7 +258,9 @@ Plans:
 
 **Goal:** Comprehensive end-to-end test suite that exercises every CLI command as a subprocess against real (temp) project directories. Final gate before replacing the bash queue runner.
 **Depends on:** Phase 14
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-(to be planned)
+- [ ] 15-01-PLAN.md — E2E test harness + monitoring command tests
+- [ ] 15-02-PLAN.md — Setup, queue management, lifecycle, and error case tests
+- [ ] 15-03-PLAN.md — Runner E2E, stuck --kill, TUI smoke, build system wiring
