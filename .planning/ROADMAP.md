@@ -107,9 +107,9 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — Fix setup: .opencode/ symlinks + opencode.json correct format
-- [ ] 05-02-PLAN.md — Fix status: skip queue runner PID, fast stuck scoring
-- [ ] 05-03-PLAN.md — Fix runner --once wait + update explicit remote/branch
-- [ ] 05-04-PLAN.md — Regression tests for all integration fixes
+- [x] 05-02-PLAN.md — Fix status: skip queue runner PID, fast stuck scoring
+- [x] 05-03-PLAN.md — Fix runner --once wait + update explicit remote/branch
+- [x] 05-04-PLAN.md — Regression tests for all integration fixes
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
 **Goal:** Replace QUEUE.md with structured JSON storage at ~/.pilot/queue.json. CLI becomes the only queue interface with nanoid IDs, timestamps, dependency tracking, and capped history.
