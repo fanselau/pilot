@@ -3,13 +3,16 @@
  *
  * Uses native fs.watch + read stream to follow a log file in real-time.
  * Does NOT shell out to `tail -f`.
+ *
+ * Special case: `pilot tail runner` follows the runner log file.
  */
 
-import { stat, access, open } from 'node:fs/promises';
+import { stat, access, open, writeFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { getConfig } from '../core/config.js';
+import { getRunnerLogPath } from '../core/runner-log.js';
 
 interface TailOpts {
   json?: boolean;
@@ -19,8 +22,28 @@ async function tailCommand(session: string, opts: TailOpts): Promise<void> {
   void opts;
   const config = getConfig();
 
-  // Resolve log file path
-  const logPath = path.join(config.logDir, `gsd-${session}.log`);
+  // ── Special case: "runner" follows the runner log file ──────────────
+  let logPath: string;
+  if (session.toLowerCase() === 'runner') {
+    logPath = getRunnerLogPath();
+    // Touch the file if it doesn't exist (runner may not have written yet)
+    try {
+      await access(logPath);
+    } catch {
+      try {
+        // Ensure parent directory exists
+        const { mkdirSync } = await import('node:fs');
+        mkdirSync(path.dirname(logPath), { recursive: true });
+        await writeFile(logPath, '', 'utf8');
+      } catch {
+        process.stderr.write(`Error: Could not create runner log: ${logPath}\n`);
+        process.exit(1);
+      }
+    }
+  } else {
+    // Resolve log file path
+    logPath = path.join(config.logDir, `gsd-${session}.log`);
+  }
 
   // Check file exists
   try {
