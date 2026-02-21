@@ -90,9 +90,9 @@ export async function importCommand(
         duration: 0,
       };
       queue.history.push(historyItem);
-      // Cap history at 100
-      if (queue.history.length > 100) {
-        queue.history = queue.history.slice(-100);
+      // Cap history at 200
+      if (queue.history.length > 200) {
+        queue.history = queue.history.slice(-200);
       }
       await saveQueue(queue);
       toHistory++;

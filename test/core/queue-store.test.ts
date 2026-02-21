@@ -400,20 +400,20 @@ describe('markQueued', () => {
 // ── History capping ────────────────────────────────────────────────────────
 
 describe('history capping', () => {
-  it('caps history at 100 entries', async () => {
-    // Add and complete 105 items
-    for (let i = 0; i < 105; i++) {
+  it('caps history at 200 entries', async () => {
+    // Add and complete 205 items
+    for (let i = 0; i < 205; i++) {
       const id = await addItem({ project: `proj-${i}`, mode: 'm' });
       await markRunning(id);
       await markCompleted(id);
     }
 
     const history = await getHistory();
-    expect(history).toHaveLength(100);
+    expect(history).toHaveLength(200);
 
     // Verify we kept the newest entries (highest project numbers)
     const data = await loadQueue();
-    expect(data.history).toHaveLength(100);
+    expect(data.history).toHaveLength(200);
   });
 });
 
@@ -631,9 +631,9 @@ describe('completedIds persistence', () => {
   });
 
   it('completedIds survives history pruning', async () => {
-    // Add and complete 105 items — history caps at 100 but completedIds keeps all
+    // Add and complete 205 items — history caps at 200 but completedIds keeps all
     const allIds: string[] = [];
-    for (let i = 0; i < 105; i++) {
+    for (let i = 0; i < 205; i++) {
       const id = await addItem({ project: `proj-${i}`, mode: 'm' });
       await markRunning(id);
       await markCompleted(id);
@@ -641,10 +641,10 @@ describe('completedIds persistence', () => {
     }
 
     const data = await loadQueue();
-    // History capped at 100
-    expect(data.history).toHaveLength(100);
-    // completedIds has ALL 105
-    expect(data.completedIds).toHaveLength(105);
+    // History capped at 200
+    expect(data.history).toHaveLength(200);
+    // completedIds has ALL 205
+    expect(data.completedIds).toHaveLength(205);
     for (const id of allIds) {
       expect(data.completedIds).toContain(id);
     }
