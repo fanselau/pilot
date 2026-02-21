@@ -87,7 +87,7 @@ export function useStatusData(opts: { intervalMs: number }): StatusData {
       ]);
 
       // Check runner status
-      const runnerPid = await readPidFile('queue').catch(() => null);
+      const runnerPid = await readPidFile('pilot-runner').catch(() => null);
       const runnerActive = runnerPid !== null && isProcessAlive(runnerPid);
       setRunner({ active: runnerActive, pid: runnerPid });
 

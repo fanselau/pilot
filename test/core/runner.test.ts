@@ -12,12 +12,14 @@ vi.mock('../../src/core/config.js', () => ({
     projectDir: '/tmp/projects',
     gsdDir: '/tmp/gsd',
     noColor: true,
+    pollInterval: 3,
+    defaultTimeout: 60,
   })),
 }));
 
 vi.mock('../../src/core/queue-store.js', () => ({
-  findLaunchable: vi.fn(),
-  markRunning: vi.fn().mockResolvedValue(undefined),
+  findLaunchableAtomic: vi.fn(),
+  cascadeFailure: vi.fn().mockResolvedValue([]),
   markCompleted: vi.fn().mockResolvedValue(undefined),
   markFailed: vi.fn().mockResolvedValue(undefined),
   markQueued: vi.fn().mockResolvedValue(undefined),
@@ -61,14 +63,13 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-import { findLaunchable, markRunning, markCompleted, markQueued } from '../../src/core/queue-store.js';
+import { findLaunchableAtomic, markCompleted, markQueued } from '../../src/core/queue-store.js';
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
 import { createRunner } from '../../src/core/runner.js';
 import type { QueueJsonItem } from '../../src/core/types.js';
 
-const mockedFindLaunchable = vi.mocked(findLaunchable);
-const mockedMarkRunning = vi.mocked(markRunning);
+const mockedFindLaunchableAtomic = vi.mocked(findLaunchableAtomic);
 const mockedMarkCompleted = vi.mocked(markCompleted);
 const mockedMarkQueued = vi.mocked(markQueued);
 const mockedSpawnSession = vi.mocked(spawnSession);
@@ -108,11 +109,12 @@ describe('Runner', () => {
 
     // First call: return the item (launchable)
     // Subsequent calls: return null (nothing more to launch)
+    // findLaunchableAtomic returns the item already marked running
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async () => {
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
       scanCount++;
       if (scanCount === 1) {
-        return item;
+        return { ...item, status: 'running' as const, attempts: 1 };
       }
       return null;
     });
@@ -144,12 +146,13 @@ describe('Runner', () => {
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     await runner.start();
 
-    // Assert markRunning was called with the item ID
-    expect(mockedMarkRunning).toHaveBeenCalledWith('test-id-1234');
+    // findLaunchableAtomic marks running atomically — no separate markRunning call
+    expect(mockedFindLaunchableAtomic).toHaveBeenCalled();
 
     // Assert spawnSession was called (job was launched)
     expect(mockedSpawnSession).toHaveBeenCalledTimes(1);
@@ -168,9 +171,9 @@ describe('Runner', () => {
     });
 
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async () => {
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
       scanCount++;
-      if (scanCount === 1) return item;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 1 };
       return null;
     });
 
@@ -193,6 +196,7 @@ describe('Runner', () => {
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     await runner.start();
@@ -212,9 +216,9 @@ describe('Runner', () => {
     });
 
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async () => {
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
       scanCount++;
-      if (scanCount === 1) return item;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 1 };
       return null;
     });
 
@@ -234,6 +238,7 @@ describe('Runner', () => {
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     await runner.start();
@@ -253,9 +258,9 @@ describe('Runner', () => {
     });
 
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async () => {
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
       scanCount++;
-      if (scanCount === 1) return item;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 1 };
       return null;
     });
 
@@ -268,6 +273,7 @@ describe('Runner', () => {
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     // Must add error listener — EventEmitter throws on unhandled 'error' events
@@ -276,8 +282,8 @@ describe('Runner', () => {
 
     await runner.start();
 
-    // markRunning should have been called before spawn attempt
-    expect(mockedMarkRunning).toHaveBeenCalledWith('test-id-1234');
+    // findLaunchableAtomic marks running atomically — no separate markRunning call
+    expect(mockedFindLaunchableAtomic).toHaveBeenCalled();
 
     // After spawn failure, markQueued should be called to revert
     expect(mockedMarkQueued).toHaveBeenCalledWith('test-id-1234');
