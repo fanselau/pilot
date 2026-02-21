@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 6 of 13 (Queue storage migration per requirements/queue-storage-migration.md)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 06-01-PLAN.md
+Last activity: 2026-02-21 - Completed 06-02-PLAN.md
 
-Progress: █████████████████████████ 100% (37/40 plans)
+Progress: █████████████████████████ 100% (38/40 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 6 in progress — queue storage migration (1/4 plans)
+**Current focus:** Phase 6 in progress — queue storage migration (2/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
-- **Status:** in progress (1/4 plans complete)
+- **Status:** in progress (2/4 plans complete)
 
 ### Phase 7: Smart add per requirements/smart-add.md
 - **Status:** complete (2/4 plans executed [gap closure 03+04], verified ✓)
@@ -152,9 +152,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 06-01 | detectCircularDep exported for direct testing | addItem creates new IDs so cycles via public API are impossible, but guards against data corruption |
 | 06-01 | History capped at 100 entries by newest completedAt | Prevents unbounded growth while keeping useful history |
 | 06-01 | Lock on queue.json file, create empty if needed | proper-lockfile requires existing target |
+| 06-02 | Timeout stored in item.meta.timeout instead of entry.timeout | QueueJsonItem uses meta bag for optional fields |
+| 06-02 | item.description holds run-command args (replaces entry.args) | Consistent with queue-store addItem API |
+| 06-02 | lock.ts kept with deprecation notice for add.ts/scope.ts | Will be removed after Plan 03 migrates remaining consumers |
 
 ## Session Continuity
 
-Last session: 2026-02-21T10:47:23Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-02-21T10:56:43Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
