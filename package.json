@@ -36,6 +36,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
     "cli-table3": "^0.6.5",
     "commander": "^13.0.0",
     "execa": "^9.5.0",
@@ -48,6 +49,7 @@
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "@types/react": "^18.3.0",
