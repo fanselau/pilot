@@ -30,7 +30,7 @@ import { execa } from 'execa';
 import treeKill from 'tree-kill';
 
 import { getConfig } from './config.js';
-import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued, loadQueue, ensurePilotDir } from './queue-store.js';
+import { findLaunchable, findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued, loadQueue, ensurePilotDir } from './queue-store.js';
 import { preSpawnChecks, spawnSession, truncateTitle, enforceSpawnRateLimit, checkBinary, getSystemFreeMem } from './spawn.js';
 import { writePidFile, removePidFile, isProcessAlive } from './process.js';
 import { logPostmortem } from './postmortem.js';
@@ -472,6 +472,14 @@ class Runner extends EventEmitter<RunnerEvents> {
     }
 
     try {
+      if (this.opts.dryRun) {
+        // Read-only scan — don't mark items as running
+        return await findLaunchable(
+          runningProjects,
+          this.opts.maxParallel,
+          this.state.activeJobs.size,
+        );
+      }
       return await findLaunchableAtomic(
         runningProjects,
         this.opts.maxParallel,
