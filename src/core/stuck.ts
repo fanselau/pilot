@@ -14,7 +14,7 @@
 
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { StuckAssessment, StuckSignal } from './types.js';
+import type { StuckAssessment, StuckSignal, DaemonStuckAssessment } from './types.js';
 import { getConfig } from './config.js';
 import { findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
 
@@ -437,6 +437,135 @@ async function computeStuckScoreFast(pid: number, session: string): Promise<Stuc
   };
 }
 
+// ── Daemon-Optimized Stuck Scorer ──────────────────────────────────────────
+
+/**
+ * Fast stuck assessment optimized for the daemon's 60-second check cycle.
+ *
+ * Checks 4 signal types (NO CPU sampling — too slow for periodic checks):
+ *   1. Log staleness (max 50 points)
+ *   2. Process state + wchan (max 80 points)
+ *   3. Memory pressure (max 20 points)
+ *   4. No output at all (max 40 points)
+ *
+ * Same thresholds as full scoring: ≥70 stuck, 40-69 suspect, <40 healthy.
+ *
+ * All /proc reads wrapped in try/catch — process may have just died.
+ * Returns healthy if the process is unreadable (it will be reaped next cycle).
+ */
+async function computeDaemonStuckScore(
+  pid: number,
+  session: string,
+  logFile: string,
+  runtimeSeconds: number,
+): Promise<DaemonStuckAssessment> {
+  let score = 0;
+  const signals: StuckSignal[] = [];
+
+  try {
+    // ── Signal 1: Log staleness (max 50 points) ──
+    let logStaleness = Infinity;
+    let logSize = 0;
+    try {
+      const logStat = await stat(logFile);
+      logStaleness = (Date.now() - logStat.mtimeMs) / 1000;
+      logSize = logStat.size;
+    } catch {
+      // Log file doesn't exist or unreadable — will be caught by Signal 4
+    }
+
+    if (logStaleness > 900 && runtimeSeconds > 900) {
+      // 15min stale + 15min runtime → 30 points
+      score += 30;
+      signals.push({
+        name: 'log_stale_15m',
+        points: 30,
+        detail: `Log stale ${Math.round(logStaleness / 60)}m`,
+      });
+    } else if (logStaleness > 300 && runtimeSeconds > 600) {
+      // 5min stale + 10min runtime → 20 points
+      score += 20;
+      signals.push({
+        name: 'log_stale_5m',
+        points: 20,
+        detail: `Log stale ${Math.round(logStaleness / 60)}m`,
+      });
+    }
+
+    // ── Signal 2: Process state (max 80 points) ──
+    const procState = await readProcState(pid);
+    const wchan = await readProcWchan(pid);
+
+    if (procState === 'T') {
+      score += 50;
+      signals.push({
+        name: 'stopped',
+        points: 50,
+        detail: 'Process state: stopped (T)',
+      });
+    }
+
+    if (procState === 'Z') {
+      score += 80;
+      signals.push({
+        name: 'zombie',
+        points: 80,
+        detail: 'Process state: zombie (Z)',
+      });
+    }
+
+    if (wchan && /read|wait|poll/.test(wchan) && runtimeSeconds > 600) {
+      score += 30;
+      signals.push({
+        name: 'stdin_blocked',
+        points: 30,
+        detail: `wchan: ${wchan}`,
+      });
+    }
+
+    // ── Signal 3: Memory pressure (max 20 points) ──
+    const processRss = await getProcessRss(pid);
+    const systemFreeMb = await getSystemFreeMem();
+
+    if (processRss > 1024) {
+      score += 10;
+      signals.push({
+        name: 'high_rss',
+        points: 10,
+        detail: `RSS ${processRss}MB`,
+      });
+    }
+
+    if (systemFreeMb < 500) {
+      score += 10;
+      signals.push({
+        name: 'low_system_mem',
+        points: 10,
+        detail: `System free ${systemFreeMb}MB`,
+      });
+    }
+
+    // ── Signal 4: No output at all (max 40 points) ──
+    if (runtimeSeconds > 300 && logSize === 0) {
+      score += 40;
+      signals.push({
+        name: 'no_output',
+        points: 40,
+        detail: `No log output after ${Math.round(runtimeSeconds / 60)}m`,
+      });
+    }
+  } catch {
+    // Process may have died between checks — return healthy, will be reaped
+    return { score: 0, verdict: 'healthy', signals: [], isFlaky: false };
+  }
+
+  // ── Verdict ──
+  const verdict: 'healthy' | 'suspect' | 'stuck' =
+    score >= 70 ? 'stuck' : score >= 40 ? 'suspect' : 'healthy';
+
+  return { score, verdict, signals, isFlaky: false };
+}
+
 // ── Gap Closure Misconfiguration Detection ─────────────────────────────────
 
 export interface GapClosureMisconfig {
@@ -519,5 +648,6 @@ export {
   readProcWchan,
   computeStuckScore,
   computeStuckScoreFast,
+  computeDaemonStuckScore,
   detectGapClosureMisconfig,
 };
