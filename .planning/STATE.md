@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 11 of 15 (Finishing touches per requirements/finishing-touches.md)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-21 - Completed 11-03-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-21 - Completed 11-04-PLAN.md
 
-Progress: █████████████████████████ 100% (43/43 plans)
+Progress: █████████████████████████ 100% (44/44 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 11 in progress — finishing touches (3/4 plans)
+**Current focus:** Phase 11 complete — finishing touches (4/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -50,7 +50,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
-- **Status:** in progress (3/4 plans complete)
+- **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 - **Status:** complete (3/3 plans, verified ✓)
@@ -172,9 +172,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 11-03 | History truncation keeps last 100 entries | Newest entries are most useful; prevents unbounded growth |
 | 11-03 | Queue cleanup is read-only reporting | Modifying queue.json during cleanup is too risky |
 | 11-03 | verifySetup uses realpath for symlink resolution | Catches broken symlinks that lstat alone would miss |
+| 11-04 | postbuild script guarantees shebang + chmod | Defense in depth even if tsc behavior changes |
+| 11-04 | --no-tui is informational flag | Runner already headless by default; flag documents intent |
+| 11-04 | TUI smoke tests in test/commands/ per plan | Complements test/tui/ without duplication |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:45:38Z
-Stopped at: Completed 11-03-PLAN.md
+Last session: 2026-02-21T11:53:00Z
+Stopped at: Completed 11-04-PLAN.md (Phase 11 complete)
 Resume file: None
