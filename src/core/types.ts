@@ -8,7 +8,9 @@
 // ── Configuration ──────────────────────────────────────────────────────────
 
 export interface PilotConfig {
-  queueFile: string;
+  queueFile: string;        // legacy QUEUE.md path (keep for import command)
+  pilotDir: string;          // ~/.pilot/
+  queueJsonFile: string;     // ~/.pilot/queue.json
   logDir: string;
   stuckThreshold: number;
   projectDir: string;
@@ -222,4 +224,33 @@ export interface VerifyResult {
   issues: string[];
   testsRan: boolean;
   testsPassed: boolean | null;  // null if no tests found
+}
+
+// ── Queue JSON Storage ────────────────────────────────────────────────────
+
+export interface QueueJsonItem {
+  id: string;                    // nanoid
+  project: string;
+  mode: string;                  // build-full, continue, continue-all, etc.
+  description: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  addedAt: string;               // ISO 8601
+  startedAt: string | null;
+  completedAt: string | null;
+  phase: number | null;
+  attempts: number;
+  maxAttempts: number;           // default 3
+  dependsOn: string | null;      // item ID (not project name)
+  error: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface QueueHistoryItem extends QueueJsonItem {
+  duration: number;              // seconds
+}
+
+export interface QueueJsonFile {
+  version: 1;
+  items: QueueJsonItem[];
+  history: QueueHistoryItem[];
 }
