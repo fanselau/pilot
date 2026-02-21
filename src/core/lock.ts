@@ -1,18 +1,20 @@
 /**
- * @deprecated — Legacy QUEUE.md file locking.
- * All queue operations now use queue-store.ts with its own locking.
- * This module is retained for backward compatibility but has no runtime consumers.
+ * Queue file locking utilities.
  *
- * Wraps any async callback with file locking on the QUEUE.md path.
- * Stale timeout: 30s. Retry with exponential backoff for contention.
+ * - withQueueLock: Legacy QUEUE.md file locking (deprecated, no runtime consumers)
+ * - cleanStaleLocks: Safety net — removes lock files older than 5 minutes
  *
  * Pure core module — no UI dependencies.
  */
 
 import { lock } from 'proper-lockfile';
+import { stat, unlink } from 'node:fs/promises';
 import { getConfig } from './config.js';
 
 /**
+ * @deprecated — Legacy QUEUE.md file locking.
+ * All queue operations now use queue-store.ts with its own locking.
+ *
  * Execute an async function while holding an exclusive lock on QUEUE.md.
  *
  * - Stale timeout: 30 seconds (spec §8 — QUEUE.md locking)
@@ -38,4 +40,37 @@ async function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export { withQueueLock };
+/**
+ * Remove stale lock files that proper-lockfile's own stale detection missed.
+ *
+ * Safety net for production: if proper-lockfile crashes or its stale detection
+ * fails, lock files can accumulate and block all queue operations. This function
+ * checks the queue.json lock file and removes it if older than 5 minutes.
+ *
+ * Intended to be called on daemon startup.
+ */
+const STALE_LOCK_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+async function cleanStaleLocks(): Promise<void> {
+  const config = getConfig();
+  const lockPath = config.queueJsonFile + '.lock';
+
+  try {
+    const info = await stat(lockPath);
+    const ageMs = Date.now() - info.mtimeMs;
+
+    if (ageMs > STALE_LOCK_AGE_MS) {
+      await unlink(lockPath);
+      process.stderr.write(`[lock] Removed stale lock file (age > 5min)\n`);
+    }
+  } catch (err: unknown) {
+    // Lock file doesn't exist or can't be stat'd — nothing to clean
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      process.stderr.write(
+        `[lock] Warning: Could not check lock file: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
+  }
+}
+
+export { withQueueLock, cleanStaleLocks };
