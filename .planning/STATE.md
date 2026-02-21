@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 14 of 15 (Production hardening per requirements/production-hardening.md)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 14-01-PLAN.md
+Last activity: 2026-02-21 - Completed 14-02-PLAN.md
 
-Progress: █████████████████████████░░░░░ 83% (49/59 plans)
+Progress: █████████████████████████░░░░░ 85% (50/59 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 14 — production hardening (1/5 plans complete)
+**Current focus:** Phase 14 — production hardening (2/5 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -59,7 +59,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans)
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
-- **Status:** in progress (1/5 plans complete)
+- **Status:** in progress (2/5 plans complete)
 
 ## Accumulated Context
 
@@ -202,9 +202,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 14-01 | tryParseJson with trailing-garbage trimming for truncated write recovery | Handles partial writes where JSON is truncated mid-write |
 | 14-01 | cleanStaleLocks as 5-minute safety net beyond proper-lockfile 30s stale | Defense in depth for lock cleanup when proper-lockfile fails |
 | 14-01 | Lock acquisition failure logs + re-throws | Callers in daemon loop catch and skip cycle; daemon never crashes |
+| 14-02 | BigInt arithmetic for disk space calculation | bfree * bsize can exceed Number.MAX_SAFE_INTEGER on large filesystems |
+| 14-02 | Spawn rate limiter as module-level state in spawn.ts | Single daemon process means module-level is effectively singleton |
+| 14-02 | validLogLevels cast to readonly string[] for includes() | TypeScript const tuple needs widened type for string.includes() |
 
 ## Session Continuity
 
-Last session: 2026-02-21T13:27:52Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-02-21T13:31:00Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
