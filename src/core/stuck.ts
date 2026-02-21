@@ -188,8 +188,9 @@ async function getLogStaleness(logFile: string): Promise<number> {
  * Returns array of CPU percentages for each interval.
  * Returns [0] repeated for non-existent PIDs.
  */
-async function sampleCpu(pid: number, count: number, intervalMs: number): Promise<number[]> {
+async function sampleCpu(pid: number, count: number, intervalMs: number, timeoutMs?: number): Promise<number[]> {
   const samples: number[] = [];
+  const startTime = Date.now();
 
   /**
    * Read utime + stime (fields 14 + 15, 0-indexed 13 + 14) from /proc/pid/stat.
@@ -221,7 +222,17 @@ async function sampleCpu(pid: number, count: number, intervalMs: number): Promis
   }
 
   for (let i = 0; i < count; i++) {
+    // Check timeout before sleeping
+    if (timeoutMs !== undefined && (Date.now() - startTime) >= timeoutMs) {
+      break; // Return whatever samples we collected so far
+    }
+
     await new Promise(resolve => setTimeout(resolve, intervalMs));
+
+    // Check timeout after sleeping
+    if (timeoutMs !== undefined && (Date.now() - startTime) >= timeoutMs) {
+      break;
+    }
 
     const currentTicks = await readCpuTicks();
     const currentTime = Date.now();
@@ -353,7 +364,8 @@ async function computeStuckScore(pid: number, session: string): Promise<StuckAss
     ]);
 
   // CPU sampling is sequential by nature (needs time between samples)
-  const cpuSamples = await sampleCpu(pid, 3, 10_000);
+  // Cap total sampling time at 3s to avoid long hangs
+  const cpuSamples = await sampleCpu(pid, 3, 10_000, 3_000);
 
   // Score using pure function
   const { score, verdict, signals } = scoreFromSignals({
@@ -361,6 +373,53 @@ async function computeStuckScore(pid: number, session: string): Promise<StuckAss
     runtime,
     cpuSamples,
     messageCount: null, // caller should provide via session list cache
+    processRss,
+    systemFreeMb,
+    procState,
+    wchan,
+  });
+
+  return {
+    pid,
+    session,
+    score,
+    verdict,
+    signals,
+    runtime_seconds: runtime,
+    log_staleness_seconds: logStaleness,
+  };
+}
+
+/**
+ * Fast stuck assessment — skips CPU sampling entirely.
+ *
+ * Used by `pilot status` for instant results. Computes all instantaneous
+ * signals (log staleness, memory, proc state, wchan, runtime) but sets
+ * cpuSamples to empty array so the scorer assumes active (maxCpu defaults to 100).
+ *
+ * This avoids the 30s hang from sampleCpu(3, 10_000) per process.
+ */
+async function computeStuckScoreFast(pid: number, session: string): Promise<StuckAssessment> {
+  const config = getConfig();
+  const logFile = path.join(config.logDir, `gsd-${session}.log`);
+
+  // Gather all instantaneous signal data in parallel
+  const [logStaleness, processRss, systemFreeMb, procState, wchan, runtime] =
+    await Promise.all([
+      getLogStaleness(logFile),
+      getProcessRss(pid),
+      getSystemFreeMem(),
+      readProcState(pid),
+      readProcWchan(pid),
+      getProcessRuntime(pid),
+    ]);
+
+  // Score with no CPU samples — scorer defaults maxCpu to 100 (assume active)
+  const { score, verdict, signals } = scoreFromSignals({
+    logStaleness,
+    runtime,
+    cpuSamples: [],       // Skip CPU sampling for speed
+    messageCount: null,
     processRss,
     systemFreeMb,
     procState,
@@ -459,5 +518,6 @@ export {
   readProcState,
   readProcWchan,
   computeStuckScore,
+  computeStuckScoreFast,
   detectGapClosureMisconfig,
 };
