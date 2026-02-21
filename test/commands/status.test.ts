@@ -245,6 +245,54 @@ describe('statusCommand', () => {
     });
   });
 
+  it('excludes queue runner PID from stuck scoring', async () => {
+    const sessions: SessionInfo[] = [
+      { id: 'sess-001', title: 'some-job-execute', updated: 1708436400000, created: 1708432800000, message_count: 42 },
+      { id: 'sess-002', title: 'queue-runner', updated: 1708435500000, created: 1708432200000, message_count: 0 },
+    ];
+    mockedListSessions.mockResolvedValue(sessions);
+
+    // Two PID entries: a regular job and the queue runner
+    mockedScanPidFiles.mockResolvedValue([
+      { session: 'some-job-execute', pid: 1234 },
+      { session: 'queue-runner', pid: 5678 },
+    ]);
+
+    mockedParseQueueFile.mockResolvedValue([]);
+
+    // readPidFile('queue') returns 5678 — the queue runner PID
+    mockedReadPidFile.mockResolvedValue(5678);
+    mockedIsProcessAlive.mockReturnValue(true);
+    mockedGetProcessRuntime.mockResolvedValue(3600);
+
+    // computeStuckScoreFast returns healthy
+    mockedComputeStuckScoreFast.mockResolvedValue({
+      pid: 1234,
+      session: 'some-job-execute',
+      score: 15,
+      verdict: 'healthy',
+      signals: [],
+      runtime_seconds: 300,
+      log_staleness_seconds: 10,
+    } satisfies StuckAssessment);
+
+    setJsonMode(true);
+    await statusCommand({ json: true });
+
+    const parsed = JSON.parse(output);
+
+    // computeStuckScoreFast should be called ONCE (for PID 1234, not for PID 5678)
+    expect(mockedComputeStuckScoreFast).toHaveBeenCalledTimes(1);
+    expect(mockedComputeStuckScoreFast).toHaveBeenCalledWith(1234, 'some-job-execute');
+
+    // Both PIDs should still be counted as running
+    expect(parsed.summary.running).toBe(2);
+
+    // Runner should be active
+    expect(parsed.runner.active).toBe(true);
+    expect(parsed.runner.pid).toBe(5678);
+  });
+
   it('handles queue file not found gracefully', async () => {
     mockedListSessions.mockResolvedValue([]);
     mockedScanPidFiles.mockResolvedValue([]);

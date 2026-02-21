@@ -581,6 +581,11 @@ describe('Helper function exports', () => {
     const { computeStuckScore } = await import('../../src/core/stuck.js');
     expect(typeof computeStuckScore).toBe('function');
   });
+
+  it('exports computeStuckScoreFast', async () => {
+    const { computeStuckScoreFast } = await import('../../src/core/stuck.js');
+    expect(typeof computeStuckScoreFast).toBe('function');
+  });
 });
 
 // ── I/O Helper Behavior (with real /proc on Linux) ──────────────────────────
