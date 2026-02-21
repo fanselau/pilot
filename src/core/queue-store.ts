@@ -276,6 +276,7 @@ async function addItem(opts: {
   dependsOn?: string;
   maxAttempts?: number;
   meta?: Record<string, unknown>;
+  position?: { next?: boolean; before?: string; after?: string };
 }): Promise<string> {
   return withQueueJsonLock(async () => {
     const data = await loadQueue();
@@ -322,7 +323,26 @@ async function addItem(opts: {
       meta: opts.meta ?? {},
     };
 
-    data.items.push(item);
+    // Position-aware insertion
+    if (opts.position?.next) {
+      const firstQueued = data.items.findIndex((i) => i.status === 'queued');
+      if (firstQueued === -1) {
+        data.items.push(item);
+      } else {
+        data.items.splice(firstQueued, 0, item);
+      }
+    } else if (opts.position?.before) {
+      const targetIdx = data.items.findIndex((i) => i.id === opts.position!.before);
+      if (targetIdx === -1) throw new Error(`Item not found: ${opts.position.before}`);
+      data.items.splice(targetIdx, 0, item);
+    } else if (opts.position?.after) {
+      const targetIdx = data.items.findIndex((i) => i.id === opts.position!.after);
+      if (targetIdx === -1) throw new Error(`Item not found: ${opts.position.after}`);
+      data.items.splice(targetIdx + 1, 0, item);
+    } else {
+      data.items.push(item);
+    }
+
     await saveQueue(data);
     return id;
   });
@@ -347,6 +367,51 @@ async function removeItem(id: string): Promise<void> {
     }
 
     data.items.splice(idx, 1);
+    await saveQueue(data);
+  });
+}
+
+/**
+ * Move a queued item to a new position in the queue.
+ * Only queued items can be moved (not running/completed/failed/blocked).
+ */
+async function moveItem(
+  id: string,
+  position: { next?: boolean; before?: string; after?: string },
+): Promise<void> {
+  return withQueueJsonLock(async () => {
+    const data = await loadQueue();
+    const idx = data.items.findIndex((i) => i.id === id);
+    if (idx === -1) throw new Error(`Item not found: ${id}`);
+
+    const item = data.items[idx]!;
+    if (item.status !== 'queued') {
+      throw new Error(
+        `Cannot move item with status '${item.status}' — only queued items can be moved`,
+      );
+    }
+
+    // Remove from current position
+    data.items.splice(idx, 1);
+
+    // Insert at new position
+    if (position.next) {
+      const firstQueued = data.items.findIndex((i) => i.status === 'queued');
+      if (firstQueued === -1) {
+        data.items.push(item);
+      } else {
+        data.items.splice(firstQueued, 0, item);
+      }
+    } else if (position.before) {
+      const targetIdx = data.items.findIndex((i) => i.id === position.before);
+      if (targetIdx === -1) throw new Error(`Target item not found: ${position.before}`);
+      data.items.splice(targetIdx, 0, item);
+    } else if (position.after) {
+      const targetIdx = data.items.findIndex((i) => i.id === position.after);
+      if (targetIdx === -1) throw new Error(`Target item not found: ${position.after}`);
+      data.items.splice(targetIdx + 1, 0, item);
+    }
+
     await saveQueue(data);
   });
 }
@@ -634,6 +699,7 @@ export {
   withQueueJsonLock,
   addItem,
   removeItem,
+  moveItem,
   findLaunchable,
   findLaunchableAtomic,
   markRunning,
