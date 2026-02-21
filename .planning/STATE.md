@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 11 of 15 (Finishing touches per requirements/finishing-touches.md)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 11-01-PLAN.md
+Last activity: 2026-02-21 - Completed 11-02-PLAN.md
 
-Progress: █████████████████████████ 100% (41/41 plans)
+Progress: █████████████████████████ 100% (42/42 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 11 in progress — finishing touches (1/4 plans)
+**Current focus:** Phase 11 in progress — finishing touches (2/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -50,7 +50,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
-- **Status:** in progress (1/4 plans complete)
+- **Status:** in progress (2/4 plans complete)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 - **Status:** complete (3/3 plans, verified ✓)
@@ -164,9 +164,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 11-01 | Reuse spawn.ts patterns without shared helpers | Keeps modules independent, avoids refactor scope |
 | 11-01 | Queue check validates queue.json not QUEUE.md | Consistent with Phase 6 migration |
 | 11-01 | Tests account for real filesystem state | Binary and snapshot repos may exist on dev machines |
+| 11-02 | Built-in fetch() for webhook notifications | No new dependency needed (Node.js 20+) |
+| 11-02 | Sync appendFileSync for runner log | Infrequent writes, simplicity over async |
+| 11-02 | Filename date rotation not mtime | Deterministic and testable |
+| 11-02 | Notifications never throw | Fire-and-forget with stderr logging on failure |
 
 ## Session Continuity
 
-Last session: 2026-02-21T11:29:49Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-02-21T11:37:29Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
