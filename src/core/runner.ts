@@ -24,16 +24,20 @@
 
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink } from 'node:fs/promises';
+import { writeFileSync, statSync, statfsSync } from 'node:fs';
 import { execa } from 'execa';
 import treeKill from 'tree-kill';
 
 import { getConfig } from './config.js';
-import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued } from './queue-store.js';
-import { preSpawnChecks, spawnSession, truncateTitle } from './spawn.js';
+import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued, loadQueue, ensurePilotDir } from './queue-store.js';
+import { preSpawnChecks, spawnSession, truncateTitle, enforceSpawnRateLimit, checkBinary, getSystemFreeMem } from './spawn.js';
 import { writePidFile, removePidFile, isProcessAlive } from './process.js';
 import { logPostmortem } from './postmortem.js';
 import { runLifecycleMode } from './lifecycle.js';
+import { cleanStaleLocks } from './lock.js';
+import { computeDaemonStuckScore } from './stuck.js';
+import { getProcessRuntime } from './process.js';
 import type {
   QueueJsonItem,
   RunnerJob,
@@ -92,6 +96,9 @@ class Runner extends EventEmitter<RunnerEvents> {
   private config: PilotConfig;
   private queuePidFile: string;
 
+  /** Track flaky failure count per item ID (not persisted — resets on daemon restart) */
+  private flakyAttempts: Map<string, number> = new Map();
+
   constructor(opts: RunnerOptions) {
     super();
     this.opts = opts;
@@ -109,17 +116,54 @@ class Runner extends EventEmitter<RunnerEvents> {
   /**
    * Start the runner main loop.
    *
-   * 1. Write runner PID file
-   * 2. Check for existing runner
-   * 3. Set up SIGTERM handler
-   * 4. Loop: reap → scan → launch/wait
+   * Startup sequence:
+   *   1. startupSelfCheck (validate binary, gsd dir, queue, disk, memory)
+   *   2. cleanStaleLocks (from lock.ts — Plan 01)
+   *   3. cleanOrphanProcesses (detect orphaned opencode processes)
+   *   4. cleanJobLogs (delete old job logs: keep 20, >7 days old)
+   *   5. checkExistingRunner (stale PID cleanup)
+   *   6. writePidFile
+   *   7. heartbeat setup (every 60s to ~/.pilot/heartbeat)
+   *   8. mainLoop
    */
   async start(): Promise<void> {
-    // Check for existing runner PID
+    // Step 1: Validate environment before doing anything else
+    await this.startupSelfCheck();
+
+    // Step 2: Clean stale lock files (safety net from Plan 01)
+    try {
+      await cleanStaleLocks();
+    } catch (err) {
+      this.emit('error', `Failed to clean stale locks: ${String(err)}`);
+      // Non-critical — continue startup
+    }
+
+    // Step 3: Detect orphan processes (log only, don't kill on startup)
+    await this.cleanOrphanProcesses();
+
+    // Step 4: Clean old job logs
+    await this.cleanJobLogs();
+
+    // Step 5: Check for existing runner PID
     await this.checkExistingRunner();
 
-    // Write our PID file: gsd-queue-pid
+    // Step 6: Write our PID file
     await writePidFile(this.queuePidFile, process.pid);
+
+    // Step 7: Set up heartbeat (every 60s to ~/.pilot/heartbeat)
+    await ensurePilotDir();
+    const heartbeatPath = path.join(this.config.pilotDir, 'heartbeat');
+    // Write initial heartbeat immediately
+    try {
+      writeFileSync(heartbeatPath, new Date().toISOString() + '\n');
+    } catch { /* best effort */ }
+    const heartbeatInterval = setInterval(() => {
+      try {
+        writeFileSync(heartbeatPath, new Date().toISOString() + '\n');
+      } catch {
+        // Best effort — don't crash for heartbeat write failure
+      }
+    }, 60_000);
 
     // Set up graceful shutdown on SIGTERM and SIGINT (Ctrl+C)
     const sigHandler = () => {
@@ -131,22 +175,215 @@ class Runner extends EventEmitter<RunnerEvents> {
     try {
       await this.mainLoop();
     } finally {
+      clearInterval(heartbeatInterval);
       process.off('SIGTERM', sigHandler);
       process.off('SIGINT', sigHandler);
       await removePidFile(this.queuePidFile);
     }
   }
 
+  // ── Startup self-check ────────────────────────────────────────────────
+
+  /**
+   * Validate environment preconditions before running.
+   *
+   * Critical failures (throw): binary missing, gsd dir missing, disk < 500MB.
+   * Non-critical failures (emit error): queue unreadable, memory low.
+   */
+  private async startupSelfCheck(): Promise<void> {
+    // 1. Check opencode binary exists — critical
+    try {
+      await checkBinary();
+    } catch (err) {
+      throw new Error(`Startup check failed: opencode binary not found. ${String(err)}`);
+    }
+
+    // 2. Check gsd dir exists — critical
+    try {
+      await stat(this.config.gsdDir);
+    } catch {
+      throw new Error(
+        `Startup check failed: pilot-gsd directory not found at ${this.config.gsdDir}. ` +
+        `Set PILOT_GSD_DIR or clone https://github.com/punchlab-dev/pilot-gsd`,
+      );
+    }
+
+    // 3. Check queue file readable/writable — non-critical (auto-creates)
+    try {
+      await loadQueue();
+    } catch (err) {
+      this.emit('error', `Startup warning: queue file issue: ${String(err)}`);
+      // Continue — queue auto-creates on first write
+    }
+
+    // 4. Check disk space > 500MB — critical
+    try {
+      const st = statfsSync(this.config.pilotDir);
+      const freeBytes = BigInt(st.bfree) * BigInt(st.bsize);
+      const freeMb = Number(freeBytes / BigInt(1024 * 1024));
+      if (freeBytes < BigInt(500 * 1024 * 1024)) {
+        throw new Error(
+          `Disk space too low: ${freeMb}MB free (need 500MB). Clear logs or free space.`,
+        );
+      }
+    } catch (err) {
+      // Re-throw our own disk space errors
+      if (err instanceof Error && err.message.startsWith('Disk space too low')) {
+        throw err;
+      }
+      // statfsSync unavailable — skip check with warning
+      this.emit('error', `Startup warning: could not check disk space: ${String(err)}`);
+    }
+
+    // 5. Check memory > 2GB — non-critical (may free up later)
+    try {
+      const availableMb = await getSystemFreeMem();
+      if (availableMb !== null && availableMb < 2048) {
+        this.emit('error', `Startup warning: low memory (${availableMb}MB free, need 2048MB). Jobs may fail to spawn.`);
+      }
+    } catch (err) {
+      this.emit('error', `Startup warning: could not check memory: ${String(err)}`);
+    }
+  }
+
+  // ── Orphan process detection ──────────────────────────────────────────
+
+  /**
+   * Detect opencode processes not matching any running queue item.
+   *
+   * On startup: log only. Does NOT kill. The 2-hour kill is for periodic
+   * checks handled in Plan 04's stuck detection.
+   */
+  private async cleanOrphanProcesses(): Promise<void> {
+    try {
+      const result = await execa('pgrep', ['-f', 'opencode'], { reject: false });
+      if (result.exitCode !== 0 || !result.stdout.trim()) {
+        return; // No opencode processes found
+      }
+
+      const pids = result.stdout.trim().split('\n').map((p) => parseInt(p.trim(), 10)).filter((p) => !Number.isNaN(p));
+      if (pids.length === 0) return;
+
+      // Get running items from queue to cross-reference
+      let runningProjects: string[] = [];
+      try {
+        const queueData = await loadQueue();
+        runningProjects = queueData.items
+          .filter((i) => i.status === 'running')
+          .map((i) => i.project);
+      } catch {
+        // Queue unreadable — can't cross-reference, skip
+        return;
+      }
+
+      // If there are running queue items, some opencode processes are expected
+      // We can't perfectly match PIDs to queue items without PID tracking,
+      // so just log if there are more opencode processes than running items
+      if (pids.length > runningProjects.length) {
+        const orphanCount = pids.length - runningProjects.length;
+        this.emit('error',
+          `Startup: detected ${orphanCount} potential orphan opencode process(es) ` +
+          `(${pids.length} opencode PIDs, ${runningProjects.length} running queue items). ` +
+          `PIDs: ${pids.join(', ')}`,
+        );
+      }
+    } catch {
+      // pgrep not available or other error — orphan detection is non-critical
+    }
+  }
+
+  // ── Job log cleanup ───────────────────────────────────────────────────
+
+  /**
+   * Clean old job logs: keep the 20 most recent, delete others older than 7 days.
+   *
+   * Scans config.logDir for gsd-*.log files. Non-critical — failure
+   * never prevents startup.
+   */
+  private async cleanJobLogs(): Promise<void> {
+    try {
+      const entries = await readdir(this.config.logDir);
+      const logFiles = entries.filter((f) => f.startsWith('gsd-') && f.endsWith('.log'));
+
+      if (logFiles.length === 0) return;
+
+      // Get stats for all log files
+      const fileStats: Array<{ name: string; mtimeMs: number }> = [];
+      for (const name of logFiles) {
+        try {
+          const st = await stat(path.join(this.config.logDir, name));
+          fileStats.push({ name, mtimeMs: st.mtimeMs });
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+
+      // Sort by mtime descending (most recent first)
+      fileStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+      // Keep the 20 most recent regardless of age
+      const toConsider = fileStats.slice(20);
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+      for (const file of toConsider) {
+        if (file.mtimeMs < sevenDaysAgo) {
+          try {
+            await unlink(path.join(this.config.logDir, file.name));
+          } catch {
+            // Best effort — skip files we can't delete
+          }
+        }
+      }
+    } catch {
+      // Log cleanup failing should never prevent startup
+    }
+  }
+
   private async mainLoop(): Promise<void> {
     let lastIdleLog = 0; // timestamp of last idle log message
     const IDLE_LOG_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    let lastStuckCheck = 0;
+    const STUCK_CHECK_INTERVAL = 60_000; // 60 seconds
+    let lastOrphanCheck = 0;
+    const ORPHAN_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
     while (!this.state.isShuttingDown) {
-      // Step 1: Reap dead processes
-      await this.reap();
+      // Step 0: Periodic stuck detection (every 60s, only when jobs active)
+      const now0 = Date.now();
+      if (now0 - lastStuckCheck >= STUCK_CHECK_INTERVAL && this.state.activeJobs.size > 0) {
+        try {
+          await this.checkStuckJobs();
+        } catch {
+          // Stuck detection failure must not crash daemon
+        }
+        lastStuckCheck = now0;
+      }
 
-      // Step 2: Check per-job timeouts on active jobs
-      await this.checkTimeouts();
+      // Step 0b: Periodic orphan cleanup (every 30 min)
+      if (now0 - lastOrphanCheck >= ORPHAN_CHECK_INTERVAL) {
+        try {
+          await this.cleanOrphanPeriodic();
+        } catch {
+          // Orphan cleanup failure must not crash daemon
+        }
+        lastOrphanCheck = now0;
+      }
+
+      // Step 1: Reap dead processes (graceful degradation)
+      try {
+        await this.reap();
+      } catch (err) {
+        this.emit('error', `Reap cycle failed: ${String(err)}`);
+        // Continue loop — individual job errors handled inside reap
+      }
+
+      // Step 2: Check per-job timeouts on active jobs (graceful degradation)
+      try {
+        await this.checkTimeouts();
+      } catch (err) {
+        this.emit('error', `Timeout check failed: ${String(err)}`);
+        // Continue loop — timeout checking is non-critical
+      }
 
       // Step 3: Scan for next launchable item (atomic: holds lock during read+mark)
       this.emit('scan');
@@ -260,6 +497,14 @@ class Runner extends EventEmitter<RunnerEvents> {
    */
   private async launch(item: QueueJsonItem): Promise<void> {
     const projectDir = path.join(this.config.projectDir, item.project);
+
+    // Enforce minimum 5-second interval between spawns (thundering herd prevention)
+    try {
+      await enforceSpawnRateLimit();
+    } catch (err) {
+      this.emit('error', `Spawn rate limit failed for ${item.project}: ${String(err)}`);
+      // Continue — rate limiting is non-critical
+    }
 
     // Pre-spawn checks (git gc, memory, config, binary)
     try {

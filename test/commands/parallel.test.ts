@@ -36,12 +36,21 @@ vi.mock('../../src/core/queue-store.js', () => ({
   markCompleted: vi.fn().mockResolvedValue(undefined),
   markFailed: vi.fn().mockResolvedValue(undefined),
   markQueued: vi.fn().mockResolvedValue(undefined),
+  loadQueue: vi.fn().mockResolvedValue({ version: 1, items: [], history: [], completedIds: [] }),
+  ensurePilotDir: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../src/core/spawn.js', () => ({
   preSpawnChecks: vi.fn().mockResolvedValue(undefined),
   spawnSession: vi.fn(),
   truncateTitle: vi.fn((p: string, m: string, _a?: string) => `${p}-${m}`),
+  enforceSpawnRateLimit: vi.fn().mockResolvedValue(undefined),
+  checkBinary: vi.fn().mockResolvedValue('/usr/bin/opencode'),
+  getSystemFreeMem: vi.fn().mockResolvedValue(8192),
+}));
+
+vi.mock('../../src/core/lock.js', () => ({
+  cleanStaleLocks: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../src/core/process.js', () => ({
@@ -72,6 +81,21 @@ vi.mock('node:fs/promises', async () => {
     ...actual,
     readFile: vi.fn().mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    stat: vi.fn().mockResolvedValue({ mtimeMs: Date.now() }),
+    readdir: vi.fn().mockResolvedValue([]),
+    unlink: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return {
+    ...actual,
+    writeFileSync: vi.fn(),
+    statfsSync: vi.fn(() => ({
+      bfree: BigInt(10_000_000),
+      bsize: BigInt(4096),
+    })),
   };
 });
 
