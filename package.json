@@ -9,6 +9,14 @@
     "node": ">=20.0.0"
   },
   "files": ["dist"],
+  "description": "Autonomous AI development pipeline CLI — monitors, orchestrates, and manages AI coding agents",
+  "keywords": ["ai", "development", "pipeline", "automation", "cli", "opencode"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucafanselau/pilot.git"
+  },
+  "author": "PunchLab <hello@punchlab.dev>",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
