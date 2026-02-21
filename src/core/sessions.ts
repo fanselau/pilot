@@ -1,7 +1,7 @@
 /**
  * Session list/export wrappers with fuzzy matching.
  *
- * Wraps the claude CLI to list, search, and export sessions.
+ * Wraps the opencode CLI to list, search, and export sessions.
  * Provides caching for message counts to avoid repeated CLI calls.
  *
  * Pure core module — no UI dependencies.
@@ -32,7 +32,7 @@ const CACHE_TTL_MS = 60_000;
  */
 async function listSessions(): Promise<SessionInfo[]> {
   try {
-    const result = await execa('claude', ['session', 'list', '--format', 'json']);
+    const result = await execa('opencode', ['session', 'list', '--format', 'json'], { timeout: 5000 });
     const parsed: unknown = JSON.parse(result.stdout);
 
     if (!Array.isArray(parsed)) {
@@ -88,7 +88,7 @@ async function findSession(query: string): Promise<SessionInfo | null> {
  */
 async function exportSession(sessionId: string): Promise<unknown> {
   try {
-    const result = await execa('claude', ['export', sessionId]);
+    const result = await execa('opencode', ['export', sessionId], { timeout: 5000 });
     return JSON.parse(result.stdout) as unknown;
   } catch (err: unknown) {
     const message =
@@ -153,8 +153,7 @@ function toSessionInfo(raw: unknown): SessionInfo | null {
     typeof obj.id !== 'string' ||
     typeof obj.title !== 'string' ||
     typeof obj.updated !== 'number' ||
-    typeof obj.created !== 'number' ||
-    typeof obj.message_count !== 'number'
+    typeof obj.created !== 'number'
   ) {
     return null;
   }
@@ -164,7 +163,7 @@ function toSessionInfo(raw: unknown): SessionInfo | null {
     title: obj.title,
     updated: obj.updated,
     created: obj.created,
-    message_count: obj.message_count,
+    message_count: typeof obj.message_count === 'number' ? obj.message_count : undefined,
   };
 }
 
