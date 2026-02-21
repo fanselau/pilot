@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../src/core/config.js', () => ({
   getConfig: vi.fn(() => ({
     queueFile: '/tmp/QUEUE.md',
+    pilotDir: '/tmp/.pilot',
+    queueJsonFile: '/tmp/.pilot/queue.json',
     logDir: '/tmp',
     stuckThreshold: 90,
     projectDir: '/tmp/projects',
@@ -28,8 +30,8 @@ vi.mock('../../src/core/stuck.js', () => ({
   computeStuckScoreFast: vi.fn(),
 }));
 
-vi.mock('../../src/core/queue-parser.js', () => ({
-  parseQueueFile: vi.fn(),
+vi.mock('../../src/core/queue-store.js', () => ({
+  getItems: vi.fn(),
 }));
 
 // Must mock cli-table3 to avoid rendering issues in tests
@@ -45,10 +47,10 @@ vi.mock('cli-table3', () => {
 import { listSessions } from '../../src/core/sessions.js';
 import { scanPidFiles, readPidFile, isProcessAlive, getProcessRuntime } from '../../src/core/process.js';
 import { computeStuckScoreFast } from '../../src/core/stuck.js';
-import { parseQueueFile } from '../../src/core/queue-parser.js';
+import { getItems } from '../../src/core/queue-store.js';
 import { setJsonMode } from '../../src/util/output.js';
 import { statusCommand } from '../../src/commands/status.js';
-import type { SessionInfo, StuckAssessment, QueueEntry } from '../../src/core/types.js';
+import type { SessionInfo, StuckAssessment, QueueJsonItem } from '../../src/core/types.js';
 
 const mockedListSessions = vi.mocked(listSessions);
 const mockedScanPidFiles = vi.mocked(scanPidFiles);
@@ -56,7 +58,29 @@ const mockedReadPidFile = vi.mocked(readPidFile);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
 const mockedGetProcessRuntime = vi.mocked(getProcessRuntime);
 const mockedComputeStuckScoreFast = vi.mocked(computeStuckScoreFast);
-const mockedParseQueueFile = vi.mocked(parseQueueFile);
+const mockedGetItems = vi.mocked(getItems);
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeItem(overrides: Partial<QueueJsonItem> = {}): QueueJsonItem {
+  return {
+    id: 'ab12',
+    project: 'test-project',
+    mode: 'continue',
+    description: '',
+    status: 'queued',
+    addedAt: '2026-02-20T10:00:00Z',
+    startedAt: null,
+    completedAt: null,
+    phase: null,
+    attempts: 0,
+    maxAttempts: 3,
+    dependsOn: null,
+    error: null,
+    meta: {},
+    ...overrides,
+  };
+}
 
 describe('statusCommand', () => {
   let output: string;
@@ -92,11 +116,11 @@ describe('statusCommand', () => {
       { session: 'resume-roast-execute', pid: 12345 },
     ]);
 
-    const queueEntries: QueueEntry[] = [
-      { lineNum: 1, project: 'hub', mode: 'continue', args: '', status: 'pending' },
-      { lineNum: 2, project: 'registry', mode: 'add-and-build', args: 'add caching', status: 'pending' },
+    const queueItems: QueueJsonItem[] = [
+      makeItem({ id: 'q1', project: 'hub', mode: 'continue', status: 'queued' }),
+      makeItem({ id: 'q2', project: 'registry', mode: 'add-and-build', status: 'queued', description: 'add caching' }),
     ];
-    mockedParseQueueFile.mockResolvedValue(queueEntries);
+    mockedGetItems.mockResolvedValue(queueItems);
 
     mockedComputeStuckScoreFast.mockResolvedValue({
       pid: 12345,
@@ -147,7 +171,7 @@ describe('statusCommand', () => {
   it('outputs all zeros when no sessions, PIDs, or queue entries', async () => {
     mockedListSessions.mockResolvedValue([]);
     mockedScanPidFiles.mockResolvedValue([]);
-    mockedParseQueueFile.mockResolvedValue([]);
+    mockedGetItems.mockResolvedValue([]);
 
     setJsonMode(true);
     await statusCommand({ json: true });
@@ -181,7 +205,7 @@ describe('statusCommand', () => {
       { session: 'resume-roast-execute', pid: 12345 },
     ]);
 
-    mockedParseQueueFile.mockResolvedValue([]);
+    mockedGetItems.mockResolvedValue([]);
 
     mockedComputeStuckScoreFast.mockResolvedValue({
       pid: 12345,
@@ -211,15 +235,15 @@ describe('statusCommand', () => {
     expect(parsed.summary.completed).toBe(1);
   });
 
-  it('includes queue entries with correct fields in JSON output', async () => {
+  it('includes queue entries with backward-compat fields in JSON output', async () => {
     mockedListSessions.mockResolvedValue([]);
     mockedScanPidFiles.mockResolvedValue([]);
 
-    const queueEntries: QueueEntry[] = [
-      { lineNum: 5, project: 'hub', mode: 'continue', args: '', status: 'pending', description: 'A pending entry' },
-      { lineNum: 10, project: 'registry', mode: 'add-and-build', args: 'add caching', status: 'running' },
+    const queueItems: QueueJsonItem[] = [
+      makeItem({ id: 'q1', project: 'hub', mode: 'continue', status: 'queued', description: 'A pending entry' }),
+      makeItem({ id: 'q2', project: 'registry', mode: 'add-and-build', status: 'running', description: 'add caching' }),
     ];
-    mockedParseQueueFile.mockResolvedValue(queueEntries);
+    mockedGetItems.mockResolvedValue(queueItems);
 
     setJsonMode(true);
     await statusCommand({ json: true });
@@ -227,22 +251,17 @@ describe('statusCommand', () => {
     const parsed = JSON.parse(output);
 
     expect(parsed.queue).toHaveLength(2);
-    expect(parsed.queue[0]).toEqual({
-      status: 'pending',
-      project: 'hub',
-      mode: 'continue',
-      args: '',
-      description: 'A pending entry',
-      line_num: 5,
-    });
-    expect(parsed.queue[1]).toEqual({
-      status: 'running',
-      project: 'registry',
-      mode: 'add-and-build',
-      args: 'add caching',
-      description: '',
-      line_num: 10,
-    });
+    // Backward compat: 'queued' maps to 'pending'
+    expect(parsed.queue[0].status).toBe('pending');
+    expect(parsed.queue[0].project).toBe('hub');
+    expect(parsed.queue[0].mode).toBe('continue');
+    expect(parsed.queue[0].args).toBe('A pending entry');
+    expect(parsed.queue[0].description).toBe('A pending entry');
+    expect(parsed.queue[0].line_num).toBe(0);
+
+    expect(parsed.queue[1].status).toBe('running');
+    expect(parsed.queue[1].project).toBe('registry');
+    expect(parsed.queue[1].args).toBe('add caching');
   });
 
   it('excludes queue runner PID from stuck scoring', async () => {
@@ -258,7 +277,7 @@ describe('statusCommand', () => {
       { session: 'queue-runner', pid: 5678 },
     ]);
 
-    mockedParseQueueFile.mockResolvedValue([]);
+    mockedGetItems.mockResolvedValue([]);
 
     // readPidFile('queue') returns 5678 — the queue runner PID
     mockedReadPidFile.mockResolvedValue(5678);
@@ -293,17 +312,17 @@ describe('statusCommand', () => {
     expect(parsed.runner.pid).toBe(5678);
   });
 
-  it('handles queue file not found gracefully', async () => {
+  it('handles queue store error gracefully', async () => {
     mockedListSessions.mockResolvedValue([]);
     mockedScanPidFiles.mockResolvedValue([]);
-    mockedParseQueueFile.mockRejectedValue(new Error('ENOENT'));
+    mockedGetItems.mockRejectedValue(new Error('ENOENT'));
 
     setJsonMode(true);
     await statusCommand({ json: true });
 
     const parsed = JSON.parse(output);
 
-    // Queue should be empty when file not found (not an error for status)
+    // Queue should be empty when store not available (not an error for status)
     expect(parsed.queue).toEqual([]);
     expect(parsed.summary.queued).toBe(0);
   });

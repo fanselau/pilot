@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../src/core/config.js', () => ({
   getConfig: vi.fn(() => ({
     queueFile: '/tmp/QUEUE.md',
+    pilotDir: '/tmp/.pilot',
+    queueJsonFile: '/tmp/.pilot/queue.json',
     logDir: '/tmp',
     stuckThreshold: 90,
     projectDir: '/tmp/projects',
@@ -13,16 +15,42 @@ vi.mock('../../src/core/config.js', () => ({
   })),
 }));
 
-vi.mock('../../src/core/queue-parser.js', () => ({
-  parseQueueFile: vi.fn(),
+vi.mock('../../src/core/queue-store.js', () => ({
+  getItems: vi.fn(),
+  getHistory: vi.fn(),
+  removeItem: vi.fn(),
 }));
 
-import { parseQueueFile } from '../../src/core/queue-parser.js';
+import { getItems, getHistory, removeItem } from '../../src/core/queue-store.js';
 import { setJsonMode } from '../../src/util/output.js';
-import { queueCommand } from '../../src/commands/queue.js';
-import type { QueueEntry } from '../../src/core/types.js';
+import { queueCommand, queueRemoveCommand } from '../../src/commands/queue.js';
+import type { QueueJsonItem } from '../../src/core/types.js';
 
-const mockedParseQueueFile = vi.mocked(parseQueueFile);
+const mockedGetItems = vi.mocked(getItems);
+const mockedGetHistory = vi.mocked(getHistory);
+const mockedRemoveItem = vi.mocked(removeItem);
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeItem(overrides: Partial<QueueJsonItem> = {}): QueueJsonItem {
+  return {
+    id: 'ab12',
+    project: 'test-project',
+    mode: 'continue',
+    description: '',
+    status: 'queued',
+    addedAt: '2026-02-20T10:00:00Z',
+    startedAt: null,
+    completedAt: null,
+    phase: null,
+    attempts: 0,
+    maxAttempts: 3,
+    dependsOn: null,
+    error: null,
+    meta: {},
+    ...overrides,
+  };
+}
 
 describe('queueCommand', () => {
   let output: string;
@@ -52,15 +80,13 @@ describe('queueCommand', () => {
     setJsonMode(false);
   });
 
-  it('outputs entries with correct fields in JSON mode', async () => {
-    const entries: QueueEntry[] = [
-      { lineNum: 1, project: 'baby-predictor', mode: 'build-full', args: 'AI baby face predictor tool', status: 'done', description: 'Created in 2h 15m, 10 phases complete' },
-      { lineNum: 6, project: 'resume-roast', mode: 'continue-all', args: '', status: 'running', description: 'Running Phase 3 execute' },
-      { lineNum: 12, project: 'hub', mode: 'continue', args: '', status: 'pending', dependsOn: ['registry'] },
-      { lineNum: 15, project: 'registry', mode: 'add-and-build', args: 'add caching per requirements/cache.md', status: 'pending', timeout: 120 },
-      { lineNum: 18, project: 'caricature', mode: 'build-full', args: 'Caricature studio', status: 'failed', description: 'Failed: OOM after 3 retries' },
+  it('outputs entries with backward-compat fields in JSON mode', async () => {
+    const items: QueueJsonItem[] = [
+      makeItem({ id: 'aa11', project: 'resume-roast', mode: 'continue-all', status: 'running', description: 'Running Phase 3' }),
+      makeItem({ id: 'bb22', project: 'hub', mode: 'continue', status: 'queued' }),
+      makeItem({ id: 'cc33', project: 'registry', mode: 'add-and-build', status: 'queued', description: 'add caching per requirements/cache.md' }),
     ];
-    mockedParseQueueFile.mockResolvedValue(entries);
+    mockedGetItems.mockResolvedValue(items);
 
     setJsonMode(true);
     await queueCommand({ json: true });
@@ -72,9 +98,9 @@ describe('queueCommand', () => {
 
     // Has queue array
     expect(Array.isArray(parsed.queue)).toBe(true);
-    expect(parsed.queue).toHaveLength(5);
+    expect(parsed.queue).toHaveLength(3);
 
-    // Each entry has required fields
+    // Each entry has backward-compat fields
     for (const item of parsed.queue) {
       expect(item).toHaveProperty('status');
       expect(item).toHaveProperty('project');
@@ -82,93 +108,87 @@ describe('queueCommand', () => {
       expect(item).toHaveProperty('args');
       expect(item).toHaveProperty('description');
       expect(item).toHaveProperty('line_num');
-      expect(typeof item.status).toBe('string');
-      expect(typeof item.project).toBe('string');
-      expect(typeof item.mode).toBe('string');
-      expect(typeof item.args).toBe('string');
-      expect(typeof item.description).toBe('string');
+      expect(item).toHaveProperty('id');        // new field
+      expect(item).toHaveProperty('addedAt');    // new field
       expect(typeof item.line_num).toBe('number');
     }
 
-    // Verify specific entries
-    expect(parsed.queue[0].project).toBe('baby-predictor');
-    expect(parsed.queue[0].status).toBe('done');
-    expect(parsed.queue[0].line_num).toBe(1);
+    // Backward compat: 'queued' maps to 'pending' in JSON
+    const queuedItem = parsed.queue.find((i: Record<string, unknown>) => i.id === 'bb22');
+    expect(queuedItem.status).toBe('pending');
 
-    expect(parsed.queue[2].project).toBe('hub');
-    expect(parsed.queue[2].status).toBe('pending');
+    // Running stays as running
+    const runningItem = parsed.queue.find((i: Record<string, unknown>) => i.id === 'aa11');
+    expect(runningItem.status).toBe('running');
+
+    // args maps to description
+    expect(queuedItem.args).toBe('');
+    expect(parsed.queue[2].args).toBe('add caching per requirements/cache.md');
+
+    // line_num is always 0 (deprecated)
+    expect(queuedItem.line_num).toBe(0);
   });
 
-  it('exits 1 with error when queue file not found', async () => {
-    const enoentError = new Error('ENOENT: no such file or directory');
-    (enoentError as NodeJS.ErrnoException).code = 'ENOENT';
-    mockedParseQueueFile.mockRejectedValue(enoentError);
-
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
-      throw new Error('process.exit');
-    }) as never);
-
-    setJsonMode(false);
-    await expect(queueCommand({ json: false })).rejects.toThrow('process.exit');
-
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(stderrOutput).toContain('Error: Queue file not found:');
-
-    exitSpy.mockRestore();
-  });
-
-  it('includes all entries regardless of status in JSON', async () => {
-    const entries: QueueEntry[] = [
-      { lineNum: 1, project: 'done-proj', mode: 'build-full', args: '', status: 'done' },
-      { lineNum: 5, project: 'running-proj', mode: 'continue', args: '', status: 'running' },
-      { lineNum: 10, project: 'pending-proj', mode: 'continue-all', args: '', status: 'pending' },
-      { lineNum: 15, project: 'failed-proj', mode: 'build-full', args: '', status: 'failed' },
+  it('calculates active_count as running + queued', async () => {
+    const items: QueueJsonItem[] = [
+      makeItem({ id: 'a1', status: 'running' }),
+      makeItem({ id: 'a2', status: 'running' }),
+      makeItem({ id: 'a3', status: 'queued' }),
     ];
-    mockedParseQueueFile.mockResolvedValue(entries);
+    mockedGetItems.mockResolvedValue(items);
 
     setJsonMode(true);
     await queueCommand({ json: true });
 
     const parsed = JSON.parse(output);
-
-    // All 4 entries present
-    expect(parsed.queue).toHaveLength(4);
-
-    const statuses = parsed.queue.map((e: { status: string }) => e.status);
-    expect(statuses).toContain('done');
-    expect(statuses).toContain('running');
-    expect(statuses).toContain('pending');
-    expect(statuses).toContain('failed');
-  });
-
-  it('calculates active_count as running + pending', async () => {
-    const entries: QueueEntry[] = [
-      { lineNum: 1, project: 'done-proj', mode: 'build-full', args: '', status: 'done' },
-      { lineNum: 5, project: 'running-1', mode: 'continue', args: '', status: 'running' },
-      { lineNum: 10, project: 'running-2', mode: 'continue', args: '', status: 'running' },
-      { lineNum: 15, project: 'pending-1', mode: 'continue-all', args: '', status: 'pending' },
-      { lineNum: 20, project: 'failed-proj', mode: 'build-full', args: '', status: 'failed' },
-    ];
-    mockedParseQueueFile.mockResolvedValue(entries);
-
-    setJsonMode(true);
-    await queueCommand({ json: true });
-
-    const parsed = JSON.parse(output);
-
-    // 2 running + 1 pending = 3 active
     expect(parsed.active_count).toBe(3);
   });
 
-  it('handles empty queue file gracefully', async () => {
-    mockedParseQueueFile.mockResolvedValue([]);
+  it('handles empty queue gracefully', async () => {
+    mockedGetItems.mockResolvedValue([]);
 
     setJsonMode(true);
     await queueCommand({ json: true });
 
     const parsed = JSON.parse(output);
-
     expect(parsed.queue).toEqual([]);
     expect(parsed.active_count).toBe(0);
+  });
+
+  it('--history shows completed and failed from history', async () => {
+    mockedGetHistory.mockResolvedValue([
+      {
+        ...makeItem({ id: 'h1', project: 'proj-a', mode: 'build-full', status: 'completed' }),
+        duration: 3600,
+        completedAt: '2026-02-20T11:00:00Z',
+      },
+      {
+        ...makeItem({ id: 'h2', project: 'proj-b', mode: 'continue', status: 'failed', error: 'OOM' }),
+        duration: 1200,
+        completedAt: '2026-02-20T11:30:00Z',
+      },
+    ]);
+
+    setJsonMode(true);
+    await queueCommand({ json: true, history: true });
+
+    const parsed = JSON.parse(output);
+    expect(parsed.history).toHaveLength(2);
+    expect(parsed.history[0].id).toBe('h1');
+    expect(parsed.history[0].status).toBe('completed');
+    expect(parsed.history[1].error).toBe('OOM');
+    expect(parsed.count).toBe(2);
+  });
+
+  it('queue remove removes a queued item', async () => {
+    mockedRemoveItem.mockResolvedValue(undefined);
+
+    setJsonMode(true);
+    await queueRemoveCommand('ab12', {});
+
+    const parsed = JSON.parse(output);
+    expect(parsed.action).toBe('removed');
+    expect(parsed.id).toBe('ab12');
+    expect(mockedRemoveItem).toHaveBeenCalledWith('ab12');
   });
 });
