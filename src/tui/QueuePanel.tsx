@@ -1,7 +1,7 @@
 /**
  * Queue panel for the TUI dashboard.
  *
- * Shows pending and running queue entries with a progress bar showing
+ * Shows queued and running queue entries with a progress bar showing
  * completion ratio (done / total).
  *
  * TUI module — depends on React + Ink. No picocolors, no cli-table3.
@@ -63,21 +63,23 @@ export function QueuePanel({
           const isSelected = active && i === selectedIndex;
           const prefix = isSelected ? '> ' : '  ';
           const maxEntryLen = Math.max(10, width - 8);
-          const entryText = `${e.project}: ${e.mode}`;
+          const entryText = e.description
+            ? `${e.project}: ${e.mode} | ${e.description}`
+            : `${e.project}: ${e.mode}`;
           const display = entryText.length > maxEntryLen
             ? entryText.slice(0, maxEntryLen - 1) + '\u2026'
             : entryText;
 
           if (e.status === 'running') {
             return (
-              <Text key={e.lineNum} bold={isSelected} inverse={isSelected}>
+              <Text key={e.id} bold={isSelected} inverse={isSelected}>
                 {prefix}<Text color="cyan">{'\u27F3'}</Text> {display}
               </Text>
             );
           }
 
           return (
-            <Text key={e.lineNum} bold={isSelected} inverse={isSelected}>
+            <Text key={e.id} bold={isSelected} inverse={isSelected}>
               {prefix}<Text dimColor>○</Text> {display}
             </Text>
           );
