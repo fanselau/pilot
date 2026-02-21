@@ -32,6 +32,22 @@ const program = new Command()
 
 program.configureHelp({
   formatHelp: (cmd: Command, helper) => {
+    // Only use custom grouped format for the root 'pilot' command
+    if (cmd.name() !== 'pilot') {
+      const usage = helper.commandUsage(cmd);
+      const desc = helper.commandDescription(cmd);
+      const argLines = helper.visibleArguments(cmd)
+        .map((arg) => `  ${helper.argumentTerm(arg).padEnd(25)}${helper.argumentDescription(arg)}`)
+        .join('\n');
+      const optLines = helper.visibleOptions(cmd)
+        .map((opt) => `  ${helper.optionTerm(opt).padEnd(25)}${helper.optionDescription(opt)}`)
+        .join('\n');
+      let output = `Usage: ${usage}\n\n${desc}\n`;
+      if (argLines) output += `\nArguments:\n${argLines}\n`;
+      if (optLines) output += `\nOptions:\n${optLines}\n`;
+      return output;
+    }
+
     const title = `Usage: ${cmd.name()} [options] [command]\n\n${cmd.description()}\n`;
 
     // Format options using helper methods (NOT helper.formatHelp which would recurse)
@@ -78,6 +94,7 @@ program.configureHelp({
           ['stop [options]', 'Stop queue runner'],
           ['add <project> <req>', 'Smart add to queue'],
           ['build <project> [req]', 'Smart add + run'],
+          ['move <id> [options]', 'Reorder queue item'],
         ],
       },
       {
@@ -344,6 +361,12 @@ program
   .option('--dry-run', 'Show what would happen')
   .option('--as <scope>', 'Override scope: quick, phase, milestone')
   .option('--timeout <minutes>', 'Per-job timeout in minutes')
+  .option('--next', 'Insert at front of pending queue')
+  .option('--before <id>', 'Insert before specific queue item')
+  .option('--after <id>', 'Insert after specific queue item')
+  .option('--depends-on <id>', 'Set dependency on another queue item')
+  .option('--phase', 'Force phase scope (requires .md file)')
+  .option('--milestone', 'Force milestone scope (requires directory)')
   .action(async (project: string, input: string, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { addCommand } = await import('./commands/add.js');
@@ -372,6 +395,19 @@ program
     const opts = mergeOpts(localOpts);
     const { buildCommand } = await import('./commands/build.js');
     await buildCommand(project, input, opts);
+  });
+
+program
+  .command('move')
+  .argument('<id>', 'Queue item ID')
+  .description('Reorder a queued item')
+  .option('--next', 'Move to front of pending queue')
+  .option('--before <id>', 'Move before specific item')
+  .option('--after <id>', 'Move after specific item')
+  .action(async (id: string, localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    const { moveCommand } = await import('./commands/move.js');
+    await moveCommand(id, opts);
   });
 
 // ── Project Lifecycle (Phase 2 stubs) ──────────────────────────────────────

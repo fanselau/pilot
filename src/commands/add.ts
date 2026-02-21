@@ -14,7 +14,6 @@ import { stat, readFile, writeFile, readdir, mkdir, copyFile } from 'node:fs/pro
 import path from 'node:path';
 import { getConfig } from '../core/config.js';
 import {
-  detectScope,
   detectProjectState,
   generateRequirementsContent,
   resolveInternalMode,
@@ -102,9 +101,12 @@ export async function addCommand(
     description = input;
   }
 
-  // ── Step 2: Check --as scope override ───────────────────────────────────
+  // ── Step 2: Check scope override flags ───────────────────────────────────
+  // --phase and --milestone are sugar for --as phase / --as milestone
+  let scopeOverride = opts['as'] as string | undefined;
+  if (opts['phase'] === true) scopeOverride = 'phase';
+  if (opts['milestone'] === true) scopeOverride = 'milestone';
 
-  const scopeOverride = opts['as'] as string | undefined;
   if (scopeOverride !== undefined) {
     if (!VALID_SCOPE_OVERRIDES.includes(scopeOverride as typeof VALID_SCOPE_OVERRIDES[number])) {
       process.stderr.write(
@@ -114,7 +116,7 @@ export async function addCommand(
     }
   }
 
-  // ── Step 3: Detect scope ────────────────────────────────────────────────
+  // ── Step 3: Determine scope ─────────────────────────────────────────────
 
   let scopeResult: ScopeDetectionResult;
 
@@ -125,10 +127,17 @@ export async function addCommand(
       itemCount: 0,
       hasPhaseHeaders: false,
       isDirectory: isDir,
-      rationale: `--as ${scopeOverride} override`,
+      rationale: `--${scopeOverride === 'phase' && opts['phase'] ? 'phase' : scopeOverride === 'milestone' && opts['milestone'] ? 'milestone' : 'as ' + scopeOverride} flag`,
     };
   } else {
-    scopeResult = detectScope({ content, description, isDirectory: isDir });
+    // Default: quick task (no heuristic detection — caller decides)
+    scopeResult = {
+      scope: 'quick',
+      itemCount: 0,
+      hasPhaseHeaders: false,
+      isDirectory: isDir,
+      rationale: 'default (no scope flag)',
+    };
   }
 
   // ── Step 4: Detect project state ────────────────────────────────────────
@@ -240,11 +249,25 @@ export async function addCommand(
     meta['timeout'] = timeout;
   }
 
+  // Build position from flags
+  const position: { next?: boolean; before?: string; after?: string } | undefined =
+    (opts['next'] === true || opts['before'] !== undefined || opts['after'] !== undefined)
+      ? {
+          next: opts['next'] === true ? true : undefined,
+          before: opts['before'] as string | undefined,
+          after: opts['after'] as string | undefined,
+        }
+      : undefined;
+
+  const dependsOn = opts['dependsOn'] as string | undefined;
+
   const id = await addItem({
     project,
     mode: internalMode,
     description: description || '',
+    dependsOn,
     meta: Object.keys(meta).length > 0 ? meta : undefined,
+    position,
   });
 
   // ── Step 14: Output result ──────────────────────────────────────────────
@@ -254,11 +277,13 @@ export async function addCommand(
     if (requirementsPath) {
       outputHuman(`  Requirements: ${requirementsPath}`);
     }
-    // Check if runner is active and show hint
+    // Show runner status (both active and inactive)
     const { readPidFile: readPid, isProcessAlive: isPidAlive } = await import('../core/process.js');
     const runnerPid = await readPid('pilot-runner');
     const runnerActive = runnerPid !== null && isPidAlive(runnerPid);
-    if (!runnerActive) {
+    if (runnerActive) {
+      outputHuman(dim(`Runner active (PID ${runnerPid})`));
+    } else {
       outputHuman(dim('Runner not active. Start with: pilot run'));
     }
   }
