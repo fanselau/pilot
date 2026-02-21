@@ -8,7 +8,7 @@
  * Pure core module — no UI dependencies.
  */
 
-import { mkdir, symlink, readFile, writeFile, access, stat } from 'node:fs/promises';
+import { mkdir, symlink, readFile, writeFile, access, stat, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
 import { getConfig } from './config.js';
@@ -99,9 +99,20 @@ async function setupProject(dir: string): Promise<SetupResult> {
       continue;
     }
 
-    // Check if symlink already exists
+    // Check if path already exists — distinguish symlinks from real directories
     if (await exists(linkPath)) {
-      result.skipped.push(`.opencode/${link.name}/ (already exists)`);
+      try {
+        const linkStats = await lstat(linkPath);
+        if (linkStats.isSymbolicLink()) {
+          result.skipped.push(`.opencode/${link.name}/ (already exists)`);
+        } else {
+          result.skipped.push(
+            `.opencode/${link.name}/ exists as real directory (not symlink) — skipping to avoid data loss`,
+          );
+        }
+      } catch {
+        result.skipped.push(`.opencode/${link.name}/ (already exists)`);
+      }
       continue;
     }
 
@@ -114,10 +125,13 @@ async function setupProject(dir: string): Promise<SetupResult> {
     }
   }
 
-  // 4. Create opencode.json
+  // 4. Create opencode.json (skip if either opencode.json or legacy claude.json exists)
   const configJsonPath = path.join(absDir, 'opencode.json');
+  const legacyConfigPath = path.join(absDir, 'claude.json');
   if (await exists(configJsonPath)) {
     result.skipped.push('opencode.json (already exists)');
+  } else if (await exists(legacyConfigPath)) {
+    result.skipped.push('opencode.json (legacy claude.json exists — not overwriting)');
   } else {
     const opencodeConfig = {
       permission: {
