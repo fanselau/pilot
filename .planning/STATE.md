@@ -8,7 +8,7 @@
 Phase: 5 of 13 (Integration fixes per requirements/integration-fixes.md)
 Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 05-03-PLAN.md
+Last activity: 2026-02-21 - Completed 05-02-PLAN.md
 
 Progress: █████████████████████████ 100% (33/36 plans)
 
@@ -141,11 +141,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 12-02 | Cap donePhases at totalPhases before percent calc | Prevents extra phase dirs inflating progress |
 | 05-01 | lstat to distinguish symlinks from real directories | Prevents data loss on re-setup with real dirs |
 | 05-01 | Skip opencode.json if legacy claude.json exists | Backward compat without overwriting user configs |
+| 05-02 | computeStuckScoreFast skips CPU sampling — scorer defaults maxCpu to 100 | Instant results for status dashboard |
+| 05-02 | sampleCpu timeout checks before and after sleep | Prompt abort when timeout exceeded |
+| 05-02 | Runner PID check moved before stuck loop in status | Enables PID exclusion from scoring |
 | 05-03 | Unconditional wait-for-all block after main loop | Safe: normal mode breaks when activeJobs empty (no-op) |
 | 05-03 | Best-effort upstream tracking before explicit pull | Graceful degradation on fresh clones |
 
 ## Session Continuity
 
-Last session: 2026-02-21T10:24:48Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-02-21T10:25:42Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
