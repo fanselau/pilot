@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 5 of 13 (Integration fixes per requirements/integration-fixes.md)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-21 - Completed 05-02-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-21 - Completed 05-04-PLAN.md
 
-Progress: █████████████████████████ 100% (33/36 plans)
+Progress: █████████████████████████ 100% (34/36 plans)
 
 ## Project Reference
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
-- **Status:** in progress (3/4 plans complete)
+- **Status:** complete (4/4 plans complete)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
 - **Status:** not planned (0/0 plans)
@@ -146,9 +146,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 05-02 | Runner PID check moved before stuck loop in status | Enables PID exclusion from scoring |
 | 05-03 | Unconditional wait-for-all block after main loop | Safe: normal mode breaks when activeJobs empty (no-op) |
 | 05-03 | Best-effort upstream tracking before explicit pull | Graceful degradation on fresh clones |
+| 05-04 | Setup tests use real filesystem (mkdtemp) for symlink verification | Integration-level testing more reliable than mocking fs for symlink behavior |
+| 05-04 | Runner tests use mock exit event instead of fake timers | Avoids timeout issues with runner's sleep-based polling loops |
 
 ## Session Continuity
 
-Last session: 2026-02-21T10:25:42Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-02-21T10:33:35Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None
