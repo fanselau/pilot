@@ -217,3 +217,15 @@ Plans:
 - [ ] 11-02-PLAN.md — Notifications on build complete/fail + runner logging with rotation
 - [ ] 11-03-PLAN.md — `pilot cleanup` maintenance command + `pilot setup --verify` validation
 - [ ] 11-04-PLAN.md — Global install verification, --no-tui flag, parallel build tests, TUI smoke test
+
+### Phase 12: Critical fixes per requirements/overnight-fixes.md
+
+**Goal:** [To be planned]
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 12 to break down)
+
+**Details:**
+[To be added during planning]

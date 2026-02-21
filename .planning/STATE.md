@@ -5,7 +5,7 @@
 
 ## Current Position
 
-Phase: 10 of 11 (Smart verify routing)
+Phase: 10 of 12 (Smart verify routing)
 Plan: 4 of 4 in current phase
 Status: Phase complete, verified ✓ (8/8 must-haves)
 Last activity: 2026-02-20 - Phase 10 complete, verified 8/8 must-haves
@@ -53,6 +53,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
 - **Status:** not planned (0/0 plans)
 
+### Phase 12: Critical fixes per requirements/overnight-fixes.md
+- **Status:** not planned (0/0 plans)
+
 ## Accumulated Context
 
 ### Roadmap Evolution
@@ -64,6 +67,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 9 added: Gap closure resilience per requirements/gap-closure-resilience.md
 - Phase 10 added: Smart verify routing per requirements/smart-verify-routing.md
 - Phase 11 added: Finishing touches per requirements/finishing-touches.md
+- Phase 12 added: Critical fixes per requirements/overnight-fixes.md
 
 ## Decisions
 
