@@ -173,8 +173,10 @@ async function saveQueue(data: QueueJsonFile): Promise<void> {
  * Locks on the pilotDir when queue.json doesn't exist yet (proper-lockfile
  * needs an existing target). Creates the empty queue file first if needed.
  *
- * - Stale timeout: 30 seconds
+ * - Stale timeout: 30 seconds (auto-removes locks older than 30s)
  * - Retries: 5 with 100ms-1000ms exponential backoff
+ * - Explicit lockfilePath for predictable lock file location
+ * - Lock acquisition failure logs error instead of crashing daemon
  */
 async function withQueueJsonLock<T>(fn: () => Promise<T>): Promise<T> {
   const config = getConfig();
@@ -191,14 +193,23 @@ async function withQueueJsonLock<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 
-  const release = await lock(config.queueJsonFile, {
-    stale: 30_000,
-    retries: {
-      retries: 5,
-      minTimeout: 100,
-      maxTimeout: 1000,
-    },
-  });
+  let release: () => Promise<void>;
+  try {
+    release = await lock(config.queueJsonFile, {
+      stale: 30_000,
+      lockfilePath: config.queueJsonFile + '.lock',
+      retries: {
+        retries: 5,
+        minTimeout: 100,
+        maxTimeout: 1000,
+      },
+    });
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[queue-store] Lock acquisition failed: ${err instanceof Error ? err.message : String(err)}. Skipping this cycle.\n`,
+    );
+    throw err;
+  }
 
   try {
     return await fn();
