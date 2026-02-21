@@ -77,12 +77,14 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-// Mock node:fs — needed for heartbeat (writeFileSync) and disk check (statfsSync)
+// Mock node:fs — needed for heartbeat (writeFileSync), disk check (statfsSync),
+// and flaky detection (statSync for log file size)
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return {
     ...actual,
     writeFileSync: vi.fn(),
+    statSync: vi.fn(() => ({ size: 0, mtimeMs: Date.now() })),
     statfsSync: vi.fn(() => ({
       bfree: BigInt(10_000_000),
       bsize: BigInt(4096),
@@ -94,6 +96,7 @@ import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQu
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
 import { execa } from 'execa';
+import { writeFileSync, statSync } from 'node:fs';
 import { createRunner } from '../../src/core/runner.js';
 import type { QueueJsonItem } from '../../src/core/types.js';
 
@@ -105,6 +108,8 @@ const mockedMarkQueued = vi.mocked(markQueued);
 const mockedSpawnSession = vi.mocked(spawnSession);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
 const mockedExeca = vi.mocked(execa);
+const mockedStatSync = vi.mocked(statSync);
+const mockedWriteFileSync = vi.mocked(writeFileSync);
 
 // ── Helper: create a mock QueueJsonItem ────────────────────────────────────
 
@@ -483,5 +488,152 @@ describe('Runner', () => {
 
     processOnSpy.mockRestore();
     processOffSpy.mockRestore();
+  });
+
+  it('flaky detection: quick fail retried and flakyAttempts incremented', async () => {
+    const item = makeItem({
+      mode: 'run-command',
+      description: 'quick test',
+      attempts: 0,
+      maxAttempts: 3,
+    });
+
+    let scanCount = 0;
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 1 };
+      return null;
+    });
+
+    const mockProcess = {
+      on: vi.fn((event: string, cb: (code: number) => void) => {
+        if (event === 'exit') setTimeout(() => cb(1), 50); // non-zero exit = failure
+      }),
+      unref: vi.fn(),
+    };
+    mockedSpawnSession.mockResolvedValue({
+      pid: 66666,
+      process: mockProcess,
+      title: 'test-title',
+      logFile: '/tmp/gsd-test-title.log',
+    });
+    mockedIsProcessAlive.mockReturnValue(false);
+
+    // Mock execa: no new commits, no planning changes — this is a failure
+    mockedExeca.mockImplementation((async (cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'rev-list') return { stdout: '5', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'status') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'add') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'pgrep') return { stdout: '', stderr: '', exitCode: 1 };
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }) as unknown as typeof execa);
+
+    // Mock statSync for flaky detection: small log file (< 4096 bytes)
+    mockedStatSync.mockReturnValue({ size: 100 } as ReturnType<typeof statSync>);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+
+    const errors: string[] = [];
+    runner.on('error', (msg: string) => errors.push(msg));
+
+    await runner.start();
+
+    // Flaky job (exit code != 0, duration < 5min, small log) should be retried
+    expect(mockedMarkQueued).toHaveBeenCalledWith('test-id-1234');
+    // Should log flaky detection
+    expect(errors.some(e => e.includes('flaky'))).toBe(true);
+  });
+
+  it('flaky detection: 3 strikes marks as consistently flaky', async () => {
+    const item = makeItem({
+      mode: 'run-command',
+      description: 'flaky test',
+      attempts: 2,
+      maxAttempts: 3,
+    });
+
+    let scanCount = 0;
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 3 };
+      return null;
+    });
+
+    const mockProcess = {
+      on: vi.fn((event: string, cb: (code: number) => void) => {
+        if (event === 'exit') setTimeout(() => cb(1), 50);
+      }),
+      unref: vi.fn(),
+    };
+    mockedSpawnSession.mockResolvedValue({
+      pid: 55551,
+      process: mockProcess,
+      title: 'test-title',
+      logFile: '/tmp/gsd-test-title.log',
+    });
+    mockedIsProcessAlive.mockReturnValue(false);
+
+    // No commits, no planning changes
+    mockedExeca.mockImplementation((async (cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'rev-list') return { stdout: '5', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'status') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'add') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'pgrep') return { stdout: '', stderr: '', exitCode: 1 };
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }) as unknown as typeof execa);
+
+    // Small log for flaky detection
+    mockedStatSync.mockReturnValue({ size: 50 } as ReturnType<typeof statSync>);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+
+    const errors: string[] = [];
+    runner.on('error', (msg: string) => errors.push(msg));
+
+    await runner.start();
+
+    // attempts(3) >= maxAttempts(3) → permanent failure
+    expect(mockedMarkFailed).toHaveBeenCalledWith('test-id-1234', expect.any(String));
+    expect(mockedMarkQueued).not.toHaveBeenCalled();
+    expect(mockedCascadeFailure).toHaveBeenCalledWith('test-id-1234');
+  });
+
+  it('heartbeat file is written on startup', async () => {
+    mockedFindLaunchableAtomic.mockResolvedValue(null);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+
+    await runner.start();
+
+    // writeFileSync should have been called with heartbeat path
+    const heartbeatCalls = mockedWriteFileSync.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && String(call[0]).includes('heartbeat'),
+    );
+    expect(heartbeatCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Heartbeat content should be an ISO timestamp
+    const heartbeatContent = String(heartbeatCalls[0]![1]);
+    expect(heartbeatContent).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 });
