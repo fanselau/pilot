@@ -225,6 +225,6 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — Fix sessions.ts: opencode binary, optional message_count, 5s timeout, update tests
-- [ ] 12-02-PLAN.md — Fix init.ts, spawn.ts, config.ts, setup.ts claude→opencode + progress overflow cap
-- [ ] 12-03-PLAN.md — README.md, LICENSE, package.json metadata
+- [x] 12-01-PLAN.md — Fix sessions.ts: opencode binary, optional message_count, 5s timeout, update tests
+- [x] 12-02-PLAN.md — Fix init.ts, spawn.ts, config.ts, setup.ts claude→opencode + progress overflow cap
+- [x] 12-03-PLAN.md — README.md, LICENSE, package.json metadata
