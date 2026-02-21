@@ -6,6 +6,7 @@
  */
 
 import os from 'node:os';
+import path from 'node:path';
 import type { PilotConfig } from './types.js';
 
 function expandTilde(filepath: string): string {
@@ -41,8 +42,13 @@ function getConfig(): PilotConfig {
 
   const noColor = process.env.NO_COLOR !== undefined;
 
+  const pilotDir = path.join(home, '.pilot');
+  const queueJsonFile = path.join(pilotDir, 'queue.json');
+
   return {
     queueFile,
+    pilotDir,
+    queueJsonFile,
     logDir,
     stuckThreshold: Number.isNaN(stuckThreshold) ? 90 : stuckThreshold,
     projectDir,
