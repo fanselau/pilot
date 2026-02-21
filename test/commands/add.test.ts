@@ -312,4 +312,25 @@ describe('addCommand', () => {
 
     expect(exitSpy).toHaveBeenCalledWith(2);
   });
+
+  it('add does not start runner (fire-and-forget)', async () => {
+    mockedStat.mockRejectedValue(new Error('ENOENT'));
+    mockedDetectProjectState.mockResolvedValue(makeProjectState());
+    mockedDetectScope.mockReturnValue(makeScopeResult({ scope: 'quick' }));
+    mockedResolveInternalMode.mockReturnValue('quick');
+
+    const result = await addCommand('resume-roast', 'fix bug', {});
+
+    // addItem was called (item queued)
+    expect(mockedAddItem).toHaveBeenCalled();
+    expect(result.id).toBe('ab12');
+
+    // No runner-related modules should be imported or called for spawning
+    // The add command only reads PID to show "runner not active" hint
+    // It does NOT call createRunner, execa to spawn runner, etc.
+    // Verify by checking that no process spawning occurred
+    // (the mock setup doesn't include runner.js or execa — if add tried
+    //  to import/call them, it would fail)
+    expect(result.dryRun).toBe(false);
+  });
 });

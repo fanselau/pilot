@@ -63,17 +63,21 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-import { findLaunchableAtomic, markCompleted, markQueued } from '../../src/core/queue-store.js';
+import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued } from '../../src/core/queue-store.js';
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
+import { execa } from 'execa';
 import { createRunner } from '../../src/core/runner.js';
 import type { QueueJsonItem } from '../../src/core/types.js';
 
 const mockedFindLaunchableAtomic = vi.mocked(findLaunchableAtomic);
+const mockedCascadeFailure = vi.mocked(cascadeFailure);
 const mockedMarkCompleted = vi.mocked(markCompleted);
+const mockedMarkFailed = vi.mocked(markFailed);
 const mockedMarkQueued = vi.mocked(markQueued);
 const mockedSpawnSession = vi.mocked(spawnSession);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
+const mockedExeca = vi.mocked(execa);
 
 // ── Helper: create a mock QueueJsonItem ────────────────────────────────────
 
@@ -290,5 +294,167 @@ describe('Runner', () => {
 
     // Error should have been emitted
     expect(errors.some(e => e.includes('spawn failed'))).toBe(true);
+  });
+
+  it('--once exits when no items available', async () => {
+    mockedFindLaunchableAtomic.mockResolvedValue(null);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+
+    // Should resolve (exit) quickly
+    await runner.start();
+    expect(mockedFindLaunchableAtomic).toHaveBeenCalled();
+    // No sessions spawned
+    expect(mockedSpawnSession).not.toHaveBeenCalled();
+  });
+
+  it('per-item maxAttempts: retries when attempts < maxAttempts', async () => {
+    const item = makeItem({
+      mode: 'run-command',
+      description: 'debug',
+      attempts: 1,
+      maxAttempts: 3,
+    });
+
+    let scanCount = 0;
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 1 };
+      return null;
+    });
+
+    const mockProcess = {
+      on: vi.fn((event: string, cb: (code: number) => void) => {
+        if (event === 'exit') setTimeout(() => cb(1), 50); // non-zero exit = failure
+      }),
+      unref: vi.fn(),
+    };
+    mockedSpawnSession.mockResolvedValue({
+      pid: 55555,
+      process: mockProcess,
+      title: 'test-title',
+      logFile: '/tmp/test.log',
+    });
+    mockedIsProcessAlive.mockReturnValue(false);
+
+    // Override execa: git rev-list returns same count (0 new commits),
+    // git status --porcelain returns empty (no planning changes)
+    mockedExeca.mockImplementation((async (cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'rev-list') return { stdout: '5', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'status') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'add') return { stdout: '', stderr: '', exitCode: 0 };
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }) as unknown as typeof execa);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+    runner.on('error', () => {}); // suppress
+
+    await runner.start();
+
+    // attempts(1) < maxAttempts(3) → retry via markQueued
+    expect(mockedMarkQueued).toHaveBeenCalledWith('test-id-1234');
+    expect(mockedMarkFailed).not.toHaveBeenCalled();
+  });
+
+  it('per-item maxAttempts: fails when attempts >= maxAttempts and calls cascadeFailure', async () => {
+    const item = makeItem({
+      mode: 'run-command',
+      description: 'debug',
+      attempts: 3,
+      maxAttempts: 3,
+    });
+
+    let scanCount = 0;
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
+      scanCount++;
+      if (scanCount === 1) return { ...item, status: 'running' as const, attempts: 3 };
+      return null;
+    });
+
+    const mockProcess = {
+      on: vi.fn((event: string, cb: (code: number) => void) => {
+        if (event === 'exit') setTimeout(() => cb(1), 50); // non-zero exit = failure
+      }),
+      unref: vi.fn(),
+    };
+    mockedSpawnSession.mockResolvedValue({
+      pid: 44444,
+      process: mockProcess,
+      title: 'test-title',
+      logFile: '/tmp/test.log',
+    });
+    mockedIsProcessAlive.mockReturnValue(false);
+
+    // Override execa: git rev-list returns same count (0 new commits),
+    // git status --porcelain returns empty (no planning changes)
+    mockedExeca.mockImplementation((async (cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'rev-list') return { stdout: '5', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'status') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'git' && args[0] === 'add') return { stdout: '', stderr: '', exitCode: 0 };
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }) as unknown as typeof execa);
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+    runner.on('error', () => {}); // suppress
+
+    await runner.start();
+
+    // attempts(3) >= maxAttempts(3) → permanent failure
+    expect(mockedMarkFailed).toHaveBeenCalledWith('test-id-1234', expect.stringContaining('exit code'));
+    expect(mockedMarkQueued).not.toHaveBeenCalled();
+    // cascadeFailure should be called after permanent failure
+    expect(mockedCascadeFailure).toHaveBeenCalledWith('test-id-1234');
+  });
+
+  it('registers SIGTERM and SIGINT handlers', async () => {
+    mockedFindLaunchableAtomic.mockResolvedValue(null);
+
+    const processOnSpy = vi.spyOn(process, 'on');
+    const processOffSpy = vi.spyOn(process, 'off');
+
+    const runner = createRunner({
+      once: true,
+      maxParallel: 5,
+      maxRetries: 3,
+      dryRun: false,
+      force: true,
+      pollInterval: 3,
+    });
+
+    await runner.start();
+
+    // Both SIGTERM and SIGINT should have been registered
+    const onCalls = processOnSpy.mock.calls.map((c) => c[0]);
+    expect(onCalls).toContain('SIGTERM');
+    expect(onCalls).toContain('SIGINT');
+
+    // And cleaned up after start completes
+    const offCalls = processOffSpy.mock.calls.map((c) => c[0]);
+    expect(offCalls).toContain('SIGTERM');
+    expect(offCalls).toContain('SIGINT');
+
+    processOnSpy.mockRestore();
+    processOffSpy.mockRestore();
   });
 });
