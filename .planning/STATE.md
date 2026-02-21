@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 13 of 15 (Daemon mode runner per requirements/daemon-mode-runner.md)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 13-01-PLAN.md
+Last activity: 2026-02-21 - Completed 13-02-PLAN.md
 
-Progress: █████████████████████████ 100% (45/48 plans)
+Progress: █████████████████████████ 100% (46/48 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 13 — daemon mode runner (1/4 plans)
+**Current focus:** Phase 13 — daemon mode runner (2/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -56,7 +56,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
-- **Status:** in progress (1/4 plans complete)
+- **Status:** in progress (2/4 plans complete)
 
 ## Accumulated Context
 
@@ -184,8 +184,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 13-01 | QueueEntry moved to queue-parser.ts | Legacy QUEUE.md vocabulary, not runtime contract |
 | 13-01 | QueueItem kept in types.ts with blocked | JSON contract vocabulary (pending/done) must be preserved |
 
+| 13-02 | Task 2 merged into Task 1 — cascadeFailure tightly coupled with runner refactor | Cannot be separated into standalone commit |
+| 13-02 | PID file key change requires updating all consumers | Cross-cutting concern applied atomically |
+| 13-02 | Graceful shutdown removes kill logic — pilot stop --force handles externally | Active jobs finish naturally on SIGINT/SIGTERM |
+
 ## Session Continuity
 
-Last session: 2026-02-21T12:25:00Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-02-21T12:37:53Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None
