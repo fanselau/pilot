@@ -15,6 +15,8 @@ vi.mock('../../src/core/config.js', () => {
       projectDir: '/tmp/projects',
       gsdDir: '/tmp/gsd',
       noColor: false,
+      pollInterval: 3,
+      defaultTimeout: 60,
     }),
   };
 });
@@ -26,10 +28,13 @@ import {
   addItem,
   removeItem,
   findLaunchable,
+  findLaunchableAtomic,
   markRunning,
   markCompleted,
   markFailed,
   markQueued,
+  markBlocked,
+  cascadeFailure,
   getHistory,
   getItems,
   getItemById,
@@ -610,5 +615,202 @@ describe('getItemById', () => {
   it('returns null when not found', async () => {
     const item = await getItemById('nonexistent');
     expect(item).toBeNull();
+  });
+});
+
+// ── completedIds persistence ───────────────────────────────────────────────
+
+describe('completedIds persistence', () => {
+  it('markCompleted adds ID to completedIds', async () => {
+    const id = await addItem({ project: 'proj', mode: 'm' });
+    await markRunning(id);
+    await markCompleted(id);
+
+    const data = await loadQueue();
+    expect(data.completedIds).toContain(id);
+  });
+
+  it('completedIds survives history pruning', async () => {
+    // Add and complete 105 items — history caps at 100 but completedIds keeps all
+    const allIds: string[] = [];
+    for (let i = 0; i < 105; i++) {
+      const id = await addItem({ project: `proj-${i}`, mode: 'm' });
+      await markRunning(id);
+      await markCompleted(id);
+      allIds.push(id);
+    }
+
+    const data = await loadQueue();
+    // History capped at 100
+    expect(data.history).toHaveLength(100);
+    // completedIds has ALL 105
+    expect(data.completedIds).toHaveLength(105);
+    for (const id of allIds) {
+      expect(data.completedIds).toContain(id);
+    }
+  });
+
+  it('loadQueue defaults completedIds to empty array for old format', async () => {
+    // Write queue.json without completedIds field
+    const queueFile = (globalThis as Record<string, unknown>).__TEST_QUEUE_JSON__ as string;
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(queueFile, JSON.stringify({ version: 1, items: [], history: [] }, null, 2), 'utf8');
+
+    const data = await loadQueue();
+    expect(data.completedIds).toEqual([]);
+  });
+});
+
+// ── findLaunchableAtomic ───────────────────────────────────────────────────
+
+describe('findLaunchableAtomic', () => {
+  it('returns item already marked running with attempts incremented', async () => {
+    const id = await addItem({ project: 'proj', mode: 'm' });
+
+    const result = await findLaunchableAtomic(new Set(), 5, 0);
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe(id);
+    expect(result!.status).toBe('running');
+    expect(result!.attempts).toBe(1);
+    expect(result!.startedAt).toBeTruthy();
+  });
+
+  it('item is atomically marked running in queue.json', async () => {
+    const id = await addItem({ project: 'proj', mode: 'm' });
+
+    await findLaunchableAtomic(new Set(), 5, 0);
+
+    // Read the item from storage — should be marked running
+    const item = await getItemById(id);
+    expect(item!.status).toBe('running');
+    expect(item!.attempts).toBe(1);
+  });
+
+  it('skips item with unmet dependency (not in completedIds)', async () => {
+    const depId = await addItem({ project: 'dep', mode: 'm' });
+    await addItem({ project: 'dependent', mode: 'm', dependsOn: depId });
+
+    // dep is still queued — dependent should be skipped, dep returned
+    const result = await findLaunchableAtomic(new Set(), 5, 0);
+    expect(result).not.toBeNull();
+    expect(result!.project).toBe('dep');
+  });
+
+  it('returns item whose dependency is in completedIds', async () => {
+    const depId = await addItem({ project: 'dep', mode: 'm' });
+    const childId = await addItem({ project: 'child', mode: 'm', dependsOn: depId });
+
+    // Complete the dependency
+    await markRunning(depId);
+    await markCompleted(depId);
+
+    const result = await findLaunchableAtomic(new Set(), 5, 0);
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe(childId);
+  });
+
+  it('skips same-project already running', async () => {
+    await addItem({ project: 'a', mode: 'm' });
+    const id2 = await addItem({ project: 'b', mode: 'm' });
+
+    const result = await findLaunchableAtomic(new Set(['a']), 5, 0);
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe(id2);
+  });
+
+  it('returns null when activeCount >= maxParallel', async () => {
+    await addItem({ project: 'proj', mode: 'm' });
+    const result = await findLaunchableAtomic(new Set(), 3, 3);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no queued items', async () => {
+    const result = await findLaunchableAtomic(new Set(), 5, 0);
+    expect(result).toBeNull();
+  });
+});
+
+// ── cascadeFailure ─────────────────────────────────────────────────────────
+
+describe('cascadeFailure', () => {
+  it('blocks direct dependents of a failed item', async () => {
+    const idA = await addItem({ project: 'a', mode: 'm' });
+    const idB = await addItem({ project: 'b', mode: 'm', dependsOn: idA });
+
+    // Fail A first (must run and fail for cascadeFailure to make sense)
+    await markRunning(idA);
+    await markFailed(idA);
+
+    const blockedIds = await cascadeFailure(idA);
+    expect(blockedIds).toContain(idB);
+
+    const itemB = await getItemById(idB);
+    expect(itemB!.status).toBe('blocked');
+    expect(itemB!.error).toContain(idA);
+  });
+
+  it('blocks transitive dependents (A→B→C)', async () => {
+    const idA = await addItem({ project: 'a', mode: 'm' });
+    const idB = await addItem({ project: 'b', mode: 'm', dependsOn: idA });
+    const idC = await addItem({ project: 'c', mode: 'm', dependsOn: idB });
+
+    await markRunning(idA);
+    await markFailed(idA);
+
+    const blockedIds = await cascadeFailure(idA);
+    expect(blockedIds).toContain(idB);
+    expect(blockedIds).toContain(idC);
+
+    const itemB = await getItemById(idB);
+    const itemC = await getItemById(idC);
+    expect(itemB!.status).toBe('blocked');
+    expect(itemC!.status).toBe('blocked');
+  });
+
+  it('returns empty array when no dependents exist', async () => {
+    const idA = await addItem({ project: 'a', mode: 'm' });
+    await markRunning(idA);
+    await markFailed(idA);
+
+    const blockedIds = await cascadeFailure(idA);
+    expect(blockedIds).toEqual([]);
+  });
+
+  it('only blocks queued items (running items unaffected)', async () => {
+    const idA = await addItem({ project: 'a', mode: 'm' });
+    const idB = await addItem({ project: 'b', mode: 'm', dependsOn: idA });
+    const idC = await addItem({ project: 'c', mode: 'm', dependsOn: idA });
+
+    // Mark B as running before cascade
+    await markRunning(idB);
+
+    // Fail A
+    await markRunning(idA);
+    await markFailed(idA);
+
+    const blockedIds = await cascadeFailure(idA);
+    // B is running → not blocked, C is queued → blocked
+    expect(blockedIds).not.toContain(idB);
+    expect(blockedIds).toContain(idC);
+
+    const itemB = await getItemById(idB);
+    expect(itemB!.status).toBe('running'); // unchanged
+  });
+});
+
+// ── markBlocked ────────────────────────────────────────────────────────────
+
+describe('markBlocked', () => {
+  it('marks a queued item as blocked with error reason', async () => {
+    const id = await addItem({ project: 'proj', mode: 'm' });
+    await markBlocked(id, 'dependency failed');
+
+    const item = await getItemById(id);
+    expect(item!.status).toBe('blocked');
+    expect(item!.error).toBe('dependency failed');
+  });
+
+  it('throws on non-existent item', async () => {
+    await expect(markBlocked('nonexistent', 'reason')).rejects.toThrow('Item not found: nonexistent');
   });
 });
