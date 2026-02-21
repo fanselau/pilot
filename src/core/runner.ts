@@ -1,13 +1,16 @@
 /**
  * Queue runner state machine — the automation heart of Pilot.
  *
- * Port of gsd-queue-v5.sh scan→launch→reap loop as a typed TypeScript
- * state machine.  Processes QUEUE.md entries through the cycle:
+ * Processes queue.json items through the cycle:
  *
  *   SCAN → LAUNCH → REAP → (repeat)
  *
- * Same-project entries run sequentially. Cross-project entries run in
+ * Same-project items run sequentially. Cross-project items run in
  * parallel up to --max-parallel.
+ *
+ * Uses queue-store.ts for all queue CRUD (findLaunchable, markRunning,
+ * markCompleted, markFailed, markQueued). Items tracked by short ID, not
+ * line numbers.
  *
  * Success detection: new commits OR .planning changes OR clean exit 0.
  * (NOT ≥8 messages — phantom completion bug.)
@@ -22,14 +25,13 @@ import { execa } from 'execa';
 import treeKill from 'tree-kill';
 
 import { getConfig } from './config.js';
-import { parseQueueFile, markEntry } from './queue-parser.js';
-import { withQueueLock } from './lock.js';
+import { findLaunchable, markRunning, markCompleted, markFailed, markQueued } from './queue-store.js';
 import { preSpawnChecks, spawnSession, truncateTitle } from './spawn.js';
 import { writePidFile, removePidFile, isProcessAlive } from './process.js';
 import { logPostmortem } from './postmortem.js';
 import { runLifecycleMode } from './lifecycle.js';
 import type {
-  QueueEntry,
+  QueueJsonItem,
   RunnerJob,
   RunnerOptions,
   SpawnOptions,
@@ -62,12 +64,12 @@ let syntheticPidCounter = -1;
  */
 export interface RunnerEvents {
   scan: [];
-  launch: [entry: QueueEntry, pid: number];
+  launch: [item: QueueJsonItem, pid: number];
   reap: [job: RunnerJob, exitCode: number];
-  complete: [entry: QueueEntry, result: string];
+  complete: [item: QueueJsonItem, result: string];
   error: [message: string];
   shutdown: [];
-  'dry-run': [entry: QueueEntry];
+  'dry-run': [item: QueueJsonItem];
 }
 
 // ── Runner class ──────────────────────────────────────────────────────────
@@ -133,11 +135,11 @@ class Runner extends EventEmitter<RunnerEvents> {
       // Step 1: Reap dead processes
       await this.reap();
 
-      // Step 2: Scan for next launchable entry
+      // Step 2: Scan for next launchable item
       this.emit('scan');
-      const entry = await this.scan();
+      const item = await this.scan();
 
-      if (entry !== null) {
+      if (item !== null) {
         if (this.state.activeJobs.size >= this.opts.maxParallel) {
           // At capacity — wait for any completion then rescan
           await this.waitForAnyCompletion();
@@ -146,18 +148,18 @@ class Runner extends EventEmitter<RunnerEvents> {
 
         // Launch
         if (this.opts.dryRun) {
-          this.emit('dry-run', entry);
+          this.emit('dry-run', item);
         } else {
-          await this.launch(entry);
+          await this.launch(item);
         }
 
-        // If --once and dry-run, process one entry then check for more
+        // If --once and dry-run, process one item then check for more
         if (this.opts.once && this.opts.dryRun) {
           // Dry-run once mode: scan all launchable then exit
           continue;
         }
       } else {
-        // No launchable entry found
+        // No launchable item found
 
         if (this.opts.once) {
           // --once: done scanning, break to wait-for-all block below
@@ -194,66 +196,37 @@ class Runner extends EventEmitter<RunnerEvents> {
   // ── Scan ──────────────────────────────────────────────────────────────
 
   /**
-   * Parse QUEUE.md and find the next launchable entry.
+   * Find the next launchable item from queue.json via queue-store.
    *
    * Launchability rules (spec §8):
-   *   1. Status is 'pending'
-   *   2. No other entry for same project is in activeJobs
-   *   3. dependsOn entries are all marked 'done' above this one
+   *   1. Status is 'queued'
+   *   2. No other item for same project is in activeJobs
+   *   3. dependsOn item is completed in history
    *   4. Active count < maxParallel
    */
-  private async scan(): Promise<QueueEntry | null> {
-    let entries: QueueEntry[];
-    try {
-      entries = await parseQueueFile(this.config.queueFile);
-    } catch (err) {
-      this.emit('error', `Failed to parse queue: ${String(err)}`);
-      return null;
-    }
-
+  private async scan(): Promise<QueueJsonItem | null> {
     // Build set of projects currently running
     const runningProjects = new Set<string>();
     for (const job of this.state.activeJobs.values()) {
-      runningProjects.add(job.entry.project);
+      runningProjects.add(job.item.project);
     }
 
-    // Build set of done projects (for dependency checking)
-    const doneProjects = new Set<string>();
-    for (const e of entries) {
-      if (e.status === 'done') {
-        doneProjects.add(e.project);
-      }
+    try {
+      return await findLaunchable(
+        runningProjects,
+        this.opts.maxParallel,
+        this.state.activeJobs.size,
+      );
+    } catch (err) {
+      this.emit('error', `Failed to scan queue: ${String(err)}`);
+      return null;
     }
-
-    // Find first launchable
-    for (const entry of entries) {
-      if (entry.status !== 'pending') {
-        continue;
-      }
-
-      // Same-project sequential: no other entry for same project currently running
-      if (runningProjects.has(entry.project)) {
-        continue;
-      }
-
-      // Dependency check: all dependsOn projects must have a 'done' entry
-      if (entry.dependsOn !== undefined && entry.dependsOn.length > 0) {
-        const depsAllDone = entry.dependsOn.every((dep) => doneProjects.has(dep));
-        if (!depsAllDone) {
-          continue;
-        }
-      }
-
-      return entry;
-    }
-
-    return null;
   }
 
   // ── Launch ────────────────────────────────────────────────────────────
 
   /**
-   * Launch a queue entry.
+   * Launch a queue item.
    *
    * Dispatches based on mode:
    * - Lifecycle modes (build-full, continue, continue-all, etc.) →
@@ -262,39 +235,37 @@ class Runner extends EventEmitter<RunnerEvents> {
    * - run-command → direct session spawn via spawnSession (single
    *   detached process tracked by real OS PID).
    */
-  private async launch(entry: QueueEntry): Promise<void> {
-    const projectDir = path.join(this.config.projectDir, entry.project);
+  private async launch(item: QueueJsonItem): Promise<void> {
+    const projectDir = path.join(this.config.projectDir, item.project);
 
     // Pre-spawn checks (git gc, memory, config, binary)
     try {
       await preSpawnChecks(projectDir);
     } catch (err) {
-      this.emit('error', `Pre-spawn checks failed for ${entry.project}: ${String(err)}`);
+      this.emit('error', `Pre-spawn checks failed for ${item.project}: ${String(err)}`);
       return;
     }
 
     // Count commits before spawn (for success detection)
     const preCommitCount = await countGitCommits(projectDir);
 
-    // Mark entry as running in QUEUE.md (locked)
+    // Mark item as running in queue.json
     try {
-      await withQueueLock(async () => {
-        await markEntry(this.config.queueFile, entry.lineNum, 'running');
-      });
+      await markRunning(item.id);
     } catch (err) {
-      this.emit('error', `Failed to mark entry as running: ${String(err)}`);
+      this.emit('error', `Failed to mark item as running: ${String(err)}`);
       return;
     }
 
-    const title = truncateTitle(entry.project, entry.mode, entry.args || undefined);
+    const title = truncateTitle(item.project, item.mode, item.description || undefined);
     const logFile = path.join(this.config.logDir, `gsd-${title}.log`);
 
-    if (LIFECYCLE_MODES.has(entry.mode)) {
+    if (LIFECYCLE_MODES.has(item.mode)) {
       // ── Lifecycle mode: delegate to runLifecycleMode ──
-      await this.launchLifecycleMode(entry, projectDir, title, logFile, preCommitCount);
+      await this.launchLifecycleMode(item, projectDir, title, logFile, preCommitCount);
     } else {
       // ── run-command or unknown: direct session spawn ──
-      await this.launchDirectSpawn(entry, projectDir, title, logFile, preCommitCount);
+      await this.launchDirectSpawn(item, projectDir, title, logFile, preCommitCount);
     }
   }
 
@@ -310,7 +281,7 @@ class Runner extends EventEmitter<RunnerEvents> {
    * completes (or fails), we store the exit code for the reap cycle.
    */
   private async launchLifecycleMode(
-    entry: QueueEntry,
+    item: QueueJsonItem,
     projectDir: string,
     title: string,
     logFile: string,
@@ -319,7 +290,7 @@ class Runner extends EventEmitter<RunnerEvents> {
     const syntheticPid = syntheticPidCounter--;
 
     const job: RunnerJob = {
-      entry,
+      item,
       pid: syntheticPid,
       title,
       logFile,
@@ -329,10 +300,10 @@ class Runner extends EventEmitter<RunnerEvents> {
     };
 
     this.state.activeJobs.set(syntheticPid, job);
-    this.emit('launch', entry, syntheticPid);
+    this.emit('launch', item, syntheticPid);
 
-    // Per-job timeout
-    const timeoutMinutes = entry.timeout ?? 60;
+    // Per-job timeout (default 60 min, use meta.timeout if set)
+    const timeoutMinutes = typeof item.meta['timeout'] === 'number' ? item.meta['timeout'] : 60;
     const timeoutMs = timeoutMinutes * 60 * 1000;
     const timeoutId = setTimeout(() => {
       // For lifecycle modes, timeout means we mark as failed
@@ -345,10 +316,10 @@ class Runner extends EventEmitter<RunnerEvents> {
     // Fire and forget — lifecycle runs in background, stores exit code on completion
     void (async () => {
       try {
-        await runLifecycleMode(projectDir, entry.mode, entry.args || '');
+        await runLifecycleMode(projectDir, item.mode, item.description || '');
         this.state.exitCodes.set(syntheticPid, 0);
       } catch (err) {
-        this.emit('error', `Lifecycle mode ${entry.mode} failed for ${entry.project}: ${String(err)}`);
+        this.emit('error', `Lifecycle mode ${item.mode} failed for ${item.project}: ${String(err)}`);
         this.state.exitCodes.set(syntheticPid, 1);
       } finally {
         clearTimeout(timeoutId);
@@ -362,18 +333,19 @@ class Runner extends EventEmitter<RunnerEvents> {
    * Spawns a single detached AI session and tracks it by real OS PID.
    */
   private async launchDirectSpawn(
-    entry: QueueEntry,
+    item: QueueJsonItem,
     projectDir: string,
     title: string,
     logFile: string,
     preCommitCount: number,
   ): Promise<void> {
+    // For run-command mode, the command and args are extracted from description
+    const desc = item.description || '';
     const spawnOpts: SpawnOptions = {
-      project: entry.project,
+      project: item.project,
       projectDir,
-      // run-command mode: the actual command is in args, not mode
-      command: entry.mode === 'run-command' && entry.args ? entry.args.split(' ')[0] : entry.mode,
-      args: entry.mode === 'run-command' && entry.args ? entry.args.split(' ').slice(1).join(' ') || undefined : entry.args || undefined,
+      command: item.mode === 'run-command' && desc ? desc.split(' ')[0] : item.mode,
+      args: item.mode === 'run-command' && desc ? desc.split(' ').slice(1).join(' ') || undefined : desc || undefined,
       title,
       logFile,
     };
@@ -385,11 +357,9 @@ class Runner extends EventEmitter<RunnerEvents> {
       pid = result.pid;
       childProcess = result.process;
     } catch (err) {
-      this.emit('error', `Failed to spawn session for ${entry.project}: ${String(err)}`);
+      this.emit('error', `Failed to spawn session for ${item.project}: ${String(err)}`);
       try {
-        await withQueueLock(async () => {
-          await markEntryPending(this.config.queueFile, entry.lineNum);
-        });
+        await markQueued(item.id);
       } catch {
         // Best effort
       }
@@ -397,7 +367,7 @@ class Runner extends EventEmitter<RunnerEvents> {
     }
 
     const job: RunnerJob = {
-      entry,
+      item,
       pid,
       title,
       logFile,
@@ -417,14 +387,14 @@ class Runner extends EventEmitter<RunnerEvents> {
       });
     }
 
-    // Per-job timeout
-    const timeoutMinutes = entry.timeout ?? 60;
+    // Per-job timeout (default 60 min, use meta.timeout if set)
+    const timeoutMinutes = typeof item.meta['timeout'] === 'number' ? item.meta['timeout'] : 60;
     const timeoutMs = timeoutMinutes * 60 * 1000;
     setTimeout(() => {
       void this.handleJobTimeout(job);
     }, timeoutMs);
 
-    this.emit('launch', entry, pid);
+    this.emit('launch', item, pid);
   }
 
   // ── Reap ──────────────────────────────────────────────────────────────
@@ -485,7 +455,7 @@ class Runner extends EventEmitter<RunnerEvents> {
    * DOES NOT use ≥8 messages as success signal (phantom completion bug).
    */
   private async handleJobCompletion(job: RunnerJob, exitCode: number): Promise<void> {
-    const projectDir = path.join(this.config.projectDir, job.entry.project);
+    const projectDir = path.join(this.config.projectDir, job.item.project);
     const duration = Date.now() - job.startTime;
 
     // Count new commits
@@ -519,31 +489,27 @@ class Runner extends EventEmitter<RunnerEvents> {
       result = 'failed';
     }
 
-    // Update QUEUE.md
+    // Update queue via queue-store (no manual locking needed — store handles it)
     try {
-      await withQueueLock(async () => {
-        if (result === 'success' || result === 'success_no_artifacts') {
-          await markEntry(this.config.queueFile, job.entry.lineNum, 'done');
-        } else if (result === 'retry') {
-          job.retries++;
-          // Mark back to pending for retry
-          // markEntry only supports running/done/failed, so we need to write pending manually
-          await markEntryPending(this.config.queueFile, job.entry.lineNum);
-        } else {
-          await markEntry(this.config.queueFile, job.entry.lineNum, 'failed');
-        }
-      });
+      if (result === 'success' || result === 'success_no_artifacts') {
+        await markCompleted(job.item.id);
+      } else if (result === 'retry') {
+        job.retries++;
+        await markQueued(job.item.id);
+      } else {
+        await markFailed(job.item.id, `exit code ${exitCode}`);
+      }
     } catch (err) {
-      this.emit('error', `Failed to update queue entry: ${String(err)}`);
+      this.emit('error', `Failed to update queue item: ${String(err)}`);
     }
 
     // Log post-mortem
     try {
       await logPostmortem({
         ts: new Date().toISOString(),
-        project: job.entry.project,
+        project: job.item.project,
         title: job.title,
-        mode: job.entry.mode,
+        mode: job.item.mode,
         exit: exitCode,
         duration_ms: duration,
         result,
@@ -562,7 +528,7 @@ class Runner extends EventEmitter<RunnerEvents> {
       // Best effort
     }
 
-    this.emit('complete', job.entry, result);
+    this.emit('complete', job.item, result);
   }
 
   // ── Job timeout ───────────────────────────────────────────────────────
@@ -578,7 +544,8 @@ class Runner extends EventEmitter<RunnerEvents> {
       return;
     }
 
-    this.emit('error', `Job ${job.title} timed out after ${job.entry.timeout ?? 60} minutes`);
+    const jobTimeout = typeof job.item.meta['timeout'] === 'number' ? job.item.meta['timeout'] : 60;
+    this.emit('error', `Job ${job.title} timed out after ${jobTimeout} minutes`);
 
     if (job.pid > 0) {
       // Real PID — kill the process tree
@@ -631,12 +598,10 @@ class Runner extends EventEmitter<RunnerEvents> {
       }
     }
 
-    // Step 4: Mark running entries back to pending
+    // Step 4: Mark running items back to queued via queue-store
     for (const job of activeJobs) {
       try {
-        await withQueueLock(async () => {
-          await markEntryPending(this.config.queueFile, job.entry.lineNum);
-        });
+        await markQueued(job.item.id);
       } catch {
         // Best effort
       }
@@ -764,36 +729,6 @@ async function checkPlanningChanges(projectDir: string): Promise<boolean> {
   }
 }
 
-/**
- * Mark a queue entry back to pending by stripping the status prefix.
- *
- * The markEntry function in queue-parser only supports running/done/failed.
- * For retry, we need to reset to pending (no prefix).
- */
-async function markEntryPending(filePath: string, lineNum: number): Promise<void> {
-  const content = await readFile(filePath, 'utf8');
-  const lines = content.split('\n');
-  const idx = lineNum - 1;
-
-  if (idx < 0 || idx >= lines.length) {
-    throw new Error(`Line number ${lineNum} out of range`);
-  }
-
-  const line = lines[idx]!;
-  const headerRe = /^## (✅ DONE: |❌ FAIL: |🔨 )?(.+)$/;
-  const match = headerRe.exec(line);
-
-  if (match === null) {
-    throw new Error(`Line ${lineNum} is not a ## header`);
-  }
-
-  // Strip prefix — set to pending (no prefix)
-  const rest = match[2]!;
-  lines[idx] = `## ${rest}`;
-
-  const { writeFile: fsWriteFile } = await import('node:fs/promises');
-  await fsWriteFile(filePath, lines.join('\n'));
-}
 
 /**
  * Kill an entire process tree via tree-kill with SIGKILL.

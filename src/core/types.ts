@@ -158,7 +158,7 @@ export type PhaseState = 'needs-plan' | 'needs-execute' | 'needs-verify' | 'need
 // ── Runner ─────────────────────────────────────────────────────────────────
 
 export interface RunnerJob {
-  entry: QueueEntry;
+  item: QueueJsonItem;
   pid: number;
   title: string;
   logFile: string;
@@ -229,7 +229,7 @@ export interface VerifyResult {
 // ── Queue JSON Storage ────────────────────────────────────────────────────
 
 export interface QueueJsonItem {
-  id: string;                    // nanoid
+  id: string;                    // short 4-char alphanumeric
   project: string;
   mode: string;                  // build-full, continue, continue-all, etc.
   description: string;
