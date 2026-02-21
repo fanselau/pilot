@@ -106,7 +106,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Fix setup: .opencode/ symlinks + opencode.json correct format
+- [x] 05-01-PLAN.md — Fix setup: .opencode/ symlinks + opencode.json correct format
 - [ ] 05-02-PLAN.md — Fix status: skip queue runner PID, fast stuck scoring
 - [ ] 05-03-PLAN.md — Fix runner --once wait + update explicit remote/branch
 - [ ] 05-04-PLAN.md — Regression tests for all integration fixes
@@ -228,3 +228,12 @@ Plans:
 - [x] 12-01-PLAN.md — Fix sessions.ts: opencode binary, optional message_count, 5s timeout, update tests
 - [x] 12-02-PLAN.md — Fix init.ts, spawn.ts, config.ts, setup.ts claude→opencode + progress overflow cap
 - [x] 12-03-PLAN.md — README.md, LICENSE, package.json metadata
+
+### Phase 13: E2E test suite per requirements/e2e-test-suite.md
+
+**Goal:** Comprehensive end-to-end test suite that exercises every CLI command as a subprocess against real (temp) project directories. Final gate before replacing the bash queue runner.
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+Plans:
+(to be planned)

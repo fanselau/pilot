@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 12
+## Current Phase: 5
 
 ## Current Position
 
-Phase: 12 of 12 (Critical fixes per requirements/overnight-fixes.md)
-Plan: 3 of 3 in current phase
-Status: Phase complete, verified ✓ (8/8 must-haves)
-Last activity: 2026-02-21 - Phase 12 complete, verified 8/8 must-haves
+Phase: 5 of 13 (Integration fixes per requirements/integration-fixes.md)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 05-01-PLAN.md
 
-Progress: █████████████████████████ 100% (32/32 plans)
+Progress: █████████████████████████ 100% (33/36 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** All phases complete — milestone launch-v1
+**Current focus:** Phase 5 integration fixes
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
-- **Status:** planned (0/4 plans complete)
+- **Status:** in progress (1/4 plans complete)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
 - **Status:** not planned (0/0 plans)
@@ -139,9 +139,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 12-02 | Removed claude binary fallback from spawn.ts checkBinary | Only opencode binary supported for spawning |
 | 12-02 | Kept claude paths as secondary detection in config.ts | Backward compat for reporting binary location |
 | 12-02 | Cap donePhases at totalPhases before percent calc | Prevents extra phase dirs inflating progress |
+| 05-01 | lstat to distinguish symlinks from real directories | Prevents data loss on re-setup with real dirs |
+| 05-01 | Skip opencode.json if legacy claude.json exists | Backward compat without overwriting user configs |
 
 ## Session Continuity
 
-Last session: 2026-02-21T03:00:00Z
-Stopped at: Phase 12 complete — all plans executed, verified ✓
+Last session: 2026-02-21T10:22:09Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
