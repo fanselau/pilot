@@ -8,7 +8,7 @@
  * Pure core module — no UI dependencies.
  */
 
-import { mkdir, symlink, readFile, writeFile, access, stat, lstat } from 'node:fs/promises';
+import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
 import { getConfig } from './config.js';
@@ -189,5 +189,169 @@ async function setupProject(dir: string): Promise<SetupResult> {
   return result;
 }
 
-export { setupProject };
-export type { SetupResult };
+// ── Verify ─────────────────────────────────────────────────────────────────
+
+interface VerifyFinding {
+  status: 'pass' | 'fail' | 'warn';
+  label: string;
+  detail: string;
+}
+
+interface VerifySetupResult {
+  findings: VerifyFinding[];
+  passed: number;
+  failed: number;
+  warnings: number;
+}
+
+/**
+ * Verify an existing project setup without modifying anything.
+ *
+ * Checks:
+ * 1. .opencode/ (or .claude/) directory exists
+ * 2. Expected symlinks exist AND resolve to valid targets
+ * 3. Entries in config dir are symlinks (not real files/dirs)
+ * 4. opencode.json (or claude.json) exists and is valid JSON
+ */
+async function verifySetup(dir: string): Promise<VerifySetupResult> {
+  const absDir = path.resolve(dir);
+  const findings: VerifyFinding[] = [];
+
+  // 1. Check for config directory (.opencode/ or .claude/)
+  const configDirs = ['.opencode', '.claude'];
+  let foundConfigDir: string | null = null;
+  let configDirName: string | null = null;
+
+  for (const name of configDirs) {
+    const configPath = path.join(absDir, name);
+    if (await exists(configPath)) {
+      foundConfigDir = configPath;
+      configDirName = name;
+      break;
+    }
+  }
+
+  if (foundConfigDir === null || configDirName === null) {
+    findings.push({
+      status: 'fail',
+      label: 'Config directory',
+      detail: 'No .opencode/ or .claude/ directory found',
+    });
+  } else {
+    findings.push({
+      status: 'pass',
+      label: 'Config directory',
+      detail: `${configDirName}/ exists`,
+    });
+
+    // 2. Check symlinks
+    const expectedLinks = ['command', 'agents', 'get-shit-done'];
+
+    for (const linkName of expectedLinks) {
+      const linkPath = path.join(foundConfigDir, linkName);
+
+      try {
+        const linkStats = await lstat(linkPath);
+
+        if (!linkStats.isSymbolicLink()) {
+          findings.push({
+            status: 'warn',
+            label: `${configDirName}/${linkName}`,
+            detail: 'exists as real directory/file (not a symlink)',
+          });
+          continue;
+        }
+
+        // Check symlink resolves
+        try {
+          const resolved = await realpath(linkPath);
+          findings.push({
+            status: 'pass',
+            label: `${configDirName}/${linkName}`,
+            detail: `→ ${resolved}`,
+          });
+        } catch {
+          findings.push({
+            status: 'fail',
+            label: `${configDirName}/${linkName}`,
+            detail: 'broken symlink (target does not exist)',
+          });
+        }
+      } catch {
+        findings.push({
+          status: 'fail',
+          label: `${configDirName}/${linkName}`,
+          detail: 'not found',
+        });
+      }
+    }
+
+    // 3. Check for unexpected real files/dirs (not symlinks) in config dir
+    try {
+      const entries = await readdir(foundConfigDir);
+      for (const entry of entries) {
+        if (expectedLinks.includes(entry)) continue; // Already checked above
+
+        const entryPath = path.join(foundConfigDir, entry);
+        try {
+          const entryStats = await lstat(entryPath);
+          if (!entryStats.isSymbolicLink()) {
+            findings.push({
+              status: 'warn',
+              label: `${configDirName}/${entry}`,
+              detail: 'real file/directory (expected symlink or not expected at all)',
+            });
+          }
+        } catch {
+          // Can't stat — skip
+        }
+      }
+    } catch {
+      // Can't read dir — skip
+    }
+  }
+
+  // 4. Check opencode.json / claude.json
+  const configFiles = ['opencode.json', 'claude.json'];
+  let foundConfig = false;
+
+  for (const configFile of configFiles) {
+    const configPath = path.join(absDir, configFile);
+    if (await exists(configPath)) {
+      foundConfig = true;
+      try {
+        const content = await readFile(configPath, 'utf8');
+        JSON.parse(content);
+        findings.push({
+          status: 'pass',
+          label: configFile,
+          detail: 'valid JSON',
+        });
+      } catch {
+        findings.push({
+          status: 'fail',
+          label: configFile,
+          detail: 'invalid JSON',
+        });
+      }
+      break;
+    }
+  }
+
+  if (!foundConfig) {
+    findings.push({
+      status: 'fail',
+      label: 'Config file',
+      detail: 'No opencode.json or claude.json found',
+    });
+  }
+
+  const passed = findings.filter((f) => f.status === 'pass').length;
+  const failed = findings.filter((f) => f.status === 'fail').length;
+  const warnings = findings.filter((f) => f.status === 'warn').length;
+
+  return { findings, passed, failed, warnings };
+}
+
+export { setupProject, verifySetup };
+export type { SetupResult, VerifySetupResult, VerifyFinding };
