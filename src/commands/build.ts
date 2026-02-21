@@ -62,7 +62,7 @@ export async function buildCommand(
   rotateRunnerLogs(7);
 
   const runnerOpts: RunnerOptions = {
-    maxParallel: 5,
+    maxParallel: config.maxParallel,
     maxRetries: 3,
     once: true,
     dryRun: false,

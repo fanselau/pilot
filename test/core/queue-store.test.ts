@@ -17,6 +17,8 @@ vi.mock('../../src/core/config.js', () => {
       noColor: false,
       pollInterval: 3,
       defaultTimeout: 60,
+      maxParallel: 2,
+      logLevel: 'INFO',
     }),
   };
 });

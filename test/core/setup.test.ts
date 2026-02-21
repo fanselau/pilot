@@ -44,11 +44,17 @@ describe('setupProject', () => {
     // Point getConfig to our temp gsdDir
     vi.mocked(getConfig).mockReturnValue({
       queueFile: '/tmp/QUEUE.md',
+      pilotDir: '/tmp/.pilot',
+      queueJsonFile: '/tmp/.pilot/queue.json',
       logDir: '/tmp',
       stuckThreshold: 90,
       projectDir: '/tmp/projects',
       gsdDir,
       noColor: true,
+      pollInterval: 3,
+      defaultTimeout: 60,
+      maxParallel: 2,
+      logLevel: 'INFO',
     });
 
     // Pre-create a .git directory so git init is skipped

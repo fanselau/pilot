@@ -51,6 +51,20 @@ function getConfig(): PilotConfig {
   const defaultTimeoutRaw = parseInt(process.env.PILOT_DEFAULT_TIMEOUT ?? '60', 10);
   const defaultTimeout = Number.isNaN(defaultTimeoutRaw) ? 60 : defaultTimeoutRaw;
 
+  // Auto-detect maxParallel from system RAM: <32GB → 2, ≥32GB → 5
+  const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
+  const defaultMaxParallel = totalMemMb < 32768 ? 2 : 5;
+  const maxParallelRaw = parseInt(process.env.PILOT_MAX_PARALLEL ?? '', 10);
+  const maxParallel = Number.isNaN(maxParallelRaw) ? defaultMaxParallel : maxParallelRaw;
+
+  // Log level: DEBUG, INFO, WARN, ERROR (default INFO)
+  const validLogLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const;
+  type LogLevel = typeof validLogLevels[number];
+  const logLevelRaw = (process.env.PILOT_LOG_LEVEL ?? 'INFO').toUpperCase();
+  const logLevel: LogLevel = (validLogLevels as readonly string[]).includes(logLevelRaw)
+    ? (logLevelRaw as LogLevel)
+    : 'INFO';
+
   return {
     queueFile,
     pilotDir,
@@ -62,6 +76,8 @@ function getConfig(): PilotConfig {
     noColor,
     pollInterval,
     defaultTimeout,
+    maxParallel,
+    logLevel,
   };
 }
 
