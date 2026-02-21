@@ -220,12 +220,11 @@ Plans:
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
 
-**Goal:** [To be planned]
+**Goal:** Fix all claude→opencode binary references, progress overflow bugs, and add project documentation so all CLI commands work without hanging and the project is demo-ready.
 **Depends on:** Phase 11
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 12 to break down)
-
-**Details:**
-[To be added during planning]
+- [ ] 12-01-PLAN.md — Fix sessions.ts: opencode binary, optional message_count, 5s timeout, update tests
+- [ ] 12-02-PLAN.md — Fix init.ts .claude→.opencode, spawn.ts cleanup, progress overflow cap
+- [ ] 12-03-PLAN.md — README.md, LICENSE, package.json metadata
