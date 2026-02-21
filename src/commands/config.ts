@@ -2,7 +2,7 @@
  * pilot config — Display all resolved configuration values.
  *
  * Shows env var names with their resolved values.
- * Detects whether the claude binary is available.
+ * Detects whether the opencode binary is available.
  */
 
 import { access } from 'node:fs/promises';
@@ -20,48 +20,48 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
   void opts; // used via isJsonMode()
   const config = getConfig();
 
-  // Detect claude binary
-  let claudeFound = false;
-  let claudePath = '';
+  // Detect opencode binary
+  let binaryFound = false;
+  let binaryPath = '';
 
-  // Check common locations
+  // Check common locations (opencode first, claude as secondary detection)
   const candidatePaths = [
-    path.join(os.homedir(), '.claude', 'bin', 'claude'),
     path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+    path.join(os.homedir(), '.claude', 'bin', 'claude'),
   ];
 
   for (const candidate of candidatePaths) {
     try {
       await access(candidate);
-      claudeFound = true;
-      claudePath = candidate;
+      binaryFound = true;
+      binaryPath = candidate;
       break;
     } catch {
       // Not at this location
     }
   }
 
-  // Fallback: check if claude or opencode is in PATH via which
-  if (!claudeFound) {
+  // Fallback: check if opencode is in PATH via which (try opencode first)
+  if (!binaryFound) {
     try {
       const { execa } = await import('execa');
-      const result = await execa('which', ['claude']);
+      const result = await execa('which', ['opencode']);
       if (result.stdout.trim()) {
-        claudeFound = true;
-        claudePath = result.stdout.trim();
+        binaryFound = true;
+        binaryPath = result.stdout.trim();
       }
     } catch {
       // Not in PATH
     }
   }
 
-  if (!claudeFound) {
+  if (!binaryFound) {
     try {
       const { execa } = await import('execa');
-      const result = await execa('which', ['opencode']);
+      const result = await execa('which', ['claude']);
       if (result.stdout.trim()) {
-        claudeFound = true;
-        claudePath = result.stdout.trim();
+        binaryFound = true;
+        binaryPath = result.stdout.trim();
       }
     } catch {
       // Not in PATH
@@ -79,9 +79,9 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
         PILOT_GSD_DIR: config.gsdDir,
         NO_COLOR: config.noColor ? 'set' : null,
       },
-      claude_binary: {
-        found: claudeFound,
-        path: claudePath || null,
+      opencode_binary: {
+        found: binaryFound,
+        path: binaryPath || null,
       },
     });
     return;
@@ -105,10 +105,10 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
     `${'NO_COLOR'.padEnd(COL)}${config.noColor ? 'set' : dim('(not set)')}`,
   );
 
-  const claudeStatus = claudeFound
-    ? `${claudePath} ${dim('(found)')}`
+  const binaryStatus = binaryFound
+    ? `${binaryPath} ${dim('(found)')}`
     : dim('(not found)');
-  outputHuman(`${'claude'.padEnd(COL)}${claudeStatus}`);
+  outputHuman(`${'opencode'.padEnd(COL)}${binaryStatus}`);
 }
 
 export { configCommand };
