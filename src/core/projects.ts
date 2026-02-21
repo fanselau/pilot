@@ -107,7 +107,9 @@ async function detectPlanningState(planningDir: string): Promise<PlanningStateRe
     // No phases/ directory
   }
 
-  const percent = totalPhases > 0 ? Math.round((donePhases / totalPhases) * 100) : 0;
+  // Cap donePhases at totalPhases — extra phase dirs (decimal phases, renamed) can inflate count
+  donePhases = Math.min(donePhases, totalPhases);
+  const percent = totalPhases > 0 ? Math.min(100, Math.round((donePhases / totalPhases) * 100)) : 0;
   const state = donePhases >= totalPhases ? 'complete' : 'active';
 
   return {

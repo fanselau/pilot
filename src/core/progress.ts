@@ -150,9 +150,9 @@ async function getProgress(projectPath: string): Promise<ProgressInfo> {
     });
   }
 
-  // Calculate overall progress
+  // Calculate overall progress (cap at 100% — gap closure summaries can inflate doneCount)
   const totalPhases = roadmapPhases.length;
-  const overall = totalPhases > 0 ? Math.round((doneCount / totalPhases) * 100) : 0;
+  const overall = totalPhases > 0 ? Math.min(100, Math.round((doneCount / totalPhases) * 100)) : 0;
 
   // Determine next action
   let nextAction = 'All phases complete';
