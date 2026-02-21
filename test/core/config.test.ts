@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import os from 'node:os';
 import { getConfig } from '../../src/core/config.js';
 
@@ -13,6 +13,10 @@ describe('getConfig', () => {
     delete process.env.PILOT_STUCK_THRESHOLD;
     delete process.env.PILOT_PROJECT_DIR;
     delete process.env.PILOT_GSD_DIR;
+    delete process.env.PILOT_MAX_PARALLEL;
+    delete process.env.PILOT_LOG_LEVEL;
+    delete process.env.PILOT_POLL_INTERVAL;
+    delete process.env.PILOT_DEFAULT_TIMEOUT;
     delete process.env.NO_COLOR;
   });
 
@@ -121,6 +125,67 @@ describe('getConfig', () => {
       process.env.PILOT_QUEUE_FILE = '/some/~/path/QUEUE.md';
       const config = getConfig();
       expect(config.queueFile).toBe('/some/~/path/QUEUE.md');
+    });
+  });
+
+  describe('maxParallel auto-detection', () => {
+    it('defaults to 2 on systems with <32GB RAM', () => {
+      // Mock totalmem to return 16GB
+      const spy = vi.spyOn(os, 'totalmem').mockReturnValue(16 * 1024 * 1024 * 1024);
+      delete process.env.PILOT_MAX_PARALLEL;
+
+      const config = getConfig();
+      expect(config.maxParallel).toBe(2);
+
+      spy.mockRestore();
+    });
+
+    it('defaults to 5 on systems with >=32GB RAM', () => {
+      // Mock totalmem to return 64GB
+      const spy = vi.spyOn(os, 'totalmem').mockReturnValue(64 * 1024 * 1024 * 1024);
+      delete process.env.PILOT_MAX_PARALLEL;
+
+      const config = getConfig();
+      expect(config.maxParallel).toBe(5);
+
+      spy.mockRestore();
+    });
+
+    it('PILOT_MAX_PARALLEL overrides auto-detection', () => {
+      process.env.PILOT_MAX_PARALLEL = '3';
+      const config = getConfig();
+      expect(config.maxParallel).toBe(3);
+    });
+  });
+
+  describe('logLevel', () => {
+    it('defaults to INFO when not set', () => {
+      delete process.env.PILOT_LOG_LEVEL;
+      const config = getConfig();
+      expect(config.logLevel).toBe('INFO');
+    });
+
+    it('accepts valid log levels', () => {
+      process.env.PILOT_LOG_LEVEL = 'DEBUG';
+      expect(getConfig().logLevel).toBe('DEBUG');
+
+      process.env.PILOT_LOG_LEVEL = 'WARN';
+      expect(getConfig().logLevel).toBe('WARN');
+
+      process.env.PILOT_LOG_LEVEL = 'ERROR';
+      expect(getConfig().logLevel).toBe('ERROR');
+    });
+
+    it('falls back to INFO for invalid log level', () => {
+      process.env.PILOT_LOG_LEVEL = 'invalid';
+      const config = getConfig();
+      expect(config.logLevel).toBe('INFO');
+    });
+
+    it('is case-insensitive', () => {
+      process.env.PILOT_LOG_LEVEL = 'debug';
+      const config = getConfig();
+      expect(config.logLevel).toBe('DEBUG');
     });
   });
 });
