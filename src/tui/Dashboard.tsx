@@ -46,7 +46,7 @@ export function Dashboard({ intervalMs }: DashboardProps): React.ReactElement {
       case 'running':
         return data.running.length;
       case 'queue':
-        return data.queue.filter((e) => e.status === 'pending' || e.status === 'running').length;
+        return data.queue.filter((e) => e.status === 'queued' || e.status === 'running').length;
       case 'completed':
         return data.completed.length;
       case 'log':
@@ -154,10 +154,10 @@ export function Dashboard({ intervalMs }: DashboardProps): React.ReactElement {
   const leftWidth = Math.floor(cols / 2);
   const rightWidth = cols - leftWidth;
 
-  // Queue summary: total = all entries across all statuses
-  const queueDone = data.queue.filter((e) => e.status === 'done').length;
-  const queueFailed = data.queue.filter((e) => e.status === 'failed').length;
-  const queueTotal = data.queue.length;
+  // Queue summary: done/failed from summary (via history), total = items + done + failed
+  const queueDone = data.summary.done;
+  const queueFailed = data.summary.failed;
+  const queueTotal = data.queue.length + queueDone + queueFailed;
 
   if (data.loading && data.running.length === 0 && data.completed.length === 0) {
     return (

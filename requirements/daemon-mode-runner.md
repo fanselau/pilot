@@ -75,6 +75,17 @@
 - Lock file prevents concurrent runners — existing `withQueueLock` handles this
 - Keep `--once` as the escape hatch, daemon as default
 
+### Review Fixes (from requirements audit)
+- [ ] **ID collision check**: `shortId()` must check existing item IDs and regenerate on collision
+- [ ] **Use `item.maxAttempts` not `opts.maxRetries`**: Per-item retry config overrides global default. Persist attempt count in queue.json, not in-memory.
+- [ ] **`--timeout 0` means no timeout**: Skip the setTimeout entirely when timeout is 0 or null. Don't fire at 0ms.
+- [ ] **Process tree kill on timeout**: Actually kill the opencode process tree (SIGTERM to process group), don't just mark as failed while the process keeps running
+- [ ] **SIGINT handler**: Treat Ctrl+C same as SIGTERM — graceful shutdown, drain active jobs, clean PID file
+- [ ] **History-safe dependency resolution**: Keep a separate `completedIds: string[]` set in queue.json that never gets pruned, even when history is capped. Check deps against this set, not history array.
+- [ ] **`findLaunchable` must hold lock**: Read queue + mark running in a single locked transaction to prevent TOCTOU race where two runners launch the same item
+- [ ] **Kill `pilot build` or differentiate**: Once `add` auto-starts daemon, `build` is redundant. Option A: remove it. Option B: make `build` = synchronous (blocks until job completes), `add` = async (fire-and-forget).
+- [ ] **Unify status vocabulary**: Use `queued/running/completed/failed` everywhere. Remove legacy `QueueEntry` and `QueueItem` types after migration.
+
 ## Do NOT
 
 - Use `nohup` for daemonization — use `child_process.spawn` with `detached: true` + `unref()`
