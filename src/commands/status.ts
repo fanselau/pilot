@@ -10,7 +10,7 @@ import { getConfig } from '../core/config.js';
 import { listSessions } from '../core/sessions.js';
 import { parseQueueFile } from '../core/queue-parser.js';
 import { scanPidFiles, readPidFile, isProcessAlive, getProcessRuntime } from '../core/process.js';
-import { computeStuckScore } from '../core/stuck.js';
+import { computeStuckScoreFast } from '../core/stuck.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { formatDuration } from '../util/format.js';
 import { green, red, yellow, dim, bold } from '../util/colors.js';
@@ -61,27 +61,7 @@ async function statusCommand(opts: StatusOpts): Promise<void> {
   }
   const pendingEntries = queueEntries.filter((e) => e.status === 'pending');
 
-  // 5. Stuck detection on all PID entries
-  const stuckResults: StuckAssessment[] = [];
-  for (const pidEntry of pidEntries) {
-    try {
-      const assessment = await computeStuckScore(pidEntry.pid, pidEntry.session);
-      stuckResults.push(assessment);
-    } catch {
-      // Skip if process disappeared during scoring
-    }
-  }
-
-  const stuckProcesses = stuckResults.filter((r) => r.verdict === 'stuck');
-  const suspectProcesses = stuckResults.filter((r) => r.verdict === 'suspect');
-
-  // 6. Completed sessions: not matched to PIDs, sorted by updated desc, take 5
-  const completedSessions = sessions
-    .filter((s) => !runningSessions.has(s.id))
-    .sort((a, b) => b.updated - a.updated)
-    .slice(0, 5);
-
-  // 7. Runner status
+  // 5. Runner status — check BEFORE stuck detection to exclude runner PID
   let runnerActive = false;
   let runnerPid: number | null = null;
   let runnerUptime: number | null = null;
@@ -96,6 +76,30 @@ async function statusCommand(opts: StatusOpts): Promise<void> {
   } catch {
     // No runner
   }
+
+  // 6. Stuck detection — exclude queue runner PID, use fast scoring (no CPU sampling)
+  const scorablePidEntries = runnerPid !== null
+    ? pidEntries.filter((e) => e.pid !== runnerPid)
+    : pidEntries;
+
+  const stuckResults: StuckAssessment[] = [];
+  for (const pidEntry of scorablePidEntries) {
+    try {
+      const assessment = await computeStuckScoreFast(pidEntry.pid, pidEntry.session);
+      stuckResults.push(assessment);
+    } catch {
+      // Skip if process disappeared during scoring
+    }
+  }
+
+  const stuckProcesses = stuckResults.filter((r) => r.verdict === 'stuck');
+  const suspectProcesses = stuckResults.filter((r) => r.verdict === 'suspect');
+
+  // 7. Completed sessions: not matched to PIDs, sorted by updated desc, take 5
+  const completedSessions = sessions
+    .filter((s) => !runningSessions.has(s.id))
+    .sort((a, b) => b.updated - a.updated)
+    .slice(0, 5);
 
   // ── JSON mode ────────────────────────────────────────────────────────
   if (isJsonMode()) {

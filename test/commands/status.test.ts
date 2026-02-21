@@ -25,7 +25,7 @@ vi.mock('../../src/core/process.js', () => ({
 }));
 
 vi.mock('../../src/core/stuck.js', () => ({
-  computeStuckScore: vi.fn(),
+  computeStuckScoreFast: vi.fn(),
 }));
 
 vi.mock('../../src/core/queue-parser.js', () => ({
@@ -44,7 +44,7 @@ vi.mock('cli-table3', () => {
 
 import { listSessions } from '../../src/core/sessions.js';
 import { scanPidFiles, readPidFile, isProcessAlive, getProcessRuntime } from '../../src/core/process.js';
-import { computeStuckScore } from '../../src/core/stuck.js';
+import { computeStuckScoreFast } from '../../src/core/stuck.js';
 import { parseQueueFile } from '../../src/core/queue-parser.js';
 import { setJsonMode } from '../../src/util/output.js';
 import { statusCommand } from '../../src/commands/status.js';
@@ -55,7 +55,7 @@ const mockedScanPidFiles = vi.mocked(scanPidFiles);
 const mockedReadPidFile = vi.mocked(readPidFile);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
 const mockedGetProcessRuntime = vi.mocked(getProcessRuntime);
-const mockedComputeStuckScore = vi.mocked(computeStuckScore);
+const mockedComputeStuckScoreFast = vi.mocked(computeStuckScoreFast);
 const mockedParseQueueFile = vi.mocked(parseQueueFile);
 
 describe('statusCommand', () => {
@@ -98,7 +98,7 @@ describe('statusCommand', () => {
     ];
     mockedParseQueueFile.mockResolvedValue(queueEntries);
 
-    mockedComputeStuckScore.mockResolvedValue({
+    mockedComputeStuckScoreFast.mockResolvedValue({
       pid: 12345,
       session: 'resume-roast-execute',
       score: 15,
@@ -183,7 +183,7 @@ describe('statusCommand', () => {
 
     mockedParseQueueFile.mockResolvedValue([]);
 
-    mockedComputeStuckScore.mockResolvedValue({
+    mockedComputeStuckScoreFast.mockResolvedValue({
       pid: 12345,
       session: 'resume-roast-execute',
       score: 10,
