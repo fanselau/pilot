@@ -2,7 +2,7 @@
  * pilot init <project> [desc] — Initialize new project.
  *
  * Special command: creates project directory if needed, runs setupProject
- * for .claude/ symlinks + claude.json, then spawns gsd-new-project.
+ * for .opencode/ symlinks + opencode.json, then spawns gsd-new-project.
  */
 
 import { execa } from 'execa';
@@ -26,10 +26,10 @@ export async function initCommand(
   // Create project dir if needed
   await mkdir(projectDir, { recursive: true });
 
-  // Run setup if .claude/ doesn't exist
-  const claudeDir = path.join(projectDir, '.claude');
+  // Run setup if .opencode/ doesn't exist
+  const opencodeDir = path.join(projectDir, '.opencode');
   try {
-    await access(claudeDir);
+    await access(opencodeDir);
   } catch {
     const result = await setupProject(projectDir);
     if (result.errors.length > 0) {

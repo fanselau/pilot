@@ -5,7 +5,7 @@
  *   1. Disable git gc on snapshot repos (including global)
  *   2. Memory check via /proc/meminfo
  *   3. Config validation (opencode.json)
- *   4. Binary check (opencode/claude in PATH or default locations)
+ *   4. Binary check (opencode in PATH or default location)
  *   5. Title truncation (80 char max)
  *
  * Pure core module — no UI dependencies.
@@ -143,31 +143,21 @@ async function getSystemFreeMem(): Promise<number | null> {
  * Validate the AI tool config JSON in the project directory.
  *
  * Checks (from spec §5):
- *   - File exists (opencode.json or claude.json, prefer opencode.json)
+ *   - File exists (opencode.json)
  *   - Valid JSON
  *   - `permission` field exists (NOT `permissions` — singular!)
  *   - All required permission types have `"**": "allow"`
  *   - If `instructions` field exists, it must be an array (NOT string — silent crash)
  */
 async function validateConfig(projectDir: string): Promise<void> {
-  // Try opencode.json first, then claude.json
-  let configContent: string | null = null;
-  let configPath: string | null = null;
+  const configPath = path.join(projectDir, 'opencode.json');
+  let configContent: string;
 
-  for (const filename of ['opencode.json', 'claude.json']) {
-    const candidate = path.join(projectDir, filename);
-    try {
-      configContent = await readFile(candidate, 'utf8');
-      configPath = candidate;
-      break;
-    } catch {
-      // Try next
-    }
-  }
-
-  if (configContent === null || configPath === null) {
+  try {
+    configContent = await readFile(configPath, 'utf8');
+  } catch {
     throw new Error(
-      `No opencode.json or claude.json found in ${projectDir}. Run: pilot setup ${projectDir}`,
+      `No opencode.json found in ${projectDir}. Run: pilot setup ${projectDir}`,
     );
   }
 
@@ -220,48 +210,39 @@ async function validateConfig(projectDir: string): Promise<void> {
 // ── Pre-spawn check 4: Binary check ───────────────────────────────────────
 
 /**
- * Find the AI binary (opencode or claude).
+ * Find the opencode binary.
  *
  * Checks in order:
- *   1. `which opencode` / `which claude` (in current PATH)
- *   2. ~/.opencode/bin/opencode / ~/.claude/bin/claude (default install locations)
+ *   1. `which opencode` (in current PATH)
+ *   2. ~/.opencode/bin/opencode (default install location)
  *
  * Stores resolved path at module level for reuse.
- * Throws if neither found.
+ * Throws if not found.
  */
 async function checkBinary(): Promise<string> {
   // Check PATH first
-  for (const name of ['opencode', 'claude']) {
-    try {
-      const result = await execa('which', [name]);
-      if (result.stdout.trim().length > 0) {
-        resolvedBinary = result.stdout.trim();
-        return resolvedBinary;
-      }
-    } catch {
-      // Not in PATH
+  try {
+    const result = await execa('which', ['opencode']);
+    if (result.stdout.trim().length > 0) {
+      resolvedBinary = result.stdout.trim();
+      return resolvedBinary;
     }
+  } catch {
+    // Not in PATH
   }
 
-  // Check default install locations
-  const candidates = [
-    path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
-    path.join(os.homedir(), '.claude', 'bin', 'claude'),
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      await execa(candidate, ['--version']);
-      resolvedBinary = candidate;
-      return resolvedBinary;
-    } catch {
-      // Not available at this path
-    }
+  // Check default install location
+  const candidate = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
+  try {
+    await execa(candidate, ['--version']);
+    resolvedBinary = candidate;
+    return resolvedBinary;
+  } catch {
+    // Not available at this path
   }
 
   throw new Error(
-    'Error: opencode/claude not found in PATH. ' +
-    'Install: npm install -g @anthropic/claude-ai',
+    'Error: opencode not found in PATH or ~/.opencode/bin/. Install opencode first.',
   );
 }
 
