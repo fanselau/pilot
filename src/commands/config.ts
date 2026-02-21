@@ -88,6 +88,8 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
         PILOT_STUCK_THRESHOLD: config.stuckThreshold,
         PILOT_PROJECT_DIR: config.projectDir,
         PILOT_GSD_DIR: config.gsdDir,
+        PILOT_MAX_PARALLEL: config.maxParallel,
+        PILOT_LOG_LEVEL: config.logLevel,
         NO_COLOR: config.noColor ? 'set' : null,
       },
       queue_json: {
@@ -119,6 +121,12 @@ async function configCommand(opts: ConfigOpts): Promise<void> {
   );
   outputHuman(`${'PILOT_PROJECT_DIR'.padEnd(COL)}${config.projectDir}`);
   outputHuman(`${'PILOT_GSD_DIR'.padEnd(COL)}${config.gsdDir}`);
+  outputHuman(
+    `${'PILOT_MAX_PARALLEL'.padEnd(COL)}${config.maxParallel} ${dim('(auto-detected)')}`,
+  );
+  outputHuman(
+    `${'PILOT_LOG_LEVEL'.padEnd(COL)}${config.logLevel}`,
+  );
   outputHuman(
     `${'NO_COLOR'.padEnd(COL)}${config.noColor ? 'set' : dim('(not set)')}`,
   );

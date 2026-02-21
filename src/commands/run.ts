@@ -29,7 +29,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   const config = getConfig();
 
   const runnerOpts: RunnerOptions = {
-    maxParallel: parseInt(opts['maxParallel'] as string, 10) || 5,
+    maxParallel: parseInt(opts['maxParallel'] as string, 10) || config.maxParallel,
     maxRetries: parseInt(opts['maxRetries'] as string, 10) || 3,
     once: opts['once'] === true,
     dryRun: opts['dryRun'] === true,

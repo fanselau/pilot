@@ -43,6 +43,8 @@ function makeConfig(overrides?: Partial<PilotConfig>): PilotConfig {
     noColor: false,
     pollInterval: 3,
     defaultTimeout: 60,
+    maxParallel: 2,
+    logLevel: 'INFO',
     ...overrides,
   };
 }

@@ -18,6 +18,8 @@ export interface PilotConfig {
   noColor: boolean;
   pollInterval: number;      // seconds, default 3 (min 1)
   defaultTimeout: number;    // minutes, default 60
+  maxParallel: number;       // auto: <32GB RAM → 2, ≥32GB → 5
+  logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 }
 
 // ── Queue ──────────────────────────────────────────────────────────────────
