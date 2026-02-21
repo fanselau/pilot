@@ -6,9 +6,9 @@
 ## Current Position
 
 Phase: 5 of 13 (Integration fixes per requirements/integration-fixes.md)
-Plan: 1 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 05-01-PLAN.md
+Last activity: 2026-02-21 - Completed 05-03-PLAN.md
 
 Progress: █████████████████████████ 100% (33/36 plans)
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
-- **Status:** in progress (1/4 plans complete)
+- **Status:** in progress (3/4 plans complete)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
 - **Status:** not planned (0/0 plans)
@@ -141,9 +141,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 12-02 | Cap donePhases at totalPhases before percent calc | Prevents extra phase dirs inflating progress |
 | 05-01 | lstat to distinguish symlinks from real directories | Prevents data loss on re-setup with real dirs |
 | 05-01 | Skip opencode.json if legacy claude.json exists | Backward compat without overwriting user configs |
+| 05-03 | Unconditional wait-for-all block after main loop | Safe: normal mode breaks when activeJobs empty (no-op) |
+| 05-03 | Best-effort upstream tracking before explicit pull | Graceful degradation on fresh clones |
 
 ## Session Continuity
 
-Last session: 2026-02-21T10:22:09Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-02-21T10:24:48Z
+Stopped at: Completed 05-03-PLAN.md
 Resume file: None
