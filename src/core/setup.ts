@@ -115,17 +115,21 @@ async function setupProject(dir: string): Promise<SetupResult> {
   }
 
   // 4. Create opencode.json
-  const claudeJsonPath = path.join(absDir, 'opencode.json');
-  if (await exists(claudeJsonPath)) {
+  const configJsonPath = path.join(absDir, 'opencode.json');
+  if (await exists(configJsonPath)) {
     result.skipped.push('opencode.json (already exists)');
   } else {
-    const claudeConfig = {
-      permissions: {
-        allow: ['**'],
+    const opencodeConfig = {
+      permission: {
+        read: { '**': 'allow' },
+        write: { '**': 'allow' },
+        edit: { '**': 'allow' },
+        bash: { '**': 'allow' },
+        external_directory: { '**': 'allow' },
       },
     };
     try {
-      await writeFile(claudeJsonPath, JSON.stringify(claudeConfig, null, 2) + '\n', 'utf8');
+      await writeFile(configJsonPath, JSON.stringify(opencodeConfig, null, 2) + '\n', 'utf8');
       result.created.push('opencode.json');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
