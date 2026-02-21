@@ -237,9 +237,9 @@ Plans:
 
 Plans:
 - [x] 13-01-PLAN.md — Types, config, queue-store hardening (blocked status, completedIds, atomic findLaunchable, dep cascading)
-- [ ] 13-02-PLAN.md — Runner daemon mode (watch loop, SIGINT, graceful shutdown, per-item retry, timeout fixes)
-- [ ] 13-03-PLAN.md — Command layer (run/stop/add/build refactor, init-service, CLI registration)
-- [ ] 13-04-PLAN.md — Tests for all Phase 13 changes
+- [x] 13-02-PLAN.md — Runner daemon mode (watch loop, SIGINT, graceful shutdown, per-item retry, timeout fixes)
+- [x] 13-03-PLAN.md — Command layer (run/stop/add/build refactor, init-service, CLI registration)
+- [x] 13-04-PLAN.md — Tests for all Phase 13 changes
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
 
