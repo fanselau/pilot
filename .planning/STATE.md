@@ -5,19 +5,19 @@
 
 ## Current Position
 
-Phase: 14 of 15 (Production hardening per requirements/production-hardening.md)
-Plan: 5 of 5 in current phase
-Status: Phase complete, verified ✓
-Last activity: 2026-02-21 - Phase 14 complete and verified (5/5 plans, 13/13 must-haves)
+Phase: 15 of 15 (E2E test suite per requirements/e2e-test-suite.md)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 15-01-PLAN.md
 
-Progress: █████████████████████████████░ 90% (53/59 plans)
+Progress: ██████████████████████████████ 91% (54/59 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 14 complete — all production hardening done. Ready for Phase 15 (E2E tests)
+**Current focus:** Phase 15 in progress — E2E test suite (1/3 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -60,6 +60,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
 - **Status:** complete (5/5 plans, verified ✓)
+
+### Phase 15: E2E test suite per requirements/e2e-test-suite.md
+- **Status:** in progress (1/3 plans complete)
 
 ## Accumulated Context
 
@@ -218,9 +221,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 14-05 | statSync added to node:fs mock in runner.test.ts | Flaky detection uses statSync; must be mocked |
 | 14-05 | Fake timers for spawn rate limiter test | Avoids 5-second real delays in test |
 | 14-05 | computeDaemonStuckScore tested with process.pid | Always-alive PID for healthy path verification |
+| 15-01 | progress exits 0 for nonexistent projects — test adjusted | Actual CLI behavior: shows "No planning data found" not exit 1 |
+| 15-01 | execaNode for E2E subprocess spawning | Cleaner than execa('node', ...) for Node.js scripts |
+| 15-01 | Queue JSON written directly in helpers (no core imports) | Test isolation — helpers must not depend on application code |
 
 ## Session Continuity
 
-Last session: 2026-02-21T13:52:01Z
-Stopped at: Completed 14-05-PLAN.md (Phase 14 complete)
+Last session: 2026-02-21T14:13:33Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None

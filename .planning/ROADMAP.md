@@ -261,6 +261,6 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — E2E test harness + monitoring command tests
+- [x] 15-01-PLAN.md — E2E test harness + monitoring command tests
 - [ ] 15-02-PLAN.md — Setup, queue management, lifecycle, and error case tests
 - [ ] 15-03-PLAN.md — Runner E2E, stuck --kill, TUI smoke, build system wiring
