@@ -231,12 +231,15 @@ Plans:
 
 ### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
 
-**Goal:** Make `pilot run` a persistent daemon that watches for new queue entries. `pilot add` auto-starts the daemon if not running. `--once` flag preserves current drain-and-exit behavior for batch/CI use.
+**Goal:** Make `pilot run` a persistent daemon that watches for new queue entries. `pilot add` is fire-and-forget. `pilot build` blocks until complete. `--once` flag preserves current drain-and-exit behavior for batch/CI use. Queue-store hardened with atomic findLaunchable, completedIds, dependency failure cascading, and blocked status.
 **Depends on:** Phase 12
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-(to be planned)
+- [ ] 13-01-PLAN.md — Types, config, queue-store hardening (blocked status, completedIds, atomic findLaunchable, dep cascading)
+- [ ] 13-02-PLAN.md — Runner daemon mode (watch loop, SIGINT, graceful shutdown, per-item retry, timeout fixes)
+- [ ] 13-03-PLAN.md — Command layer (run/stop/add/build refactor, init-service, CLI registration)
+- [ ] 13-04-PLAN.md — Tests for all Phase 13 changes
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
 
