@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 13
+## Current Phase: 14
 
 ## Current Position
 
-Phase: 13 of 15 (Daemon mode runner per requirements/daemon-mode-runner.md)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-02-21 - Completed 13-04-PLAN.md
+Phase: 14 of 15 (Production hardening per requirements/production-hardening.md)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 14-01-PLAN.md
 
-Progress: █████████████████████████ 100% (48/48 plans)
+Progress: █████████████████████████░░░░░ 83% (49/59 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 13 complete — daemon mode runner (4/4 plans, verified ✓)
+**Current focus:** Phase 14 — production hardening (1/5 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -57,6 +57,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
 - **Status:** complete (4/4 plans)
+
+### Phase 14: Production hardening per requirements/production-hardening.md
+- **Status:** in progress (1/5 plans complete)
 
 ## Accumulated Context
 
@@ -195,9 +198,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 13-04 | Execa mock override needed for retry/fail test paths | Default stdout:'0' makes checkPlanningChanges true |
 | 13-04 | parallel.test.ts once:false → once:true | Sequential/maxParallel enforcement identical in both modes; avoids daemon loop |
 | 13-04 | Config mock must include pollInterval + defaultTimeout | Required fields added in Plan 03 runner refactor |
+| 14-01 | Sync fs methods for atomic write path (writeFileSync, renameSync, copyFileSync, fsyncSync) | Crash safety requires synchronous operations within held lock |
+| 14-01 | tryParseJson with trailing-garbage trimming for truncated write recovery | Handles partial writes where JSON is truncated mid-write |
+| 14-01 | cleanStaleLocks as 5-minute safety net beyond proper-lockfile 30s stale | Defense in depth for lock cleanup when proper-lockfile fails |
+| 14-01 | Lock acquisition failure logs + re-throws | Callers in daemon loop catch and skip cycle; daemon never crashes |
 
 ## Session Continuity
 
-Last session: 2026-02-21T13:01:29Z
-Stopped at: Completed 13-04-PLAN.md — Phase 13 complete
+Last session: 2026-02-21T13:27:52Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
