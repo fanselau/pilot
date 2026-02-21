@@ -298,3 +298,188 @@ describe('pilot stop', () => {
     expect(result.stdout).toMatch(/not running/i);
   }, 30_000);
 });
+
+// ── Lifecycle commands (smoke tests) ──────────────────────────────────────
+
+describe('lifecycle commands', () => {
+  let env: TempEnv;
+
+  beforeEach(async () => {
+    env = await createTempEnv();
+  });
+
+  afterEach(async () => {
+    await cleanupTempEnv(env);
+  });
+
+  it.each([
+    ['init', ['init', 'test-project']],
+    ['plan', ['plan', 'test-project', '1']],
+    ['execute', ['execute', 'test-project', '1']],
+    ['verify', ['verify', 'test-project', '1']],
+    ['quick', ['quick', 'test-project', 'fix bug']],
+    ['debug', ['debug', 'test-project']],
+    ['research', ['research', 'test-project', '1']],
+    ['scope', ['scope', 'test-project', 'new feature']],
+    ['map', ['map', 'test-project']],
+    ['insert', ['insert', 'test-project', '2', 'new phase desc']],
+    ['remove', ['remove', 'test-project', '99']],
+    ['milestone new', ['milestone', 'new', 'test-project']],
+    ['milestone complete', ['milestone', 'complete', 'test-project', 'v1']],
+    ['todos list', ['todos', 'list', 'test-project']],
+    ['todos add', ['todos', 'add', 'test-project', 'fix something']],
+  ])('pilot %s exits without crash', async (_name, args) => {
+    // Create a fake project with .planning/ so commands can find it
+    await createFakeProject(env, 'test-project', { planning: true, phases: [1] });
+
+    const result = await runPilot(args as string[], env.env);
+    // Exit code 0 or 1 — NOT 2 (usage error). The mock opencode exits 0.
+    expect(result.exitCode).toBeLessThanOrEqual(1);
+  }, 30_000);
+});
+
+// ── Utility / management commands ─────────────────────────────────────────
+
+describe('utility commands', () => {
+  let env: TempEnv;
+
+  beforeEach(async () => {
+    env = await createTempEnv();
+  });
+
+  afterEach(async () => {
+    await cleanupTempEnv(env);
+  });
+
+  it('pilot cleanup exits without crash', async () => {
+    const result = await runPilot(['cleanup'], env.env);
+    expect(result.exitCode).toBeLessThanOrEqual(1);
+  }, 30_000);
+
+  it('pilot import exits without crash with no QUEUE.md', async () => {
+    // No QUEUE.md exists — should error but not crash
+    const result = await runPilot(['import'], env.env);
+    // Exit 1 expected (file not found)
+    expect(result.exitCode).toBeLessThanOrEqual(1);
+  }, 30_000);
+
+  it('pilot import processes a QUEUE.md when present', async () => {
+    // Create a minimal QUEUE.md
+    const queueMdPath = path.join(env.pilotDir, 'QUEUE.md');
+    await writeFile(queueMdPath, '## test-proj | continue | do stuff\n');
+
+    // Set PILOT_QUEUE_FILE to point to our file
+    const envWithQueue = {
+      ...env.env,
+      PILOT_QUEUE_FILE: queueMdPath,
+    };
+
+    const result = await runPilot(['import'], envWithQueue);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/import/i);
+  }, 30_000);
+
+  it('pilot init-service exits without crash', async () => {
+    const result = await runPilot(['init-service', '--dry-run'], env.env);
+    expect(result.exitCode).toBeLessThanOrEqual(1);
+  }, 30_000);
+
+  it('pilot queue remove nonexistent-id exits 1', async () => {
+    const result = await runPilot(['queue', 'remove', 'nonexistent-id'], env.env);
+    expect(result.exitCode).toBe(1);
+  }, 30_000);
+
+  it('pilot queue remove works with valid ID', async () => {
+    await createFakeProject(env, 'remove-test', { planning: true });
+
+    // Add an item first
+    await runPilot(['add', 'remove-test', 'task to remove'], env.env);
+
+    // Read queue.json to get the ID
+    const queuePath = path.join(env.dir, 'home', '.pilot', 'queue.json');
+    const queueContent = await readFile(queuePath, 'utf8');
+    const queue = JSON.parse(queueContent);
+    expect(queue.items.length).toBe(1);
+    const itemId = queue.items[0].id as string;
+
+    // Remove the item
+    const result = await runPilot(['queue', 'remove', itemId], env.env);
+    expect(result.exitCode).toBe(0);
+
+    // Verify item is gone
+    const updatedContent = await readFile(queuePath, 'utf8');
+    const updatedQueue = JSON.parse(updatedContent);
+    expect(updatedQueue.items.length).toBe(0);
+  }, 30_000);
+});
+
+// ── Error cases ───────────────────────────────────────────────────────────
+
+describe('error cases', () => {
+  let env: TempEnv;
+
+  beforeEach(async () => {
+    env = await createTempEnv();
+  });
+
+  afterEach(async () => {
+    await cleanupTempEnv(env);
+  });
+
+  it('pilot add with no args exits 2 (usage error)', async () => {
+    const result = await runPilot(['add'], env.env);
+    expect(result.exitCode).toBe(2);
+  }, 15_000);
+
+  it('pilot plan with no args exits 2 (usage error)', async () => {
+    const result = await runPilot(['plan'], env.env);
+    expect(result.exitCode).toBe(2);
+  }, 15_000);
+
+  it('pilot execute with no args exits 2 (usage error)', async () => {
+    const result = await runPilot(['execute'], env.env);
+    expect(result.exitCode).toBe(2);
+  }, 15_000);
+
+  it('pilot log with no args exits 2 (usage error)', async () => {
+    const result = await runPilot(['log'], env.env);
+    expect(result.exitCode).toBe(2);
+  }, 15_000);
+
+  it('pilot progress for nonexistent project exits 0 with no planning message', async () => {
+    const result = await runPilot(['progress', 'no-such-project'], env.env);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/no planning/i);
+  }, 15_000);
+});
+
+// ── Global --json sweep ───────────────────────────────────────────────────
+
+describe('global --json sweep', () => {
+  let env: TempEnv;
+
+  beforeEach(async () => {
+    env = await createTempEnv();
+  });
+
+  afterEach(async () => {
+    await cleanupTempEnv(env);
+  });
+
+  it.each([
+    'status',
+    'queue',
+    'stuck',
+    'projects',
+    'config',
+    'doctor',
+  ])('pilot %s --json outputs valid JSON with timestamp', async (cmd) => {
+    const result = await runPilot(['--json', cmd], env.env);
+    // doctor may exit 1 if checks fail, others should be 0
+    expect(result.exitCode).toBeLessThanOrEqual(1);
+
+    const data = JSON.parse(result.stdout);
+    expect(data).toHaveProperty('timestamp');
+    expect(typeof data.timestamp).toBe('string');
+  }, 30_000);
+});

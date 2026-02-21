@@ -1,13 +1,15 @@
 /**
  * Weighted multi-signal stuck detection algorithm.
  *
- * Evaluates 5 independent signals to score whether a process is stuck.
+ * Evaluates independent signals to score whether a process is stuck.
  * Replaces the bash 3-way AND with a nuanced scoring system.
  *
  * Architecture:
  * - scoreFromSignals() is a pure function for testability (no I/O)
  * - Helper functions (getLogStaleness, sampleCpu, etc.) handle /proc I/O
  * - computeStuckScore() orchestrates: calls helpers → passes data to scorer
+ * - isStuck() from opencode-db.ts provides DB-based stuck detection
+ *   (replaces the old message-count Signal 3 heuristic)
  *
  * Pure core module — no UI dependencies.
  */
@@ -17,6 +19,7 @@ import path from 'node:path';
 import type { StuckAssessment, StuckSignal, DaemonStuckAssessment } from './types.js';
 import { getConfig } from './config.js';
 import { findPhaseDir, countSummaryFiles, countNonGapPlanFiles } from './phase-state.js';
+import { isStuck, findSessionByTitle } from './opencode-db.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -342,11 +345,64 @@ async function getProcessRuntime(pid: number): Promise<number> {
   }
 }
 
+// ── DB-based stuck signal ──────────────────────────────────────────────────
+
+/**
+ * Query the opencode DB for a session's stuck status and return a StuckSignal.
+ *
+ * Maps isStuck() results to weighted signals:
+ *   - waiting_for_user_input → 80 points (immediately stuck, no threshold)
+ *   - child_stuck → 70 points (child stuck = parent should be killed)
+ *   - long_running_command → 40 points
+ *   - not_stuck → null (no signal)
+ *
+ * Fails gracefully: returns null if DB is unavailable or session not found.
+ */
+function getDbStuckSignal(session: string): StuckSignal | null {
+  try {
+    const sessionId = findSessionByTitle(session);
+    if (sessionId === null) {
+      return null;
+    }
+
+    const result = isStuck(sessionId);
+    if (!result.stuck) {
+      return null;
+    }
+
+    switch (result.reason) {
+      case 'waiting_for_user_input':
+        return {
+          name: 'db_waiting_for_input',
+          points: 80,
+          detail: result.detail,
+        };
+      case 'child_stuck':
+        return {
+          name: 'db_child_stuck',
+          points: 70,
+          detail: result.detail,
+        };
+      case 'long_running_command':
+        return {
+          name: 'db_long_running',
+          points: 40,
+          detail: result.detail,
+        };
+      default:
+        return null;
+    }
+  } catch {
+    // DB unavailable — fail gracefully
+    return null;
+  }
+}
+
 // ── Orchestrator ───────────────────────────────────────────────────────────
 
 /**
  * Full stuck assessment for a PID + session.
- * Calls I/O helpers → passes data to pure scorer → returns assessment.
+ * Calls I/O helpers → passes data to pure scorer → adds DB-based isStuck signal → returns assessment.
  */
 async function computeStuckScore(pid: number, session: string): Promise<StuckAssessment> {
   const config = getConfig();
@@ -367,17 +423,27 @@ async function computeStuckScore(pid: number, session: string): Promise<StuckAss
   // Cap total sampling time at 3s to avoid long hangs
   const cpuSamples = await sampleCpu(pid, 3, 10_000, 3_000);
 
-  // Score using pure function
-  const { score, verdict, signals } = scoreFromSignals({
+  // Score using pure function — messageCount: null so Signal 3 never fires
+  let { score, signals } = scoreFromSignals({
     logStaleness,
     runtime,
     cpuSamples,
-    messageCount: null, // caller should provide via session list cache
+    messageCount: null,
     processRss,
     systemFreeMb,
     procState,
     wchan,
   });
+
+  // Add DB-based stuck detection signal (replaces old message-count heuristic)
+  const dbSignal = getDbStuckSignal(session);
+  if (dbSignal !== null) {
+    score += dbSignal.points;
+    signals = [...signals, dbSignal];
+  }
+
+  const verdict: 'healthy' | 'suspect' | 'stuck' =
+    score >= 70 ? 'stuck' : score >= 40 ? 'suspect' : 'healthy';
 
   return {
     pid,
@@ -397,6 +463,8 @@ async function computeStuckScore(pid: number, session: string): Promise<StuckAss
  * signals (log staleness, memory, proc state, wchan, runtime) but sets
  * cpuSamples to empty array so the scorer assumes active (maxCpu defaults to 100).
  *
+ * Also queries the opencode DB for precise stuck detection via isStuck().
+ *
  * This avoids the 30s hang from sampleCpu(3, 10_000) per process.
  */
 async function computeStuckScoreFast(pid: number, session: string): Promise<StuckAssessment> {
@@ -415,7 +483,8 @@ async function computeStuckScoreFast(pid: number, session: string): Promise<Stuc
     ]);
 
   // Score with no CPU samples — scorer defaults maxCpu to 100 (assume active)
-  const { score, verdict, signals } = scoreFromSignals({
+  // messageCount: null so Signal 3 never fires
+  let { score, signals } = scoreFromSignals({
     logStaleness,
     runtime,
     cpuSamples: [],       // Skip CPU sampling for speed
@@ -425,6 +494,16 @@ async function computeStuckScoreFast(pid: number, session: string): Promise<Stuc
     procState,
     wchan,
   });
+
+  // Add DB-based stuck detection signal (replaces old message-count heuristic)
+  const dbSignal = getDbStuckSignal(session);
+  if (dbSignal !== null) {
+    score += dbSignal.points;
+    signals = [...signals, dbSignal];
+  }
+
+  const verdict: 'healthy' | 'suspect' | 'stuck' =
+    score >= 70 ? 'stuck' : score >= 40 ? 'suspect' : 'healthy';
 
   return {
     pid,
@@ -553,6 +632,13 @@ async function computeDaemonStuckScore(
         points: 40,
         detail: `No log output after ${Math.round(runtimeSeconds / 60)}m`,
       });
+    }
+
+    // ── Signal 5: DB-based stuck detection (replaces old message-count heuristic) ──
+    const dbSignal = getDbStuckSignal(session);
+    if (dbSignal !== null) {
+      score += dbSignal.points;
+      signals.push(dbSignal);
     }
   } catch {
     // Process may have died between checks — return healthy, will be reaped

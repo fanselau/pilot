@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
-import { scoreFromSignals, detectGapClosureMisconfig, computeDaemonStuckScore } from '../../src/core/stuck.js';
+import { scoreFromSignals, detectGapClosureMisconfig, computeDaemonStuckScore, computeStuckScoreFast } from '../../src/core/stuck.js';
 import type { StuckAssessment, DaemonStuckAssessment } from '../../src/core/types.js';
 import { mkdtemp, mkdir, writeFile, rm, stat } from 'node:fs/promises';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -911,5 +911,80 @@ describe('computeDaemonStuckScore', () => {
     expect(result).toHaveProperty('isFlaky');
     expect(typeof result.score).toBe('number');
     expect(typeof result.isFlaky).toBe('boolean');
+  });
+});
+
+// ── DB-based stuck signal integration ──────────────────────────────────────
+
+describe('DB-based stuck signal (isStuck integration)', () => {
+  /**
+   * These tests verify that computeStuckScoreFast and computeDaemonStuckScore
+   * correctly integrate the DB-based isStuck signal. We test via the
+   * module's actual behavior — if the DB is not available (which it won't
+   * be during tests unless we inject one), the signal gracefully returns null.
+   *
+   * The detailed isStuck decision tree is thoroughly tested in opencode-db.test.ts.
+   * Here we verify the integration layer: that stuck.ts calls getDbStuckSignal
+   * and incorporates the result correctly.
+   */
+
+  let tmpDirForDb: string;
+
+  beforeEach(async () => {
+    tmpDirForDb = await mkdtemp(path.join(tmpdir(), 'pilot-db-stuck-'));
+  });
+
+  afterEach(async () => {
+    if (tmpDirForDb) {
+      await rm(tmpDirForDb, { recursive: true, force: true });
+    }
+  });
+
+  it('computeStuckScoreFast does not crash when DB is unavailable', async () => {
+    // When DB is not available, getDbStuckSignal returns null gracefully
+    const logFile = path.join(tmpDirForDb, 'test.log');
+    writeFileSync(logFile, 'some output\n');
+
+    const result = await computeStuckScoreFast(process.pid, 'nonexistent-session-title');
+
+    expect(result).toBeDefined();
+    expect(typeof result.score).toBe('number');
+    expect(['healthy', 'suspect', 'stuck']).toContain(result.verdict);
+    // Should not contain any db_* signals since DB session won't be found
+    const dbSignals = result.signals.filter(s => s.name.startsWith('db_'));
+    expect(dbSignals).toHaveLength(0);
+  });
+
+  it('computeDaemonStuckScore does not crash when DB is unavailable', async () => {
+    const logFile = path.join(tmpDirForDb, 'test.log');
+    writeFileSync(logFile, 'some output\n');
+
+    const result = await computeDaemonStuckScore(
+      process.pid, 'nonexistent-session-title', logFile, 60,
+    );
+
+    expect(result).toBeDefined();
+    expect(typeof result.score).toBe('number');
+    // Should not contain any db_* signals
+    const dbSignals = result.signals.filter(s => s.name.startsWith('db_'));
+    expect(dbSignals).toHaveLength(0);
+  });
+
+  it('scoreFromSignals still works with messageCount null (Signal 3 disabled)', () => {
+    // When messageCount is null, Signal 3 never fires — this is the new default
+    const result = scoreFromSignals({
+      logStaleness: 0,
+      runtime: 601,
+      cpuSamples: [],
+      messageCount: null,
+      processRss: 256,
+      systemFreeMb: 4096,
+      procState: 'S',
+      wchan: null,
+    });
+
+    const msgSignals = result.signals.filter(s => s.name.includes('messages'));
+    expect(msgSignals).toHaveLength(0);
+    expect(result.score).toBe(0);
   });
 });

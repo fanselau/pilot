@@ -9,7 +9,7 @@
  */
 
 import { getConfig } from '../core/config.js';
-import { getItemById } from '../core/queue-store.js';
+import { getItemById, getHistory } from '../core/queue-store.js';
 import { createRunner } from '../core/runner.js';
 import { isJsonMode, outputJson, outputHuman } from '../util/output.js';
 import { addCommand } from './add.js';
@@ -98,12 +98,19 @@ export async function buildCommand(
 
   // Step 3: Check final status of our specific item
   if (itemResult === null) {
-    const item = await getItemById(addResult.id);
+    // Check active items first
+    const item = await getItemById(addResult.id!);
     if (item !== null) {
-      itemResult = item.status;
+      itemResult = item.status === 'completed' ? 'success' : item.status;
     } else {
-      // Item moved to history — completed (success or fail)
-      itemResult = 'completed (in history)';
+      // Item moved to history — check history for final status
+      const history = await getHistory(50);
+      const historyItem = history.find((h) => h.id === addResult.id);
+      if (historyItem) {
+        itemResult = historyItem.status === 'completed' ? 'success' : 'failed';
+      } else {
+        itemResult = 'unknown';
+      }
     }
   }
 
