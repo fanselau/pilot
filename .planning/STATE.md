@@ -6,9 +6,9 @@
 ## Current Position
 
 Phase: 12 of 12 (Critical fixes per requirements/overnight-fixes.md)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-21 - Completed 12-03-PLAN.md
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 12-02-PLAN.md
 
 Progress: █████████████████████████ 100% (32/32 plans)
 
@@ -135,9 +135,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 10-04 | Auto-skip writes UAT with result: pass for state machine compat | Phase moves to done/next-phase without manual intervention |
 | 12-01 | message_count optional (undefined) not default 0 | Preserves distinction between no data and zero messages |
 | 12-01 | 5s timeout on all execa calls to opencode | Prevents indefinite hangs when binary unavailable |
+| 12-02 | Removed claude.json fallback from spawn.ts validateConfig | opencode.json is the only config format |
+| 12-02 | Removed claude binary fallback from spawn.ts checkBinary | Only opencode binary supported for spawning |
+| 12-02 | Kept claude paths as secondary detection in config.ts | Backward compat for reporting binary location |
+| 12-02 | Cap donePhases at totalPhases before percent calc | Prevents extra phase dirs inflating progress |
 
 ## Session Continuity
 
-Last session: 2026-02-21T02:47:43Z
-Stopped at: Completed 12-03-PLAN.md — Phase 12 complete
+Last session: 2026-02-21T02:49:11Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None
