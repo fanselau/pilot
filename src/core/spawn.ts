@@ -11,7 +11,7 @@
  * Pure core module — no UI dependencies.
  */
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { execa } from 'execa';
@@ -22,6 +22,10 @@ import { writePidFile } from './process.js';
 
 /** Cached resolved binary path after first preSpawnChecks call. */
 let resolvedBinary: string | null = null;
+
+/** Spawn rate limiting: epoch ms of last spawn. */
+let lastSpawnTime = 0;
+const MIN_SPAWN_INTERVAL_MS = 5_000; // 5 seconds between spawns
 
 // ── truncateTitle ──────────────────────────────────────────────────────────
 
@@ -83,13 +87,16 @@ async function disableSnapshotGc(): Promise<void> {
 
 /**
  * Check system available memory via /proc/meminfo.
- * If < 500MB, wait (polling every 30s) up to 10 minutes.
+ * If < 2GB (2048MB), wait (polling every 30s) up to 10 minutes.
  * Throws if memory never frees.
+ *
+ * Threshold raised from 500MB to 2GB for production VPS use —
+ * OOM kills at 4+ parallel jobs are the #2 cause of daemon death.
  */
 async function checkMemory(): Promise<void> {
   const MAX_POLLS = 20; // 20 × 30s = 10 minutes
   const POLL_INTERVAL_MS = 30_000;
-  const MIN_AVAILABLE_MB = 500;
+  const MIN_AVAILABLE_MB = 2048;
 
   for (let attempt = 0; attempt <= MAX_POLLS; attempt++) {
     const availableMb = await getSystemFreeMem();
@@ -134,6 +141,40 @@ async function getSystemFreeMem(): Promise<number | null> {
     return Math.floor(parseInt(match[1]!, 10) / 1024);
   } catch {
     return null;
+  }
+}
+
+// ── Pre-spawn check 2b: Disk space check ──────────────────────────────────
+
+/**
+ * Check available disk space on the filesystem containing projectDir.
+ * If < 1GB free → throw Error with clear message.
+ *
+ * Uses Node.js fs.statfs (available since Node 18.15+).
+ * On failure (e.g., unsupported platform), logs warning and skips.
+ */
+const MIN_DISK_FREE_BYTES = 1_073_741_824; // 1 GB
+
+async function checkDiskSpace(projectDir: string): Promise<void> {
+  try {
+    const stat = await statfs(projectDir);
+    const freeBytes = BigInt(stat.bfree) * BigInt(stat.bsize);
+    const freeMb = Number(freeBytes / BigInt(1024 * 1024));
+
+    if (freeBytes < BigInt(MIN_DISK_FREE_BYTES)) {
+      throw new Error(
+        `Disk space too low: ${freeMb}MB free (need 1024MB). Clear logs or free space.`,
+      );
+    }
+  } catch (err) {
+    // Re-throw our own disk space errors
+    if (err instanceof Error && err.message.startsWith('Disk space too low')) {
+      throw err;
+    }
+    // statfs unavailable or other error — skip check with warning
+    process.stderr.write(
+      `[spawn] Warning: Could not check disk space: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   }
 }
 
@@ -246,6 +287,22 @@ async function checkBinary(): Promise<string> {
   );
 }
 
+// ── Spawn rate limiting ────────────────────────────────────────────────────
+
+/**
+ * Enforce minimum 5-second interval between spawns.
+ *
+ * Prevents thundering herd when queue has many items ready to launch.
+ * Runner.ts should call this before each launch.
+ */
+async function enforceSpawnRateLimit(): Promise<void> {
+  const elapsed = Date.now() - lastSpawnTime;
+  if (elapsed < MIN_SPAWN_INTERVAL_MS) {
+    await sleep(MIN_SPAWN_INTERVAL_MS - elapsed);
+  }
+  lastSpawnTime = Date.now();
+}
+
 // ── preSpawnChecks (combined) ──────────────────────────────────────────────
 
 /**
@@ -265,6 +322,7 @@ async function checkBinary(): Promise<string> {
 async function preSpawnChecks(projectDir: string): Promise<void> {
   await disableSnapshotGc();
   await checkMemory();
+  await checkDiskSpace(projectDir);
   await validateConfig(projectDir);
   await checkBinary();
 }
@@ -346,4 +404,6 @@ export {
   preSpawnChecks,
   spawnSession,
   getResolvedBinary,
+  enforceSpawnRateLimit,
+  checkDiskSpace,
 };
