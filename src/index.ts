@@ -66,6 +66,7 @@ program.configureHelp({
           ['update', 'Update pilot-gsd definitions'],
           ['config', 'Show configuration'],
           ['import [file]', 'Import QUEUE.md into queue.json'],
+          ['doctor [options]', 'Health check: validate setup'],
         ],
       },
       {
@@ -269,6 +270,16 @@ program
     void opts;
     const { importCommand } = await import('./commands/import.js');
     await importCommand(file, { ...program.opts(), ...localOpts });
+  });
+
+program
+  .command('doctor')
+  .description('Health check: validate setup')
+  .option('--fix', 'Auto-fix what we can')
+  .action(async (localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    const { doctorCommand } = await import('./commands/doctor.js');
+    await doctorCommand(opts);
   });
 
 // ── Queue Management (Phase 2 stubs) ──────────────────────────────────────
