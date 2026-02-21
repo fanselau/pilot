@@ -12,6 +12,8 @@ const testConfig: PilotConfig = {
   stuckThreshold: 90,
   gsdDir: '/test/pilot-gsd',
   noColor: false,
+  pollInterval: 3,
+  defaultTimeout: 60,
 };
 
 // ── Mocks ──────────────────────────────────────────────────────────────────

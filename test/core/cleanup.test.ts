@@ -41,6 +41,8 @@ function makeConfig(overrides?: Partial<PilotConfig>): PilotConfig {
     projectDir: path.join(tmpDir, 'projects'),
     gsdDir: path.join(tmpDir, 'pilot-gsd'),
     noColor: false,
+    pollInterval: 3,
+    defaultTimeout: 60,
     ...overrides,
   };
 }
