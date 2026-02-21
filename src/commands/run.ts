@@ -30,6 +30,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     once: opts['once'] === true,
     dryRun: opts['dryRun'] === true,
     force: opts['force'] === true,
+    pollInterval: config.pollInterval,
   };
 
   // ── Runner log setup ────────────────────────────────────────────────

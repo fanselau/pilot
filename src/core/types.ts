@@ -16,23 +16,20 @@ export interface PilotConfig {
   projectDir: string;
   gsdDir: string;
   noColor: boolean;
+  pollInterval: number;      // seconds, default 3 (min 1)
+  defaultTimeout: number;    // minutes, default 60
 }
 
 // ── Queue ──────────────────────────────────────────────────────────────────
 
-export interface QueueEntry {
-  lineNum: number;
-  project: string;
-  mode: string;
-  args: string;
-  status: 'pending' | 'running' | 'done' | 'failed';
-  description?: string;
-  dependsOn?: string[];
-  timeout?: number;
-}
-
+/**
+ * QueueItem defines the JSON contract vocabulary used by --json output.
+ * Status vocabulary differs from QueueJsonItem internal vocabulary:
+ *   queued → pending, completed → done
+ * Adapters in status.ts and queue.ts map between these vocabularies.
+ */
 export interface QueueItem {
-  status: 'pending' | 'running' | 'done' | 'failed';
+  status: 'pending' | 'running' | 'done' | 'failed' | 'blocked';
   project: string;
   mode: string;
   args: string;
@@ -169,10 +166,11 @@ export interface RunnerJob {
 
 export interface RunnerOptions {
   maxParallel: number;
-  maxRetries: number;
+  maxRetries: number;  // kept for backward compat; runner prefers item.maxAttempts
   once: boolean;
   dryRun: boolean;
   force: boolean;
+  pollInterval: number;  // seconds, default 3
 }
 
 // ── Smart Add ─────────────────────────────────────────────────────────────
@@ -233,7 +231,7 @@ export interface QueueJsonItem {
   project: string;
   mode: string;                  // build-full, continue, continue-all, etc.
   description: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'blocked';
   addedAt: string;               // ISO 8601
   startedAt: string | null;
   completedAt: string | null;
@@ -253,4 +251,5 @@ export interface QueueJsonFile {
   version: 1;
   items: QueueJsonItem[];
   history: QueueHistoryItem[];
+  completedIds: string[];  // IDs that completed successfully — never pruned by history cap
 }

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseQueue, parseQueueFile, markEntry } from '../../src/core/queue-parser.js';
-import type { QueueEntry } from '../../src/core/types.js';
+import type { QueueEntry } from '../../src/core/queue-parser.js';
 
 // ── Fixture path ───────────────────────────────────────────────────────────
 

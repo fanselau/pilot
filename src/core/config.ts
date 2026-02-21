@@ -45,6 +45,12 @@ function getConfig(): PilotConfig {
   const pilotDir = path.join(home, '.pilot');
   const queueJsonFile = path.join(pilotDir, 'queue.json');
 
+  const pollIntervalRaw = parseInt(process.env.PILOT_POLL_INTERVAL ?? '3', 10);
+  const pollInterval = Math.max(1, Number.isNaN(pollIntervalRaw) ? 3 : pollIntervalRaw);
+
+  const defaultTimeoutRaw = parseInt(process.env.PILOT_DEFAULT_TIMEOUT ?? '60', 10);
+  const defaultTimeout = Number.isNaN(defaultTimeoutRaw) ? 60 : defaultTimeoutRaw;
+
   return {
     queueFile,
     pilotDir,
@@ -54,6 +60,8 @@ function getConfig(): PilotConfig {
     projectDir,
     gsdDir,
     noColor,
+    pollInterval,
+    defaultTimeout,
   };
 }
 
