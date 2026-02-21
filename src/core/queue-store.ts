@@ -47,10 +47,15 @@ async function loadQueue(): Promise<QueueJsonFile> {
   const config = getConfig();
   try {
     const raw = await readFile(config.queueJsonFile, 'utf8');
-    return JSON.parse(raw) as QueueJsonFile;
+    const data = JSON.parse(raw) as QueueJsonFile;
+    // Backward compat: old queue.json files may lack completedIds
+    if (!Array.isArray(data.completedIds)) {
+      data.completedIds = [];
+    }
+    return data;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { version: 1, items: [], history: [] };
+      return { version: 1, items: [], history: [], completedIds: [] };
     }
     throw err;
   }
@@ -86,7 +91,7 @@ async function withQueueJsonLock<T>(fn: () => Promise<T>): Promise<T> {
     await readFile(config.queueJsonFile, 'utf8');
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      await saveQueue({ version: 1, items: [], history: [] });
+      await saveQueue({ version: 1, items: [], history: [], completedIds: [] });
     } else {
       throw err;
     }
@@ -242,12 +247,15 @@ async function removeItem(id: string): Promise<void> {
 }
 
 /**
- * Find the first launchable item in the queue.
+ * @deprecated Use `findLaunchableAtomic` instead — it holds the lock during
+ * read + mark to prevent TOCTOU race where two runners launch the same item.
+ *
+ * Find the first launchable item in the queue (non-atomic, read-only).
  *
  * An item is launchable when:
- * - status === 'queued'
+ * - status === 'queued' (blocked items are implicitly excluded)
  * - project not in runningProjects set (same-project sequential)
- * - dependsOn is null OR the dependency is in history as 'completed'
+ * - dependsOn is null OR the dependency is in completedIds
  * - activeCount < maxParallel
  *
  * Returns null if no item is launchable.
@@ -262,20 +270,63 @@ async function findLaunchable(
   const data = await loadQueue();
 
   for (const item of data.items) {
-    if (item.status !== 'queued') continue;
+    if (item.status !== 'queued') continue;  // blocked/running/completed/failed all skip
     if (runningProjects.has(item.project)) continue;
 
     if (item.dependsOn !== null) {
-      const depCompleted = data.history.some(
-        (h) => h.id === item.dependsOn && h.status === 'completed',
-      );
-      if (!depCompleted) continue;
+      // Use completedIds (never pruned) instead of history (capped at 100)
+      if (!data.completedIds.includes(item.dependsOn)) continue;
     }
 
     return item;
   }
 
   return null;
+}
+
+/**
+ * Find and atomically mark the first launchable item as running.
+ *
+ * Holds the queue lock during read + mark to prevent TOCTOU race where two
+ * runners could both find the same item launchable and launch it twice.
+ *
+ * An item is launchable when:
+ * - status === 'queued' (blocked items are implicitly excluded)
+ * - project not in runningProjects set (same-project sequential)
+ * - dependsOn is null OR the dependency is in completedIds
+ * - activeCount < maxParallel
+ *
+ * Returns the item (already marked running with attempts incremented) or null.
+ */
+async function findLaunchableAtomic(
+  runningProjects: Set<string>,
+  maxParallel: number,
+  activeCount: number,
+): Promise<QueueJsonItem | null> {
+  return withQueueJsonLock(async () => {
+    if (activeCount >= maxParallel) return null;
+
+    const data = await loadQueue();
+
+    for (const item of data.items) {
+      if (item.status !== 'queued') continue;  // blocked/running/completed/failed all skip
+      if (runningProjects.has(item.project)) continue;
+
+      if (item.dependsOn !== null) {
+        // Use completedIds (never pruned) instead of history (capped at 100)
+        if (!data.completedIds.includes(item.dependsOn)) continue;
+      }
+
+      // Found launchable — mark running atomically within the same lock
+      item.status = 'running';
+      item.startedAt = new Date().toISOString();
+      item.attempts++;
+      await saveQueue(data);
+      return item;
+    }
+
+    return null;
+  });
 }
 
 /**
@@ -321,6 +372,12 @@ async function markCompleted(id: string): Promise<void> {
     const historyItem: QueueHistoryItem = { ...item, duration };
     data.history.push(historyItem);
     data.history = capHistory(data.history);
+
+    // Track in completedIds — never pruned (unlike history which caps at 100).
+    // This is the source of truth for dependency resolution.
+    if (!data.completedIds.includes(id)) {
+      data.completedIds.push(id);
+    }
 
     data.items.splice(idx, 1);
     await saveQueue(data);
@@ -378,6 +435,65 @@ async function markQueued(id: string): Promise<void> {
 }
 
 /**
+ * Mark an item as blocked with an error reason.
+ * Blocked items are not launchable and are not retried.
+ */
+async function markBlocked(id: string, reason: string): Promise<void> {
+  return withQueueJsonLock(async () => {
+    const data = await loadQueue();
+    const item = data.items.find((i) => i.id === id);
+    if (!item) throw new Error(`Item not found: ${id}`);
+    item.status = 'blocked';
+    item.error = reason;
+    await saveQueue(data);
+  });
+}
+
+/**
+ * When a job permanently fails, block all transitive dependents.
+ *
+ * Walks the dependency graph starting from failedId. Any item (direct or
+ * transitive) that depends on the failed item and is still queued gets
+ * marked as 'blocked' with an error indicating which dependency failed.
+ *
+ * Returns the list of item IDs that were blocked.
+ */
+async function cascadeFailure(failedId: string): Promise<string[]> {
+  return withQueueJsonLock(async () => {
+    const data = await loadQueue();
+    const blockedIds: string[] = [];
+
+    // BFS: find all items that directly or transitively depend on failedId
+    const toBlock = new Set<string>();
+    const queue = [failedId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      for (const item of data.items) {
+        if (item.dependsOn === currentId && item.status === 'queued' && !toBlock.has(item.id)) {
+          toBlock.add(item.id);
+          queue.push(item.id);  // Check for transitive deps
+        }
+      }
+    }
+
+    for (const id of toBlock) {
+      const item = data.items.find((i) => i.id === id);
+      if (item) {
+        item.status = 'blocked';
+        item.error = `dependency ${failedId} failed`;
+        blockedIds.push(id);
+      }
+    }
+
+    if (blockedIds.length > 0) {
+      await saveQueue(data);
+    }
+    return blockedIds;
+  });
+}
+
+/**
  * Get history entries sorted by completedAt desc.
  */
 async function getHistory(limit?: number): Promise<QueueHistoryItem[]> {
@@ -414,10 +530,13 @@ export {
   addItem,
   removeItem,
   findLaunchable,
+  findLaunchableAtomic,
   markRunning,
   markCompleted,
   markFailed,
   markQueued,
+  markBlocked,
+  cascadeFailure,
   getHistory,
   getItems,
   getItemById,
