@@ -229,10 +229,19 @@ Plans:
 - [x] 12-02-PLAN.md — Fix init.ts, spawn.ts, config.ts, setup.ts claude→opencode + progress overflow cap
 - [x] 12-03-PLAN.md — README.md, LICENSE, package.json metadata
 
-### Phase 13: E2E test suite per requirements/e2e-test-suite.md
+### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
+
+**Goal:** Make `pilot run` a persistent daemon that watches for new queue entries. `pilot add` auto-starts the daemon if not running. `--once` flag preserves current drain-and-exit behavior for batch/CI use.
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+Plans:
+(to be planned)
+
+### Phase 14: E2E test suite per requirements/e2e-test-suite.md
 
 **Goal:** Comprehensive end-to-end test suite that exercises every CLI command as a subprocess against real (temp) project directories. Final gate before replacing the bash queue runner.
-**Depends on:** Phase 12
+**Depends on:** Phase 13
 **Plans:** 0 plans
 
 Plans:

@@ -2,7 +2,7 @@
  * JSON queue storage — CRUD operations over ~/.pilot/queue.json.
  *
  * Replaces queue-parser.ts for all new queue operations. Provides typed
- * CRUD with proper file locking (proper-lockfile), nanoid IDs, circular
+ * CRUD with proper file locking (proper-lockfile), short human-typeable IDs, circular
  * dependency detection, and history capping.
  *
  * Pure core module — no UI dependencies.
@@ -10,7 +10,20 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { lock } from 'proper-lockfile';
-import { nanoid } from 'nanoid';
+/**
+ * Generate a short human-typeable ID: 4 lowercase alphanumeric chars.
+ * ~1.6M combinations — plenty for a queue that rarely exceeds 100 items.
+ */
+function shortId(): string {
+  const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
+  let id = '';
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  for (const b of bytes) {
+    id += alphabet[b % alphabet.length];
+  }
+  return id;
+}
 import { getConfig } from './config.js';
 import type { QueueJsonFile, QueueJsonItem, QueueHistoryItem } from './types.js';
 
@@ -156,7 +169,7 @@ async function addItem(opts: {
 }): Promise<string> {
   return withQueueJsonLock(async () => {
     const data = await loadQueue();
-    const id = nanoid(12);
+    const id = shortId();
 
     if (opts.dependsOn !== undefined) {
       const depItem = data.items.find((i) => i.id === opts.dependsOn);

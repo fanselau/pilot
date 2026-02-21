@@ -25,7 +25,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
   {
     "version": 1,
     "items": [{
-      "id": "nanoid",
+      "id": "4-char alphanumeric (e.g. a3x9)",
       "project": "string",
       "mode": "build-full | add-and-build | run-command",
       "description": "string",
@@ -47,7 +47,14 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
   }
   ```
 - [ ] `pilot add <project> <mode> [description]` — appends to items array, returns id
+- [ ] `pilot add --after <id>` — insert after specific item
+- [ ] `pilot add --before <id>` — insert before specific item  
+- [ ] `pilot add --next` — insert at top of pending items (after running/done, before all queued)
+- [ ] `pilot add --depends-on <id>` — set dependency (item waits until dep completes)
 - [ ] `pilot remove <id>` — removes queued item (not running)
+- [ ] `pilot move <id> --after <id>` — reorder existing item
+- [ ] `pilot move <id> --before <id>` — reorder existing item
+- [ ] `pilot move <id> --next` — move to top of pending
 - [ ] `pilot queue` — renders items table (human-readable), `--json` for raw
 - [ ] `pilot queue --history` — shows completed/failed from history array
 - [ ] `pilot run` reads from JSON, updates status in-place with proper file locking (`proper-lockfile`)
@@ -67,7 +74,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
 
 ### Nice to Have
 - [ ] `pilot queue --watch` — live-updating queue view
-- [ ] `pilot prioritize <id> --top` — reorder queue
+- [ ] `pilot queue --compact` — one-line-per-item view with just id + project + status
 - [ ] `pilot retry <id>` — re-queue a failed item from history
 - [ ] Queue events logged to post-mortem JSONL for analysis
 - [ ] `pilot queue --clear-history` — prune history
@@ -75,7 +82,7 @@ Pilot owns its queue as structured JSON. The CLI is the only interface. QUEUE.md
 ## Technical Notes
 
 - `proper-lockfile` already in the dependency list (Phase 3 spec)
-- nanoid for item IDs (short, URL-safe, no collisions)
+- Short human-typeable IDs: 4-char lowercase alphanumeric via nanoid with custom alphabet `0123456789abcdefghijklmnopqrstuvwxyz` size 4 (e.g., `a3x9`, `k2m7`). Must be easy to type in CLI flags.
 - `~/.pilot/` directory also good for future config, caches, credentials
 - Runner state machine (scan → launch → reap) stays the same, just reads JSON instead of parsing markdown
 - Items array is the source of truth — no separate PID files needed if we track status here

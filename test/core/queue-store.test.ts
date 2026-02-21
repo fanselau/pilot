@@ -72,11 +72,11 @@ describe('ensurePilotDir', () => {
 // ── addItem ────────────────────────────────────────────────────────────────
 
 describe('addItem', () => {
-  it('adds item with nanoid ID and correct defaults', async () => {
+  it('adds item with short alphanumeric ID and correct defaults', async () => {
     const id = await addItem({ project: 'my-app', mode: 'build-full' });
 
     expect(typeof id).toBe('string');
-    expect(id.length).toBe(12);
+    expect(id.length).toBe(4);
 
     const items = await getItems();
     expect(items).toHaveLength(1);
@@ -98,12 +98,12 @@ describe('addItem', () => {
     expect(item.addedAt).toBeTruthy();
   });
 
-  it('returns unique 12-char IDs', async () => {
+  it('returns unique 4-char IDs', async () => {
     const id1 = await addItem({ project: 'a', mode: 'm' });
     const id2 = await addItem({ project: 'b', mode: 'm' });
 
-    expect(id1.length).toBe(12);
-    expect(id2.length).toBe(12);
+    expect(id1.length).toBe(4);
+    expect(id2.length).toBe(4);
     expect(id1).not.toBe(id2);
   });
 
@@ -504,7 +504,7 @@ describe('circular dependency detection', () => {
     });
 
     // Now if addItem generates id=fakeNewId and depends on B, it would cycle
-    // We can't control nanoid, but we can test detectCircularDep is called
+    // We can't control ID generation, but we can test detectCircularDep is called
     // by verifying the function itself works (tested above)
     // This test just verifies the chain: non-existent dep allows add
     const id = await addItem({ project: 'a', mode: 'm', dependsOn: 'B' });
