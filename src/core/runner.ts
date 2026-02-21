@@ -8,9 +8,13 @@
  * Same-project items run sequentially. Cross-project items run in
  * parallel up to --max-parallel.
  *
- * Uses queue-store.ts for all queue CRUD (findLaunchable, markRunning,
- * markCompleted, markFailed, markQueued). Items tracked by short ID, not
- * line numbers.
+ * Default mode is **daemon**: the runner stays alive after draining,
+ * polling every `pollInterval` seconds for new entries added via
+ * `pilot add`.  Pass `--once` to drain-and-exit (CI/batch use).
+ *
+ * Uses queue-store.ts for all queue CRUD (findLaunchableAtomic,
+ * cascadeFailure, markCompleted, markFailed, markQueued). Items tracked
+ * by short ID, not line numbers.
  *
  * Success detection: new commits OR .planning changes OR clean exit 0.
  * (NOT ≥8 messages — phantom completion bug.)
@@ -25,7 +29,7 @@ import { execa } from 'execa';
 import treeKill from 'tree-kill';
 
 import { getConfig } from './config.js';
-import { findLaunchable, markRunning, markCompleted, markFailed, markQueued } from './queue-store.js';
+import { findLaunchableAtomic, cascadeFailure, markCompleted, markFailed, markQueued } from './queue-store.js';
 import { preSpawnChecks, spawnSession, truncateTitle } from './spawn.js';
 import { writePidFile, removePidFile, isProcessAlive } from './process.js';
 import { logPostmortem } from './postmortem.js';
@@ -70,6 +74,7 @@ export interface RunnerEvents {
   error: [message: string];
   shutdown: [];
   'dry-run': [item: QueueJsonItem];
+  idle: [];  // Emitted every 5 minutes when daemon is idle and watching for new entries
 }
 
 // ── Runner class ──────────────────────────────────────────────────────────
@@ -91,7 +96,7 @@ class Runner extends EventEmitter<RunnerEvents> {
     super();
     this.opts = opts;
     this.config = getConfig();
-    this.queuePidFile = 'queue';
+    this.queuePidFile = 'pilot-runner';
     this.state = {
       activeJobs: new Map(),
       exitCodes: new Map(),
@@ -116,55 +121,57 @@ class Runner extends EventEmitter<RunnerEvents> {
     // Write our PID file: gsd-queue-pid
     await writePidFile(this.queuePidFile, process.pid);
 
-    // Set up graceful shutdown on SIGTERM
+    // Set up graceful shutdown on SIGTERM and SIGINT (Ctrl+C)
     const sigHandler = () => {
       void this.shutdown();
     };
     process.on('SIGTERM', sigHandler);
+    process.on('SIGINT', sigHandler);
 
     try {
       await this.mainLoop();
     } finally {
       process.off('SIGTERM', sigHandler);
+      process.off('SIGINT', sigHandler);
       await removePidFile(this.queuePidFile);
     }
   }
 
   private async mainLoop(): Promise<void> {
+    let lastIdleLog = 0; // timestamp of last idle log message
+    const IDLE_LOG_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
     while (!this.state.isShuttingDown) {
       // Step 1: Reap dead processes
       await this.reap();
 
-      // Step 2: Scan for next launchable item
+      // Step 2: Check per-job timeouts on active jobs
+      await this.checkTimeouts();
+
+      // Step 3: Scan for next launchable item (atomic: holds lock during read+mark)
       this.emit('scan');
       const item = await this.scan();
 
       if (item !== null) {
-        if (this.state.activeJobs.size >= this.opts.maxParallel) {
-          // At capacity — wait for any completion then rescan
+        if (this.state.activeJobs.size > this.opts.maxParallel) {
+          // Over capacity — wait for any completion then rescan
           await this.waitForAnyCompletion();
           continue;
         }
 
-        // Launch
+        // Launch (item is already marked running by findLaunchableAtomic)
         if (this.opts.dryRun) {
           this.emit('dry-run', item);
         } else {
           await this.launch(item);
         }
 
-        // If --once and dry-run, process one item then check for more
+        // If --once and dry-run, scan all launchable then exit
         if (this.opts.once && this.opts.dryRun) {
-          // Dry-run once mode: scan all launchable then exit
           continue;
         }
       } else {
         // No launchable item found
-
-        if (this.opts.once) {
-          // --once: done scanning, break to wait-for-all block below
-          break;
-        }
 
         if (this.state.activeJobs.size > 0) {
           // Jobs still running — wait for any to finish, then rescan
@@ -172,23 +179,33 @@ class Runner extends EventEmitter<RunnerEvents> {
           continue;
         }
 
-        // Queue empty and no jobs running — done
-        break;
+        // Queue empty and no jobs running
+        if (this.opts.once) {
+          break; // --once: exit
+        }
+
+        // Daemon mode: log idle status periodically, then sleep and rescan
+        const now = Date.now();
+        if (now - lastIdleLog >= IDLE_LOG_INTERVAL) {
+          this.emit('idle');
+          lastIdleLog = now;
+        }
+
+        await sleep(this.opts.pollInterval * 1000);
+        continue;
       }
 
-      // Small delay to avoid CPU spin
+      // Small delay between launches to avoid CPU spin
       await sleep(1000);
     }
 
-    // Wait for all running jobs to complete before exiting.
-    // In --once mode, this drains launched jobs. In normal mode, the loop
-    // only breaks when activeJobs is empty, so this is a no-op.
-    if (!this.state.isShuttingDown) {
-      while (this.state.activeJobs.size > 0) {
-        await this.reap();
-        if (this.state.activeJobs.size > 0) {
-          await sleep(2000);
-        }
+    // Wait for all running jobs to complete before exiting (unconditional drain).
+    // On shutdown: waits for active jobs to finish naturally (NOT killed).
+    // On --once: drains launched jobs before exiting.
+    while (this.state.activeJobs.size > 0) {
+      await this.reap();
+      if (this.state.activeJobs.size > 0) {
+        await sleep(2000);
       }
     }
   }
@@ -198,11 +215,17 @@ class Runner extends EventEmitter<RunnerEvents> {
   /**
    * Find the next launchable item from queue.json via queue-store.
    *
+   * Uses findLaunchableAtomic which holds the lock during read+mark,
+   * preventing TOCTOU race where two runners launch the same item.
+   *
    * Launchability rules (spec §8):
    *   1. Status is 'queued'
    *   2. No other item for same project is in activeJobs
    *   3. dependsOn item is completed in history
    *   4. Active count < maxParallel
+   *
+   * Returns an item already marked as 'running' (attempts incremented),
+   * or null if nothing is launchable.
    */
   private async scan(): Promise<QueueJsonItem | null> {
     // Build set of projects currently running
@@ -212,7 +235,7 @@ class Runner extends EventEmitter<RunnerEvents> {
     }
 
     try {
-      return await findLaunchable(
+      return await findLaunchableAtomic(
         runningProjects,
         this.opts.maxParallel,
         this.state.activeJobs.size,
@@ -249,13 +272,8 @@ class Runner extends EventEmitter<RunnerEvents> {
     // Count commits before spawn (for success detection)
     const preCommitCount = await countGitCommits(projectDir);
 
-    // Mark item as running in queue.json
-    try {
-      await markRunning(item.id);
-    } catch (err) {
-      this.emit('error', `Failed to mark item as running: ${String(err)}`);
-      return;
-    }
+    // Item is already marked as running by findLaunchableAtomic (atomic read+mark).
+    // No separate markRunning call needed.
 
     const title = truncateTitle(item.project, item.mode, item.description || undefined);
     const logFile = path.join(this.config.logDir, `gsd-${title}.log`);
@@ -279,6 +297,8 @@ class Runner extends EventEmitter<RunnerEvents> {
    *
    * The lifecycle runs as an async fire-and-forget promise. When it
    * completes (or fails), we store the exit code for the reap cycle.
+   *
+   * Timeout is handled centrally by checkTimeouts() — no per-job setTimeout.
    */
   private async launchLifecycleMode(
     item: QueueJsonItem,
@@ -302,17 +322,6 @@ class Runner extends EventEmitter<RunnerEvents> {
     this.state.activeJobs.set(syntheticPid, job);
     this.emit('launch', item, syntheticPid);
 
-    // Per-job timeout (default 60 min, use meta.timeout if set)
-    const timeoutMinutes = typeof item.meta['timeout'] === 'number' ? item.meta['timeout'] : 60;
-    const timeoutMs = timeoutMinutes * 60 * 1000;
-    const timeoutId = setTimeout(() => {
-      // For lifecycle modes, timeout means we mark as failed
-      if (this.state.activeJobs.has(syntheticPid)) {
-        this.state.exitCodes.set(syntheticPid, -1);
-        this.emit('error', `Job ${title} timed out after ${timeoutMinutes} minutes`);
-      }
-    }, timeoutMs);
-
     // Fire and forget — lifecycle runs in background, stores exit code on completion
     void (async () => {
       try {
@@ -321,8 +330,6 @@ class Runner extends EventEmitter<RunnerEvents> {
       } catch (err) {
         this.emit('error', `Lifecycle mode ${item.mode} failed for ${item.project}: ${String(err)}`);
         this.state.exitCodes.set(syntheticPid, 1);
-      } finally {
-        clearTimeout(timeoutId);
       }
     })();
   }
@@ -331,6 +338,7 @@ class Runner extends EventEmitter<RunnerEvents> {
    * Launch a direct session spawn (run-command mode or any non-lifecycle mode).
    *
    * Spawns a single detached AI session and tracks it by real OS PID.
+   * Timeout is handled centrally by checkTimeouts() — no per-job setTimeout.
    */
   private async launchDirectSpawn(
     item: QueueJsonItem,
@@ -386,13 +394,6 @@ class Runner extends EventEmitter<RunnerEvents> {
         this.state.exitCodes.set(pid, exitCode);
       });
     }
-
-    // Per-job timeout (default 60 min, use meta.timeout if set)
-    const timeoutMinutes = typeof item.meta['timeout'] === 'number' ? item.meta['timeout'] : 60;
-    const timeoutMs = timeoutMinutes * 60 * 1000;
-    setTimeout(() => {
-      void this.handleJobTimeout(job);
-    }, timeoutMs);
 
     this.emit('launch', item, pid);
   }
@@ -476,14 +477,15 @@ class Runner extends EventEmitter<RunnerEvents> {
       }
     }
 
-    // Determine result
+    // Determine result — uses per-item maxAttempts (attempts already incremented
+    // by findLaunchableAtomic on launch)
     let result: 'success' | 'success_no_artifacts' | 'retry' | 'failed';
 
     if (newCommits > 0 || planningChanges) {
       result = 'success';
     } else if (exitCode === 0) {
       result = 'success_no_artifacts';
-    } else if (job.retries < this.opts.maxRetries) {
+    } else if (job.item.attempts < job.item.maxAttempts) {
       result = 'retry';
     } else {
       result = 'failed';
@@ -494,10 +496,18 @@ class Runner extends EventEmitter<RunnerEvents> {
       if (result === 'success' || result === 'success_no_artifacts') {
         await markCompleted(job.item.id);
       } else if (result === 'retry') {
-        job.retries++;
         await markQueued(job.item.id);
       } else {
         await markFailed(job.item.id, `exit code ${exitCode}`);
+        // Cascade failure to transitive dependents
+        try {
+          const blockedIds = await cascadeFailure(job.item.id);
+          if (blockedIds.length > 0) {
+            this.emit('error', `Blocked ${blockedIds.length} dependent item(s) due to failure of ${job.item.project}`);
+          }
+        } catch (cascadeErr) {
+          this.emit('error', `Failed to cascade failure: ${String(cascadeErr)}`);
+        }
       }
     } catch (err) {
       this.emit('error', `Failed to update queue item: ${String(err)}`);
@@ -531,42 +541,61 @@ class Runner extends EventEmitter<RunnerEvents> {
     this.emit('complete', job.item, result);
   }
 
-  // ── Job timeout ───────────────────────────────────────────────────────
+  // ── Timeout checking ───────────────────────────────────────────────────
 
   /**
-   * Handle a per-job timeout. Kill the process tree and treat as failure.
-   * For real PIDs, kills the process tree. For synthetic PIDs (lifecycle
-   * modes), the timeout handler in launchLifecycleMode sets the exit code.
+   * Check all active jobs for timeout violations.
+   *
+   * Called once per main loop iteration (centralized, replaces individual
+   * setTimeout per job). Uses per-item meta.timeout if set, falling back
+   * to config.defaultTimeout. timeout=0 disables the timeout entirely.
+   *
+   * Timed-out real PIDs get their process tree killed (SIGTERM to group
+   * first, then tree-kill SIGKILL). Synthetic PIDs get an exit code set
+   * so they are reaped in the next cycle.
    */
-  private async handleJobTimeout(job: RunnerJob): Promise<void> {
-    // Only if still active
-    if (!this.state.activeJobs.has(job.pid)) {
-      return;
-    }
+  private async checkTimeouts(): Promise<void> {
+    for (const [pid, job] of this.state.activeJobs) {
+      const timeoutMinutes = typeof job.item.meta['timeout'] === 'number'
+        ? job.item.meta['timeout']
+        : this.config.defaultTimeout;
 
-    const jobTimeout = typeof job.item.meta['timeout'] === 'number' ? job.item.meta['timeout'] : 60;
-    this.emit('error', `Job ${job.title} timed out after ${jobTimeout} minutes`);
+      // timeout=0 means no timeout
+      if (timeoutMinutes === 0) continue;
 
-    if (job.pid > 0) {
-      // Real PID — kill the process tree
-      await killProcessTree(job.pid);
-      // Will be reaped in next cycle as dead process
+      const elapsedMs = Date.now() - job.startTime;
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+
+      if (elapsedMs > timeoutMs) {
+        this.emit('error', `Job ${job.title} timed out after ${timeoutMinutes} minutes`);
+
+        if (pid > 0) {
+          // Real PID — kill the entire process group with SIGTERM first
+          try { process.kill(-pid, 'SIGTERM'); } catch { /* process group may not exist */ }
+          // Wait briefly then force kill the tree
+          await sleep(5000);
+          if (isProcessAlive(pid)) {
+            await killProcessTree(pid);
+          }
+        }
+        // For synthetic PIDs (lifecycle modes), set exit code to trigger reap
+        this.state.exitCodes.set(pid, -1);
+      }
     }
-    // Synthetic PIDs: timeout handled in launchLifecycleMode
   }
 
   // ── Graceful shutdown ─────────────────────────────────────────────────
 
   /**
-   * Graceful shutdown (spec §5 — SIGTERM handler).
+   * Graceful shutdown.
    *
-   * 1. Stop scan loop
-   * 2. SIGTERM all active children
-   * 3. Wait 15 seconds
-   * 4. SIGKILL survivors via tree-kill
-   * 5. Mark running entries back to pending
-   * 6. Clean up PID files
-   * 7. Remove runner PID file
+   * Sets isShuttingDown flag, which causes mainLoop to stop scanning
+   * for new items. Active jobs finish naturally — they are NOT killed.
+   * The post-loop drain block in mainLoop() waits for all active jobs
+   * to complete before returning.
+   *
+   * Force-killing is handled externally by `pilot stop --force`.
+   * PID file cleanup happens in start()'s finally block.
    */
   async shutdown(): Promise<void> {
     if (this.state.isShuttingDown) {
@@ -574,49 +603,8 @@ class Runner extends EventEmitter<RunnerEvents> {
     }
     this.state.isShuttingDown = true;
     this.emit('shutdown');
-
-    const activeJobs = [...this.state.activeJobs.values()];
-
-    // Step 1: Send SIGTERM to all active children (real PIDs only)
-    for (const job of activeJobs) {
-      if (job.pid > 0) {
-        try {
-          process.kill(job.pid, 'SIGTERM');
-        } catch {
-          // Process may already be dead
-        }
-      }
-    }
-
-    // Step 2: Wait 15 seconds
-    await sleep(15_000);
-
-    // Step 3: SIGKILL survivors via tree-kill (real PIDs only)
-    for (const job of activeJobs) {
-      if (job.pid > 0 && isProcessAlive(job.pid)) {
-        await killProcessTree(job.pid);
-      }
-    }
-
-    // Step 4: Mark running items back to queued via queue-store
-    for (const job of activeJobs) {
-      try {
-        await markQueued(job.item.id);
-      } catch {
-        // Best effort
-      }
-    }
-
-    // Step 5: Clean up PID files
-    for (const job of activeJobs) {
-      try {
-        await removePidFile(job.title);
-      } catch {
-        // Best effort
-      }
-    }
-
-    // Runner PID file cleaned up in start() finally block
+    // Active jobs drain in the post-loop block of mainLoop()
+    // PID file cleaned up in start() finally block
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ async function statusCommand(opts: StatusOpts): Promise<void> {
   let runnerPid: number | null = null;
   let runnerUptime: number | null = null;
   try {
-    const queuePid = await readPidFile('queue');
+    const queuePid = await readPidFile('pilot-runner');
     if (queuePid !== null && isProcessAlive(queuePid)) {
       runnerActive = true;
       runnerPid = queuePid;

@@ -1,8 +1,9 @@
 /**
  * pilot stop — Stop queue runner.
  *
- * Reads the runner PID from gsd-queue-pid, sends SIGTERM, waits up to 30s
- * for clean exit.  With --force, sends SIGKILL via tree-kill after timeout.
+ * Reads the runner PID from gsd-pilot-runner-pid, sends SIGTERM, waits up
+ * to 30s for clean exit.  With --force, sends SIGKILL via tree-kill after
+ * timeout.
  */
 
 import treeKill from 'tree-kill';
@@ -29,13 +30,13 @@ function sleep(ms: number): Promise<void> {
 export async function stopCommand(opts: Record<string, unknown>): Promise<void> {
   void getConfig(); // validate config loads
 
-  // Read runner PID file (gsd-queue-pid)
-  const pid = await readPidFile('queue');
+  // Read runner PID file (gsd-pilot-runner-pid)
+  const pid = await readPidFile('pilot-runner');
 
   if (pid === null || !isProcessAlive(pid)) {
     // Clean up stale PID file if it exists
     if (pid !== null) {
-      await removePidFile('queue');
+      await removePidFile('pilot-runner');
     }
 
     if (isJsonMode()) {
@@ -83,7 +84,7 @@ export async function stopCommand(opts: Record<string, unknown>): Promise<void> 
   }
 
   // Clean up PID file
-  await removePidFile('queue');
+  await removePidFile('pilot-runner');
 
   if (isJsonMode()) {
     outputJson({ status: 'stopped', pid });

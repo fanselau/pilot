@@ -147,6 +147,14 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     }
   });
 
+  runner.on('idle', () => {
+    const msg = 'Watching for new queue entries...';
+    logger.log(msg);
+    if (!isJsonMode()) {
+      outputHuman(`[${formatTime()}] ${msg}`);
+    }
+  });
+
   runner.on('shutdown', () => {
     logger.log('Shutting down...');
     if (!isJsonMode()) {

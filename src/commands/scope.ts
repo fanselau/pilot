@@ -59,7 +59,7 @@ export async function scopeCommand(
     });
 
     // Start runner if not active
-    const runnerPid = await readPidFile('queue');
+    const runnerPid = await readPidFile('pilot-runner');
     const runnerAlive = runnerPid !== null && isProcessAlive(runnerPid);
 
     if (!runnerAlive) {

@@ -29,7 +29,7 @@ export async function buildCommand(
   let runnerStarted = false;
 
   if (shouldRun && !addResult.dryRun) {
-    const runnerPid = await readPidFile('queue');
+    const runnerPid = await readPidFile('pilot-runner');
     const runnerAlive = runnerPid !== null && isProcessAlive(runnerPid);
 
     if (runnerAlive) {
