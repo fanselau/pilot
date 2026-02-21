@@ -8,7 +8,17 @@
  * Pure core module — no UI dependencies.
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
+import {
+  writeFileSync,
+  renameSync,
+  copyFileSync,
+  openSync,
+  fsyncSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+} from 'node:fs';
 import { lock } from 'proper-lockfile';
 /**
  * Generate a short human-typeable ID: 4 lowercase alphanumeric chars.
@@ -27,7 +37,7 @@ function shortId(): string {
 import { getConfig } from './config.js';
 import type { QueueJsonFile, QueueJsonItem, QueueHistoryItem } from './types.js';
 
-const MAX_HISTORY = 100;
+const MAX_HISTORY = 200;
 
 // ── File I/O ───────────────────────────────────────────────────────────────
 
@@ -40,35 +50,119 @@ async function ensurePilotDir(): Promise<void> {
 }
 
 /**
+ * Try to parse JSON, with fallback to trimming trailing garbage
+ * from a truncated write (strip everything after last `}`).
+ */
+function tryParseJson(raw: string): QueueJsonFile | null {
+  try {
+    return JSON.parse(raw) as QueueJsonFile;
+  } catch {
+    // Try trimming trailing garbage (truncated write)
+    const lastBrace = raw.lastIndexOf('}');
+    if (lastBrace > 0) {
+      try {
+        return JSON.parse(raw.slice(0, lastBrace + 1)) as QueueJsonFile;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+/**
  * Load queue from ~/.pilot/queue.json.
  * Returns empty queue if file doesn't exist.
+ *
+ * Recovery chain on corrupt data:
+ * 1. Try parsing normally
+ * 2. Try trimming trailing garbage (truncated write)
+ * 3. Try reading queue.json.bak
+ * 4. Return empty queue
  */
 async function loadQueue(): Promise<QueueJsonFile> {
   const config = getConfig();
+  let raw: string;
+
   try {
-    const raw = await readFile(config.queueJsonFile, 'utf8');
-    const data = JSON.parse(raw) as QueueJsonFile;
-    // Backward compat: old queue.json files may lack completedIds
-    if (!Array.isArray(data.completedIds)) {
-      data.completedIds = [];
-    }
-    return data;
+    raw = await readFile(config.queueJsonFile, 'utf8');
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       return { version: 1, items: [], history: [], completedIds: [] };
     }
     throw err;
   }
+
+  // Step 1+2: Try parsing (with truncation fallback)
+  const data = tryParseJson(raw);
+  if (data !== null) {
+    // Backward compat: old queue.json files may lack completedIds
+    if (!Array.isArray(data.completedIds)) {
+      data.completedIds = [];
+    }
+    return data;
+  }
+
+  // Step 3: Try reading backup
+  process.stderr.write('[queue-store] Recovered from corrupt queue.json — trying backup\n');
+  const bakPath = config.queueJsonFile + '.bak';
+  try {
+    const bakRaw = await readFile(bakPath, 'utf8');
+    const bakData = tryParseJson(bakRaw);
+    if (bakData !== null) {
+      process.stderr.write('[queue-store] Using backup queue.json.bak\n');
+      if (!Array.isArray(bakData.completedIds)) {
+        bakData.completedIds = [];
+      }
+      return bakData;
+    }
+  } catch {
+    // Backup doesn't exist or unreadable — fall through
+  }
+
+  // Step 4: Return empty queue
+  process.stderr.write('[queue-store] Backup also corrupt or missing — starting with empty queue\n');
+  return { version: 1, items: [], history: [], completedIds: [] };
 }
 
 /**
  * Save queue to ~/.pilot/queue.json with 2-space indent.
  * Creates ~/.pilot/ directory if needed.
+ *
+ * Crash-safe write sequence:
+ * 1. Backup current queue.json to queue.json.bak (sync)
+ * 2. Write to queue.json.tmp (sync)
+ * 3. fsync the temp file to flush to disk
+ * 4. Atomic rename tmp → queue.json (rename is atomic on Linux same-filesystem)
  */
 async function saveQueue(data: QueueJsonFile): Promise<void> {
   const config = getConfig();
-  await ensurePilotDir();
-  await writeFile(config.queueJsonFile, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  // Ensure directory exists (sync to avoid race with writeFileSync)
+  mkdirSync(config.pilotDir, { recursive: true });
+
+  const filePath = config.queueJsonFile;
+  const tmpPath = filePath + '.tmp';
+  const bakPath = filePath + '.bak';
+
+  // Step 1: Backup current file (skip if it doesn't exist yet)
+  if (existsSync(filePath)) {
+    copyFileSync(filePath, bakPath);
+  }
+
+  // Step 2: Write to temp file
+  const content = JSON.stringify(data, null, 2) + '\n';
+  writeFileSync(tmpPath, content, 'utf8');
+
+  // Step 3: fsync to flush to disk
+  const fd = openSync(tmpPath, 'r');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+
+  // Step 4: Atomic rename
+  renameSync(tmpPath, filePath);
 }
 
 // ── File Locking ───────────────────────────────────────────────────────────
@@ -274,7 +368,7 @@ async function findLaunchable(
     if (runningProjects.has(item.project)) continue;
 
     if (item.dependsOn !== null) {
-      // Use completedIds (never pruned) instead of history (capped at 100)
+      // Use completedIds (never pruned) instead of history (capped at 200)
       if (!data.completedIds.includes(item.dependsOn)) continue;
     }
 
@@ -313,7 +407,7 @@ async function findLaunchableAtomic(
       if (runningProjects.has(item.project)) continue;
 
       if (item.dependsOn !== null) {
-        // Use completedIds (never pruned) instead of history (capped at 100)
+        // Use completedIds (never pruned) instead of history (capped at 200)
         if (!data.completedIds.includes(item.dependsOn)) continue;
       }
 
@@ -373,7 +467,7 @@ async function markCompleted(id: string): Promise<void> {
     data.history.push(historyItem);
     data.history = capHistory(data.history);
 
-    // Track in completedIds — never pruned (unlike history which caps at 100).
+    // Track in completedIds — never pruned (unlike history which caps at 200).
     // This is the source of truth for dependency resolution.
     if (!data.completedIds.includes(id)) {
       data.completedIds.push(id);
