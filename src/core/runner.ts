@@ -158,6 +158,12 @@ class Runner extends EventEmitter<RunnerEvents> {
         }
       } else {
         // No launchable entry found
+
+        if (this.opts.once) {
+          // --once: done scanning, break to wait-for-all block below
+          break;
+        }
+
         if (this.state.activeJobs.size > 0) {
           // Jobs still running — wait for any to finish, then rescan
           await this.waitForAnyCompletion();
@@ -168,18 +174,14 @@ class Runner extends EventEmitter<RunnerEvents> {
         break;
       }
 
-      // If --once flag and we just launched something, continue scanning
-      // but don't loop after all entries have been processed
-      if (this.opts.once && entry === null) {
-        break;
-      }
-
       // Small delay to avoid CPU spin
       await sleep(1000);
     }
 
-    // If --once, wait for all running jobs to complete before exiting
-    if (this.opts.once && !this.state.isShuttingDown) {
+    // Wait for all running jobs to complete before exiting.
+    // In --once mode, this drains launched jobs. In normal mode, the loop
+    // only breaks when activeJobs is empty, so this is a no-op.
+    if (!this.state.isShuttingDown) {
       while (this.state.activeJobs.size > 0) {
         await this.reap();
         if (this.state.activeJobs.size > 0) {
