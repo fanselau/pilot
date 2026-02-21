@@ -1,11 +1,14 @@
 /**
- * QUEUE.md v5 parser — read, parse, and mark queue entries.
+ * QUEUE.md v5 parser — LEGACY MODULE.
  *
- * Parses the pipe-delimited markdown format used by the Pilot queue system.
+ * Only used by `pilot import` to read the old QUEUE.md format for
+ * one-time migration to queue.json. Not used by any runtime code path.
+ *
+ * Do NOT add new consumers of this module.
+ *
+ * Parses the pipe-delimited markdown format used by the old Pilot queue system.
  * Supports 4 status types: pending, running (🔨), done (✅ DONE:), failed (❌ FAIL:).
  * Extracts project, mode, args, metadata (depends-on, timeout), and description.
- *
- * Used by: pilot queue, pilot status, pilot run, pilot add.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -147,6 +150,9 @@ export async function parseQueueFile(filePath: string): Promise<QueueEntry[]> {
 // ── markEntry ──────────────────────────────────────────────────────────────
 
 /**
+ * @deprecated No longer called by any runtime code. Retained for backward
+ * compatibility with tests. All queue mutations now go through queue-store.ts.
+ *
  * Mark an entry at a specific line number with a new status.
  *
  * Reads the file, modifies the header at `lineNum`, and writes back.

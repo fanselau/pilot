@@ -1,3 +1,4 @@
+// Tests for legacy QUEUE.md parser (used by pilot import)
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

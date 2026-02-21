@@ -34,18 +34,34 @@ vi.mock('../../src/core/sessions.js', () => ({
   clearSessionCache: vi.fn(),
 }));
 
-vi.mock('../../src/core/queue-parser.js', () => ({
-  parseQueueFile: vi.fn().mockResolvedValue([
+vi.mock('../../src/core/queue-store.js', () => ({
+  getItems: vi.fn().mockResolvedValue([
     {
-      lineNum: 1,
+      id: 'ab12',
       project: 'queued-project',
       mode: 'continue',
-      args: '',
-      status: 'pending' as const,
+      description: '',
+      status: 'queued' as const,
+      addedAt: '2026-02-20T10:00:00Z',
+      startedAt: null,
+      completedAt: null,
+      phase: null,
+      attempts: 0,
+      maxAttempts: 3,
+      dependsOn: null,
+      error: null,
+      meta: {},
     },
   ]),
-  parseQueue: vi.fn(),
-  markEntry: vi.fn(),
+  getHistory: vi.fn().mockResolvedValue([]),
+  addItem: vi.fn(),
+  removeItem: vi.fn(),
+  markRunning: vi.fn(),
+  markCompleted: vi.fn(),
+  markFailed: vi.fn(),
+  markQueued: vi.fn(),
+  findLaunchable: vi.fn(),
+  getItemById: vi.fn(),
 }));
 
 vi.mock('../../src/core/process.js', () => ({

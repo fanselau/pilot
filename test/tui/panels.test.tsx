@@ -172,16 +172,25 @@ describe('QueuePanel', () => {
     expect(lastFrame()).toContain('Queue empty');
   });
 
-  it('renders pending entries with ○ prefix', () => {
+  it('renders queued entries with ○ prefix', () => {
     const { lastFrame } = renderComponent(
       <QueuePanel
         entries={[
           {
-            lineNum: 1,
+            id: 'ab12',
             project: 'my-project',
             mode: 'continue',
-            args: '',
-            status: 'pending' as const,
+            description: '',
+            status: 'queued' as const,
+            addedAt: '2026-02-20T10:00:00Z',
+            startedAt: null,
+            completedAt: null,
+            phase: null,
+            attempts: 0,
+            maxAttempts: 3,
+            dependsOn: null,
+            error: null,
+            meta: {},
           },
         ]}
         active={false}
@@ -201,11 +210,20 @@ describe('QueuePanel', () => {
       <QueuePanel
         entries={[
           {
-            lineNum: 1,
+            id: 'cd34',
             project: 'my-project',
             mode: 'continue',
-            args: '',
+            description: '',
             status: 'running' as const,
+            addedAt: '2026-02-20T10:00:00Z',
+            startedAt: '2026-02-20T10:05:00Z',
+            completedAt: null,
+            phase: null,
+            attempts: 1,
+            maxAttempts: 3,
+            dependsOn: null,
+            error: null,
+            meta: {},
           },
         ]}
         active={false}

@@ -10,7 +10,7 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { getConfig } from './config.js';
 import { detectPlanningState } from './projects.js';
-import { parseQueueFile } from './queue-parser.js';
+import { getItems } from './queue-store.js';
 import type {
   SmartAddScope,
   ScopeDetectionResult,
@@ -241,21 +241,21 @@ async function detectProjectState(project: string, config?: PilotConfig): Promis
 
   // Check queue status
   try {
-    const entries = await parseQueueFile(resolvedConfig.queueFile);
-    for (const entry of entries) {
-      if (entry.project === project) {
-        if (entry.status === 'pending') {
+    const items = await getItems();
+    for (const item of items) {
+      if (item.project === project) {
+        if (item.status === 'queued') {
           result.isQueued = true;
-          result.queuedMode = entry.mode;
+          result.queuedMode = item.mode;
         }
-        if (entry.status === 'running') {
+        if (item.status === 'running') {
           result.isRunning = true;
-          result.runningPhase = entry.args || null;
+          result.runningPhase = item.description || null;
         }
       }
     }
   } catch {
-    // Queue file may not exist — not an error
+    // Queue store may not exist — not an error
   }
 
   return result;
