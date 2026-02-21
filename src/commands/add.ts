@@ -144,8 +144,10 @@ export async function addCommand(
 
   // ── Step 6: Auto-setup if .opencode/ missing ───────────────────────────
 
+  const silent = opts['silent'] === true;
+
   if (projectState.needsSetup) {
-    if (!isJsonMode()) {
+    if (!isJsonMode() && !silent) {
       outputHuman(`${dim('→')} Running setup for ${project}...`);
     }
     await setupProject(projectDir);
@@ -153,7 +155,7 @@ export async function addCommand(
 
   // ── Step 7: Warn if already queued/running ─────────────────────────────
 
-  if (!isJsonMode()) {
+  if (!isJsonMode() && !silent) {
     if (projectState.isQueued) {
       outputHuman(yellow(`⚠ ${project} is already queued (${projectState.queuedMode})`));
     }
@@ -193,7 +195,7 @@ export async function addCommand(
 
   // ── Step 11: Log scope detection decision ───────────────────────────────
 
-  if (!isJsonMode()) {
+  if (!isJsonMode() && !silent) {
     outputHuman(`${dim('→')} Detected: ${scopeResult.scope} (${scopeResult.rationale})`);
   }
 
@@ -209,7 +211,7 @@ export async function addCommand(
         description,
         requirementsPath,
       });
-    } else {
+    } else if (!silent) {
       outputHuman(`Dry run — would queue:`);
       outputHuman(`  Project: ${project}`);
       outputHuman(`  Scope: ${scopeResult.scope}`);
@@ -232,20 +234,33 @@ export async function addCommand(
 
   // ── Step 13: Write to queue.json ────────────────────────────────────────
 
+  const timeout = opts['timeout'] !== undefined ? parseInt(opts['timeout'] as string, 10) : undefined;
+  const meta: Record<string, unknown> = {};
+  if (timeout !== undefined && !isNaN(timeout)) {
+    meta['timeout'] = timeout;
+  }
+
   const id = await addItem({
     project,
     mode: internalMode,
     description: description || '',
+    meta: Object.keys(meta).length > 0 ? meta : undefined,
   });
 
   // ── Step 14: Output result ──────────────────────────────────────────────
 
-  if (!isJsonMode()) {
+  if (!isJsonMode() && !silent) {
     outputHuman(`✓ Queued (${id}): ${project} | ${scopeResult.scope} → ${internalMode}`);
     if (requirementsPath) {
       outputHuman(`  Requirements: ${requirementsPath}`);
     }
-    outputHuman(`Run ${dim('pilot run')} to start building`);
+    // Check if runner is active and show hint
+    const { readPidFile: readPid, isProcessAlive: isPidAlive } = await import('../core/process.js');
+    const runnerPid = await readPid('pilot-runner');
+    const runnerActive = runnerPid !== null && isPidAlive(runnerPid);
+    if (!runnerActive) {
+      outputHuman(dim('Runner not active. Start with: pilot run'));
+    }
   }
 
   return {

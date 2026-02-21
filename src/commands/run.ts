@@ -1,9 +1,13 @@
 /**
- * pilot run — Start queue runner.
+ * pilot run — Start queue runner (daemon mode by default).
  *
  * Creates and starts the queue runner state machine with parsed options.
- * Listens for runner events and formats human-readable output.
- * Handles --dry-run by collecting dry-run events and outputting as JSON.
+ * Default mode is daemon: stays alive watching for new queue entries.
+ * With --once: processes the queue once and exits.
+ *
+ * TTY detection: when stdout is not a TTY (systemd, backgrounded),
+ * suppress human-readable output — the runner log file captures all events.
+ *
  * Writes its own log to ~/.pilot/logs/runner-YYYY-MM-DD.log.
  * Sends webhook notifications on complete/fail events.
  */
@@ -33,10 +37,14 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     pollInterval: config.pollInterval,
   };
 
+  // ── TTY detection — suppress stdout when running as daemon (not TTY) ──
+  const isTTY = process.stdout.isTTY === true;
+  const modeLabel = runnerOpts.once ? 'once' : 'daemon';
+
   // ── Runner log setup ────────────────────────────────────────────────
   const logger = createRunnerLogger();
   rotateRunnerLogs(7);
-  logger.log(`Runner starting (PID: ${process.pid})`);
+  logger.log(`Runner starting in ${modeLabel} mode (PID: ${process.pid})`);
   logger.log(`  max-parallel: ${runnerOpts.maxParallel}, max-retries: ${runnerOpts.maxRetries}`);
 
   // ── Notification config ─────────────────────────────────────────────
@@ -80,9 +88,9 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  // Human-readable event listeners
-  if (!isJsonMode()) {
-    outputHuman(`Pilot Queue Runner started (PID: ${process.pid})`);
+  // Human-readable event listeners (only when stdout is a TTY)
+  if (!isJsonMode() && isTTY) {
+    outputHuman(`Pilot Queue Runner starting in ${modeLabel} mode (PID: ${process.pid})`);
     outputHuman(`  max-parallel: ${runnerOpts.maxParallel}`);
     outputHuman(`  max-retries: ${runnerOpts.maxRetries}`);
     outputHuman(`  queue: ${config.queueFile}`);
@@ -92,7 +100,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
 
   runner.on('scan', () => {
     logger.log('Scanning queue...');
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] Scanning queue...`);
     }
   });
@@ -100,7 +108,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   runner.on('launch', (item: QueueJsonItem, pid: number) => {
     const msg = `Launching: ${item.project} | ${item.mode} (PID ${pid})`;
     logger.log(msg);
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] ${msg}`);
     }
   });
@@ -108,7 +116,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   runner.on('dry-run', (item: QueueJsonItem) => {
     const msg = `Would launch: ${item.project} | ${item.mode}${item.description ? ' | ' + item.description : ''}`;
     logger.log(msg);
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] ${msg}`);
     }
   });
@@ -116,7 +124,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   runner.on('complete', (item: QueueJsonItem, result: string) => {
     const msg = `Completed: ${item.project} (${result})`;
     logger.log(msg);
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] ${msg}`);
     }
 
@@ -132,7 +140,7 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
 
   runner.on('error', (message: string) => {
     logger.log(`Error: ${message}`);
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] Error: ${message}`);
     }
 
@@ -150,14 +158,14 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
   runner.on('idle', () => {
     const msg = 'Watching for new queue entries...';
     logger.log(msg);
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] ${msg}`);
     }
   });
 
   runner.on('shutdown', () => {
     logger.log('Shutting down...');
-    if (!isJsonMode()) {
+    if (!isJsonMode() && isTTY) {
       outputHuman(`[${formatTime()}] Shutting down...`);
     }
   });
@@ -172,11 +180,14 @@ export async function runCommand(opts: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
-  const exitMsg = 'Queue empty, all jobs complete. Exiting.';
-  logger.log(exitMsg);
-  logger.close();
-
-  if (!isJsonMode()) {
-    outputHuman(`[${formatTime()}] ${exitMsg}`);
+  if (runnerOpts.once) {
+    const exitMsg = 'Queue empty, all jobs complete. Exiting.';
+    logger.log(exitMsg);
+    if (!isJsonMode() && isTTY) {
+      outputHuman(`[${formatTime()}] ${exitMsg}`);
+    }
+  } else {
+    logger.log('Runner stopped.');
   }
+  logger.close();
 }
