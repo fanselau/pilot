@@ -6,6 +6,8 @@ import type { PilotConfig, ProjectStateResult } from '../../src/core/types.js';
 const testConfig: PilotConfig = {
   projectDir: '/test/projects',
   queueFile: '/test/QUEUE.md',
+  pilotDir: '/test/.pilot',
+  queueJsonFile: '/test/.pilot/queue.json',
   logDir: '/tmp',
   stuckThreshold: 90,
   gsdDir: '/test/pilot-gsd',
@@ -23,8 +25,8 @@ vi.mock('../../src/core/projects.js', () => ({
   detectPlanningState: vi.fn(),
 }));
 
-vi.mock('../../src/core/queue-parser.js', () => ({
-  parseQueueFile: vi.fn(),
+vi.mock('../../src/core/queue-store.js', () => ({
+  getItems: vi.fn(),
 }));
 
 vi.mock('../../src/core/config.js', () => ({
@@ -45,7 +47,7 @@ import {
 
 import { access } from 'node:fs/promises';
 import { detectPlanningState } from '../../src/core/projects.js';
-import { parseQueueFile } from '../../src/core/queue-parser.js';
+import { getItems } from '../../src/core/queue-store.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -260,7 +262,7 @@ describe('generateRequirementsContent', () => {
 describe('detectProjectState', () => {
   const mockedAccess = vi.mocked(access);
   const mockedDetectPlanningState = vi.mocked(detectPlanningState);
-  const mockedParseQueueFile = vi.mocked(parseQueueFile);
+  const mockedGetItems = vi.mocked(getItems);
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -272,7 +274,7 @@ describe('detectProjectState', () => {
       progress: { done: 2, total: 5, percent: 40 },
     });
     // Default: empty queue
-    mockedParseQueueFile.mockResolvedValue([]);
+    mockedGetItems.mockResolvedValue([]);
   });
 
   it('detects project directory does not exist', async () => {
@@ -338,14 +340,23 @@ describe('detectProjectState', () => {
     expect(result.allPhasesDone).toBe(false);
   });
 
-  it('detects project already queued in QUEUE.md', async () => {
-    mockedParseQueueFile.mockResolvedValue([
+  it('detects project already queued in queue.json', async () => {
+    mockedGetItems.mockResolvedValue([
       {
-        lineNum: 1,
+        id: 'ab12',
         project: 'myproject',
-        status: 'pending',
+        status: 'queued' as const,
         mode: 'build-full',
-        args: '',
+        description: '',
+        addedAt: '2026-02-20T10:00:00Z',
+        startedAt: null,
+        completedAt: null,
+        phase: null,
+        attempts: 0,
+        maxAttempts: 3,
+        dependsOn: null,
+        error: null,
+        meta: {},
       },
     ]);
 
@@ -354,14 +365,23 @@ describe('detectProjectState', () => {
     expect(result.queuedMode).toBe('build-full');
   });
 
-  it('detects project currently running in QUEUE.md', async () => {
-    mockedParseQueueFile.mockResolvedValue([
+  it('detects project currently running in queue.json', async () => {
+    mockedGetItems.mockResolvedValue([
       {
-        lineNum: 1,
+        id: 'cd34',
         project: 'myproject',
-        status: 'running',
+        status: 'running' as const,
         mode: 'continue-all',
-        args: 'Phase 3',
+        description: 'Phase 3',
+        addedAt: '2026-02-20T10:00:00Z',
+        startedAt: '2026-02-20T10:05:00Z',
+        completedAt: null,
+        phase: null,
+        attempts: 1,
+        maxAttempts: 3,
+        dependsOn: null,
+        error: null,
+        meta: {},
       },
     ]);
 

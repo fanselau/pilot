@@ -1,10 +1,7 @@
 /**
- * @deprecated Use queue-store.ts withQueueJsonLock instead.
- * This module locks QUEUE.md for legacy markdown queue operations.
- * Will be removed after all consumers migrate to queue-store.
- *
- * Remaining consumers: src/commands/add.ts, src/commands/scope.ts
- * (will be migrated in Plan 03).
+ * @deprecated — Legacy QUEUE.md file locking.
+ * All queue operations now use queue-store.ts with its own locking.
+ * This module is retained for backward compatibility but has no runtime consumers.
  *
  * Wraps any async callback with file locking on the QUEUE.md path.
  * Stale timeout: 30s. Retry with exponential backoff for contention.
