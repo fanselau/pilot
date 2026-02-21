@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 5
+## Current Phase: 6
 
 ## Current Position
 
-Phase: 5 of 13 (Integration fixes per requirements/integration-fixes.md)
-Plan: 4 of 4 in current phase
-Status: Phase complete, verified ✓ (10/10 must-haves)
-Last activity: 2026-02-21 - Phase 5 complete, verified 10/10 must-haves
+Phase: 6 of 13 (Queue storage migration per requirements/queue-storage-migration.md)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed 06-01-PLAN.md
 
-Progress: █████████████████████████ 100% (36/36 plans)
+Progress: █████████████████████████ 100% (37/40 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 5 complete — integration fixes verified
+**Current focus:** Phase 6 in progress — queue storage migration (1/4 plans)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
-- **Status:** not planned (0/0 plans)
+- **Status:** in progress (1/4 plans complete)
 
 ### Phase 7: Smart add per requirements/smart-add.md
 - **Status:** complete (2/4 plans executed [gap closure 03+04], verified ✓)
@@ -148,9 +148,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 05-03 | Best-effort upstream tracking before explicit pull | Graceful degradation on fresh clones |
 | 05-04 | Setup tests use real filesystem (mkdtemp) for symlink verification | Integration-level testing more reliable than mocking fs for symlink behavior |
 | 05-04 | Runner tests use mock exit event instead of fake timers | Avoids timeout issues with runner's sleep-based polling loops |
+| 06-01 | nanoid(12) for queue item IDs | Short enough to type, unique enough for <100 items |
+| 06-01 | detectCircularDep exported for direct testing | addItem creates new IDs so cycles via public API are impossible, but guards against data corruption |
+| 06-01 | History capped at 100 entries by newest completedAt | Prevents unbounded growth while keeping useful history |
+| 06-01 | Lock on queue.json file, create empty if needed | proper-lockfile requires existing target |
 
 ## Session Continuity
 
-Last session: 2026-02-21T10:45:00Z
-Stopped at: Phase 5 complete — all plans executed, verified ✓
+Last session: 2026-02-21T10:47:23Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None

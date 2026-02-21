@@ -117,7 +117,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Foundation: types, nanoid dep, queue-store.ts, tests
+- [x] 06-01-PLAN.md — Foundation: types, nanoid dep, queue-store.ts, tests
 - [ ] 06-02-PLAN.md — Runner migration to queue-store
 - [ ] 06-03-PLAN.md — Command layer migration (add/build/scope/queue/status/config/import)
 - [ ] 06-04-PLAN.md — TUI migration, test updates, legacy code cleanup
