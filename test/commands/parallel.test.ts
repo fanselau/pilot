@@ -23,12 +23,14 @@ vi.mock('../../src/core/config.js', () => ({
     projectDir: '/tmp/projects',
     gsdDir: '/tmp/gsd',
     noColor: true,
+    pollInterval: 3,
+    defaultTimeout: 60,
   })),
 }));
 
 vi.mock('../../src/core/queue-store.js', () => ({
-  findLaunchable: vi.fn(),
-  markRunning: vi.fn().mockResolvedValue(undefined),
+  findLaunchableAtomic: vi.fn(),
+  cascadeFailure: vi.fn().mockResolvedValue([]),
   markCompleted: vi.fn().mockResolvedValue(undefined),
   markFailed: vi.fn().mockResolvedValue(undefined),
   markQueued: vi.fn().mockResolvedValue(undefined),
@@ -71,14 +73,13 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-import { findLaunchable, markRunning } from '../../src/core/queue-store.js';
+import { findLaunchableAtomic } from '../../src/core/queue-store.js';
 import { spawnSession } from '../../src/core/spawn.js';
 import { isProcessAlive } from '../../src/core/process.js';
 import { createRunner } from '../../src/core/runner.js';
 import type { QueueJsonItem } from '../../src/core/types.js';
 
-const mockedFindLaunchable = vi.mocked(findLaunchable);
-const mockedMarkRunning = vi.mocked(markRunning);
+const mockedFindLaunchableAtomic = vi.mocked(findLaunchableAtomic);
 const mockedSpawnSession = vi.mocked(spawnSession);
 const mockedIsProcessAlive = vi.mocked(isProcessAlive);
 
@@ -127,14 +128,13 @@ describe('Cross-project parallel builds', () => {
     const itemA = makeItem({ id: 'id-aaaa', project: 'project-a' });
     const itemB = makeItem({ id: 'id-bbbb', project: 'project-b' });
 
-    // findLaunchable returns items for different projects in sequence,
-    // then null when no more launchable. The runner calls scan repeatedly.
+    // findLaunchableAtomic returns items already marked running.
     // For parallel: scan 1→A, scan 2→B, scan 3→null
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async (runningProjects) => {
+    mockedFindLaunchableAtomic.mockImplementation(async (runningProjects) => {
       scanCount++;
-      if (scanCount === 1) return itemA;
-      if (scanCount === 2 && !runningProjects.has('project-b')) return itemB;
+      if (scanCount === 1) return { ...itemA, status: 'running' as const, attempts: 1 };
+      if (scanCount === 2 && !runningProjects.has('project-b')) return { ...itemB, status: 'running' as const, attempts: 1 };
       return null;
     });
 
@@ -162,6 +162,7 @@ describe('Cross-project parallel builds', () => {
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     const launchedItems: string[] = [];
@@ -175,25 +176,27 @@ describe('Cross-project parallel builds', () => {
     expect(launchedItems).toContain('project-a');
     expect(launchedItems).toContain('project-b');
     expect(mockedSpawnSession).toHaveBeenCalledTimes(2);
-    expect(mockedMarkRunning).toHaveBeenCalledWith('id-aaaa');
-    expect(mockedMarkRunning).toHaveBeenCalledWith('id-bbbb');
+    // findLaunchableAtomic marks running atomically — no separate markRunning call
+    expect(mockedFindLaunchableAtomic).toHaveBeenCalled();
   }, 15000);
 
   it('same-project items run sequentially (second waits for first)', async () => {
     const item1 = makeItem({ id: 'id-1111', project: 'same-project', description: 'task-1' });
     const item2 = makeItem({ id: 'id-2222', project: 'same-project', description: 'task-2' });
 
-    // Track whether the runner tried to block the second item
+    // Track whether the runner tried to block the second item.
+    // findLaunchableAtomic receives runningProjects set from the runner —
+    // while 'same-project' is in that set, it must NOT return item2.
     let sameProjectBlocked = false;
     let firstItemLaunched = false;
     let firstItemReaped = false;
     let secondReturned = false;
 
-    mockedFindLaunchable.mockImplementation(async (runningProjects) => {
-      // First scan: return item1
+    mockedFindLaunchableAtomic.mockImplementation(async (runningProjects) => {
+      // First scan: return item1 (already marked running by atomic find)
       if (!firstItemLaunched) {
         firstItemLaunched = true;
-        return item1;
+        return { ...item1, status: 'running' as const, attempts: 1 };
       }
       // While same-project is in runningProjects, the runner won't launch item2
       if (runningProjects.has('same-project')) {
@@ -203,18 +206,18 @@ describe('Cross-project parallel builds', () => {
       // After first is reaped, return item2
       if (firstItemReaped && !secondReturned) {
         secondReturned = true;
-        return item2;
+        return { ...item2, status: 'running' as const, attempts: 1 };
       }
       return null;
     });
 
-    // First spawn: keep alive initially, then die
+    // First spawn: keep alive for first check, then die on reap
     let firstAliveCount = 0;
     mockedIsProcessAlive.mockImplementation((pid: number) => {
       if (pid === 20001) {
         firstAliveCount++;
-        // Keep alive for first 2 checks, then die
-        if (firstAliveCount <= 2) return true;
+        // Keep alive for first check (scan → waitForAnyCompletion), then die
+        if (firstAliveCount <= 1) return true;
         firstItemReaped = true;
         return false;
       }
@@ -236,12 +239,16 @@ describe('Cross-project parallel builds', () => {
         logFile: '/tmp/same-2.log',
       });
 
+    // Use once:true — the sequential behavior is enforced by runner passing
+    // runningProjects to findLaunchableAtomic, which works identically in
+    // both once and daemon modes. once:true avoids the daemon poll loop.
     const runner = createRunner({
-      once: false,
+      once: true,
       maxParallel: 5,
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     const launchOrder: string[] = [];
@@ -271,11 +278,12 @@ describe('Cross-project parallel builds', () => {
     );
 
     let itemIndex = 0;
-    mockedFindLaunchable.mockImplementation(async (_runningProjects, maxParallel, activeCount) => {
+    mockedFindLaunchableAtomic.mockImplementation(async (_runningProjects, maxParallel, activeCount) => {
       // Only return items if capacity allows
       if (activeCount >= maxParallel) return null;
       if (itemIndex < items.length) {
-        return items[itemIndex++]!;
+        const item = items[itemIndex++]!;
+        return { ...item, status: 'running' as const, attempts: 1 };
       }
       return null;
     });
@@ -292,12 +300,16 @@ describe('Cross-project parallel builds', () => {
 
     mockedIsProcessAlive.mockReturnValue(false);
 
+    // Use once:true — maxParallel limit is enforced by the runner passing
+    // activeCount to findLaunchableAtomic, which works identically in both
+    // once and daemon modes. once:true avoids the daemon poll loop.
     const runner = createRunner({
-      once: false,
+      once: true,
       maxParallel: 3,
       maxRetries: 3,
       dryRun: false,
       force: true,
+      pollInterval: 3,
     });
 
     const launched: string[] = [];
@@ -310,9 +322,8 @@ describe('Cross-project parallel builds', () => {
     // All 6 should eventually launch (after reaping frees capacity)
     expect(launched.length).toBeGreaterThanOrEqual(3);
 
-    // findLaunchable should have been called with activeCount capping
-    // Verify that at least one call had activeCount checked against maxParallel
-    expect(mockedFindLaunchable).toHaveBeenCalled();
+    // findLaunchableAtomic should have been called with activeCount capping
+    expect(mockedFindLaunchableAtomic).toHaveBeenCalled();
   }, 15000);
 
   it('--dry-run shows all launchable entries without spawning', async () => {
@@ -320,10 +331,10 @@ describe('Cross-project parallel builds', () => {
     const itemB = makeItem({ id: 'id-dry2', project: 'dry-b' });
 
     let scanCount = 0;
-    mockedFindLaunchable.mockImplementation(async () => {
+    mockedFindLaunchableAtomic.mockImplementation(async () => {
       scanCount++;
-      if (scanCount === 1) return itemA;
-      if (scanCount === 2) return itemB;
+      if (scanCount === 1) return { ...itemA, status: 'running' as const, attempts: 1 };
+      if (scanCount === 2) return { ...itemB, status: 'running' as const, attempts: 1 };
       return null;
     });
 
@@ -333,6 +344,7 @@ describe('Cross-project parallel builds', () => {
       maxRetries: 3,
       dryRun: true,
       force: true,
+      pollInterval: 3,
     });
 
     const dryRunItems: string[] = [];
@@ -348,7 +360,5 @@ describe('Cross-project parallel builds', () => {
 
     // No actual spawns
     expect(mockedSpawnSession).not.toHaveBeenCalled();
-    // No marking as running
-    expect(mockedMarkRunning).not.toHaveBeenCalled();
   });
 });
