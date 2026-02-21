@@ -406,4 +406,6 @@ export {
   getResolvedBinary,
   enforceSpawnRateLimit,
   checkDiskSpace,
+  checkBinary,
+  getSystemFreeMem,
 };
