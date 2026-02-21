@@ -68,6 +68,7 @@ program.configureHelp({
           ['import [file]', 'Import QUEUE.md into queue.json'],
           ['doctor [options]', 'Health check: validate setup'],
           ['cleanup [options]', 'Clean stale PIDs, old logs, orphans'],
+          ['init-service [options]', 'Generate systemd service file'],
         ],
       },
       {
@@ -296,6 +297,16 @@ program
     await cleanupCommand(opts);
   });
 
+program
+  .command('init-service')
+  .description('Generate systemd user service file')
+  .option('--dry-run', 'Show what would be created')
+  .action(async (localOpts: Record<string, unknown>) => {
+    const opts = mergeOpts(localOpts);
+    const { initServiceCommand } = await import('./commands/init-service.js');
+    await initServiceCommand(opts);
+  });
+
 // ── Queue Management (Phase 2 stubs) ──────────────────────────────────────
 
 program
@@ -332,15 +343,20 @@ program
   .description('Smart add: auto-detects scope and queues work')
   .option('--dry-run', 'Show what would happen')
   .option('--as <scope>', 'Override scope: quick, phase, milestone')
+  .option('--timeout <minutes>', 'Per-job timeout in minutes')
   .action(async (project: string, input: string, localOpts: Record<string, unknown>) => {
     const opts = mergeOpts(localOpts);
     const { addCommand } = await import('./commands/add.js');
     const result = await addCommand(project, input, opts);
     if (opts.json) {
       const { outputJson } = await import('./util/output.js');
+      const { readPidFile, isProcessAlive } = await import('./core/process.js');
+      const runnerPid = await readPidFile('pilot-runner');
+      const runnerActive = runnerPid !== null && isProcessAlive(runnerPid);
       outputJson({
         action: result.dryRun ? 'dry-run' : 'added',
         ...result,
+        runner_active: runnerActive,
       });
     }
   });
