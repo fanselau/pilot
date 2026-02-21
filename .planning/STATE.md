@@ -8,7 +8,7 @@
 Phase: 14 of 15 (Production hardening per requirements/production-hardening.md)
 Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed 14-04-PLAN.md
+Last activity: 2026-02-21 - Completed 14-03-PLAN.md (Plans 01-04 done, Plan 05 remaining)
 
 Progress: ██████████████████████████░░░░ 88% (52/59 plans)
 
@@ -17,7 +17,7 @@ Progress: ███████████████████████�
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 14 — production hardening (4/5 plans complete)
+**Current focus:** Phase 14 — production hardening (4/5 plans complete, Plan 05 tests remaining)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -205,6 +205,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 14-02 | BigInt arithmetic for disk space calculation | bfree * bsize can exceed Number.MAX_SAFE_INTEGER on large filesystems |
 | 14-02 | Spawn rate limiter as module-level state in spawn.ts | Single daemon process means module-level is effectively singleton |
 | 14-02 | validLogLevels cast to readonly string[] for includes() | TypeScript const tuple needs widened type for string.includes() |
+| 14-03 | Export checkBinary and getSystemFreeMem from spawn.ts for startup validation | Runner needs binary/memory check without full preSpawnChecks |
+| 14-03 | Orphan detection logs only on startup — no kill | Killing on startup too aggressive; Plan 04 handles periodic kill |
+| 14-03 | Job log cleanup: keep 20 most recent, delete >7 days beyond that | Balance debugging access with disk space |
+| 14-03 | ISO-8601 local timestamp for structured logging | Matches requirements; parseable and sortable |
+| 14-03 | Size rotation renameSync cascade (current→.1→.2→.3→deleted) | Standard pattern; ~40MB total cap |
 | 14-04 | DaemonStuckAssessment separate from StuckAssessment | Daemon needs isFlaky field and skips CPU sampling |
 | 14-04 | Flaky detection checks attempts >= maxAttempts FIRST | Exhausted attempts always fail regardless of flaky signals |
 | 14-04 | flakyAttempts map entry required for consistently_flaky label | Prevents false positives on first-time failures |
@@ -213,6 +218,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-02-21T13:41:00Z
-Stopped at: Completed 14-04-PLAN.md
+Last session: 2026-02-21T13:41:50Z
+Stopped at: Completed 14-03-PLAN.md (Plans 01-04 all done)
 Resume file: None
