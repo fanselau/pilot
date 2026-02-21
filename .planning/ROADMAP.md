@@ -248,11 +248,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 14-01-PLAN.md — Atomic queue writes + corruption recovery + backup-on-write
-- [ ] 14-02-PLAN.md — Resource guards (2GB memory, 1GB disk, auto maxParallel, spawn rate limit)
-- [ ] 14-03-PLAN.md — Daemon resilience (startup self-check, heartbeat, structured logging, job log cleanup)
-- [ ] 14-04-PLAN.md — Daemon stuck detection + auto-recovery + flaky detection (3-strike rule)
-- [ ] 14-05-PLAN.md — Tests for all production hardening changes
+- [x] 14-01-PLAN.md — Atomic queue writes + corruption recovery + backup-on-write
+- [x] 14-02-PLAN.md — Resource guards (2GB memory, 1GB disk, auto maxParallel, spawn rate limit)
+- [x] 14-03-PLAN.md — Daemon resilience (startup self-check, heartbeat, structured logging, job log cleanup)
+- [x] 14-04-PLAN.md — Daemon stuck detection + auto-recovery + flaky detection (3-strike rule)
+- [x] 14-05-PLAN.md — Tests for all production hardening changes
 
 ### Phase 15: E2E test suite per requirements/e2e-test-suite.md
 
