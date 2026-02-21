@@ -1,9 +1,9 @@
 /**
- * Project setup: symlinks, claude.json, .gitignore, git init.
+ * Project setup: symlinks, opencode.json, .gitignore, git init.
  *
- * Powers `pilot setup <dir>` by creating the .claude/ directory structure
+ * Powers `pilot setup <dir>` by creating the .opencode/ directory structure
  * with symlinks to pilot-gsd resources, generating the permissive
- * claude.json config, and ensuring .gitignore and git are set up.
+ * opencode.json config, and ensuring .gitignore and git are set up.
  *
  * Pure core module — no UI dependencies.
  */
@@ -48,12 +48,12 @@ async function isDirectory(filePath: string): Promise<boolean> {
  *
  * Creates:
  * 1. The project directory (if needed)
- * 2. .claude/ directory with symlinks to pilot-gsd
- * 3. claude.json with permissive permissions
- * 4. .gitignore entry for .claude/
+ * 2. .opencode/ directory with symlinks to pilot-gsd
+ * 3. opencode.json with permissive permissions
+ * 4. .gitignore entry for .opencode/
  * 5. git init (if not already a repo)
  *
- * Never overwrites existing claude.json.
+ * Never overwrites existing opencode.json.
  */
 async function setupProject(dir: string): Promise<SetupResult> {
   const config = getConfig();
@@ -73,13 +73,13 @@ async function setupProject(dir: string): Promise<SetupResult> {
     return result;
   }
 
-  // 2. Create .claude/ directory
-  const claudeDir = path.join(absDir, '.claude');
+  // 2. Create .opencode/ directory
+  const opencodeDir = path.join(absDir, '.opencode');
   try {
-    await mkdir(claudeDir, { recursive: true });
+    await mkdir(opencodeDir, { recursive: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    result.errors.push(`Failed to create .claude/: ${msg}`);
+    result.errors.push(`Failed to create .opencode/: ${msg}`);
     return result;
   }
 
@@ -91,7 +91,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
   ];
 
   for (const link of symlinks) {
-    const linkPath = path.join(claudeDir, link.name);
+    const linkPath = path.join(opencodeDir, link.name);
 
     // Check if target exists
     if (!(await isDirectory(link.target))) {
@@ -101,23 +101,23 @@ async function setupProject(dir: string): Promise<SetupResult> {
 
     // Check if symlink already exists
     if (await exists(linkPath)) {
-      result.skipped.push(`.claude/${link.name}/ (already exists)`);
+      result.skipped.push(`.opencode/${link.name}/ (already exists)`);
       continue;
     }
 
     try {
       await symlink(link.target, linkPath);
-      result.created.push(`.claude/${link.name}/ → ${link.target}`);
+      result.created.push(`.opencode/${link.name}/ → ${link.target}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      result.errors.push(`Failed to create symlink .claude/${link.name}/: ${msg}`);
+      result.errors.push(`Failed to create symlink .opencode/${link.name}/: ${msg}`);
     }
   }
 
-  // 4. Create claude.json
-  const claudeJsonPath = path.join(absDir, 'claude.json');
+  // 4. Create opencode.json
+  const claudeJsonPath = path.join(absDir, 'opencode.json');
   if (await exists(claudeJsonPath)) {
-    result.skipped.push('claude.json (already exists)');
+    result.skipped.push('opencode.json (already exists)');
   } else {
     const claudeConfig = {
       permissions: {
@@ -126,10 +126,10 @@ async function setupProject(dir: string): Promise<SetupResult> {
     };
     try {
       await writeFile(claudeJsonPath, JSON.stringify(claudeConfig, null, 2) + '\n', 'utf8');
-      result.created.push('claude.json');
+      result.created.push('opencode.json');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      result.errors.push(`Failed to create claude.json: ${msg}`);
+      result.errors.push(`Failed to create opencode.json: ${msg}`);
     }
   }
 
@@ -138,15 +138,15 @@ async function setupProject(dir: string): Promise<SetupResult> {
   try {
     if (await exists(gitignorePath)) {
       const content = await readFile(gitignorePath, 'utf8');
-      if (!content.split('\n').some((line) => line.trim() === '.claude/')) {
+      if (!content.split('\n').some((line) => line.trim() === '.opencode/')) {
         const suffix = content.endsWith('\n') ? '' : '\n';
-        await writeFile(gitignorePath, content + suffix + '.claude/\n', 'utf8');
-        result.created.push('.gitignore entry for .claude/');
+        await writeFile(gitignorePath, content + suffix + '.opencode/\n', 'utf8');
+        result.created.push('.gitignore entry for .opencode/');
       } else {
-        result.skipped.push('.gitignore already contains .claude/');
+        result.skipped.push('.gitignore already contains .opencode/');
       }
     } else {
-      await writeFile(gitignorePath, '.claude/\n', 'utf8');
+      await writeFile(gitignorePath, '.opencode/\n', 'utf8');
       result.created.push('.gitignore');
     }
   } catch (err: unknown) {

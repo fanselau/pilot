@@ -698,7 +698,7 @@ class Runner extends EventEmitter<RunnerEvents> {
    * Returns when at least one job has died or a lifecycle mode has finished.
    */
   private async waitForAnyCompletion(): Promise<void> {
-    const maxWaitMs = 300_000; // 5 minutes max wait
+    const maxWaitMs = 3_600_000; // 60 minutes max wait (builds can take a long time)
     const start = Date.now();
 
     while (Date.now() - start < maxWaitMs) {
