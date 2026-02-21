@@ -45,7 +45,7 @@ export interface SessionInfo {
   title: string;
   updated: number;
   created: number;
-  message_count: number;
+  message_count?: number;
 }
 
 // ── Stuck Detection ────────────────────────────────────────────────────────
