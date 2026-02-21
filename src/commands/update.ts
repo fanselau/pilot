@@ -32,7 +32,19 @@ async function updateCommand(opts: UpdateOpts): Promise<void> {
   outputHuman('Updating pilot-gsd...');
 
   try {
-    const result = await execa('git', ['pull'], { cwd: config.gsdDir });
+    // Detect current branch
+    const branchResult = await execa('git', ['branch', '--show-current'], { cwd: config.gsdDir });
+    const currentBranch = branchResult.stdout.trim() || 'dev';
+
+    // Set upstream tracking if not set (best effort)
+    try {
+      await execa('git', ['branch', '--set-upstream-to', `origin/${currentBranch}`, currentBranch], { cwd: config.gsdDir });
+    } catch {
+      // May fail — that's fine, we pull with explicit remote/branch below
+    }
+
+    // Pull with explicit remote/branch (works without upstream tracking)
+    const result = await execa('git', ['pull', 'origin', currentBranch], { cwd: config.gsdDir });
     const output = result.stdout.trim();
 
     if (isJsonMode()) {
