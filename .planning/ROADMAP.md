@@ -254,7 +254,18 @@ Plans:
 - [x] 14-04-PLAN.md — Daemon stuck detection + auto-recovery + flaky detection (3-strike rule)
 - [x] 14-05-PLAN.md — Tests for all production hardening changes
 
-### Phase 15: E2E test suite per requirements/e2e-test-suite.md
+### Phase 16: CLI polish per requirements/cli-polish.md
+
+**Goal:** Wire all agreed-upon CLI flags (--next, --before, --after, --depends-on, --phase, --milestone), implement `pilot move`, fix build blocking mode, complete claude→opencode migration, fix dry-run bug and add --help output.
+**Depends on:** Phase 15
+**Plans:** 3 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — Queue-store position parameter + moveItem function
+- [ ] 16-02-PLAN.md — Dry-run fix + build blocking + claude→opencode migration
+- [ ] 16-03-PLAN.md — Wire add flags, move command, help fix, runner status display
+
+### Phase 15-e2e: E2E test suite per requirements/e2e-test-suite.md
 
 **Goal:** Comprehensive end-to-end test suite that exercises every CLI command as a subprocess against real (temp) project directories. Final gate before replacing the bash queue runner.
 **Depends on:** Phase 14
