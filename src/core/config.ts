@@ -19,19 +19,6 @@ function expandTilde(filepath: string): string {
 function getConfig(): PilotConfig {
   const home = os.homedir();
 
-  const queueFile = expandTilde(
-    process.env.PILOT_QUEUE_FILE ?? `${home}/dev/QUEUE.md`,
-  );
-
-  const logDir = expandTilde(
-    process.env.PILOT_LOG_DIR ?? '/tmp',
-  );
-
-  const stuckThreshold = parseInt(
-    process.env.PILOT_STUCK_THRESHOLD ?? '90',
-    10,
-  );
-
   const projectDir = expandTilde(
     process.env.PILOT_PROJECT_DIR ?? `${home}/dev/punchlab`,
   );
@@ -40,22 +27,20 @@ function getConfig(): PilotConfig {
     process.env.PILOT_GSD_DIR ?? `${home}/dev/pilot-gsd`,
   );
 
-  const noColor = process.env.NO_COLOR !== undefined;
+  const stuckThresholdRaw = parseInt(process.env.PILOT_STUCK_THRESHOLD ?? '90', 10);
+  const stuckThreshold = Number.isNaN(stuckThresholdRaw) ? 90 : stuckThresholdRaw;
 
-  const pilotDir = path.join(home, '.pilot');
-  const queueJsonFile = path.join(pilotDir, 'queue.json');
+  // Auto-detect maxParallel from system RAM: <32GB → 1, ≥32GB → 5
+  const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
+  const defaultMaxParallel = totalMemMb < 32768 ? 1 : 5;
+  const maxParallelRaw = parseInt(process.env.PILOT_MAX_PARALLEL ?? '', 10);
+  const maxParallel = Number.isNaN(maxParallelRaw) ? defaultMaxParallel : maxParallelRaw;
 
-  const pollIntervalRaw = parseInt(process.env.PILOT_POLL_INTERVAL ?? '3', 10);
-  const pollInterval = Math.max(1, Number.isNaN(pollIntervalRaw) ? 3 : pollIntervalRaw);
+  const pollIntervalRaw = parseInt(process.env.PILOT_POLL_INTERVAL ?? '5', 10);
+  const pollInterval = Math.max(1, Number.isNaN(pollIntervalRaw) ? 5 : pollIntervalRaw);
 
   const defaultTimeoutRaw = parseInt(process.env.PILOT_DEFAULT_TIMEOUT ?? '60', 10);
   const defaultTimeout = Number.isNaN(defaultTimeoutRaw) ? 60 : defaultTimeoutRaw;
-
-  // Auto-detect maxParallel from system RAM: <32GB → 2, ≥32GB → 5
-  const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
-  const defaultMaxParallel = totalMemMb < 32768 ? 2 : 5;
-  const maxParallelRaw = parseInt(process.env.PILOT_MAX_PARALLEL ?? '', 10);
-  const maxParallel = Number.isNaN(maxParallelRaw) ? defaultMaxParallel : maxParallelRaw;
 
   // Log level: DEBUG, INFO, WARN, ERROR (default INFO)
   const validLogLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const;
@@ -65,19 +50,23 @@ function getConfig(): PilotConfig {
     ? (logLevelRaw as LogLevel)
     : 'INFO';
 
+  const noColor = process.env.NO_COLOR !== undefined;
+
+  // Derived paths (not from env vars)
+  const pilotDir = path.join(home, '.pilot');
+  const pilotDbPath = path.join(pilotDir, 'pilot.db');
+
   return {
-    queueFile,
     pilotDir,
-    queueJsonFile,
-    logDir,
-    stuckThreshold: Number.isNaN(stuckThreshold) ? 90 : stuckThreshold,
+    pilotDbPath,
     projectDir,
     gsdDir,
-    noColor,
+    stuckThreshold,
+    maxParallel,
     pollInterval,
     defaultTimeout,
-    maxParallel,
     logLevel,
+    noColor,
   };
 }
 

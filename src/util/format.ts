@@ -1,8 +1,10 @@
 /**
- * Pure formatting helpers — duration, string truncation, progress bars.
+ * Formatting helpers — duration, string truncation, progress bars, relative time.
  *
- * ZERO dependencies. Pure functions only.
+ * Uses date-fns for relative time formatting.
  */
+
+import { formatDistanceToNow } from 'date-fns';
 
 /**
  * Format seconds into human-friendly duration string.
@@ -74,4 +76,14 @@ function formatProgressBar(percent: number, width: number = 10): string {
   return '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
 }
 
-export { formatDuration, truncateString, truncateTitle, formatProgressBar };
+/**
+ * Format a date as relative time string ("3s ago", "12m ago", "2h ago").
+ *
+ * Accepts Date objects or ISO 8601 strings.
+ */
+function formatRelativeTime(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return formatDistanceToNow(d, { addSuffix: true });
+}
+
+export { formatDuration, truncateString, truncateTitle, formatProgressBar, formatRelativeTime };
