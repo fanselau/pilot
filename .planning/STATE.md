@@ -5,7 +5,7 @@
 
 ## Current Position
 
-Phase: 17 of 17 (Pilot v2 complete rewrite)
+Phase: 17 of 18 (Pilot v2 complete rewrite)
 Plan: 4 of 8 in current phase
 Status: In progress
 Last activity: 2026-02-22 - Completed 17-04-PLAN.md
@@ -77,6 +77,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 11 added: Finishing touches per requirements/finishing-touches.md
 - Phase 12 added: Critical fixes per requirements/overnight-fixes.md
 - Phase 17 added: Pilot v2 complete rewrite — delegation AI, SQLite queue, opencode DB ground truth, clean CLI
+- Phase 18 added: Pilot v2 TUI with OpenTUI — dashboard, job detail, split pane views
 
 ## Decisions
 

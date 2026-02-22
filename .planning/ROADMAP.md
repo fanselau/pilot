@@ -294,3 +294,15 @@ Plans:
 
 **Details:**
 Read requirements/pilot-v2-master.md + requirements/pilot-v2-architecture.md for full spec.
+
+### Phase 18: Pilot v2 TUI with OpenTUI
+
+**Goal:** Pilot v2 TUI with OpenTUI — dashboard, job detail, split pane views. Bun migration, OpenTUI framework, vim-like navigation, reads from pilot.db + opencode.db.
+**Depends on:** Phase 17
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 18 to break down)
+
+**Details:**
+Read requirements/pilot-v2-tui.md for full spec.
