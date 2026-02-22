@@ -76,6 +76,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 10 added: Smart verify routing per requirements/smart-verify-routing.md
 - Phase 11 added: Finishing touches per requirements/finishing-touches.md
 - Phase 12 added: Critical fixes per requirements/overnight-fixes.md
+- Phase 17 added: Pilot v2 complete rewrite — delegation AI, SQLite queue, opencode DB ground truth, clean CLI
 
 ## Decisions
 
