@@ -42,7 +42,10 @@ function stub(name: string): () => void {
 
 // ── Default command: status ───────────────────────────────────────────────
 
-program.action(stub('status'));
+program.action(async () => {
+  const { statusCommand } = await import('./commands/status.js');
+  await statusCommand(program.opts() as { json?: boolean });
+});
 
 // ── Core commands (daily use) ─────────────────────────────────────────────
 
@@ -52,13 +55,19 @@ program
   .option('--as <scope>', 'Force scope: quick, phase, or milestone')
   .option('--next', 'Insert at front of queue')
   .option('--dry-run', 'Show what would happen without queuing')
-  .action(stub('add'));
+  .action(async (project: string, requirement: string, opts: Record<string, unknown>) => {
+    const { addCommand } = await import('./commands/add.js');
+    await addCommand(project, requirement, { ...program.opts(), ...opts } as Parameters<typeof addCommand>[2]);
+  });
 
 program
   .command('status [project]')
   .alias('s')
   .description('One-shot dashboard to stdout')
-  .action(stub('status'));
+  .action(async (_project: string | undefined, opts: Record<string, unknown>) => {
+    const { statusCommand } = await import('./commands/status.js');
+    await statusCommand({ ...program.opts(), ...opts } as { json?: boolean });
+  });
 
 program
   .command('log [id]')
