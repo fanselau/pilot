@@ -84,7 +84,9 @@ class Runner {
       // Check for launchable jobs if we have capacity
       if (this.activeJobs.size < this.options.maxParallel) {
         const job = getNextPending();
-        if (job) {
+        if (job && !this.activeJobs.has(job.id)) {
+          // Track BEFORE async launch so --once mode sees active jobs
+          this.activeJobs.set(job.id, { job, title: '' });
           // Launch without awaiting — allows parallel jobs
           this.launch(job).catch(() => {
             // Error already handled in launch() via markFailed
@@ -117,7 +119,7 @@ class Runner {
 
     try {
       markRunning(job.id);
-      this.activeJobs.set(job.id, { job, title: '' });
+      // activeJobs already set in run() before launch() is called
 
       // Step 1: Delegation AI decides what GSD commands to run
       let plan: DelegationPlan;
@@ -190,7 +192,7 @@ class Runner {
     proc.unref();
 
     // Poll opencode DB for session completion
-    const pollMs = 5000;
+    const pollMs = config.pollInterval * 1000;
     let sessionFound = false;
 
     while (Date.now() - start < timeoutMs) {
@@ -418,3 +420,13 @@ export {
   validateProjectConfig,
   getAvailableMemoryMb,
 };
+
+/**
+ * Reset the module-level spawn rate limiter.
+ * @internal — only for use in tests
+ */
+function _resetSpawnRateLimit(): void {
+  lastSpawnTime = 0;
+}
+
+export { _resetSpawnRateLimit };
