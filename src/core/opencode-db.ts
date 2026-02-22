@@ -15,7 +15,7 @@ import Database from 'better-sqlite3';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { accessSync, constants } from 'node:fs';
-import type { SessionInfo } from './types.js';
+import type { SessionInfo, SessionMessage } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -231,6 +231,198 @@ function findSessionByTitle(title: string): string | null {
   }
 }
 
+// ── v2 extended queries ────────────────────────────────────────────────────
+
+/**
+ * Get messages for a session, optionally filtered by time.
+ * Returns SessionMessage[] ordered by time_created ASC (chronological).
+ *
+ * Parses the `data` JSON column for role and content.
+ * Content may be absent in opencode's schema — defaults to empty string.
+ *
+ * @param sessionId - The opencode session ID
+ * @param since - Optional epoch ms timestamp; only messages after this time returned
+ */
+function getSessionMessages(sessionId: string, since?: number): SessionMessage[] {
+  const db = openDb();
+  if (db === null) {
+    return [];
+  }
+
+  try {
+    const sql = since !== undefined
+      ? 'SELECT id, data, time_created FROM message WHERE session_id = ? AND time_created > ? ORDER BY time_created ASC'
+      : 'SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created ASC';
+
+    const params = since !== undefined ? [sessionId, since] : [sessionId];
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: string;
+      data: string;
+      time_created: number;
+    }>;
+
+    return rows.map((row) => {
+      try {
+        const parsed = JSON.parse(row.data) as Record<string, unknown>;
+        return {
+          id: row.id,
+          role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
+          content: typeof parsed.content === 'string' ? parsed.content : '',
+          createdAt: row.time_created,
+        };
+      } catch {
+        return {
+          id: row.id,
+          role: 'unknown',
+          content: '',
+          createdAt: row.time_created,
+        };
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the most recent message for a session.
+ * Returns null if session has no messages or doesn't exist.
+ */
+function getLastMessage(sessionId: string): SessionMessage | null {
+  const db = openDb();
+  if (db === null) {
+    return null;
+  }
+
+  try {
+    const row = db.prepare(
+      'SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created DESC LIMIT 1',
+    ).get(sessionId) as { id: string; data: string; time_created: number } | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(row.data) as Record<string, unknown>;
+      return {
+        id: row.id,
+        role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
+        content: typeof parsed.content === 'string' ? parsed.content : '',
+        createdAt: row.time_created,
+      };
+    } catch {
+      return {
+        id: row.id,
+        role: 'unknown',
+        content: '',
+        createdAt: row.time_created,
+      };
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a session has any actively running parts.
+ * Replaces PID tracking — if opencode shows running parts, the session is alive.
+ *
+ * Queries the part table's data JSON for state.status = 'running'.
+ */
+function isSessionActive(sessionId: string): boolean {
+  const db = openDb();
+  if (db === null) {
+    return false;
+  }
+
+  try {
+    const row = db.prepare(
+      `SELECT COUNT(*) as cnt FROM part
+       WHERE session_id = ?
+         AND json_extract(data, '$.state.status') = 'running'`,
+    ).get(sessionId) as { cnt: number } | undefined;
+
+    return (row?.cnt ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Aggregate token usage for a session from assistant messages.
+ * Reads the `tokens.input` and `tokens.output` fields from message data JSON.
+ * Returns { input: 0, output: 0 } if no tokens found or DB unavailable.
+ */
+function getSessionTokens(sessionId: string): { input: number; output: number } {
+  const ZERO = { input: 0, output: 0 };
+  const db = openDb();
+  if (db === null) {
+    return ZERO;
+  }
+
+  try {
+    const row = db.prepare(
+      `SELECT
+         COALESCE(SUM(json_extract(data, '$.tokens.input')), 0) as total_input,
+         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output
+       FROM message
+       WHERE session_id = ?
+         AND json_extract(data, '$.role') = 'assistant'`,
+    ).get(sessionId) as { total_input: number; total_output: number } | undefined;
+
+    if (!row) {
+      return ZERO;
+    }
+
+    return {
+      input: row.total_input ?? 0,
+      output: row.total_output ?? 0,
+    };
+  } catch {
+    return ZERO;
+  }
+}
+
+/**
+ * Get the most recent N sessions with message counts.
+ * Returns SessionInfo[] with messageCount populated.
+ * Ordered by time_updated DESC.
+ */
+function getRecentSessions(limit: number): SessionInfo[] {
+  const db = openDb();
+  if (db === null) {
+    return [];
+  }
+
+  try {
+    const rows = db.prepare(
+      `SELECT
+         s.id, s.title, s.time_created, s.time_updated,
+         (SELECT COUNT(*) FROM message m WHERE m.session_id = s.id) as msg_count
+       FROM session s
+       ORDER BY s.time_updated DESC
+       LIMIT ?`,
+    ).all(limit) as Array<{
+      id: string;
+      title: string;
+      time_created: number;
+      time_updated: number;
+      msg_count: number;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      created: row.time_created,
+      updated: row.time_updated,
+      messageCount: row.msg_count,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ── Stuck detection via part table ─────────────────────────────────────────
 
 /**
@@ -375,6 +567,11 @@ export {
   exportSessionFromDb,
   getSessionMessageCountFromDb,
   findSessionByTitle,
+  getSessionMessages,
+  getLastMessage,
+  isSessionActive,
+  getSessionTokens,
+  getRecentSessions,
   isStuck,
   _resetDbCache,
   _setTestDb,
