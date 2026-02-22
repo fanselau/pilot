@@ -278,12 +278,19 @@ Plans:
 
 ### Phase 17: Pilot v2 complete rewrite — delegation AI, SQLite queue, opencode DB ground truth, clean CLI
 
-**Goal:** [To be planned]
+**Goal:** Clean-break rewrite of Pilot. Delete v1 code, replace JSON queue with SQLite, replace .planning/ parsing with delegation AI, replace PID tracking with opencode DB polling, slim CLI to essential commands.
 **Depends on:** Phase 16
-**Plans:** 0 plans
+**Plans:** 8 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 17 to break down)
+- [ ] 17-01-PLAN.md — Nuke v1 code, update deps, establish v2 types + config
+- [ ] 17-02-PLAN.md — SQLite queue database (pilot.db) with TDD
+- [ ] 17-03-PLAN.md — Extend opencode-db.ts with v2 session queries (TDD)
+- [ ] 17-04-PLAN.md — Delegation AI module + gsd-delegate command
+- [ ] 17-05-PLAN.md — Queue runner event loop (delegate → spawn → poll)
+- [ ] 17-06-PLAN.md — Core CLI commands: add, status, queue, log, config
+- [ ] 17-07-PLAN.md — Remaining commands + complete CLI entry point
+- [ ] 17-08-PLAN.md — Test suite for all v2 commands
 
 **Details:**
 Read requirements/pilot-v2-master.md + requirements/pilot-v2-architecture.md for full spec.
