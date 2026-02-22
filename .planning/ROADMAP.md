@@ -286,7 +286,7 @@ Plans:
 - [x] 17-01-PLAN.md — Nuke v1 code, update deps, establish v2 types + config
 - [x] 17-02-PLAN.md — SQLite queue database (pilot.db) with TDD
 - [x] 17-03-PLAN.md — Extend opencode-db.ts with v2 session queries (TDD)
-- [ ] 17-04-PLAN.md — Delegation AI module + gsd-delegate command
+- [x] 17-04-PLAN.md — Delegation AI module + gsd-delegate command
 - [ ] 17-05-PLAN.md — Queue runner event loop (delegate → spawn → poll)
 - [ ] 17-06-PLAN.md — Core CLI commands: add, status, queue, log, config
 - [ ] 17-07-PLAN.md — Remaining commands + complete CLI entry point
