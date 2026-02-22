@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 17 of 17 (Pilot v2 complete rewrite)
-Plan: 1 of 8 in current phase
+Plan: 2 of 8 in current phase
 Status: In progress
-Last activity: 2026-02-22 - Completed 17-01-PLAN.md
+Last activity: 2026-02-22 - Completed 17-02-PLAN.md
 
-Progress: ████████████████████████░░░░░░ 82% (55/67 plans)
+Progress: █████████████████████████░░░░░ 84% (56/67 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 17 in progress — Pilot v2 complete rewrite (1/8 plans complete)
+**Current focus:** Phase 17 in progress — Pilot v2 complete rewrite (2/8 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -225,9 +225,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 15-01 | progress exits 0 for nonexistent projects — test adjusted | Actual CLI behavior: shows "No planning data found" not exit 1 |
 | 15-01 | execaNode for E2E subprocess spawning | Cleaner than execa('node', ...) for Node.js scripts |
 | 15-01 | Queue JSON written directly in helpers (no core imports) | Test isolation — helpers must not depend on application code |
+| 17-02 | In-memory DB via _getTestDb() for test isolation | Fresh DB per test without touching filesystem |
+| 17-02 | 4-char alphanumeric IDs with collision check loop | 36^4 = 1.6M possible IDs, collision extremely unlikely |
+| 17-02 | updateSessionTitles appends via read-merge-write | Preserves existing titles from previous spawn cycles |
+| 17-02 | COALESCE(completed_at, created_at) for cancelled job ordering | Cancelled jobs lack completed_at; fallback to created_at |
 
 ## Session Continuity
 
-Last session: 2026-02-22T20:51:36Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-02-22T20:57:08Z
+Stopped at: Completed 17-02-PLAN.md
 Resume file: None
