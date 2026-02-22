@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 17 of 18 (Pilot v2 complete rewrite)
-Plan: 4 of 8 in current phase
+Plan: 5 of 8 in current phase
 Status: In progress
-Last activity: 2026-02-22 - Completed 17-04-PLAN.md
+Last activity: 2026-02-22 - Completed 17-05-PLAN.md
 
-Progress: █████████████████████████░░░░░ 87% (58/67 plans)
+Progress: ██████████████████████████░░░░ 88% (59/67 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 17 in progress — Pilot v2 complete rewrite (4/8 plans complete)
+**Current focus:** Phase 17 in progress — Pilot v2 complete rewrite (5/8 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -230,9 +230,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 17-02 | 4-char alphanumeric IDs with collision check loop | 36^4 = 1.6M possible IDs, collision extremely unlikely |
 | 17-02 | updateSessionTitles appends via read-merge-write | Preserves existing titles from previous spawn cycles |
 | 17-02 | COALESCE(completed_at, created_at) for cancelled job ordering | Cancelled jobs lack completed_at; fallback to created_at |
+| 17-05 | Poll interval from config.pollInterval not hardcoded 5s | Enables 1s polls in tests; configurable in production |
+| 17-05 | activeJobs tracked in run() before async launch() | Prevents --once mode from exiting before launch starts |
+| 17-05 | Guard against re-launching same job ID already active | Prevents duplicate launches when getNextPending returns same job |
+| 17-05 | _resetSpawnRateLimit for test isolation | Module-level rate limiter state persists across tests |
 
 ## Session Continuity
 
-Last session: 2026-02-22T21:04:16Z
-Stopped at: Completed 17-04-PLAN.md
+Last session: 2026-02-22T21:16:55Z
+Stopped at: Completed 17-05-PLAN.md
 Resume file: None
