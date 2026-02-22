@@ -74,13 +74,20 @@ program
   .description('Session transcript')
   .option('--follow', 'Live tail new messages')
   .option('--last <n>', 'Show last N messages', parseInt)
-  .action(stub('log'));
+  .action(async (id: string | undefined, opts: Record<string, unknown>) => {
+    const { logCommand } = await import('./commands/log.js');
+    await logCommand(id, { ...program.opts(), ...opts } as Parameters<typeof logCommand>[1]);
+  });
 
 program
   .command('queue')
   .alias('q')
   .description('Show job queue')
-  .action(stub('queue'));
+  .option('--history', 'Show completed/failed jobs')
+  .action(async (opts: Record<string, unknown>) => {
+    const { queueCommand } = await import('./commands/queue.js');
+    await queueCommand({ ...program.opts(), ...opts } as Parameters<typeof queueCommand>[0]);
+  });
 
 program
   .command('cancel <id>')
@@ -128,7 +135,10 @@ program
 program
   .command('config')
   .description('Show resolved configuration')
-  .action(stub('config'));
+  .action(async () => {
+    const { configCommand } = await import('./commands/config.js');
+    await configCommand();
+  });
 
 // ── Parse and run ─────────────────────────────────────────────────────────
 
