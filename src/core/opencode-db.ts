@@ -234,6 +234,29 @@ function findSessionByTitle(title: string): string | null {
 // ── v2 extended queries ────────────────────────────────────────────────────
 
 /**
+ * Parse a message row into a SessionMessage.
+ * Extracts role and content from the JSON data column with safe defaults.
+ */
+function parseMessageRow(row: { id: string; data: string; time_created: number }): SessionMessage {
+  try {
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    return {
+      id: row.id,
+      role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
+      content: typeof parsed.content === 'string' ? parsed.content : '',
+      createdAt: row.time_created,
+    };
+  } catch {
+    return {
+      id: row.id,
+      role: 'unknown',
+      content: '',
+      createdAt: row.time_created,
+    };
+  }
+}
+
+/**
  * Get messages for a session, optionally filtered by time.
  * Returns SessionMessage[] ordered by time_created ASC (chronological).
  *
@@ -261,24 +284,7 @@ function getSessionMessages(sessionId: string, since?: number): SessionMessage[]
       time_created: number;
     }>;
 
-    return rows.map((row) => {
-      try {
-        const parsed = JSON.parse(row.data) as Record<string, unknown>;
-        return {
-          id: row.id,
-          role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
-          content: typeof parsed.content === 'string' ? parsed.content : '',
-          createdAt: row.time_created,
-        };
-      } catch {
-        return {
-          id: row.id,
-          role: 'unknown',
-          content: '',
-          createdAt: row.time_created,
-        };
-      }
-    });
+    return rows.map(parseMessageRow);
   } catch {
     return [];
   }
@@ -303,22 +309,7 @@ function getLastMessage(sessionId: string): SessionMessage | null {
       return null;
     }
 
-    try {
-      const parsed = JSON.parse(row.data) as Record<string, unknown>;
-      return {
-        id: row.id,
-        role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
-        content: typeof parsed.content === 'string' ? parsed.content : '',
-        createdAt: row.time_created,
-      };
-    } catch {
-      return {
-        id: row.id,
-        role: 'unknown',
-        content: '',
-        createdAt: row.time_created,
-      };
-    }
+    return parseMessageRow(row);
   } catch {
     return null;
   }
