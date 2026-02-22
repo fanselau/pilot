@@ -299,10 +299,16 @@ Read requirements/pilot-v2-master.md + requirements/pilot-v2-architecture.md for
 
 **Goal:** Pilot v2 TUI with OpenTUI — dashboard, job detail, split pane views. Bun migration, OpenTUI framework, vim-like navigation, reads from pilot.db + opencode.db.
 **Depends on:** Phase 17
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 18 to break down)
+- [ ] 18-01-PLAN.md — Bun migration + OpenTUI/SolidJS dependency install
+- [ ] 18-02-PLAN.md — Theme constants, reactive state store, data polling layer
+- [ ] 18-03-PLAN.md — TUI shell: renderer, App, StatusBar, FooterBar, HelpOverlay, keyboard routing
+- [ ] 18-04-PLAN.md — Reusable widgets: sparkline, pulse-dot, scrollable
+- [ ] 18-05-PLAN.md — Dashboard view: QueuePanel, RunningPanel, CompletedPanel, FilterOverlay
+- [ ] 18-06-PLAN.md — Job Detail + Split Pane views: LogPanel, InfoPanel
+- [ ] 18-07-PLAN.md — Queue management actions + CLI entry point wiring + polish
 
 **Details:**
 Read requirements/pilot-v2-tui.md for full spec.
