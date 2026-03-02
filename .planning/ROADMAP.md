@@ -305,7 +305,7 @@ Plans:
 - [ ] 18-01-PLAN.md — Bun migration + OpenTUI/SolidJS dependency install
 - [x] 18-02-PLAN.md — Theme constants, reactive state store, data polling layer
 - [ ] 18-03-PLAN.md — TUI shell: renderer, App, StatusBar, FooterBar, HelpOverlay, keyboard routing
-- [ ] 18-04-PLAN.md — Reusable widgets: sparkline, pulse-dot, scrollable
+- [x] 18-04-PLAN.md — Reusable widgets: sparkline, pulse-dot, scrollable
 - [ ] 18-05-PLAN.md — Dashboard view: QueuePanel, RunningPanel, CompletedPanel, FilterOverlay
 - [ ] 18-06-PLAN.md — Job Detail + Split Pane views: LogPanel, InfoPanel
 - [ ] 18-07-PLAN.md — Queue management actions + CLI entry point wiring + polish
