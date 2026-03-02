@@ -288,9 +288,9 @@ Plans:
 - [x] 17-03-PLAN.md — Extend opencode-db.ts with v2 session queries (TDD)
 - [x] 17-04-PLAN.md — Delegation AI module + gsd-delegate command
 - [x] 17-05-PLAN.md — Queue runner event loop (delegate → spawn → poll)
-- [ ] 17-06-PLAN.md — Core CLI commands: add, status, queue, log, config
+- [x] 17-06-PLAN.md — Core CLI commands: add, status, queue, log, config
 - [x] 17-07-PLAN.md — Remaining commands + complete CLI entry point
-- [ ] 17-08-PLAN.md — Test suite for all v2 commands
+- [x] 17-08-PLAN.md — Test suite for all v2 commands
 
 **Details:**
 Read requirements/pilot-v2-master.md + requirements/pilot-v2-architecture.md for full spec.

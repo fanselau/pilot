@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 17 of 18 (Pilot v2 complete rewrite)
-Plan: 7 of 8 in current phase
-Status: In progress
-Last activity: 2026-03-02 - Completed 17-07-PLAN.md
+Plan: 8 of 8 in current phase
+Status: Phase complete
+Last activity: 2026-03-02 - Completed 17-08-PLAN.md
 
-Progress: ██████████████████████████░░░░ 91% (61/67 plans)
+Progress: ██████████████████████████░░░░ 93% (62/67 plans)
 
 ## Project Reference
 
@@ -234,9 +234,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 17-05 | activeJobs tracked in run() before async launch() | Prevents --once mode from exiting before launch starts |
 | 17-05 | Guard against re-launching same job ID already active | Prevents duplicate launches when getNextPending returns same job |
 | 17-05 | _resetSpawnRateLimit for test isolation | Module-level rate limiter state persists across tests |
+| 17-08 | Real filesystem for detectScope tests | package.json and src/ exist reliably in repo; avoids brittle fs mocks |
+| 17-08 | process.exit mocked as throw for error path testing | Halts execution at exit point; enables rejects.toThrow assertion pattern |
+| 17-08 | Colors mocked as identity functions | Test assertions check text content not ANSI escape sequences |
+| 17-08 | formatRelativeTime mocked to constant | Isolates command output tests from time-dependent formatting |
 
 ## Session Continuity
 
-Last session: 2026-03-02T10:16:07Z
-Stopped at: Completed 17-07-PLAN.md
+Last session: 2026-03-02T10:38:00Z
+Stopped at: Completed 17-08-PLAN.md — Phase 17 complete
 Resume file: None
