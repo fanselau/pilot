@@ -56,6 +56,16 @@ vi.mock('../../src/core/delegate.js', () => ({
   resolveOpencodeBinary: vi.fn(() => '/usr/bin/opencode'),
 }));
 
+const { mockResolveAllAgentModels, mockPatchAgentFrontmatter } = vi.hoisted(() => ({
+  mockResolveAllAgentModels: vi.fn(() => ({})),
+  mockPatchAgentFrontmatter: vi.fn(),
+}));
+
+vi.mock('../../src/core/models.js', () => ({
+  resolveAllAgentModels: mockResolveAllAgentModels,
+  patchAgentFrontmatter: mockPatchAgentFrontmatter,
+}));
+
 const mockFindSessionByTitle = vi.fn();
 const mockIsSessionActive = vi.fn();
 const mockGetLastMessage = vi.fn();
@@ -115,6 +125,8 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     delegationPlan: null,
     currentStep: 0,
     sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'claude-only',
     ...overrides,
   };
 }
@@ -238,6 +250,8 @@ describe('Runner', () => {
       expect(mockUpdateSessionTitles).toHaveBeenCalledWith('ab12', expect.arrayContaining([expect.any(String)]));
       expect(mockAdvanceStep).toHaveBeenCalledWith('ab12');
       expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+      expect(mockResolveAllAgentModels).toHaveBeenCalledWith('balanced', 'claude-only');
+      expect(mockPatchAgentFrontmatter).toHaveBeenCalled();
     }, 30000);
   });
 
@@ -316,7 +330,7 @@ describe('Runner', () => {
 
       // Should advance step twice (once per step)
       expect(mockAdvanceStep).toHaveBeenCalledTimes(2);
-      expect(mockUpdateSessionTitles).toHaveBeenCalledTimes(2);
+      expect(mockUpdateSessionTitles).toHaveBeenCalledTimes(3);
       expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
     }, 30000);
   });
