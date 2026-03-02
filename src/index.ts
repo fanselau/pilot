@@ -2,8 +2,9 @@
 /**
  * Pilot v2 CLI entry point.
  *
- * Registers all v2 commands with commander. Command implementations
- * are stubs until wired in Plans 06-07.
+ * All commands wired with dynamic imports for fast startup.
+ * Default command (no args) shows status dashboard.
+ * Global --json flag handled via preAction hook.
  */
 
 import { Command } from 'commander';
@@ -30,15 +31,6 @@ program.hook('preAction', (_thisCommand, actionCommand) => {
     setJsonMode(true);
   }
 });
-
-// ── Stub helper ───────────────────────────────────────────────────────────
-
-function stub(name: string): () => void {
-  return () => {
-    process.stderr.write(`pilot ${name}: not yet implemented (v2 Plan 06-07)\n`);
-    process.exit(1);
-  };
-}
 
 // ── Default command: status ───────────────────────────────────────────────
 
@@ -89,48 +81,50 @@ program
     await queueCommand({ ...program.opts(), ...opts } as Parameters<typeof queueCommand>[0]);
   });
 
+// ── Queue management ──────────────────────────────────────────────────────
+
 program
   .command('cancel <id>')
   .description('Cancel a pending job')
-  .action(stub('cancel'));
+  .action(async (id: string) => {
+    const { cancelCommand } = await import('./commands/cancel.js');
+    await cancelCommand(id);
+  });
 
 program
   .command('retry <id>')
   .description('Retry a failed job')
-  .action(stub('retry'));
+  .action(async (id: string) => {
+    const { retryCommand } = await import('./commands/retry.js');
+    await retryCommand(id);
+  });
 
 program
   .command('bump <id>')
   .description('Move job to front of queue')
-  .action(stub('bump'));
+  .action(async (id: string) => {
+    const { bumpCommand } = await import('./commands/bump.js');
+    await bumpCommand(id);
+  });
 
-// ── Infrastructure commands ───────────────────────────────────────────────
+// ── Infrastructure ────────────────────────────────────────────────────────
 
 program
   .command('setup <dir>')
   .description('Set up project for Pilot (links pilot-gsd)')
-  .action(stub('setup'));
+  .option('--verify', 'Verify existing setup')
+  .action(async (dir: string, opts: Record<string, unknown>) => {
+    const { setupCommand } = await import('./commands/setup.js');
+    await setupCommand(dir, opts as { verify?: boolean });
+  });
 
 program
   .command('update')
   .description('Update pilot-gsd definitions')
-  .action(stub('update'));
-
-program
-  .command('doctor')
-  .description('Health check: opencode binary, DB access, disk, memory')
-  .option('--fix', 'Attempt to fix issues')
-  .action(stub('doctor'));
-
-program
-  .command('service <action>')
-  .description('Daemon management: start, stop, status')
-  .action(stub('service'));
-
-program
-  .command('gc')
-  .description('Clean old sessions, compact DBs')
-  .action(stub('gc'));
+  .action(async () => {
+    const { updateCommand } = await import('./commands/update.js');
+    await updateCommand();
+  });
 
 program
   .command('config')
@@ -138,6 +132,47 @@ program
   .action(async () => {
     const { configCommand } = await import('./commands/config.js');
     await configCommand();
+  });
+
+program
+  .command('doctor')
+  .description('Health check: opencode binary, DB access, disk, memory')
+  .action(async () => {
+    const { doctorCommand } = await import('./commands/doctor.js');
+    await doctorCommand();
+  });
+
+program
+  .command('service <action>')
+  .description('Daemon management: install, start, stop, status')
+  .action(async (action: string) => {
+    const { serviceCommand } = await import('./commands/service.js');
+    await serviceCommand(action);
+  });
+
+program
+  .command('gc')
+  .description('Clean old jobs, compact DB')
+  .action(async () => {
+    const { gcCommand } = await import('./commands/gc.js');
+    await gcCommand();
+  });
+
+// ── Runner (foreground) ───────────────────────────────────────────────────
+
+program
+  .command('run')
+  .description('Start queue runner in foreground')
+  .option('--once', 'Process queue once then exit')
+  .option('--daemon', 'Run as daemon (no TTY output)')
+  .option('--max-parallel <n>', 'Max concurrent jobs', parseInt)
+  .action(async (opts: Record<string, unknown>) => {
+    const { createRunner } = await import('./core/runner.js');
+    const runner = createRunner({
+      once: opts.once as boolean | undefined,
+      maxParallel: opts.maxParallel as number | undefined,
+    });
+    await runner.run();
   });
 
 // ── Parse and run ─────────────────────────────────────────────────────────
