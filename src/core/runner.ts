@@ -24,6 +24,7 @@ import {
   markRunning,
   markCompleted,
   markFailed,
+  cancel,
   updateDelegationPlan,
   advanceStep,
   getJob,
@@ -31,7 +32,9 @@ import {
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-db.js';
+import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
 import { truncateTitle } from '../util/format.js';
+import { dim } from '../util/colors.js';
 import type { Job, DelegationPlan } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -159,6 +162,8 @@ class Runner {
       markRunning(job.id);
       // activeJobs already set in run() before launch() is called
 
+      this.patchModelsForJob(job, projectDir);
+
       // Step 1: Delegation AI decides what GSD commands to run
       // Track delegation session title so `pilot log` can find it
       updateSessionTitles(job.id, [`pilot-delegate-${job.id}-1`]);
@@ -171,25 +176,59 @@ class Runner {
       updateDelegationPlan(job.id, plan);
 
       // Step 2: Execute each step sequentially
+      let allStepsCompleted = true;
       for (let i = 0; i < plan.steps.length; i++) {
-        if (this.shuttingDown) break;
+        if (this.shuttingDown) {
+          allStepsCompleted = false;
+          break;
+        }
 
         const step = plan.steps[i];
         const title = truncateTitle(`${job.project}-${step.command}-${job.id}`, 80);
         this.activeJobs.set(job.id, { job, title });
         updateSessionTitles(job.id, [title]);
 
+        this.patchModelsForJob(job, projectDir);
+
         await this.spawnAndWait(projectDir, step.command, step.args, title);
+
+        // R2: Semantic success gating for phase commands
+        if (step.command === 'execute-phase' || step.command === 'plan-phase') {
+          const sessionId = findSessionByTitle(title);
+          if (sessionId) {
+            const verdict = evaluateStepResult(sessionId, step.command);
+            if (!verdict.success) {
+              throw new Error(`Step "${step.command} ${step.args}" failed: ${verdict.reason}`);
+            }
+          }
+        }
+
         advanceStep(job.id);
       }
 
-      markCompleted(job.id);
+      // R3: Only mark completed if all steps actually ran
+      if (allStepsCompleted) {
+        markCompleted(job.id);
+      } else {
+        cancel(job.id);
+      }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       markFailed(job.id, error);
     } finally {
       this.activeJobs.delete(job.id);
     }
+  }
+
+  private patchModelsForJob(job: Job, projectDir: string): void {
+    if (!job.modelProfile) {
+      return;
+    }
+
+    const providerMode = job.providerMode ?? 'claude-only';
+    process.stderr.write(dim(`Patching agent models: ${job.modelProfile}/${providerMode}`) + '\n');
+    const models = resolveAllAgentModels(job.modelProfile, providerMode);
+    patchAgentFrontmatter(projectDir, models);
   }
 
   /**
@@ -355,6 +394,51 @@ class Runner {
   }
 }
 
+// ── Semantic success gating (R2) ───────────────────────────────────────────
+
+interface StepVerdict {
+  success: boolean;
+  reason: string;
+  source: 'semantic-check';
+}
+
+/**
+ * R2: Evaluate whether a phase command (execute-phase, plan-phase) succeeded
+ * by checking the last assistant message for semantic failure markers.
+ *
+ * Returns { success: false } when the output contains known failure patterns
+ * like "no matching phase", "error phase not found", etc.
+ */
+function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
+  const lastMsg = getLastMessage(sessionId);
+  if (!lastMsg) {
+    return { success: true, reason: 'No messages to evaluate', source: 'semantic-check' };
+  }
+
+  // Failure markers — these indicate the command semantically failed
+  const failurePatterns = [
+    /no matching phase/i,
+    /error.*phase.*not found/i,
+    /no plans? found/i,
+    /phase directory.*not found/i,
+    /cannot find phase/i,
+    /failed to (plan|execute|verify)/i,
+    /\berror\b.*\b(execute|plan|verify)\b/i,
+  ];
+
+  for (const pattern of failurePatterns) {
+    if (pattern.test(lastMsg.content)) {
+      return {
+        success: false,
+        reason: `Semantic failure detected: ${lastMsg.content.slice(0, 200)}`,
+        source: 'semantic-check',
+      };
+    }
+  }
+
+  return { success: true, reason: 'No failure markers detected', source: 'semantic-check' };
+}
+
 // ── Pre-spawn safety checks ────────────────────────────────────────────────
 
 /**
@@ -496,8 +580,8 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner };
-export type { RunnerOptions, RunnerState };
+export { Runner, createRunner, evaluateStepResult };
+export type { RunnerOptions, RunnerState, StepVerdict };
 
 // Export pre-spawn checks for direct testing
 export {
