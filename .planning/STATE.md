@@ -5,20 +5,19 @@
 
 ## Current Position
 
-Phase: 19 of 19 (TUI build fix — proper OpenTUI/Solid setup)
+Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
-**Next Phase:** 20 (requirements/model-profile-support.md)
-Last activity: 2026-03-02 - Completed quick task 012: TUI Detail View - Job Drill-Down on Enter
+Last activity: 2026-03-02 - Completed 20-01-PLAN.md
 
-Progress: ████████████████████████████░░ 94% (66/70 plans)
+Progress: ████████████████████████████░░ 93% (67/72 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 19 in progress — TUI build fix (1/2 plans complete)
+**Current focus:** Phase 20 in progress — Model profile support (1/2 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -261,6 +260,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-02T14:05:29Z
-Stopped at: Completed quick-012-PLAN.md
+Last session: 2026-03-02T16:02:37Z
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None

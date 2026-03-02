@@ -333,7 +333,7 @@ Read requirements/tui-phase-redo.md for full spec.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — DB schema migration + types + add command --profile/--provider flags
+- [x] 20-01-PLAN.md — DB schema migration + types + add command --profile/--provider flags
 - [ ] 20-02-PLAN.md — Runner config writing + status profile display + tests
 
 **Details:**
