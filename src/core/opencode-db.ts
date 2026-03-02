@@ -11,7 +11,8 @@
  * Pure core module — no UI dependencies.
  */
 
-import Database from 'better-sqlite3';
+import Database from './sqlite.js';
+import type { Database as DatabaseType } from './sqlite.js';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { accessSync, constants } from 'node:fs';
@@ -27,7 +28,7 @@ export interface IsStuckResult {
 
 // ── Module-level cached DB connection ──────────────────────────────────────
 
-let cachedDb: Database.Database | null = null;
+let cachedDb: DatabaseType | null = null;
 let dbOpenAttempted = false;
 
 /**
@@ -44,7 +45,7 @@ function resolveDbPath(): string {
  * Returns a Database instance or null if DB doesn't exist or is unreadable.
  * Caches the connection at module level for reuse.
  */
-function openDb(): Database.Database | null {
+function openDb(): DatabaseType | null {
   if (cachedDb !== null) {
     return cachedDb;
   }
@@ -544,7 +545,7 @@ function _resetDbCache(): void {
  * Inject a DB instance for testing.
  * @internal — only for use in tests
  */
-function _setTestDb(db: Database.Database | null): void {
+function _setTestDb(db: DatabaseType | null): void {
   cachedDb = db;
   dbOpenAttempted = true;
 }
