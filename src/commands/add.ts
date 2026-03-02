@@ -9,11 +9,12 @@
  * For quick scope with file requirement, passes FULL file content as description.
  */
 
-import { accessSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob } from '../core/db.js';
+import { getConfig } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
-import { green, dim } from '../util/colors.js';
+import { green, dim, yellow } from '../util/colors.js';
 import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
 
 const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
@@ -90,6 +91,31 @@ async function addCommand(
   // For quick scope with file requirement, pass FULL content as description
   if (scope === 'quick' && requirementPath !== null) {
     description = readFileSync(requirementPath, 'utf8');
+  }
+
+  // R5: Warn when phase scope auto-detected but no matching phase in ROADMAP
+  if (scope === 'phase' && !opts.as && isFilePath(requirement)) {
+    const projectDir = path.join(getConfig().projectDir, project);
+    const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
+
+    if (existsSync(roadmapPath)) {
+      try {
+        const roadmap = readFileSync(roadmapPath, 'utf8');
+        const descLower = description.toLowerCase();
+        const hasMatch = roadmap.toLowerCase().includes(descLower.slice(0, 30));
+
+        if (!hasMatch) {
+          process.stderr.write(
+            `\n  ${yellow('⚠')}  No matching phase found for "${description.slice(0, 50)}"\n` +
+            `     The delegate AI will create a new phase. To override:\n` +
+            `       pilot add ${project} "${requirement}" --as quick    # run as quick task\n` +
+            `       pilot add ${project} "${requirement}" --as milestone  # full milestone\n\n`,
+          );
+        }
+      } catch {
+        // Can't read ROADMAP — skip warning silently
+      }
+    }
   }
 
   const job = addJob(project, scope, description, requirementPath ?? undefined, modelProfile, providerMode);

@@ -10,7 +10,7 @@
  */
 
 import { execa } from 'execa';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
 import type { Job, DelegationPlan } from './types.js';
@@ -74,14 +74,8 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
           reasoning: 'Fallback: project not initialized, running full lifecycle',
         };
       }
-      // Project exists — run execute-phase which reads STATE.md to find the
-      // next unexecuted phase. Smarter than hardcoding a phase number.
-      return {
-        steps: [
-          { command: 'execute-phase', args: job.description },
-        ],
-        reasoning: 'Fallback: project initialized, running execute-phase (reads STATE.md for next phase)',
-      };
+      // Project exists — resolve phase identifier safely (R1)
+      return resolvePhaseForFallback(projectDir, job);
 
     case 'milestone':
       if (!hasPlanning) {
@@ -101,6 +95,58 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
         reasoning: 'Fallback: project already initialized, adding as new phase',
       };
   }
+}
+
+/**
+ * R1: Resolve phase identifier for fallback when scope='phase' and project has ROADMAP.md.
+ *
+ * If job.description is a numeric phase identifier, execute it directly.
+ * Otherwise, build a full lifecycle: add-phase → plan-phase → execute-phase.
+ * Never blindly pass requirement titles to execute-phase.
+ */
+function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
+  const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
+  let roadmapContent: string;
+  try {
+    roadmapContent = readFileSync(roadmapPath, 'utf8');
+  } catch {
+    // No ROADMAP — can't resolve, fail fast with actionable error
+    return {
+      steps: [{ command: 'execute-phase', args: '1' }],
+      reasoning: `Fallback: ROADMAP.md not found at ${roadmapPath}, defaulting to phase 1`,
+    };
+  }
+
+  // If description is already a phase number, just execute it
+  if (/^\d+$/.test(job.description.trim())) {
+    return {
+      steps: [{ command: 'execute-phase', args: job.description.trim() }],
+      reasoning: 'Fallback: description is numeric phase identifier',
+    };
+  }
+
+  // Count existing phases in ROADMAP to determine next phase number
+  const phaseMatches = roadmapContent.match(/^###\s+Phase\s+(\d+)/gm) || [];
+  const maxPhase = phaseMatches.reduce((max, match) => {
+    const numMatch = match.match(/(\d+)/);
+    const n = numMatch ? parseInt(numMatch[1], 10) : 0;
+    return Math.max(max, n);
+  }, 0);
+  const nextPhase = maxPhase + 1;
+
+  // Build full lifecycle: add → plan → execute
+  const addArgs = job.requirementPath
+    ? `@${job.requirementPath}`
+    : job.description;
+
+  return {
+    steps: [
+      { command: 'add-phase', args: addArgs },
+      { command: 'plan-phase', args: `${nextPhase} --auto` },
+      { command: 'execute-phase', args: `${nextPhase}` },
+    ],
+    reasoning: `Fallback: "${job.description}" is not a phase number, creating as phase ${nextPhase}`,
+  };
 }
 
 /**
@@ -244,4 +290,4 @@ function parseDelegationOutput(content: string): DelegationPlan {
   };
 }
 
-export { delegate, parseDelegationOutput, resolveOpencodeBinary, waitForDelegationResult };
+export { delegate, parseDelegationOutput, resolveOpencodeBinary, waitForDelegationResult, resolvePhaseForFallback };
