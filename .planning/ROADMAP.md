@@ -326,14 +326,15 @@ Plans:
 **Details:**
 Read requirements/tui-phase-redo.md for full spec.
 
-### Phase 20: requirements/model-profile-support.md
+### Phase 20: Model profile support per requirements/model-profile-support.md
 
-**Goal:** [To be planned]
+**Goal:** Add --profile and --provider flags to `pilot add`, store on job records in pilot.db, and have the runner write .planning/config.json before spawning so GSD agents use the correct model tier. Show profile in status display.
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — DB schema migration + types + add command --profile/--provider flags
+- [ ] 20-02-PLAN.md — Runner config writing + status profile display + tests
 
 **Details:**
-[To be added during planning]
+Read requirements/model-profile-support.md for full spec.
