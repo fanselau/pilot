@@ -303,7 +303,7 @@ Read requirements/pilot-v2-master.md + requirements/pilot-v2-architecture.md for
 
 Plans:
 - [ ] 18-01-PLAN.md — Bun migration + OpenTUI/SolidJS dependency install
-- [ ] 18-02-PLAN.md — Theme constants, reactive state store, data polling layer
+- [x] 18-02-PLAN.md — Theme constants, reactive state store, data polling layer
 - [ ] 18-03-PLAN.md — TUI shell: renderer, App, StatusBar, FooterBar, HelpOverlay, keyboard routing
 - [ ] 18-04-PLAN.md — Reusable widgets: sparkline, pulse-dot, scrollable
 - [ ] 18-05-PLAN.md — Dashboard view: QueuePanel, RunningPanel, CompletedPanel, FilterOverlay
