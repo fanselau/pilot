@@ -8,7 +8,7 @@
 Phase: 18 of 18 (Pilot v2 TUI with OpenTUI)
 Plan: 5 of 7 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed quick task 001: Fix pilot log — Show actual message content
+Last activity: 2026-03-02 - Completed quick task 009: Fix TUI — Register @opentui/solid bun plugin
 
 Progress: ████████████████████████████░░ 94% (65/69 plans)
 
@@ -69,6 +69,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 001 | Fix pilot log — Show actual message content | 2026-03-02 | 8a74897 | [001-fix-pilot-log-show-actual-message-content](./quick/001-fix-pilot-log-show-actual-message-content/) |
+| 009 | Fix TUI — Register @opentui/solid bun plugin | 2026-03-02 | a5e4a57 | [009-fix-tui-replace-react-ink-with-solid-open](./quick/009-fix-tui-replace-react-ink-with-solid-open/) |
 
 ## Accumulated Context
 
@@ -253,6 +254,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-02T13:03:26Z
-Stopped at: Completed quick-001-PLAN.md
+Last session: 2026-03-02T13:16:16Z
+Stopped at: Completed quick-009-PLAN.md
 Resume file: None
