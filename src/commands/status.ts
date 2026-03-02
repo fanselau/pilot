@@ -20,6 +20,21 @@ interface StatusOptions {
 }
 
 /**
+ * Sanitize job description for single-line display.
+ * Strips newlines, collapses whitespace, extracts first heading if markdown,
+ * and truncates to 50 chars.
+ */
+function sanitizeDesc(raw: string): string {
+  // If it starts with a markdown heading, extract just the title
+  const headingMatch = raw.match(/^#\s+(.+)/m);
+  const clean = (headingMatch ? headingMatch[1] : raw)
+    .replace(/\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > 50 ? clean.slice(0, 50) + '…' : clean;
+}
+
+/**
  * Enrich a running job with session info from opencode DB.
  * Returns a display-friendly elapsed time string.
  */
@@ -82,12 +97,9 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     outputHuman(`  ${bold('Active')} (${active.length})`);
     for (const job of active) {
       const elapsed = getJobElapsed(job);
-      const desc =
-        job.description.length > 50
-          ? job.description.slice(0, 50) + '…'
-          : job.description;
+      const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${blue('●')} ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}`,
+        `  ${blue('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}`,
       );
 
       // Show latest session activity if available
@@ -103,12 +115,9 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   if (pending.length > 0) {
     outputHuman(`  ${bold('Queue')} (${pending.length})`);
     for (const job of pending) {
-      const desc =
-        job.description.length > 50
-          ? job.description.slice(0, 50) + '…'
-          : job.description;
+      const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${dim('○')} ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}`,
+        `  ${dim('○')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}`,
       );
     }
     outputHuman('');
@@ -125,12 +134,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
             ? red('✗')
             : dim('◌');
       const elapsed = job.completedAt ? formatRelativeTime(job.completedAt) : '';
-      const desc =
-        job.description.length > 50
-          ? job.description.slice(0, 50) + '…'
-          : job.description;
+      const desc = sanitizeDesc(job.description);
+      const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}${failReason}`,
       );
     }
     outputHuman('');
