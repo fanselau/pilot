@@ -52,6 +52,8 @@ describe('pilot.db', () => {
       expect(job.sessionTitles).toBeNull();
       expect(job.requirementPath).toBeNull();
       expect(job.createdAt).toBeDefined();
+      expect(job.modelProfile).toBe('balanced');
+      expect(job.providerMode).toBe('claude-only');
     });
 
     it('stores requirementPath when provided', () => {
@@ -66,6 +68,18 @@ describe('pilot.db', () => {
         ids.add(job.id);
       }
       expect(ids.size).toBe(20);
+    });
+
+    it('stores model_profile and provider_mode when provided', () => {
+      const job = addJob('proj', 'quick', 'budget task', undefined, 'budget', 'hybrid');
+      expect(job.modelProfile).toBe('budget');
+      expect(job.providerMode).toBe('hybrid');
+    });
+
+    it('defaults to balanced / claude-only when profile/provider not provided', () => {
+      const job = addJob('proj', 'quick', 'default task');
+      expect(job.modelProfile).toBe('balanced');
+      expect(job.providerMode).toBe('claude-only');
     });
   });
 
