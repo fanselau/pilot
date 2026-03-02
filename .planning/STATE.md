@@ -8,7 +8,7 @@
 Phase: 18 of 18 (Pilot v2 TUI with OpenTUI)
 Plan: 5 of 7 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed quick task 010: Flesh out pilot log — show full session activity
+Last activity: 2026-03-02 - Completed quick task 011: Daemon hot-reload after build
 
 Progress: ████████████████████████████░░ 94% (65/69 plans)
 
@@ -71,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 001 | Fix pilot log — Show actual message content | 2026-03-02 | 8a74897 | [001-fix-pilot-log-show-actual-message-content](./quick/001-fix-pilot-log-show-actual-message-content/) |
 | 009 | Fix TUI — Register @opentui/solid bun plugin | 2026-03-02 | a5e4a57 | [009-fix-tui-replace-react-ink-with-solid-open](./quick/009-fix-tui-replace-react-ink-with-solid-open/) |
 | 010 | Flesh out pilot log — show full session activity | 2026-03-02 | d73c13d | [010-flesh-out-pilot-log-show-full-session-act](./quick/010-flesh-out-pilot-log-show-full-session-act/) |
+| 011 | Daemon hot-reload after build | 2026-03-02 | 79b116c | [011-daemon-hot-reload-after-build-problem-whe](./quick/011-daemon-hot-reload-after-build-problem-whe/) |
 
 ## Accumulated Context
 
@@ -255,6 +256,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-02T13:28:33Z
-Stopped at: Completed quick-010-PLAN.md
+Last session: 2026-03-02T13:33:23Z
+Stopped at: Completed quick-011-PLAN.md
 Resume file: None
