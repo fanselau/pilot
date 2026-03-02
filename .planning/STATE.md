@@ -8,7 +8,7 @@
 Phase: 18 of 18 (Pilot v2 TUI with OpenTUI)
 Plan: 5 of 7 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed 18-05-PLAN.md
+Last activity: 2026-03-02 - Completed quick task 001: Fix pilot log — Show actual message content
 
 Progress: ████████████████████████████░░ 94% (65/69 plans)
 
@@ -63,6 +63,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 15: E2E test suite per requirements/e2e-test-suite.md
 - **Status:** in progress (1/3 plans complete)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Fix pilot log — Show actual message content | 2026-03-02 | 8a74897 | [001-fix-pilot-log-show-actual-message-content](./quick/001-fix-pilot-log-show-actual-message-content/) |
 
 ## Accumulated Context
 
