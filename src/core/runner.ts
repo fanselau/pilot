@@ -115,7 +115,7 @@ class Runner {
    */
   private async launch(job: Job): Promise<void> {
     const config = getConfig();
-    const projectDir = path.join(config.projectDir, job.project);
+    const projectDir = path.isAbsolute(job.project) ? job.project : path.join(config.projectDir, job.project);
 
     try {
       markRunning(job.id);
@@ -180,6 +180,10 @@ class Runner {
       '--format', 'default',
       '--title', title,
       '--command', gsdCommand,
+      // Pass args as a single positional string. NEVER use -- separator
+      // (causes arg.includes error on numeric args in opencode).
+      // To avoid opencode's yargs swallowing --flags, the delegate module
+      // ensures args never START with -- (puts content before flags).
       ...(args ? [args] : []),
     ], {
       cwd,
@@ -189,6 +193,9 @@ class Runner {
       detached: true,
       cleanup: false,
     });
+    // Ignore the execa promise — we poll opencode DB for completion instead.
+    // Without this catch, a non-zero exit code becomes an unhandled rejection.
+    proc.catch(() => {});
     proc.unref();
 
     // Poll opencode DB for session completion
