@@ -338,3 +338,15 @@ Plans:
 
 **Details:**
 Read requirements/model-profile-support.md for full spec.
+
+### Phase 21: requirements/tui-visual-polish.md
+
+**Goal:** [To be planned]
+**Depends on:** Phase 20
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 21 to break down)
+
+**Details:**
+[To be added during planning]

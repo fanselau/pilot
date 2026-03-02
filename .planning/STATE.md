@@ -8,6 +8,7 @@
 Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
+**Next Phase:** Phase 21 — requirements/tui-visual-polish.md
 Last activity: 2026-03-02 - Completed quick task 015: Step-level observability (R4) — job_steps table, per-step recording in runner, step summary in pilot log
 
 Progress: ████████████████████████████░░ 93% (67/72 plans)
@@ -94,6 +95,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 18 added: Pilot v2 TUI with OpenTUI — dashboard, job detail, split pane views
 - Phase 19 added: requirements/tui-phase-redo.md
 - Phase 20 added: requirements/model-profile-support.md
+- Phase 21 added: requirements/tui-visual-polish.md
 
 ## Decisions
 
