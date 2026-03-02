@@ -24,6 +24,7 @@
   "author": "PunchLab <hello@punchlab.dev>",
   "license": "MIT",
   "scripts": {
+    "prebuild": "rm -rf dist",
     "build": "tsc",
     "postbuild": "node -e \"const f=require('fs');let c=f.readFileSync('dist/index.js','utf8');c=c.replace(/^#!.*\\n/,'');f.writeFileSync('dist/index.js','#!/usr/bin/env bun\\n'+c);f.chmodSync('dist/index.js',0o755);try{const p=require('path').join(require('os').homedir(),'.pilot','daemon.pid');const pid=parseInt(f.readFileSync(p,'utf8').trim(),10);process.kill(pid,'SIGHUP');console.log('\\x1b[32m✓\\x1b[0m Signaled daemon reload (PID '+pid+')');}catch(e){}\"",
     "dev": "bun run src/index.ts",
