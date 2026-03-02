@@ -74,12 +74,13 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
           reasoning: 'Fallback: project not initialized, running full lifecycle',
         };
       }
-      // Project exists — add phase, plan it, execute it
+      // Project exists — run execute-phase which reads STATE.md to find the
+      // next unexecuted phase. Smarter than hardcoding a phase number.
       return {
         steps: [
-          { command: 'add-phase', args: job.description },
+          { command: 'execute-phase', args: job.description },
         ],
-        reasoning: 'Fallback: adding phase. Run again to plan+execute after reviewing.',
+        reasoning: 'Fallback: project initialized, running execute-phase (reads STATE.md for next phase)',
       };
 
     case 'milestone':
