@@ -15,7 +15,7 @@
  */
 
 import { execa } from 'execa';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { getConfig } from './config.js';
@@ -60,6 +60,7 @@ class Runner {
   private running = false;
   private activeJobs: Map<string, { job: Job; title: string }> = new Map();
   private shuttingDown = false;
+  private reloading = false;
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -78,6 +79,11 @@ class Runner {
     this.running = true;
     this.setupShutdownHandlers();
 
+    // Write PID file so postbuild and `pilot reload` can signal us
+    const pidFilePath = this.getPidFilePath();
+    this.writePidFile(pidFilePath);
+
+    try {
     while (this.running) {
       if (this.shuttingDown) break;
 
@@ -108,6 +114,38 @@ class Runner {
     while (this.activeJobs.size > 0) {
       await this.sleep(5000);
     }
+
+    } finally {
+      // Clean up PID file on exit
+      this.removePidFile(pidFilePath);
+    }
+
+    // If SIGHUP triggered reload, re-exec with new code
+    if (this.reloading) {
+      process.stderr.write('[runner] Reloading with new code...\n');
+
+      // Detect systemd: INVOCATION_ID is set for systemd-managed services
+      const underSystemd = !!process.env.INVOCATION_ID;
+
+      if (underSystemd) {
+        // Systemd has Restart=always — just exit and it restarts us
+        process.stderr.write('[runner] Under systemd — exiting for automatic restart\n');
+        process.exit(0);
+      } else {
+        // Not under systemd — spawn a new process before exiting
+        const child = execa(process.execPath, process.argv.slice(1), {
+          detached: true,
+          stdin: 'ignore',
+          stdout: 'ignore',
+          stderr: 'ignore',
+          cleanup: false,
+        });
+        child.catch(() => {});
+        child.unref();
+        process.stderr.write(`[runner] Spawned new runner (PID ${child.pid}), exiting old\n`);
+        process.exit(0);
+      }
+    }
   }
 
   /**
@@ -122,6 +160,8 @@ class Runner {
       // activeJobs already set in run() before launch() is called
 
       // Step 1: Delegation AI decides what GSD commands to run
+      // Track delegation session title so `pilot log` can find it
+      updateSessionTitles(job.id, [`pilot-delegate-${job.id}-1`]);
       let plan: DelegationPlan;
       try {
         plan = await delegate(job, projectDir);
@@ -137,9 +177,9 @@ class Runner {
         const step = plan.steps[i];
         const title = truncateTitle(`${job.project}-${step.command}-${job.id}`, 80);
         this.activeJobs.set(job.id, { job, title });
+        updateSessionTitles(job.id, [title]);
 
         await this.spawnAndWait(projectDir, step.command, step.args, title);
-        updateSessionTitles(job.id, [title]);
         advanceStep(job.id);
       }
 
@@ -240,15 +280,55 @@ class Runner {
   }
 
   /**
-   * Set up SIGTERM/SIGINT handlers for graceful shutdown.
+   * Get the path to the daemon PID file.
+   */
+  private getPidFilePath(): string {
+    const config = getConfig();
+    return path.join(config.pilotDir, 'daemon.pid');
+  }
+
+  /**
+   * Write the current process PID to the PID file.
+   * Creates ~/.pilot/ directory if it doesn't exist.
+   */
+  private writePidFile(pidPath: string): void {
+    const dir = path.dirname(pidPath);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(pidPath, String(process.pid), 'utf8');
+  }
+
+  /**
+   * Remove the PID file. Swallows ENOENT (already deleted).
+   */
+  private removePidFile(pidPath: string): void {
+    try {
+      unlinkSync(pidPath);
+    } catch (err) {
+      // Swallow ENOENT — file may already be deleted
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Set up SIGTERM/SIGINT/SIGHUP handlers for graceful shutdown and reload.
    */
   private setupShutdownHandlers(): void {
-    const handler = () => {
+    const shutdownHandler = () => {
       this.shuttingDown = true;
       this.running = false;
     };
-    process.on('SIGTERM', handler);
-    process.on('SIGINT', handler);
+    process.on('SIGTERM', shutdownHandler);
+    process.on('SIGINT', shutdownHandler);
+
+    // SIGHUP: graceful reload — drain current steps then re-exec
+    process.on('SIGHUP', () => {
+      process.stderr.write('[runner] SIGHUP received — reloading after current step completes...\n');
+      this.reloading = true;
+      this.shuttingDown = true;  // Reuse existing mechanism to stop accepting new steps
+      this.running = false;       // Break the main while loop
+    });
   }
 
   /**
