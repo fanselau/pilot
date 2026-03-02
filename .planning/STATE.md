@@ -8,7 +8,7 @@
 Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed quick task 013: Implement requirements/pilot-phase-execution-success-contract.md end-to-end in code: fix phase fallback mapping, semantic success gating, interrupted-job status handling, and phase ambiguity warning; include tests
+Last activity: 2026-03-02 - Completed quick task 015: Step-level observability (R4) — job_steps table, per-step recording in runner, step summary in pilot log
 
 Progress: ████████████████████████████░░ 93% (67/72 plans)
 
@@ -76,6 +76,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 012 | TUI detail view — job drill-down on enter | 2026-03-02 | ebe7b62 | [012-tui-detail-view-job-drill-down-on-enter-](./quick/012-tui-detail-view-job-drill-down-on-enter-/) |
 | 013 | Implement requirements/pilot-phase-execution-success-contract.md end-to-end in code: fix phase fallback mapping, semantic success gating, interrupted-job status handling, and phase ambiguity warning; include tests | 2026-03-02 | 979bbf3 | [013-implement-requirements-pilot-phase-execu](./quick/013-implement-requirements-pilot-phase-execu/) |
 | 014 | Model Frontmatter Patching | 2026-03-02 | 04df455 | [014-model-frontmatter-patching](./quick/014-model-frontmatter-patching/) |
+| 015 | Step-level observability (R4) — job_steps table + runner recording + pilot log display | 2026-03-02 | 6840417 | [015-pilot-requirement-phase-execution-succes](./quick/015-pilot-requirement-phase-execution-succes/) |
 
 ## Accumulated Context
 
@@ -262,6 +263,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-02T18:10:53Z
-Stopped at: Completed quick-013 (Phase Execution Success Contract)
+Last session: 2026-03-02T19:17:17Z
+Stopped at: Completed quick-015 (Step-Level Observability R4)
 Resume file: None
