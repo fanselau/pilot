@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 18 of 18 (Pilot v2 TUI with OpenTUI)
-Plan: 4 of 7 in current phase
+Plan: 5 of 7 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed 18-04-PLAN.md
+Last activity: 2026-03-02 - Completed 18-05-PLAN.md
 
-Progress: ███████████████████████████░░░ 93% (64/69 plans)
+Progress: ████████████████████████████░░ 94% (65/69 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 18 in progress — Pilot v2 TUI with OpenTUI (4/7 plans complete)
+**Current focus:** Phase 18 in progress — Pilot v2 TUI with OpenTUI (5/7 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -239,9 +239,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 17-08 | Colors mocked as identity functions | Test assertions check text content not ANSI escape sequences |
 | 17-08 | formatRelativeTime mocked to constant | Isolates command output tests from time-dependent formatting |
 | 18-04 | @jsxImportSource @opentui/solid per-file pragma for TUI .tsx | Cleaner than @ts-ignore; properly resolves OpenTUI JSX intrinsics |
+| 18-05 | Created missing 18-03 prerequisite files (app.tsx, chrome components, tui command) | Plan 18-03 SUMMARY claimed files existed but they were never committed |
+| 18-05 | Flash detection via createEffect(on()) comparing prev/current ID sets | Clean SolidJS pattern for detecting new completions without stale closures |
+| 18-05 | formatTokens exported from running-panel for reuse | Avoids duplicate helper; completed-panel imports it |
 
 ## Session Continuity
 
-Last session: 2026-03-02T12:46:28Z
-Stopped at: Completed 18-04-PLAN.md
+Last session: 2026-03-02T12:55:16Z
+Stopped at: Completed 18-05-PLAN.md
 Resume file: None
