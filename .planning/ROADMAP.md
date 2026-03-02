@@ -312,3 +312,16 @@ Plans:
 
 **Details:**
 Read requirements/pilot-v2-tui.md for full spec.
+
+### Phase 19: TUI build fix — proper OpenTUI/Solid setup
+
+**Goal:** Fix the TUI so `pilot tui` launches a working dashboard under bun. Exclude TUI from tsc (bun runs .tsx natively), fix import paths, clean dist/ before build, remove stale files, verify TUI renders.
+**Depends on:** Phase 18
+**Plans:** 2 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Build setup: exclude TUI from tsc, prebuild clean, fix import paths
+- [ ] 19-02-PLAN.md — TUI launch verification + runtime fixes + human verify
+
+**Details:**
+Read requirements/tui-phase-redo.md for full spec.
