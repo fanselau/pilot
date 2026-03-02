@@ -1,0 +1,38 @@
+/**
+ * TUI data layer: pilot.db wrappers.
+ *
+ * Thin wrappers over core/db.ts for TUI consumption.
+ * Splits queue into pending/running for separate panels.
+ * Re-exports mutation functions for queue management actions.
+ *
+ * All reads are synchronous (better-sqlite3). Fast (<1ms) — no async needed.
+ */
+
+import { getQueue, getRecent, getJob, cancel, retry, bump } from '../../core/db.js';
+import type { Job } from '../../core/types.js';
+
+// ── Read wrappers ─────────────────────────────────────────────────────────
+
+/**
+ * Fetch queue data split into pending and running lists.
+ * Dashboard uses these for the Queue and Running panels.
+ */
+export function fetchQueueData(): { pending: Job[]; running: Job[] } {
+  const all = getQueue();
+  return {
+    pending: all.filter(j => j.status === 'pending'),
+    running: all.filter(j => j.status === 'running'),
+  };
+}
+
+/**
+ * Fetch recently completed/failed/cancelled jobs.
+ * Dashboard uses this for the Recent Completions panel.
+ */
+export function fetchRecentData(limit = 50): Job[] {
+  return getRecent(limit);
+}
+
+// ── Re-export mutations for queue management actions ──────────────────────
+
+export { cancel, retry, bump, getJob };
