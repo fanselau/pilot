@@ -75,6 +75,23 @@ export interface SessionMessage {
   createdAt: number;  // epoch ms
 }
 
+export interface SessionPart {
+  id: string;
+  messageId: string;
+  role: string;          // from parent message's data.role
+  type: string;          // text, tool, patch, step-start, step-finish, reasoning
+  createdAt: number;     // epoch ms
+  // Tool-specific fields (present when type='tool')
+  tool?: string;         // bash, read, write, edit, glob, grep, etc.
+  toolInput?: string;    // truncated input summary
+  toolOutput?: string;   // truncated output summary
+  toolStatus?: string;   // running, completed, error
+  // Text/reasoning fields
+  text?: string;         // text content
+  // Patch fields
+  patchFiles?: string[]; // filenames from patch operations
+}
+
 // ── Status output ─────────────────────────────────────────────────────────
 
 export interface PilotStatusJson {
