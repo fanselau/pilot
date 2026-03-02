@@ -14,12 +14,17 @@ import path from 'node:path';
 import { addJob } from '../core/db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim } from '../util/colors.js';
-import type { JobScope } from '../core/types.js';
+import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
+
+const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
+const VALID_PROVIDERS: readonly ProviderMode[] = ['hybrid', 'claude-only', 'openai-only'];
 
 interface AddOptions {
   as?: JobScope;
   next?: boolean;
   json?: boolean;
+  profile?: string;
+  provider?: string;
 }
 
 function isFilePath(str: string): boolean {
@@ -56,6 +61,16 @@ async function addCommand(
   requirement: string,
   opts: AddOptions,
 ): Promise<void> {
+  // Validate --profile
+  const modelProfile: ModelProfile | undefined = opts.profile
+    ? validateProfile(opts.profile)
+    : undefined;
+
+  // Validate --provider
+  const providerMode: ProviderMode | undefined = opts.provider
+    ? validateProvider(opts.provider)
+    : undefined;
+
   const scope = opts.as ?? detectScope(requirement);
 
   let description = requirement;
@@ -77,7 +92,7 @@ async function addCommand(
     description = readFileSync(requirementPath, 'utf8');
   }
 
-  const job = addJob(project, scope, description, requirementPath ?? undefined);
+  const job = addJob(project, scope, description, requirementPath ?? undefined, modelProfile, providerMode);
 
   if (isJsonMode()) {
     outputJson({ job });
@@ -85,8 +100,30 @@ async function addCommand(
   }
 
   const shortDesc = description.length > 60 ? description.slice(0, 60) + '…' : description;
-  outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"  ${dim(`(id: ${job.id})`)}`);
+  // Append non-default profile/provider as dim tag
+  const tags: string[] = [];
+  if (modelProfile && modelProfile !== 'balanced') tags.push(modelProfile);
+  if (providerMode && providerMode !== 'claude-only') tags.push(providerMode);
+  const tagStr = tags.length > 0 ? `  ${dim(`[${tags.join('/')}]`)}` : '';
+
+  outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
   outputHuman(`  ${dim('Run:')} pilot service start ${dim('to process queue')}`);
+}
+
+function validateProfile(value: string): ModelProfile {
+  if (!VALID_PROFILES.includes(value as ModelProfile)) {
+    process.stderr.write(`Error: Invalid profile "${value}". Must be one of: ${VALID_PROFILES.join(', ')}\n`);
+    process.exit(2);
+  }
+  return value as ModelProfile;
+}
+
+function validateProvider(value: string): ProviderMode {
+  if (!VALID_PROVIDERS.includes(value as ProviderMode)) {
+    process.stderr.write(`Error: Invalid provider "${value}". Must be one of: ${VALID_PROVIDERS.join(', ')}\n`);
+    process.exit(2);
+  }
+  return value as ProviderMode;
 }
 
 export { addCommand, detectScope };
