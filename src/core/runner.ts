@@ -29,6 +29,9 @@ import {
   advanceStep,
   getJob,
   updateSessionTitles,
+  recordStep,
+  completeStep,
+  skipRemainingSteps,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-db.js';
@@ -157,6 +160,7 @@ class Runner {
   private async launch(job: Job): Promise<void> {
     const config = getConfig();
     const projectDir = path.isAbsolute(job.project) ? job.project : path.join(config.projectDir, job.project);
+    let currentStepRowId: number | null = null;
 
     try {
       markRunning(job.id);
@@ -180,6 +184,8 @@ class Runner {
       for (let i = 0; i < plan.steps.length; i++) {
         if (this.shuttingDown) {
           allStepsCompleted = false;
+          // Mark remaining steps as skipped
+          skipRemainingSteps(job.id, i, 'Runner shutdown');
           break;
         }
 
@@ -190,7 +196,19 @@ class Runner {
 
         this.patchModelsForJob(job, projectDir);
 
-        await this.spawnAndWait(projectDir, step.command, step.args, title);
+        // Record step as running before spawn
+        currentStepRowId = recordStep(job.id, i, step.command, step.args, title);
+
+
+        try {
+          await this.spawnAndWait(projectDir, step.command, step.args, title);
+        } catch (spawnErr) {
+          // Mark step failed, then re-throw
+          const sessionId = findSessionByTitle(title);
+          completeStep(currentStepRowId, 'failed', null, spawnErr instanceof Error ? spawnErr.message : String(spawnErr), sessionId ?? null);
+          currentStepRowId = null;
+          throw spawnErr;
+        }
 
         // R2: Semantic success gating for phase commands
         if (step.command === 'execute-phase' || step.command === 'plan-phase') {
@@ -198,10 +216,19 @@ class Runner {
           if (sessionId) {
             const verdict = evaluateStepResult(sessionId, step.command);
             if (!verdict.success) {
+              completeStep(currentStepRowId, 'failed', verdict.source, verdict.reason, sessionId);
+              currentStepRowId = null;
               throw new Error(`Step "${step.command} ${step.args}" failed: ${verdict.reason}`);
             }
+            completeStep(currentStepRowId, 'completed', verdict.source, verdict.reason, sessionId);
+          } else {
+            completeStep(currentStepRowId, 'completed', null, 'Session not found for verdict check');
           }
+        } else {
+          const sessionId = findSessionByTitle(title);
+          completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         }
+        currentStepRowId = null;
 
         advanceStep(job.id);
       }
@@ -214,6 +241,12 @@ class Runner {
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      // Safety net: if a step was in-flight when error occurred, mark it failed
+      if (currentStepRowId !== null) {
+        try {
+          completeStep(currentStepRowId, 'failed', null, error);
+        } catch { /* best effort */ }
+      }
       markFailed(job.id, error);
     } finally {
       this.activeJobs.delete(job.id);

@@ -11,14 +11,14 @@
  *   --delegation Show ONLY delegation session(s)
  */
 
-import { getJob, getQueue } from '../core/db.js';
+import { getJob, getQueue, getJobSteps } from '../core/db.js';
 import {
   findSessionByTitle,
   getSessionParts,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
-import { bold, dim, cyan, green, yellow } from '../util/colors.js';
-import type { SessionPart } from '../core/types.js';
+import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
+import type { SessionPart, JobStep } from '../core/types.js';
 
 interface LogOptions {
   json?: boolean;
@@ -149,6 +149,76 @@ function formatPart(part: SessionPart, verbose: boolean): string[] {
   return [];
 }
 
+// ── Step formatting ───────────────────────────────────────────────────
+
+/**
+ * Format duration in human-friendly form (Xs, Xm Ys).
+ */
+function formatStepDuration(ms: number | null): string {
+  if (ms === null || ms < 0) return '';
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+/**
+ * Render a compact step summary for the human log output.
+ */
+function formatStepsSummary(steps: JobStep[]): string[] {
+  if (steps.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push(`  ${dim('Steps:')}`);
+
+  for (const step of steps) {
+    const num = `${step.stepIndex + 1}.`;
+    const cmd = step.command + (step.args ? ` ${step.args}` : '');
+    const duration = formatStepDuration(step.durationMs);
+    const durationStr = duration ? ` (${duration})` : '';
+
+    let icon: string;
+    let statusColor: (s: string) => string;
+    switch (step.status) {
+      case 'completed':
+        icon = '✓';
+        statusColor = green;
+        break;
+      case 'failed':
+        icon = '✗';
+        statusColor = red;
+        break;
+      case 'skipped':
+        icon = '○';
+        statusColor = dim;
+        break;
+      default: // running
+        icon = '⟳';
+        statusColor = yellow;
+        break;
+    }
+
+    let verdictStr = '';
+    if (step.verdictSource || step.verdictReason) {
+      const parts: string[] = [];
+      if (step.verdictSource) parts.push(step.verdictSource);
+      if (step.verdictReason) {
+        // Truncate long reasons
+        const reason = step.verdictReason.length > 60
+          ? step.verdictReason.slice(0, 57) + '...'
+          : step.verdictReason;
+        parts.push(reason);
+      }
+      verdictStr = ` [${parts.join(': ')}]`;
+    }
+
+    lines.push(`    ${statusColor(`${icon} ${num} ${cmd}${durationStr}${verdictStr}`)}`);
+  }
+
+  return lines;
+}
+
 // ── Part collection ───────────────────────────────────────────────────────
 
 /**
@@ -219,6 +289,9 @@ async function logCommand(
     ? allSessions.filter((s) => s.type === 'delegation')
     : allSessions;
 
+  // Get step records for this job
+  const steps = getJobSteps(jobId);
+
   // JSON mode
   if (isJsonMode()) {
     const sessionData = collectSessionParts(sessions);
@@ -230,6 +303,7 @@ async function logCommand(
         description: job.description,
         status: job.status,
       },
+      steps,
       sessions: sessionData.map(({ session, parts }) => ({
         title: session.title,
         type: session.type,
@@ -250,6 +324,15 @@ async function logCommand(
     `  ${bold(job.project)} · ${job.scope} · "${desc}" · ${dim(job.id)}`,
   );
   outputHuman('');
+
+  // Step summary (if steps exist)
+  if (steps.length > 0) {
+    const stepLines = formatStepsSummary(steps);
+    for (const line of stepLines) {
+      outputHuman(line);
+    }
+    outputHuman('');
+  }
 
   // "Waiting" state: job is running but no sessions yet
   if (job.status === 'running' && (sessionTitles.length === 0 || sessions.every((s) => s.sessionId === null))) {
