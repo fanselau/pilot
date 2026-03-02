@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the db module
 vi.mock('../../src/core/db.js', () => ({
-  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string) => ({
+  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string) => ({
     id: 'ab12',
     project: _proj,
     scope: _scope,
@@ -29,6 +29,8 @@ vi.mock('../../src/core/db.js', () => ({
     delegationPlan: null,
     currentStep: 0,
     sessionTitles: null,
+    modelProfile: _profile ?? 'balanced',
+    providerMode: _provider ?? 'claude-only',
   })),
 }));
 
@@ -93,7 +95,7 @@ describe('addCommand', () => {
   it('queues a string requirement as quick scope', async () => {
     await addCommand('my-project', 'fix the navbar', {});
 
-    expect(addJob).toHaveBeenCalledWith('my-project', 'quick', 'fix the navbar', undefined);
+    expect(addJob).toHaveBeenCalledWith('my-project', 'quick', 'fix the navbar', undefined, undefined, undefined);
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('Queued');
@@ -103,7 +105,7 @@ describe('addCommand', () => {
   it('--as overrides auto-detected scope', async () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope });
 
-    expect(addJob).toHaveBeenCalledWith('my-project', 'phase', 'fix the navbar', undefined);
+    expect(addJob).toHaveBeenCalledWith('my-project', 'phase', 'fix the navbar', undefined, undefined, undefined);
   });
 
   it('detects file path and uses phase scope with title extraction', async () => {
@@ -116,6 +118,8 @@ describe('addCommand', () => {
       'phase',
       expect.any(String),
       expect.stringContaining('package.json'),
+      undefined,
+      undefined,
     );
   });
 
@@ -146,5 +150,61 @@ describe('addCommand', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('…');
+  });
+
+  it('passes profile and provider to addJob', async () => {
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
+
+    expect(addJob).toHaveBeenCalledWith(
+      'my-project', 'quick', 'fix stuff', undefined, 'budget', 'hybrid',
+    );
+  });
+
+  it('defaults work without --profile and --provider flags', async () => {
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith(
+      'my-project', 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
+  });
+
+  it('exits 2 for invalid profile', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', { profile: 'garbage' })).rejects.toThrow('exit');
+
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid profile'));
+    expect(exitSpy).toHaveBeenCalledWith(2);
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('exits 2 for invalid provider', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus' })).rejects.toThrow('exit');
+
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid provider'));
+    expect(exitSpy).toHaveBeenCalledWith(2);
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('shows non-default profile/provider tag in human output', async () => {
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('[budget/hybrid]');
+  });
+
+  it('does not show tag when profile/provider are defaults', async () => {
+    await addCommand('my-project', 'fix stuff', { profile: 'balanced', provider: 'claude-only' });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).not.toContain('[');
   });
 });
