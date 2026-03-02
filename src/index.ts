@@ -158,6 +158,17 @@ program
     await gcCommand();
   });
 
+// ── TUI dashboard ─────────────────────────────────────────────────────────
+
+program
+  .command('tui')
+  .description('Full-screen TUI dashboard')
+  .option('--interval <seconds>', 'Refresh interval', parseInt, 3)
+  .action(async (opts: Record<string, unknown>) => {
+    const { tuiCommand } = await import('./commands/tui.js');
+    await tuiCommand({ interval: opts.interval as number | undefined });
+  });
+
 // ── Runner (foreground) ───────────────────────────────────────────────────
 
 program
