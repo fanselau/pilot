@@ -25,7 +25,7 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "postbuild": "bun -e \"import{readFileSync,writeFileSync,chmodSync}from'fs';const c=readFileSync('dist/index.js','utf8');if(!c.startsWith('#!'))writeFileSync('dist/index.js','#!/usr/bin/env bun\\n'+c);chmodSync('dist/index.js',0o755);\"",
+    "postbuild": "node -e \"const f=require('fs');const c=f.readFileSync('dist/index.js','utf8');if(!c.startsWith('#!'))f.writeFileSync('dist/index.js','#!/usr/bin/env node\\n'+c);require('fs').chmodSync('dist/index.js',0o755);\"",
     "dev": "bun run src/index.ts",
     "test": "vitest",
     "test:run": "vitest run",

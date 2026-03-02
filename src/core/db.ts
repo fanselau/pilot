@@ -8,7 +8,8 @@
  * Pure core module — no UI dependencies.
  */
 
-import Database from 'better-sqlite3';
+import Database from './sqlite.js';
+import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig } from './config.js';
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 // ── Module-level cached DB connection ─────────────────────────────────────
 
-let cachedDb: Database.Database | null = null;
+let cachedDb: DatabaseType | null = null;
 
 // ── ID Generation ─────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function shortId(): string {
 /**
  * Generate a unique short ID that doesn't exist in the jobs table.
  */
-function generateUniqueId(db: Database.Database): string {
+function generateUniqueId(db: DatabaseType): string {
   const check = db.prepare('SELECT 1 FROM jobs WHERE id = ?');
   for (let attempt = 0; attempt < 100; attempt++) {
     const id = shortId();
@@ -120,15 +121,15 @@ function rowToJob(row: JobRow): Job {
  * Open (or return cached) pilot.db.
  * Auto-creates ~/.pilot/ directory and the jobs table on first access.
  */
-function openPilotDb(): Database.Database {
+function openPilotDb(): DatabaseType {
   if (cachedDb) return cachedDb;
 
   const config = getConfig();
   mkdirSync(dirname(config.pilotDbPath), { recursive: true });
-  cachedDb = new Database(config.pilotDbPath);
-  cachedDb.pragma('journal_mode = WAL');
-  cachedDb.exec(CREATE_TABLE_SQL);
-  return cachedDb;
+  cachedDb = new Database(config.pilotDbPath) as DatabaseType;
+  cachedDb!.pragma('journal_mode = WAL');
+  cachedDb!.exec(CREATE_TABLE_SQL);
+  return cachedDb!;
 }
 
 /**
@@ -136,21 +137,21 @@ function openPilotDb(): Database.Database {
  * Resets the cached connection each call — each test gets a fresh DB.
  * @internal — only for use in tests
  */
-function _getTestDb(): Database.Database {
+function _getTestDb(): DatabaseType {
   if (cachedDb) {
     try { cachedDb.close(); } catch { /* ignore */ }
   }
-  cachedDb = new Database(':memory:');
-  cachedDb.pragma('journal_mode = WAL');
-  cachedDb.exec(CREATE_TABLE_SQL);
-  return cachedDb;
+  cachedDb = new Database(':memory:') as DatabaseType;
+  cachedDb!.pragma('journal_mode = WAL');
+  cachedDb!.exec(CREATE_TABLE_SQL);
+  return cachedDb!;
 }
 
 /**
  * Get the currently active DB connection.
  * Uses cached connection from openPilotDb() or _getTestDb().
  */
-function getDb(): Database.Database {
+function getDb(): DatabaseType {
   if (cachedDb) return cachedDb;
   return openPilotDb();
 }
