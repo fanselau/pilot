@@ -10,6 +10,7 @@
  */
 
 import { execa } from 'execa';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
 import type { Job, DelegationPlan } from './types.js';
@@ -18,65 +19,118 @@ import type { Job, DelegationPlan } from './types.js';
  * Spawn a delegation AI session to determine what GSD commands to run for a job.
  * Uses a short cheap AI session that reads .planning/ and outputs a JSON plan.
  *
- * Retries up to 3 times, then falls back to deterministic scope-based mapping.
+ * Tries delegation AI once, then falls back to deterministic scope-based mapping.
  */
 async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 1;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await attemptDelegation(job, projectDir, attempt);
     } catch {
       if (attempt === MAX_RETRIES) {
-        // Fallback: deterministic scope-based mapping (no AI needed)
-        return fallbackPlan(job);
+        return fallbackPlan(job, projectDir);
       }
-      // Brief wait before retry
       await new Promise(r => setTimeout(r, 5000 * attempt));
     }
   }
 
-  // Unreachable, but TypeScript wants it
-  return fallbackPlan(job);
+  return fallbackPlan(job, projectDir);
 }
 
 /**
  * Fallback when delegation AI fails: deterministic scope → command mapping.
- * Less smart than AI, but guaranteed to work.
+ * Inspects project state to build an appropriate plan.
  */
-function fallbackPlan(job: Job): DelegationPlan {
+function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
+  const hasPlanning = existsSync(path.join(projectDir, '.planning', 'ROADMAP.md'));
+
   switch (job.scope) {
     case 'quick':
+      if (!hasPlanning) {
+        // Quick on uninitialized project — init first, then quick
+        return {
+          steps: [
+            { command: 'new-project', args: buildNewProjectArgs(job) },
+            { command: 'quick', args: buildQuickArgs(job) },
+          ],
+          reasoning: 'Fallback: project not initialized, running new-project then quick task',
+        };
+      }
       return {
-        steps: [{ command: 'quick', args: job.requirementPath
-          ? `Read ${job.requirementPath} for full details and implement all requirements. ${job.description}`
-          : job.description }],
-        reasoning: 'Fallback: delegation AI failed, using direct quick mapping',
+        steps: [{ command: 'quick', args: buildQuickArgs(job) }],
+        reasoning: 'Fallback: direct quick mapping',
       };
+
     case 'phase':
-      // Can't determine phase number without AI reading ROADMAP — use add-phase which auto-detects
+      if (!hasPlanning) {
+        // Phase on uninitialized project — full milestone lifecycle
+        return {
+          steps: [
+            { command: 'new-project', args: buildNewProjectArgs(job) },
+            { command: 'plan-phase', args: '1 --auto' },
+            { command: 'execute-phase', args: '1' },
+          ],
+          reasoning: 'Fallback: project not initialized, running full lifecycle',
+        };
+      }
+      // Project exists — add phase, plan it, execute it
       return {
         steps: [
           { command: 'add-phase', args: job.description },
-          // plan-phase and execute-phase need the phase number — subsequent delegation will handle
         ],
-        reasoning: 'Fallback: delegation AI failed, adding phase only. Run again to plan+execute.',
+        reasoning: 'Fallback: adding phase. Run again to plan+execute after reviewing.',
       };
+
     case 'milestone':
+      if (!hasPlanning) {
+        return {
+          steps: [
+            { command: 'new-project', args: buildNewProjectArgs(job) },
+            { command: 'plan-phase', args: '1 --auto' },
+            { command: 'execute-phase', args: '1' },
+          ],
+          reasoning: 'Fallback: full milestone lifecycle: init → plan → execute',
+        };
+      }
       return {
-        steps: [{ command: 'new-project', args: `--auto ${job.requirementPath ?? job.description}` }],
-        reasoning: 'Fallback: delegation AI failed, using direct new-project mapping',
+        steps: [
+          { command: 'add-phase', args: job.description },
+        ],
+        reasoning: 'Fallback: project already initialized, adding as new phase',
       };
   }
+}
+
+/**
+ * Build args for gsd-new-project.
+ * IMPORTANT: opencode's yargs parser swallows args starting with --.
+ * So we put the file reference FIRST, then the auto flag.
+ * GSD checks for --auto presence anywhere in $ARGUMENTS.
+ */
+function buildNewProjectArgs(job: Job): string {
+  if (job.requirementPath) {
+    return `@${job.requirementPath} --auto`;
+  }
+  return `${job.description} --auto`;
+}
+
+/**
+ * Build args for gsd-quick.
+ */
+function buildQuickArgs(job: Job): string {
+  if (job.requirementPath) {
+    return `Read ${job.requirementPath} for full details and implement all requirements. ${job.description}`;
+  }
+  return job.description;
 }
 
 /**
  * Single delegation attempt: spawn opencode, wait for result, parse output.
  */
 async function attemptDelegation(job: Job, projectDir: string, attempt: number): Promise<DelegationPlan> {
-  const title = `${job.project}-delegate-${job.id}-${attempt}`;
+  const title = `pilot-delegate-${job.id}-${attempt}`;
 
-  // Build the delegation prompt args
   const args = [
     `scope: ${job.scope}`,
     `project: ${job.project}`,
@@ -84,9 +138,8 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
     `requirement_path: ${job.requirementPath ?? 'none'}`,
   ].join('\n');
 
-  // Spawn opencode session with delegation command
   const opencodeBin = resolveOpencodeBinary();
-  await execa(opencodeBin, [
+  const proc = execa(opencodeBin, [
     'run',
     '--format', 'default',
     '--title', title,
@@ -100,23 +153,23 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
     detached: true,
     cleanup: false,
   });
+  // Don't await — we poll the DB instead
+  proc.catch(() => {});
+  proc.unref();
 
-  // Poll for session completion, then parse output
   const plan = await waitForDelegationResult(title);
   return plan;
 }
 
 /**
  * Resolve the opencode binary path.
- * Checks standard locations, falls back to PATH.
  */
 function resolveOpencodeBinary(): string {
   const home = process.env['HOME'] || process.env['USERPROFILE'] || '';
   const candidates = [
     path.join(home, '.opencode', 'bin', 'opencode'),
-    'opencode', // PATH fallback
+    'opencode',
   ];
-  // Return first candidate — runner validates binary exists at pre-spawn
   return candidates[0];
 }
 
@@ -135,11 +188,9 @@ async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
     const sessionId = findSessionByTitle(title);
     if (!sessionId) continue;
 
-    // Check if session has completed by looking for messages
     try {
       const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
       if (exported.messages.length > 0) {
-        // Find the last assistant message and parse JSON from it
         const lastAssistant = [...exported.messages]
           .reverse()
           .find(m => m.role === 'assistant');
@@ -150,7 +201,7 @@ async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
         }
       }
     } catch {
-      // Session not ready yet, keep polling
+      // Session not ready yet
     }
   }
 
@@ -159,12 +210,8 @@ async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
 
 /**
  * Parse delegation AI output into a DelegationPlan.
- * Extracts JSON from markdown code blocks or raw JSON.
- *
- * This is a pure function — testable independently without mocking.
  */
 function parseDelegationOutput(content: string): DelegationPlan {
-  // Try to extract JSON from ```json ... ``` blocks
   const jsonBlockMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
   const jsonStr = jsonBlockMatch ? jsonBlockMatch[1] : content.trim();
 
@@ -177,7 +224,6 @@ function parseDelegationOutput(content: string): DelegationPlan {
     );
   }
 
-  // Validate structure
   if (!Array.isArray(parsed.steps) || parsed.steps.length === 0) {
     throw new Error('Delegation plan has no steps');
   }
