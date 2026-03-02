@@ -39,6 +39,9 @@ const mockUpdateDelegationPlan = vi.fn();
 const mockAdvanceStep = vi.fn();
 const mockGetJob = vi.fn();
 const mockUpdateSessionTitles = vi.fn();
+const mockRecordStep = vi.fn(() => 1);  // returns row ID
+const mockCompleteStep = vi.fn();
+const mockSkipRemainingSteps = vi.fn();
 
 vi.mock('../../src/core/db.js', () => ({
   getNextPending: (...args: unknown[]) => mockGetNextPending(...args),
@@ -50,6 +53,9 @@ vi.mock('../../src/core/db.js', () => ({
   advanceStep: (...args: unknown[]) => mockAdvanceStep(...args),
   getJob: (...args: unknown[]) => mockGetJob(...args),
   updateSessionTitles: (...args: unknown[]) => mockUpdateSessionTitles(...args),
+  recordStep: (...args: unknown[]) => mockRecordStep(...args),
+  completeStep: (...args: unknown[]) => mockCompleteStep(...args),
+  skipRemainingSteps: (...args: unknown[]) => mockSkipRemainingSteps(...args),
 }));
 
 const mockDelegate = vi.fn();
@@ -507,8 +513,120 @@ describe('Runner', () => {
     }, 30000);
   });
 
+  describe('launch — step recording (R4)', () => {
+    it('records step for each step in multi-step plan', async () => {
+      const job = makeJob();
+      const plan = makePlan([
+        { command: 'plan-phase', args: '3 --auto' },
+        { command: 'execute-phase', args: '3' },
+      ]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+      mockSuccessfulSpawn();
+      mockRecordStep.mockReturnValueOnce(10).mockReturnValueOnce(11);
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // recordStep called once per step with correct args
+      expect(mockRecordStep).toHaveBeenCalledTimes(2);
+      expect(mockRecordStep).toHaveBeenCalledWith('ab12', 0, 'plan-phase', '3 --auto', expect.any(String));
+      expect(mockRecordStep).toHaveBeenCalledWith('ab12', 1, 'execute-phase', '3', expect.any(String));
+    }, 30000);
+
+    it('completes step with verdict on semantic check', async () => {
+      const job = makeJob({ scope: 'phase', description: '3' });
+      const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      mockFindSessionByTitle.mockReturnValue('session-789');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-2',
+        role: 'assistant',
+        content: 'Phase 3 execution complete. All plans executed successfully.',
+        createdAt: Date.now() - 120_000,
+      });
+      mockRecordStep.mockReturnValue(20);
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // completeStep called with semantic-check source and session ID
+      expect(mockCompleteStep).toHaveBeenCalledWith(
+        20, 'completed', 'semantic-check', expect.any(String), 'session-789',
+      );
+    }, 30000);
+
+    it('marks step failed before throwing on semantic failure', async () => {
+      const job = makeJob({ scope: 'phase', description: '3' });
+      const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      mockFindSessionByTitle.mockReturnValue('session-fail');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-fail',
+        role: 'assistant',
+        content: 'Error: no matching phase directory found for phase 3',
+        createdAt: Date.now() - 120_000,
+      });
+      mockRecordStep.mockReturnValue(30);
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // completeStep with 'failed' called BEFORE markFailed
+      expect(mockCompleteStep).toHaveBeenCalledWith(
+        30, 'failed', 'semantic-check', expect.stringContaining('no matching phase'), 'session-fail',
+      );
+      // markFailed also called (job-level failure)
+      expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('no matching phase'));
+
+      // Verify order: completeStep was called before markFailed
+      const completeStepCallOrder = mockCompleteStep.mock.invocationCallOrder[0];
+      const markFailedCallOrder = mockMarkFailed.mock.invocationCallOrder[0];
+      expect(completeStepCallOrder).toBeLessThan(markFailedCallOrder);
+    }, 30000);
+
+    it('records step completed for quick commands without verdict', async () => {
+      const job = makeJob({ scope: 'quick', description: 'Fix navbar' });
+      const plan = makePlan([{ command: 'quick', args: 'Fix navbar' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+      mockSuccessfulSpawn();
+      mockRecordStep.mockReturnValue(40);
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // completeStep called with no verdict source for quick commands
+      expect(mockCompleteStep).toHaveBeenCalledWith(
+        40, 'completed', null, null, expect.any(String),
+      );
+    }, 30000);
+  });
+
   describe('launch — shutdown interruption (R3)', () => {
-    it('marks interrupted job as cancelled, not completed', async () => {
+    it('marks interrupted job as cancelled, not completed, and skips remaining steps', async () => {
       const job = makeJob();
       const plan = makePlan([
         { command: 'plan-phase', args: '3 --auto' },
@@ -548,6 +666,8 @@ describe('Runner', () => {
       expect(mockMarkCompleted).not.toHaveBeenCalled();
       // Should be cancelled
       expect(mockCancel).toHaveBeenCalledWith('ab12');
+      // Should call skipRemainingSteps for the remaining steps
+      expect(mockSkipRemainingSteps).toHaveBeenCalledWith('ab12', 1, 'Runner shutdown');
     }, 30000);
   });
 });
