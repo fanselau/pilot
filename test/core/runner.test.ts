@@ -67,7 +67,7 @@ vi.mock('../../src/core/opencode-db.js', () => ({
 }));
 
 vi.mock('execa', () => ({
-  execa: vi.fn(() => ({ unref: vi.fn() })),
+  execa: vi.fn(() => ({ unref: vi.fn(), catch: vi.fn().mockReturnThis() })),
 }));
 
 // Mock fs reads for pre-spawn checks
