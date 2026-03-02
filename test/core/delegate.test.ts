@@ -1,5 +1,62 @@
-import { describe, it, expect } from 'vitest';
-import { parseDelegationOutput } from '../../src/core/delegate.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { parseDelegationOutput, resolvePhaseForFallback } from '../../src/core/delegate.js';
+import type { Job } from '../../src/core/types.js';
+
+// Sentinel value: when set, readFileSync throws ENOENT for ROADMAP.md
+const THROW_ENOENT = '__THROW_ENOENT__';
+
+// Mock fs.readFileSync for resolvePhaseForFallback tests
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return {
+    ...actual,
+    readFileSync: vi.fn((filePath: string, encoding?: string) => {
+      if (typeof filePath === 'string' && filePath.includes('ROADMAP.md')) {
+        if (mockRoadmapContent === THROW_ENOENT) {
+          const err = new Error('ENOENT: no such file or directory');
+          (err as NodeJS.ErrnoException).code = 'ENOENT';
+          throw err;
+        }
+        return mockRoadmapContent;
+      }
+      return actual.readFileSync(filePath, encoding as BufferEncoding);
+    }),
+    existsSync: vi.fn((filePath: string) => {
+      if (typeof filePath === 'string' && filePath.includes('ROADMAP.md')) {
+        return mockRoadmapExists;
+      }
+      return actual.existsSync(filePath);
+    }),
+  };
+});
+
+let mockRoadmapContent: string = '';
+let mockRoadmapExists = true;
+
+function makeTestJob(overrides: Partial<Job> = {}): Job {
+  return {
+    id: 'ab12',
+    project: 'test-project',
+    scope: 'phase',
+    description: 'Add dark mode support',
+    requirementPath: null,
+    status: 'pending',
+    priority: 0,
+    dependsOn: null,
+    createdAt: '2026-02-22T00:00:00Z',
+    startedAt: null,
+    completedAt: null,
+    error: null,
+    attempts: 0,
+    maxAttempts: 3,
+    delegationPlan: null,
+    currentStep: 0,
+    sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'claude-only',
+    ...overrides,
+  };
+}
 
 describe('parseDelegationOutput', () => {
   it('parses JSON from markdown code block', () => {
@@ -96,5 +153,102 @@ describe('parseDelegationOutput', () => {
     const plan = parseDelegationOutput(content);
     expect(plan.steps).toHaveLength(1);
     expect(plan.steps[0].command).toBe('quick');
+  });
+});
+
+describe('resolvePhaseForFallback', () => {
+  beforeEach(() => {
+    mockRoadmapContent = `# Roadmap
+
+### Phase 1: Project setup
+### Phase 2: Core engine
+### Phase 3: UI components
+### Phase 4: Testing
+### Phase 5: Deployment
+`;
+    mockRoadmapExists = true;
+  });
+
+  it('returns execute-phase when description is numeric', () => {
+    const job = makeTestJob({ description: '3' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('execute-phase');
+    expect(plan.steps[0].args).toBe('3');
+    expect(plan.reasoning).toContain('numeric phase identifier');
+  });
+
+  it('returns execute-phase for numeric with whitespace', () => {
+    const job = makeTestJob({ description: ' 12 ' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('execute-phase');
+    expect(plan.steps[0].args).toBe('12');
+  });
+
+  it('builds add→plan→execute lifecycle for non-numeric description', () => {
+    const job = makeTestJob({ description: 'Add dark mode support' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].args).toBe('Add dark mode support');
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[1].args).toBe('6 --auto'); // next after 5
+    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps[2].args).toBe('6');
+    expect(plan.reasoning).toContain('phase 6');
+  });
+
+  it('uses requirementPath in add-phase args when available', () => {
+    const job = makeTestJob({
+      description: 'Dark mode',
+      requirementPath: 'requirements/dark-mode.md',
+    });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].args).toBe('@requirements/dark-mode.md');
+  });
+
+  it('calculates next phase correctly with gaps in phase numbers', () => {
+    mockRoadmapContent = `# Roadmap
+
+### Phase 1: Setup
+### Phase 3: Engine
+### Phase 10: Deploy
+`;
+    const job = makeTestJob({ description: 'New feature' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    // Max phase is 10, next is 11
+    expect(plan.steps[1].args).toBe('11 --auto');
+    expect(plan.steps[2].args).toBe('11');
+  });
+
+  it('defaults to phase 1 when ROADMAP has no phases', () => {
+    mockRoadmapContent = '# Empty Roadmap\n\nNo phases yet.\n';
+    const job = makeTestJob({ description: 'Start fresh' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps[1].args).toBe('1 --auto');
+    expect(plan.steps[2].args).toBe('1');
+  });
+
+  it('falls back gracefully when ROADMAP.md is missing', () => {
+    mockRoadmapContent = THROW_ENOENT;
+    const job = makeTestJob({ description: 'Something' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    // Should still produce a valid plan (fallback to execute-phase 1)
+    expect(plan.steps.length).toBeGreaterThan(0);
+    expect(plan.reasoning).toContain('ROADMAP.md not found');
+  });
+
+  it('never passes requirement titles directly to execute-phase for non-numeric descriptions', () => {
+    const job = makeTestJob({
+      description: 'Pilot Requirement: Phase Execution Success Contract',
+    });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    // The key assertion: execute-phase should NOT get the title string
+    const executeStep = plan.steps.find(s => s.command === 'execute-phase');
+    expect(executeStep).toBeDefined();
+    // execute-phase args should be numeric
+    expect(executeStep!.args).toMatch(/^\d+$/);
   });
 });

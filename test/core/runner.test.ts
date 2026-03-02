@@ -34,6 +34,7 @@ const mockGetNextPending = vi.fn();
 const mockMarkRunning = vi.fn();
 const mockMarkCompleted = vi.fn();
 const mockMarkFailed = vi.fn();
+const mockCancel = vi.fn();
 const mockUpdateDelegationPlan = vi.fn();
 const mockAdvanceStep = vi.fn();
 const mockGetJob = vi.fn();
@@ -44,6 +45,7 @@ vi.mock('../../src/core/db.js', () => ({
   markRunning: (...args: unknown[]) => mockMarkRunning(...args),
   markCompleted: (...args: unknown[]) => mockMarkCompleted(...args),
   markFailed: (...args: unknown[]) => mockMarkFailed(...args),
+  cancel: (...args: unknown[]) => mockCancel(...args),
   updateDelegationPlan: (...args: unknown[]) => mockUpdateDelegationPlan(...args),
   advanceStep: (...args: unknown[]) => mockAdvanceStep(...args),
   getJob: (...args: unknown[]) => mockGetJob(...args),
@@ -101,7 +103,7 @@ vi.mock('node:fs', async () => {
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
-import { Runner, createRunner } from '../../src/core/runner.js';
+import { Runner, createRunner, evaluateStepResult } from '../../src/core/runner.js';
 import type { Job, DelegationPlan } from '../../src/core/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -366,6 +368,188 @@ describe('Runner', () => {
       expect(mockMarkRunning).toHaveBeenCalled();
     }, 15000);
   });
+
+  describe('launch — semantic failure detection (R2)', () => {
+    it('marks job failed when execute-phase output contains failure marker', async () => {
+      const job = makeJob({ scope: 'phase', description: '3' });
+      const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      // Spawn succeeds but last message contains failure marker
+      mockFindSessionByTitle.mockReturnValue('session-456');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Error: no matching phase directory found for phase 3',
+        createdAt: Date.now() - 120_000,
+      });
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('no matching phase'));
+      expect(mockMarkCompleted).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('marks job completed when execute-phase output has no failure markers', async () => {
+      const job = makeJob({ scope: 'phase', description: '3' });
+      const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      mockFindSessionByTitle.mockReturnValue('session-789');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-2',
+        role: 'assistant',
+        content: 'Phase 3 execution complete. All plans executed successfully.',
+        createdAt: Date.now() - 120_000,
+      });
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+      expect(mockMarkFailed).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('marks job failed when plan-phase output contains failure marker', async () => {
+      const job = makeJob({ scope: 'phase', description: '5' });
+      const plan = makePlan([{ command: 'plan-phase', args: '5 --auto' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      mockFindSessionByTitle.mockReturnValue('session-plan');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-3',
+        role: 'assistant',
+        content: 'Failed to plan phase 5: no plans found in directory',
+        createdAt: Date.now() - 120_000,
+      });
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('failed'));
+      expect(mockMarkCompleted).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('allows completion when no session messages exist', async () => {
+      const job = makeJob({ scope: 'phase', description: '2' });
+      const plan = makePlan([{ command: 'execute-phase', args: '2' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      mockFindSessionByTitle.mockReturnValue('session-empty');
+      mockIsSessionActive.mockReturnValue(false);
+      // First call for spawnAndWait polling (returns message to indicate done),
+      // Second call for evaluateStepResult (returns null = no messages to evaluate)
+      mockGetLastMessage
+        .mockReturnValueOnce({
+          id: 'msg-done',
+          role: 'assistant',
+          content: 'Done',
+          createdAt: Date.now() - 120_000,
+        })
+        .mockReturnValueOnce(null);
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // No messages = no failure markers = success
+      expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+    }, 30000);
+
+    it('does not check semantic failure for quick commands', async () => {
+      const job = makeJob({ scope: 'quick', description: 'Fix navbar' });
+      const plan = makePlan([{ command: 'quick', args: 'Fix navbar' }]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      // Even if message contains "error" words, quick commands don't get semantic check
+      mockFindSessionByTitle.mockReturnValue('session-quick');
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-q',
+        role: 'assistant',
+        content: 'Error: no matching phase directory found',
+        createdAt: Date.now() - 120_000,
+      });
+
+      const runner = createRunner({ once: true, pollInterval: 1 });
+      await runner.run();
+
+      // Quick commands skip semantic check — should complete
+      expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+    }, 30000);
+  });
+
+  describe('launch — shutdown interruption (R3)', () => {
+    it('marks interrupted job as cancelled, not completed', async () => {
+      const job = makeJob();
+      const plan = makePlan([
+        { command: 'plan-phase', args: '3 --auto' },
+        { command: 'execute-phase', args: '3' },
+      ]);
+
+      mockGetNextPending
+        .mockReturnValueOnce(job)
+        .mockReturnValue(null);
+
+      mockDelegate.mockResolvedValue(plan);
+
+      // First step: session appears and finishes quickly with clean output
+      let spawnCallCount = 0;
+      mockFindSessionByTitle.mockImplementation(() => {
+        spawnCallCount++;
+        return `session-${spawnCallCount}`;
+      });
+      mockIsSessionActive.mockReturnValue(false);
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-ok',
+        role: 'assistant',
+        content: 'Planning complete. No issues found.',
+        createdAt: Date.now() - 120_000,
+      });
+
+      const runner = createRunner({ once: true, pollInterval: 1, maxParallel: 1 });
+
+      // Stop runner after first advanceStep (after first step completes)
+      mockAdvanceStep.mockImplementationOnce(() => {
+        runner.stop();
+      });
+
+      await runner.run();
+
+      // Should NOT be marked completed since not all steps ran
+      expect(mockMarkCompleted).not.toHaveBeenCalled();
+      // Should be cancelled
+      expect(mockCancel).toHaveBeenCalledWith('ab12');
+    }, 30000);
+  });
 });
 
 describe('createRunner', () => {
@@ -377,5 +561,95 @@ describe('createRunner', () => {
   it('accepts partial options', () => {
     const runner = createRunner({ maxParallel: 3 });
     expect(runner).toBeInstanceOf(Runner);
+  });
+});
+
+describe('evaluateStepResult', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns failure for "no matching phase" message', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-1',
+      role: 'assistant',
+      content: 'Error: no matching phase directory found for phase 3',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-1', 'execute-phase');
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('no matching phase');
+    expect(result.source).toBe('semantic-check');
+  });
+
+  it('returns failure for "failed to execute" message', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-2',
+      role: 'assistant',
+      content: 'Failed to execute phase 5 because plans are missing',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-2', 'execute-phase');
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('Semantic failure detected');
+  });
+
+  it('returns failure for "no plans found" message', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-3',
+      role: 'assistant',
+      content: 'No plans found in the phase directory',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-3', 'plan-phase');
+    expect(result.success).toBe(false);
+  });
+
+  it('returns failure for "phase directory not found" message', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-4',
+      role: 'assistant',
+      content: 'Phase directory not found for phase 7',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-4', 'execute-phase');
+    expect(result.success).toBe(false);
+  });
+
+  it('returns success for normal completion message', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-5',
+      role: 'assistant',
+      content: 'Phase 3 execution complete. All 4 plans executed successfully. Created 12 files.',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-5', 'execute-phase');
+    expect(result.success).toBe(true);
+    expect(result.reason).toBe('No failure markers detected');
+  });
+
+  it('returns success when no messages exist', () => {
+    mockGetLastMessage.mockReturnValue(null);
+
+    const result = evaluateStepResult('session-6', 'execute-phase');
+    expect(result.success).toBe(true);
+    expect(result.reason).toBe('No messages to evaluate');
+  });
+
+  it('returns failure for "error execute" pattern', () => {
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-7',
+      role: 'assistant',
+      content: 'There was an error while trying to execute the phase',
+      createdAt: Date.now() - 60_000,
+    });
+
+    const result = evaluateStepResult('session-7', 'execute-phase');
+    expect(result.success).toBe(false);
   });
 });
