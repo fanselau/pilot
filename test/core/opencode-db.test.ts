@@ -136,15 +136,17 @@ afterEach(() => {
 // ── getSessionMessages ─────────────────────────────────────────────────────
 
 describe('getSessionMessages', () => {
-  it('returns messages in chronological order', () => {
+  it('returns messages in chronological order with content from part table', () => {
     insertSession(db, 'sess1', 'test-session', 1000, 3000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user', content: 'Hello' });
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'part-msg1', 'msg1', 'sess1', 1000, { type: 'text', text: 'Hello' });
     insertMessage(db, 'msg2', 'sess1', 2000, {
       role: 'assistant',
-      content: 'Hi there',
       tokens: { input: 10, output: 20 },
     });
-    insertMessage(db, 'msg3', 'sess1', 3000, { role: 'user', content: 'Thanks' });
+    insertPart(db, 'part-msg2', 'msg2', 'sess1', 2000, { type: 'text', text: 'Hi there' });
+    insertMessage(db, 'msg3', 'sess1', 3000, { role: 'user' });
+    insertPart(db, 'part-msg3', 'msg3', 'sess1', 3000, { type: 'text', text: 'Thanks' });
 
     const messages = getSessionMessages('sess1');
     expect(messages).toHaveLength(3);
@@ -159,9 +161,12 @@ describe('getSessionMessages', () => {
 
   it('filters messages with since parameter', () => {
     insertSession(db, 'sess1', 'test-session', 1000, 5000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user', content: 'First' });
-    insertMessage(db, 'msg2', 'sess1', 3000, { role: 'assistant', content: 'Second' });
-    insertMessage(db, 'msg3', 'sess1', 5000, { role: 'user', content: 'Third' });
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'part-msg1', 'msg1', 'sess1', 1000, { type: 'text', text: 'First' });
+    insertMessage(db, 'msg2', 'sess1', 3000, { role: 'assistant' });
+    insertPart(db, 'part-msg2', 'msg2', 'sess1', 3000, { type: 'text', text: 'Second' });
+    insertMessage(db, 'msg3', 'sess1', 5000, { role: 'user' });
+    insertPart(db, 'part-msg3', 'msg3', 'sess1', 5000, { type: 'text', text: 'Third' });
 
     const messages = getSessionMessages('sess1', 2000);
     expect(messages).toHaveLength(2);
@@ -180,26 +185,63 @@ describe('getSessionMessages', () => {
     expect(messages).toEqual([]);
   });
 
-  it('handles messages with missing content gracefully', () => {
+  it('handles messages with no parts gracefully (empty content)', () => {
     insertSession(db, 'sess1', 'test-session', 1000, 2000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' }); // no content
-    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant', content: null });
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' }); // no parts at all
+    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant' }); // no parts at all
 
     const messages = getSessionMessages('sess1');
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toBe('');
     expect(messages[1].content).toBe('');
   });
+
+  it('concatenates multiple text parts with newlines', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 1000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1a', 'msg1', 'sess1', 1000, { type: 'text', text: 'First paragraph' });
+    insertPart(db, 'part1b', 'msg1', 'sess1', 1001, { type: 'text', text: 'Second paragraph' });
+
+    const messages = getSessionMessages('sess1');
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('First paragraph\nSecond paragraph');
+  });
+
+  it('ignores non-text parts (tool, step-start)', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 1000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1a', 'msg1', 'sess1', 1000, { type: 'step-start', text: 'Planning...' });
+    insertPart(db, 'part1b', 'msg1', 'sess1', 1001, { type: 'tool', tool: 'bash', state: { status: 'completed' } });
+
+    const messages = getSessionMessages('sess1');
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('');
+  });
+
+  it('includes only text parts when mixed with non-text parts', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 1000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1a', 'msg1', 'sess1', 1000, { type: 'text', text: 'Hello world' });
+    insertPart(db, 'part1b', 'msg1', 'sess1', 1001, { type: 'tool', tool: 'read', state: { status: 'completed' } });
+    insertPart(db, 'part1c', 'msg1', 'sess1', 1002, { type: 'text', text: 'Goodbye world' });
+
+    const messages = getSessionMessages('sess1');
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('Hello world\nGoodbye world');
+  });
 });
 
 // ── getLastMessage ─────────────────────────────────────────────────────────
 
 describe('getLastMessage', () => {
-  it('returns the most recent message', () => {
+  it('returns the most recent message with content from part table', () => {
     insertSession(db, 'sess1', 'test-session', 1000, 3000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user', content: 'First' });
-    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant', content: 'Second' });
-    insertMessage(db, 'msg3', 'sess1', 3000, { role: 'user', content: 'Third' });
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'part-msg1', 'msg1', 'sess1', 1000, { type: 'text', text: 'First' });
+    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant' });
+    insertPart(db, 'part-msg2', 'msg2', 'sess1', 2000, { type: 'text', text: 'Second' });
+    insertMessage(db, 'msg3', 'sess1', 3000, { role: 'user' });
+    insertPart(db, 'part-msg3', 'msg3', 'sess1', 3000, { type: 'text', text: 'Third' });
 
     const last = getLastMessage('sess1');
     expect(last).not.toBeNull();
