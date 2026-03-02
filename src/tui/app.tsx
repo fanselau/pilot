@@ -19,6 +19,7 @@ import { FooterBar } from './components/footer-bar.js';
 import { HelpOverlay } from './components/help-overlay.js';
 import { FilterOverlay } from './components/filter-overlay.js';
 import { Dashboard } from './views/dashboard.js';
+import { DetailView } from './views/detail.js';
 import type { Job } from '../core/types.js';
 
 // ── Keyboard event interface (matches OpenTUI KeyEvent shape) ─────────────
@@ -127,8 +128,18 @@ export function App(_props: { interval?: number }) {
       return;
     }
 
-    // Quit
-    if (key.name === 'q' || (key.ctrl && key.name === 'c')) {
+    // q — in detail/split view: go back; in dashboard: quit
+    if (key.name === 'q') {
+      if (state.view() !== 'dashboard') {
+        state.navigateBack();
+      } else {
+        renderer.destroy();
+      }
+      return;
+    }
+
+    // Ctrl-C always quits
+    if (key.ctrl && key.name === 'c') {
       renderer.destroy();
       return;
     }
@@ -151,6 +162,14 @@ export function App(_props: { interval?: number }) {
         state.navigateBack();
       }
       return;
+    }
+
+    // Backspace — navigate back from detail/split view
+    if (key.name === 'backspace' || key.name === 'delete') {
+      if (state.view() !== 'dashboard') {
+        state.navigateBack();
+        return;
+      }
     }
 
     // Tab — cycle panel focus
@@ -229,7 +248,7 @@ export function App(_props: { interval?: number }) {
             <Dashboard state={state} />
           </Match>
           <Match when={state.view() === 'detail'}>
-            <box><text content="Detail view — coming soon" /></box>
+            <DetailView state={state} />
           </Match>
           <Match when={state.view() === 'split'}>
             <box><text content="Split view — coming soon" /></box>
