@@ -325,3 +325,15 @@ Plans:
 
 **Details:**
 Read requirements/tui-phase-redo.md for full spec.
+
+### Phase 20: requirements/model-profile-support.md
+
+**Goal:** [To be planned]
+**Depends on:** Phase 19
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 20 to break down)
+
+**Details:**
+[To be added during planning]

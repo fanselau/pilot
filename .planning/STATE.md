@@ -8,6 +8,7 @@
 Phase: 19 of 19 (TUI build fix — proper OpenTUI/Solid setup)
 Plan: 1 of 2 in current phase
 Status: In progress
+**Next Phase:** 20 (requirements/model-profile-support.md)
 Last activity: 2026-03-02 - Completed quick task 012: TUI Detail View - Job Drill-Down on Enter
 
 Progress: ████████████████████████████░░ 94% (66/70 plans)
@@ -90,6 +91,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 17 added: Pilot v2 complete rewrite — delegation AI, SQLite queue, opencode DB ground truth, clean CLI
 - Phase 18 added: Pilot v2 TUI with OpenTUI — dashboard, job detail, split pane views
 - Phase 19 added: requirements/tui-phase-redo.md
+- Phase 20 added: requirements/model-profile-support.md
 
 ## Decisions
 
