@@ -339,14 +339,16 @@ Plans:
 **Details:**
 Read requirements/model-profile-support.md for full spec.
 
-### Phase 21: requirements/tui-visual-polish.md
+### Phase 21: TUI Visual Polish & Functional Fixes
 
-**Goal:** [To be planned]
+**Goal:** Make `pilot tui` genuinely useful and visually polished — fix ghost action keys, broken token display, raw markdown descriptions, duplicated utils, and missing keyboard navigation. Add queue position numbers, empty states, enriched status bar, and better panel proportions.
 **Depends on:** Phase 20
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 21 to break down)
+- [ ] 21-01-PLAN.md — Extract duplicated utils, fix description sanitization, correct elapsed display
+- [ ] 21-02-PLAN.md — Wire action keys (cancel/retry/bump), detail view keyboard nav, remove split placeholder
+- [ ] 21-03-PLAN.md — Fix CompletedPanel tokens, panel proportions, queue numbers, empty states, enriched StatusBar
 
 **Details:**
-[To be added during planning]
+Read requirements/tui-visual-polish.md for full spec. Covers P0 (must-have), P1 (should-have), and P2 (nice-to-have) fixes.
