@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import {
   getSessionMessages,
+  getSessionParts,
   getLastMessage,
   isSessionActive,
   getSessionTokens,
@@ -231,6 +232,163 @@ describe('getSessionMessages', () => {
   });
 });
 
+// ── getSessionParts ────────────────────────────────────────────────────────
+
+describe('getSessionParts', () => {
+  it('returns parts in chronological order with correct types', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 5000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'text', text: 'Hello' });
+    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant' });
+    insertPart(db, 'p2', 'msg2', 'sess1', 2000, { type: 'text', text: 'Starting work...' });
+    insertPart(db, 'p3', 'msg2', 'sess1', 3000, {
+      type: 'tool', tool: 'bash',
+      state: { status: 'completed', input: { command: 'ls -la' }, output: 'file1\nfile2\nfile3' },
+    });
+    insertPart(db, 'p4', 'msg2', 'sess1', 4000, { type: 'text', text: 'Done!' });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(4);
+    expect(parts[0].type).toBe('text');
+    expect(parts[0].role).toBe('user');
+    expect(parts[0].createdAt).toBe(1000);
+    expect(parts[1].type).toBe('text');
+    expect(parts[1].role).toBe('assistant');
+    expect(parts[2].type).toBe('tool');
+    expect(parts[2].role).toBe('assistant');
+    expect(parts[3].type).toBe('text');
+    expect(parts[3].createdAt).toBe(4000);
+  });
+
+  it('extracts tool name, input summary, and output summary', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 2000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, {
+      type: 'tool', tool: 'grep',
+      state: { status: 'completed', input: { pattern: 'TODO', include: '*.ts' }, output: 'src/main.ts:10: // TODO fix this' },
+    });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].tool).toBe('grep');
+    expect(parts[0].toolStatus).toBe('completed');
+    expect(parts[0].toolInput).toContain('TODO');
+    expect(parts[0].toolOutput).toContain('src/main.ts');
+  });
+
+  it('extracts bash command and first 2 lines of output', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 2000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, {
+      type: 'tool', tool: 'bash',
+      state: {
+        status: 'completed',
+        input: { command: 'npm test', description: 'Run tests' },
+        output: 'PASS src/test.ts\nAll tests passed\nDone in 3.2s',
+      },
+    });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].tool).toBe('bash');
+    expect(parts[0].toolInput).toBe('npm test');
+    // First 2 lines only
+    expect(parts[0].toolOutput).toBe('PASS src/test.ts\nAll tests passed');
+  });
+
+  it('extracts file path from read/write/edit tool parts', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 4000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, {
+      type: 'tool', tool: 'read',
+      state: { status: 'completed', input: { filePath: '/home/user/project/src/main.ts' }, output: 'file contents...' },
+    });
+    insertPart(db, 'p2', 'msg1', 'sess1', 2000, {
+      type: 'tool', tool: 'write',
+      state: { status: 'completed', input: { filePath: '/home/user/project/src/new.ts' }, output: 'written' },
+    });
+    insertPart(db, 'p3', 'msg1', 'sess1', 3000, {
+      type: 'tool', tool: 'edit',
+      state: { status: 'completed', input: { filePath: '/home/user/project/src/edit.ts', oldString: 'a', newString: 'b' }, output: 'edited' },
+    });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(3);
+    expect(parts[0].tool).toBe('read');
+    expect(parts[0].toolInput).toBe('/home/user/project/src/main.ts');
+    expect(parts[1].tool).toBe('write');
+    expect(parts[1].toolInput).toBe('/home/user/project/src/new.ts');
+    expect(parts[2].tool).toBe('edit');
+    expect(parts[2].toolInput).toBe('/home/user/project/src/edit.ts');
+  });
+
+  it('extracts filenames from patch operations', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 2000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, {
+      type: 'patch',
+      operations: [
+        { path: 'src/main.ts', content: 'diff content...' },
+        { path: 'src/util.ts', content: 'more diff...' },
+      ],
+    });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].type).toBe('patch');
+    expect(parts[0].patchFiles).toEqual(['src/main.ts', 'src/util.ts']);
+  });
+
+  it('extracts text content from text and reasoning parts', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 3000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'text', text: 'Hello world' });
+    insertPart(db, 'p2', 'msg1', 'sess1', 2000, { type: 'reasoning', text: 'Let me think about this...' });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(2);
+    expect(parts[0].type).toBe('text');
+    expect(parts[0].text).toBe('Hello world');
+    expect(parts[1].type).toBe('reasoning');
+    expect(parts[1].text).toBe('Let me think about this...');
+  });
+
+  it('filters correctly with since parameter', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 5000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'text', text: 'First' });
+    insertMessage(db, 'msg2', 'sess1', 3000, { role: 'assistant' });
+    insertPart(db, 'p2', 'msg2', 'sess1', 3000, { type: 'text', text: 'Second' });
+    insertPart(db, 'p3', 'msg2', 'sess1', 5000, { type: 'text', text: 'Third' });
+
+    const parts = getSessionParts('sess1', 2000);
+    expect(parts).toHaveLength(2);
+    expect(parts[0].text).toBe('Second');
+    expect(parts[1].text).toBe('Third');
+  });
+
+  it('returns empty array for empty/nonexistent session', () => {
+    expect(getSessionParts('nonexistent')).toEqual([]);
+
+    insertSession(db, 'sess1', 'empty-session', 1000, 1000);
+    expect(getSessionParts('sess1')).toEqual([]);
+  });
+
+  it('handles step-start and step-finish types', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 3000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'step-start', snapshot: 'abc123' });
+    insertPart(db, 'p2', 'msg1', 'sess1', 2000, { type: 'text', text: 'Working...' });
+    insertPart(db, 'p3', 'msg1', 'sess1', 3000, { type: 'step-finish' });
+
+    const parts = getSessionParts('sess1');
+    expect(parts).toHaveLength(3);
+    expect(parts[0].type).toBe('step-start');
+    expect(parts[1].type).toBe('text');
+    expect(parts[2].type).toBe('step-finish');
+  });
+});
+
 // ── getLastMessage ─────────────────────────────────────────────────────────
 
 describe('getLastMessage', () => {
@@ -407,6 +565,10 @@ describe('safe defaults when DB unavailable', () => {
 
   it('getSessionMessages returns empty array', () => {
     expect(getSessionMessages('any')).toEqual([]);
+  });
+
+  it('getSessionParts returns empty array', () => {
+    expect(getSessionParts('any')).toEqual([]);
   });
 
   it('getLastMessage returns null', () => {

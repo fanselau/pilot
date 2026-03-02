@@ -16,7 +16,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { accessSync, constants } from 'node:fs';
-import type { SessionInfo, SessionMessage } from './types.js';
+import type { SessionInfo, SessionMessage, SessionPart } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -314,6 +314,171 @@ function getSessionMessages(sessionId: string, since?: number): SessionMessage[]
   }
 }
 
+// ── Part-level queries ─────────────────────────────────────────────────────
+
+/**
+ * Truncate a string to a maximum length, appending "…" if truncated.
+ */
+function truncateStr(s: string | null | undefined, maxLen: number): string | undefined {
+  if (s == null) return undefined;
+  const str = String(s);
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + '…';
+}
+
+/**
+ * Extract tool input summary from part data based on tool type.
+ */
+function extractToolInput(tool: string, stateInput: unknown): string | undefined {
+  if (stateInput == null) return undefined;
+
+  if (tool === 'bash') {
+    // bash input has { command, description }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.command === 'string') {
+        return truncateStr(inp.command, 200);
+      }
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 200);
+  }
+
+  if (tool === 'read' || tool === 'write' || tool === 'edit') {
+    // These tools have { filePath } or { path } in input
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      const filePath = inp.filePath ?? inp.path;
+      if (typeof filePath === 'string') return filePath;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 200);
+  }
+
+  // Default: truncate stringified input
+  return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 200);
+}
+
+/**
+ * Extract tool output summary from part data based on tool type.
+ */
+function extractToolOutput(tool: string, stateOutput: unknown): string | undefined {
+  if (stateOutput == null) return undefined;
+
+  const outputStr = typeof stateOutput === 'string' ? stateOutput : JSON.stringify(stateOutput);
+
+  if (tool === 'bash') {
+    // First 2 lines of output
+    const lines = outputStr.split('\n');
+    const firstTwo = lines.slice(0, 2).join('\n');
+    return truncateStr(firstTwo, 200);
+  }
+
+  return truncateStr(outputStr, 100);
+}
+
+/**
+ * Parse a raw part row into a SessionPart.
+ */
+function parsePartRow(
+  row: { id: string; message_id: string; data: string; time_created: number; message_data: string },
+): SessionPart {
+  let partData: Record<string, unknown> = {};
+  let msgData: Record<string, unknown> = {};
+
+  try { partData = JSON.parse(row.data) as Record<string, unknown>; } catch { /* empty */ }
+  try { msgData = JSON.parse(row.message_data) as Record<string, unknown>; } catch { /* empty */ }
+
+  const type = typeof partData.type === 'string' ? partData.type : 'unknown';
+  const role = typeof msgData.role === 'string' ? msgData.role : 'unknown';
+
+  const base: SessionPart = {
+    id: row.id,
+    messageId: row.message_id,
+    role,
+    type,
+    createdAt: row.time_created,
+  };
+
+  if (type === 'tool') {
+    const tool = typeof partData.tool === 'string' ? partData.tool : undefined;
+    const state = (typeof partData.state === 'object' && partData.state !== null)
+      ? partData.state as Record<string, unknown>
+      : undefined;
+
+    base.tool = tool;
+    base.toolStatus = state && typeof state.status === 'string' ? state.status : undefined;
+    if (tool && state) {
+      base.toolInput = extractToolInput(tool, state.input);
+      base.toolOutput = extractToolOutput(tool, state.output);
+    }
+    return base;
+  }
+
+  if (type === 'text' || type === 'reasoning') {
+    base.text = typeof partData.text === 'string' ? partData.text : undefined;
+    return base;
+  }
+
+  if (type === 'patch') {
+    const operations = Array.isArray(partData.operations) ? partData.operations : [];
+    const files: string[] = [];
+    for (const op of operations) {
+      if (typeof op === 'object' && op !== null) {
+        const opObj = op as Record<string, unknown>;
+        if (typeof opObj.path === 'string') {
+          files.push(opObj.path);
+        }
+      }
+    }
+    if (files.length > 0) {
+      base.patchFiles = files;
+    }
+    return base;
+  }
+
+  // step-start, step-finish, or unknown — just return base
+  return base;
+}
+
+/**
+ * Get all parts for a session, optionally filtered by time.
+ * Returns SessionPart[] ordered by time_created ASC (chronological).
+ *
+ * Joins with message table to get role from the parent message.
+ *
+ * @param sessionId - The opencode session ID
+ * @param since - Optional epoch ms timestamp; only parts after this time returned
+ */
+function getSessionParts(sessionId: string, since?: number): SessionPart[] {
+  const db = openDb();
+  if (db === null) {
+    return [];
+  }
+
+  try {
+    const baseSql = `SELECT p.id, p.message_id, p.data, p.time_created, m.data as message_data
+    FROM part p
+    JOIN message m ON p.message_id = m.id
+    WHERE p.session_id = ?`;
+
+    const sql = since !== undefined
+      ? `${baseSql} AND p.time_created > ? ORDER BY p.time_created ASC`
+      : `${baseSql} ORDER BY p.time_created ASC`;
+
+    const params = since !== undefined ? [sessionId, since] : [sessionId];
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: string;
+      message_id: string;
+      data: string;
+      time_created: number;
+      message_data: string;
+    }>;
+
+    return rows.map(parsePartRow);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Get the most recent message for a session.
  * Returns null if session has no messages or doesn't exist.
@@ -592,6 +757,7 @@ export {
   getSessionMessageCountFromDb,
   findSessionByTitle,
   getSessionMessages,
+  getSessionParts,
   getLastMessage,
   isSessionActive,
   getSessionTokens,
