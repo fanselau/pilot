@@ -153,6 +153,14 @@ program
   });
 
 program
+  .command('reload')
+  .description('Signal running daemon to reload after build')
+  .action(async () => {
+    const { reloadCommand } = await import('./commands/reload.js');
+    await reloadCommand();
+  });
+
+program
   .command('gc')
   .description('Clean old jobs, compact DB')
   .action(async () => {
