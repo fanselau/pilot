@@ -8,7 +8,7 @@
 Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed quick task 014: Model Frontmatter Patching
+Last activity: 2026-03-02 - Completed quick task 013: Implement requirements/pilot-phase-execution-success-contract.md end-to-end in code: fix phase fallback mapping, semantic success gating, interrupted-job status handling, and phase ambiguity warning; include tests
 
 Progress: ████████████████████████████░░ 93% (67/72 plans)
 
@@ -74,7 +74,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 011 | Daemon hot-reload after build | 2026-03-02 | 79b116c | [011-daemon-hot-reload-after-build-problem-whe](./quick/011-daemon-hot-reload-after-build-problem-whe/) |
 | 012 | TUI Detail View - Job Drill-Down on Enter | 2026-03-02 | e33b2d8 | [012-tui-detail-view-job-drill-down-on-enter-](./quick/012-tui-detail-view-job-drill-down-on-enter-/) |
 | 012 | TUI detail view — job drill-down on enter | 2026-03-02 | ebe7b62 | [012-tui-detail-view-job-drill-down-on-enter-](./quick/012-tui-detail-view-job-drill-down-on-enter-/) |
-| 013 | Phase Execution Success Contract | 2026-03-02 | 876442a | [013-implement-requirements-pilot-phase-execu](./quick/013-implement-requirements-pilot-phase-execu/) |
+| 013 | Implement requirements/pilot-phase-execution-success-contract.md end-to-end in code: fix phase fallback mapping, semantic success gating, interrupted-job status handling, and phase ambiguity warning; include tests | 2026-03-02 | 979bbf3 | [013-implement-requirements-pilot-phase-execu](./quick/013-implement-requirements-pilot-phase-execu/) |
 | 014 | Model Frontmatter Patching | 2026-03-02 | 04df455 | [014-model-frontmatter-patching](./quick/014-model-frontmatter-patching/) |
 
 ## Accumulated Context
