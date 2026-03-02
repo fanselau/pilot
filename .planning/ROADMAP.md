@@ -320,7 +320,7 @@ Read requirements/pilot-v2-tui.md for full spec.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 19-01-PLAN.md — Build setup: exclude TUI from tsc, prebuild clean, fix import paths
+- [x] 19-01-PLAN.md — Build setup: exclude TUI from tsc, prebuild clean, fix import paths
 - [ ] 19-02-PLAN.md — TUI launch verification + runtime fixes + human verify
 
 **Details:**
