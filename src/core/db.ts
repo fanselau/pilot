@@ -13,7 +13,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig } from './config.js';
-import type { Job, JobScope, DelegationPlan } from './types.js';
+import type { Job, JobScope, ModelProfile, ProviderMode, DelegationPlan } from './types.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   max_attempts INTEGER DEFAULT 3,
   delegation_plan TEXT,
   current_step INTEGER DEFAULT 0,
-  session_titles TEXT
+  session_titles TEXT,
+  model_profile TEXT NOT NULL DEFAULT 'balanced',
+  provider_mode TEXT NOT NULL DEFAULT 'claude-only'
 );
 `;
 
@@ -91,6 +93,8 @@ interface JobRow {
   delegation_plan: string | null;
   current_step: number;
   session_titles: string | null;
+  model_profile: string;
+  provider_mode: string;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -112,6 +116,8 @@ function rowToJob(row: JobRow): Job {
     delegationPlan: row.delegation_plan,
     currentStep: row.current_step,
     sessionTitles: row.session_titles,
+    modelProfile: (row.model_profile ?? 'balanced') as Job['modelProfile'],
+    providerMode: (row.provider_mode ?? 'claude-only') as Job['providerMode'],
   };
 }
 
@@ -121,6 +127,24 @@ function rowToJob(row: JobRow): Job {
  * Open (or return cached) pilot.db.
  * Auto-creates ~/.pilot/ directory and the jobs table on first access.
  */
+/**
+ * Run ALTER TABLE migrations for new columns.
+ * Wraps each in try/catch so already-existing columns don't error.
+ */
+function migrateSchema(db: DatabaseType): void {
+  const migrations = [
+    "ALTER TABLE jobs ADD COLUMN model_profile TEXT NOT NULL DEFAULT 'balanced'",
+    "ALTER TABLE jobs ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'claude-only'",
+  ];
+  for (const sql of migrations) {
+    try {
+      db.exec(sql);
+    } catch {
+      // Column already exists — ignore
+    }
+  }
+}
+
 function openPilotDb(): DatabaseType {
   if (cachedDb) return cachedDb;
 
@@ -129,6 +153,7 @@ function openPilotDb(): DatabaseType {
   cachedDb = new Database(config.pilotDbPath) as DatabaseType;
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
+  migrateSchema(cachedDb!);
   return cachedDb!;
 }
 
@@ -167,14 +192,18 @@ function addJob(
   scope: JobScope,
   description: string,
   requirementPath?: string,
+  modelProfile?: ModelProfile,
+  providerMode?: ProviderMode,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
+  const profile = modelProfile ?? 'balanced';
+  const provider = providerMode ?? 'claude-only';
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider);
 
   return getJob(id)!;
 }

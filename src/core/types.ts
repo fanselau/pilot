@@ -24,6 +24,8 @@ export interface PilotConfig {
 
 export type JobScope = 'quick' | 'phase' | 'milestone';
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type ModelProfile = 'quality' | 'balanced' | 'budget';
+export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
 
 export interface Job {
   id: string;                // 4 alphanumeric chars
@@ -43,6 +45,8 @@ export interface Job {
   delegationPlan: string | null;  // JSON string of DelegationPlan
   currentStep: number;
   sessionTitles: string | null;   // JSON array of session titles
+  modelProfile: ModelProfile;
+  providerMode: ProviderMode;
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
