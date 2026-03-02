@@ -172,14 +172,25 @@ function exportSessionFromDb(sessionId: string): unknown {
 
   try {
     const rows = db.prepare(
-      'SELECT id, data FROM message WHERE session_id = ? ORDER BY time_created ASC',
-    ).all(sessionId) as Array<{ id: string; data: string }>;
+      `SELECT m.id, m.data,
+        (SELECT GROUP_CONCAT(json_extract(p.data, '$.text'), char(10))
+         FROM part p
+         WHERE p.message_id = m.id
+           AND json_extract(p.data, '$.type') = 'text'
+         ORDER BY p.time_created ASC
+        ) as text_content
+      FROM message m
+      WHERE m.session_id = ?
+      ORDER BY m.time_created ASC`,
+    ).all(sessionId) as Array<{ id: string; data: string; text_content: string | null }>;
 
     const messages = rows.map((row) => {
       try {
-        return JSON.parse(row.data) as Record<string, unknown>;
+        const parsed = JSON.parse(row.data) as Record<string, unknown>;
+        parsed.content = row.text_content ?? '';
+        return parsed;
       } catch {
-        return { role: 'unknown', content: '' };
+        return { role: 'unknown', content: row.text_content ?? '' };
       }
     });
 
@@ -236,22 +247,23 @@ function findSessionByTitle(title: string): string | null {
 
 /**
  * Parse a message row into a SessionMessage.
- * Extracts role and content from the JSON data column with safe defaults.
+ * Extracts role from the JSON data column and content from the part-table subquery.
+ * The `text_content` column comes from a subquery that concatenates all text parts.
  */
-function parseMessageRow(row: { id: string; data: string; time_created: number }): SessionMessage {
+function parseMessageRow(row: { id: string; data: string; time_created: number; text_content?: string | null }): SessionMessage {
   try {
     const parsed = JSON.parse(row.data) as Record<string, unknown>;
     return {
       id: row.id,
       role: typeof parsed.role === 'string' ? parsed.role : 'unknown',
-      content: typeof parsed.content === 'string' ? parsed.content : '',
+      content: row.text_content ?? '',
       createdAt: row.time_created,
     };
   } catch {
     return {
       id: row.id,
       role: 'unknown',
-      content: '',
+      content: row.text_content ?? '',
       createdAt: row.time_created,
     };
   }
@@ -274,15 +286,26 @@ function getSessionMessages(sessionId: string, since?: number): SessionMessage[]
   }
 
   try {
+    const baseSql = `SELECT m.id, m.data, m.time_created,
+      (SELECT GROUP_CONCAT(json_extract(p.data, '$.text'), char(10))
+       FROM part p
+       WHERE p.message_id = m.id
+         AND json_extract(p.data, '$.type') = 'text'
+       ORDER BY p.time_created ASC
+      ) as text_content
+    FROM message m
+    WHERE m.session_id = ?`;
+
     const sql = since !== undefined
-      ? 'SELECT id, data, time_created FROM message WHERE session_id = ? AND time_created > ? ORDER BY time_created ASC'
-      : 'SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created ASC';
+      ? `${baseSql} AND m.time_created > ? ORDER BY m.time_created ASC`
+      : `${baseSql} ORDER BY m.time_created ASC`;
 
     const params = since !== undefined ? [sessionId, since] : [sessionId];
     const rows = db.prepare(sql).all(...params) as Array<{
       id: string;
       data: string;
       time_created: number;
+      text_content: string | null;
     }>;
 
     return rows.map(parseMessageRow);
@@ -303,8 +326,17 @@ function getLastMessage(sessionId: string): SessionMessage | null {
 
   try {
     const row = db.prepare(
-      'SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created DESC LIMIT 1',
-    ).get(sessionId) as { id: string; data: string; time_created: number } | undefined;
+      `SELECT m.id, m.data, m.time_created,
+        (SELECT GROUP_CONCAT(json_extract(p.data, '$.text'), char(10))
+         FROM part p
+         WHERE p.message_id = m.id
+           AND json_extract(p.data, '$.type') = 'text'
+         ORDER BY p.time_created ASC
+        ) as text_content
+      FROM message m
+      WHERE m.session_id = ?
+      ORDER BY m.time_created DESC LIMIT 1`,
+    ).get(sessionId) as { id: string; data: string; time_created: number; text_content: string | null } | undefined;
 
     if (!row) {
       return null;
