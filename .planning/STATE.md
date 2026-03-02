@@ -243,8 +243,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 18-05 | Flash detection via createEffect(on()) comparing prev/current ID sets | Clean SolidJS pattern for detecting new completions without stale closures |
 | 18-05 | formatTokens exported from running-panel for reuse | Avoids duplicate helper; completed-panel imports it |
 
+| quick-001 | parseMessageRow reads text_content from part-table subquery | message.data doesn't contain content in opencode schema |
+
 ## Session Continuity
 
-Last session: 2026-03-02T12:55:16Z
-Stopped at: Completed 18-05-PLAN.md
+Last session: 2026-03-02T13:03:26Z
+Stopped at: Completed quick-001-PLAN.md
 Resume file: None
