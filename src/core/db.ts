@@ -13,7 +13,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig } from './config.js';
-import type { Job, JobScope, ModelProfile, ProviderMode, DelegationPlan } from './types.js';
+import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan } from './types.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -41,6 +41,24 @@ CREATE TABLE IF NOT EXISTS jobs (
   session_titles TEXT,
   model_profile TEXT NOT NULL DEFAULT 'balanced',
   provider_mode TEXT NOT NULL DEFAULT 'claude-only'
+);
+`;
+
+const CREATE_JOB_STEPS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS job_steps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id TEXT NOT NULL REFERENCES jobs(id),
+  step_index INTEGER NOT NULL,
+  command TEXT NOT NULL,
+  args TEXT NOT NULL DEFAULT '',
+  session_title TEXT,
+  session_id TEXT,
+  status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'skipped')),
+  verdict_source TEXT,
+  verdict_reason TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  duration_ms INTEGER
 );
 `;
 
@@ -153,6 +171,7 @@ function openPilotDb(): DatabaseType {
   cachedDb = new Database(config.pilotDbPath) as DatabaseType;
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   migrateSchema(cachedDb!);
   return cachedDb!;
 }
@@ -169,6 +188,7 @@ function _getTestDb(): DatabaseType {
   cachedDb = new Database(':memory:') as DatabaseType;
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   return cachedDb!;
 }
 
@@ -364,6 +384,126 @@ function updateSessionTitles(id: string, titles: string[]): void {
   );
 }
 
+// ── Job Steps CRUD ────────────────────────────────────────────────────
+
+interface JobStepRow {
+  id: number;
+  job_id: string;
+  step_index: number;
+  command: string;
+  args: string;
+  session_title: string | null;
+  session_id: string | null;
+  status: string;
+  verdict_source: string | null;
+  verdict_reason: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+}
+
+function rowToJobStep(row: JobStepRow): JobStep {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    stepIndex: row.step_index,
+    command: row.command,
+    args: row.args,
+    sessionTitle: row.session_title,
+    sessionId: row.session_id,
+    status: row.status as JobStep['status'],
+    verdictSource: row.verdict_source,
+    verdictReason: row.verdict_reason,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    durationMs: row.duration_ms,
+  };
+}
+
+/**
+ * Record a new step as 'running'. Returns the auto-increment row ID.
+ */
+function recordStep(
+  jobId: string,
+  stepIndex: number,
+  command: string,
+  args: string,
+  sessionTitle?: string,
+): number {
+  const db = getDb();
+  const result = db.prepare(`
+    INSERT INTO job_steps (job_id, step_index, command, args, session_title)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(jobId, stepIndex, command, args, sessionTitle ?? null);
+  return Number(result.lastInsertRowid);
+}
+
+/**
+ * Complete a step: update status, set completed_at, compute duration_ms,
+ * and optionally set verdict and session ID.
+ */
+function completeStep(
+  id: number,
+  status: 'completed' | 'failed' | 'skipped',
+  verdictSource?: string | null,
+  verdictReason?: string | null,
+  sessionId?: string | null,
+): void {
+  const db = getDb();
+  // Compute duration from started_at
+  db.prepare(`
+    UPDATE job_steps
+    SET status = ?,
+        completed_at = datetime('now'),
+        duration_ms = CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER),
+        verdict_source = ?,
+        verdict_reason = ?,
+        session_id = ?
+    WHERE id = ?
+  `).run(status, verdictSource ?? null, verdictReason ?? null, sessionId ?? null, id);
+}
+
+/**
+ * Get all steps for a job, ordered by step_index ASC.
+ */
+function getJobSteps(jobId: string): JobStep[] {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM job_steps WHERE job_id = ? ORDER BY step_index ASC',
+  ).all(jobId) as JobStepRow[];
+  return rows.map(rowToJobStep);
+}
+
+/**
+ * Insert rows with status='skipped' for remaining unexecuted steps.
+ * Used when the runner is interrupted mid-job.
+ */
+function skipRemainingSteps(
+  jobId: string,
+  fromIndex: number,
+  reason: string,
+): void {
+  const db = getDb();
+  // Get the delegation plan to know how many total steps exist
+  const job = getJob(jobId);
+  if (!job?.delegationPlan) return;
+
+  let totalSteps: number;
+  try {
+    const plan = JSON.parse(job.delegationPlan) as { steps: unknown[] };
+    totalSteps = plan.steps.length;
+  } catch {
+    return;
+  }
+
+  for (let i = fromIndex; i < totalSteps; i++) {
+    db.prepare(`
+      INSERT INTO job_steps (job_id, step_index, command, args, status, verdict_reason, completed_at)
+      VALUES (?, ?, '', '', 'skipped', ?, datetime('now'))
+    `).run(jobId, i, reason);
+  }
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -383,4 +523,8 @@ export {
   advanceStep,
   bump,
   updateSessionTitles,
+  recordStep,
+  completeStep,
+  getJobSteps,
+  skipRemainingSteps,
 };

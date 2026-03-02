@@ -96,6 +96,24 @@ export interface SessionPart {
   patchFiles?: string[]; // filenames from patch operations
 }
 
+// ── Job Steps (per-step audit trail) ──────────────────────────────────────
+
+export interface JobStep {
+  id: number;                     // auto-increment
+  jobId: string;                  // FK to jobs.id
+  stepIndex: number;              // 0-based step position
+  command: string;                // e.g. "execute-phase", "plan-phase", "quick"
+  args: string;                   // e.g. "3 --auto"
+  sessionTitle: string | null;    // opencode session title
+  sessionId: string | null;       // opencode session ID (if found)
+  status: 'running' | 'completed' | 'failed' | 'skipped';
+  verdictSource: string | null;   // e.g. "semantic-check", null for non-phase commands
+  verdictReason: string | null;   // reason from evaluateStepResult
+  startedAt: string;              // ISO 8601
+  completedAt: string | null;
+  durationMs: number | null;
+}
+
 // ── Status output ─────────────────────────────────────────────────────────
 
 export interface PilotStatusJson {
