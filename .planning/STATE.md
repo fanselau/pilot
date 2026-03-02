@@ -8,7 +8,7 @@
 Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-02 - Completed 20-01-PLAN.md
+Last activity: 2026-03-02 - Completed quick task 014: Model Frontmatter Patching
 
 Progress: ████████████████████████████░░ 93% (67/72 plans)
 
@@ -74,6 +74,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 011 | Daemon hot-reload after build | 2026-03-02 | 79b116c | [011-daemon-hot-reload-after-build-problem-whe](./quick/011-daemon-hot-reload-after-build-problem-whe/) |
 | 012 | TUI Detail View - Job Drill-Down on Enter | 2026-03-02 | e33b2d8 | [012-tui-detail-view-job-drill-down-on-enter-](./quick/012-tui-detail-view-job-drill-down-on-enter-/) |
 | 012 | TUI detail view — job drill-down on enter | 2026-03-02 | ebe7b62 | [012-tui-detail-view-job-drill-down-on-enter-](./quick/012-tui-detail-view-job-drill-down-on-enter-/) |
+| 014 | Model Frontmatter Patching | 2026-03-02 | 04df455 | [014-model-frontmatter-patching](./quick/014-model-frontmatter-patching/) |
 
 ## Accumulated Context
 
