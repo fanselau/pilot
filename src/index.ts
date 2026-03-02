@@ -63,9 +63,11 @@ program
 
 program
   .command('log [id]')
-  .description('Session transcript')
-  .option('--follow', 'Live tail new messages')
-  .option('--last <n>', 'Show last N messages', parseInt)
+  .description('Session activity stream')
+  .option('--follow', 'Live tail new activity')
+  .option('--last <n>', 'Show last N parts', parseInt)
+  .option('-v, --verbose', 'Show reasoning and full tool output')
+  .option('--delegation', 'Show only delegation session')
   .action(async (id: string | undefined, opts: Record<string, unknown>) => {
     const { logCommand } = await import('./commands/log.js');
     await logCommand(id, { ...program.opts(), ...opts } as Parameters<typeof logCommand>[1]);
