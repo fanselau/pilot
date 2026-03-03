@@ -1,17 +1,17 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 25
+## Current Phase: 26
 
 ## Current Position
 
-Phase: 25 of 27 (Pilot Learnings Consolidation + Reliability Guardrails)
-Plan: 1 of 4 in current phase
+Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
+Plan: 1 of 2 in current phase
 Status: In progress
-Next: 25-02-PLAN.md (runner serialization guard + startup reconciliation)
-Last activity: 2026-03-03 - Completed 25-01-PLAN.md (DB layer: getRunningJobsForProject, getAllRunningJobs, reconcileStaleJobs, markStale)
+Next: 26-02-PLAN.md
+Last activity: 2026-03-03 - Completed 26-01-PLAN.md (DB layer: claimNextLaunchable, forceQuitJob, getRunningJobsByProject)
 
-Progress: ████████████████████████████░░ 94% (73/77 plans)
+Progress: █████████████████████████████░ 95% (74/77 plans)
 
 ## Project Reference
 
@@ -290,9 +290,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 25-01 | markStale sets started_at = NULL | Fresh timing on next run, not stale duration from ghost session |
 | 25-01 | error field records reconciliation reason | Debugging ghost-running jobs without separate audit log |
 | 25-01 | WHERE status = 'running' guard on markStale | Safe idempotency — calling twice doesn't reset a completed job |
+| 26-01 | claimNextLaunchable uses db.transaction() for atomic SELECT+UPDATE | Prevents TOCTOU race — no two callers claim the same job |
+| 26-01 | Project serialization via NOT IN subquery inside transaction | Single SQL statement, no extra round-trips |
+| 26-01 | Re-fetch row after UPDATE inside transaction | Returns accurate started_at/attempts values post-mutation |
+| 26-01 | getRunningJobsByProject is thin alias for getRunningJobsForProject | Same logic, cleaner name for runner dispatch path |
+| 26-01 | forceQuitJob embeds source in verdict_reason string | Audit trail without schema change |
 
 ## Session Continuity
 
-Last session: 2026-03-03T17:09:44Z
-Stopped at: Completed 25-01-PLAN.md
+Last session: 2026-03-03T17:16:17Z
+Stopped at: Completed 26-01-PLAN.md
 Resume file: None
