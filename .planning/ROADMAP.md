@@ -361,7 +361,7 @@ Read requirements/tui-visual-polish.md for full spec. Covers P0 (must-have), P1 
 
 Plans:
 - [x] 22-01-PLAN.md — Delegate title extraction + gsd-delegate.md prompt update
-- [ ] 22-02-PLAN.md — Runner inter-step artifact verification + dynamic arg patching
+- [x] 22-02-PLAN.md — Runner inter-step artifact verification + dynamic arg patching
 
 **Details:**
 Read requirements/delegate-phase-lifecycle-hardening.md for full spec.

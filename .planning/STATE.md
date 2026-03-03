@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 22 of 22 (Delegate Phase Lifecycle Hardening)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-03 - Completed 22-01-PLAN.md (delegate title extraction + prompt update)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-03 - Completed 22-02-PLAN.md (runner inter-step artifact verification + dynamic arg patching)
 
-Progress: ████████████████████████████░░ 94% (68/72 plans)
+Progress: ████████████████████████████░░ 96% (69/72 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 22 in progress — Delegate Phase Lifecycle Hardening (1/2 plans complete)
+**Current focus:** Phase 22 complete — Delegate Phase Lifecycle Hardening (2/2 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -266,9 +266,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 22-01 | extractRequirementTitle uses /^#\s+(.+)$/m regex for first # heading | Matches # Title but not ## Subtitle; clean title extraction |
 | 22-01 | add-phase gets title, plan-phase gets @path for GSD context | Prevents ugly slugified directory names from file paths |
 | 22-01 | Milestone dir fallback derives title from filename when no heading | Strip .md and leading digits for reasonable fallback |
+| 22-02 | Artifact verification runs AFTER semantic success gating | Both checks must pass — semantic first, artifact second |
+| 22-02 | patchStepArgs mutates plan.steps in place for remaining steps only | Simpler than cloning; patching is always forward-only |
+| 22-02 | Non-phase commands skip artifact verification entirely | quick/new-project/debug have no phase directory expectations |
+| 22-02 | restoreDefaultReaddirSync helper pattern for test mock state | vi.clearAllMocks doesn't restore mockImplementation overrides |
 
 ## Session Continuity
 
-Last session: 2026-03-03T11:08:27Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-03-03T11:13:35Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: None
