@@ -40,6 +40,7 @@ export interface Job {
   startedAt: string | null;
   completedAt: string | null;
   error: string | null;
+  resumeHint: string | null;  // hint for --resume flag on next attempt
   attempts: number;
   maxAttempts: number;       // default 3
   delegationPlan: string | null;  // JSON string of DelegationPlan

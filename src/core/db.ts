@@ -106,6 +106,7 @@ interface JobRow {
   started_at: string | null;
   completed_at: string | null;
   error: string | null;
+  resume_hint: string | null;
   attempts: number;
   max_attempts: number;
   delegation_plan: string | null;
@@ -130,6 +131,7 @@ function rowToJob(row: JobRow): Job {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     error: row.error,
+    resumeHint: row.resume_hint ?? null,
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     delegationPlan: row.delegation_plan,
@@ -156,6 +158,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN model_profile TEXT NOT NULL DEFAULT 'balanced'",
     "ALTER TABLE jobs ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'claude-only'",
     "ALTER TABLE jobs ADD COLUMN judge_verdict TEXT",
+    "ALTER TABLE jobs ADD COLUMN resume_hint TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -192,6 +195,7 @@ function _getTestDb(): DatabaseType {
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
+  migrateSchema(cachedDb!);
   return cachedDb!;
 }
 
@@ -707,7 +711,9 @@ function skipRemainingSteps(
  * Reset a job back to pending status for retry.
  * Used by the judge-based evaluation when a retryable failure is detected.
  * Clears started_at for fresh timing on next attempt.
- * Optionally records a resume hint in the error field.
+ * Clears session_titles to prevent stale titles matching in reconciler pgrep.
+ * Stores resumeHint in the dedicated resume_hint column (NOT in error field).
+ * Deletes all job_steps for the job to prevent stale steps appearing in TUI.
  */
 function resetToPending(id: string, resumeHint?: string): void {
   const db = getDb();
@@ -715,10 +721,14 @@ function resetToPending(id: string, resumeHint?: string): void {
     UPDATE jobs
     SET status = 'pending',
         started_at = NULL,
-        error = ?,
-        current_step = 0
+        error = NULL,
+        current_step = 0,
+        session_titles = NULL,
+        resume_hint = ?
     WHERE id = ?
-  `).run(resumeHint ? `Reset: ${resumeHint}` : null, id);
+  `).run(resumeHint ?? null, id);
+  // Clean up step records from previous attempt
+  db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
 }
 
 /**
