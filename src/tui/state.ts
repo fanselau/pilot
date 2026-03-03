@@ -41,6 +41,11 @@ export function createPilotState() {
   const [showFilter, setShowFilter] = createSignal(false);
   const [filter, setFilter] = createSignal<FilterState>({});
 
+  // ── Confirmation overlay signals ──────────────────────────────────────
+  const [showConfirm, setShowConfirm] = createSignal(false);
+  // pendingConfirmAction stores what to execute when user confirms
+  const [pendingConfirmAction, setPendingConfirmAction] = createSignal<(() => Promise<void>) | null>(null);
+
   // ── Log state signals ─────────────────────────────────────────────────
   const [followLog, setFollowLog] = createSignal(true);
   const [logMessages, setLogMessages] = createSignal<SessionMessage[]>([]);
@@ -96,6 +101,8 @@ export function createPilotState() {
     showHelp, setShowHelp,
     showFilter, setShowFilter,
     filter, setFilter,
+    showConfirm, setShowConfirm,
+    pendingConfirmAction, setPendingConfirmAction,
 
     // Log
     followLog, setFollowLog,
