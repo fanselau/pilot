@@ -25,7 +25,7 @@ function truncate(str: string, maxLen: number): string {
   return str.slice(0, maxLen - 1) + '…';
 }
 
-function formatDuration(startedAt: string | null, completedAt: string | null): string {
+export function formatDuration(startedAt: string | null, completedAt: string | null): string {
   if (!startedAt || !completedAt) return '—';
   const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
   if (ms < 0) return '—';
@@ -37,7 +37,7 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   return `${secs}s`;
 }
 
-function formatRelativeTime(isoDate: string | null): string {
+export function formatRelativeTime(isoDate: string | null): string {
   if (!isoDate) return '';
   const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
   if (diff < 0) return 'just now';
@@ -50,7 +50,7 @@ function formatRelativeTime(isoDate: string | null): string {
   return `${days}d ago`;
 }
 
-function statusIcon(status: JobStatus): { icon: string; color: string } {
+export function statusIcon(status: JobStatus): { icon: string; color: string } {
   switch (status) {
     case 'completed': return { icon: '✓', color: statusColors.done };
     case 'failed': return { icon: '✗', color: statusColors.failed };
@@ -60,13 +60,31 @@ function statusIcon(status: JobStatus): { icon: string; color: string } {
 }
 
 // Subtle flash background per status — dark tint, not harsh inverse
-function flashBg(status: JobStatus): string {
+export function flashBg(status: JobStatus): string {
   switch (status) {
     case 'completed': return '#0d2b0d';  // dark green tint
     case 'failed': return '#2b0d0d';     // dark red tint
     case 'cancelled': return '#1a1a1a';  // dark neutral
     default: return '#111111';
   }
+}
+
+/**
+ * Compute the background color for a completed-panel row.
+ * Selection always wins over flash — this is the core of the overlay fix.
+ *
+ * @param selected - Whether this row is currently selected
+ * @param flashing - Whether this row is currently flashing (new completion)
+ * @param status - Job status (used to determine flash tint color)
+ */
+export function computeRowBg(
+  selected: boolean,
+  flashing: boolean,
+  status: JobStatus = 'completed',
+): string | undefined {
+  if (selected) return theme.highlight;
+  if (flashing) return flashBg(status);
+  return undefined;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -163,11 +181,7 @@ export function CompletedPanel(props: {
             const tokenCount = () => jobTokens().get(job.id) ?? 0;
 
             // Selection always wins over flash — user always knows cursor position
-            const rowBg = () => {
-              if (selected()) return theme.highlight;
-              if (flashing()) return flashBg(job.status);
-              return undefined;
-            };
+            const rowBg = () => computeRowBg(selected(), flashing(), job.status);
 
             // Content text color: normal fg, slightly muted for metadata
             const contentFg = () => selected() ? theme.fg : theme.fg;
