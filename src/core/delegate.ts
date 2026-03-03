@@ -10,10 +10,10 @@
  */
 
 import { execa } from 'execa';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
-import type { Job, DelegationPlan } from './types.js';
+import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
  * Spawn a delegation AI session to determine what GSD commands to run for a job.
@@ -88,12 +88,9 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
           reasoning: 'Fallback: full milestone lifecycle: init → plan → execute',
         };
       }
-      return {
-        steps: [
-          { command: 'add-phase', args: job.description },
-        ],
-        reasoning: 'Fallback: project already initialized, adding as new phase',
-      };
+      // Milestone on initialized project: if requirementPath is a directory,
+      // iterate files and create one phase per file
+      return buildMilestonePlan(job, projectDir);
   }
 }
 
@@ -103,20 +100,11 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
  * If job.description is a numeric phase identifier, execute it directly.
  * Otherwise, build a full lifecycle: add-phase → plan-phase → execute-phase.
  * Never blindly pass requirement titles to execute-phase.
+ *
+ * Phase number resolution uses filesystem scan of .planning/phases/ dirs
+ * (same logic GSD uses) instead of counting ROADMAP headings which diverge.
  */
 function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
-  const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
-  let roadmapContent: string;
-  try {
-    roadmapContent = readFileSync(roadmapPath, 'utf8');
-  } catch {
-    // No ROADMAP — can't resolve, fail fast with actionable error
-    return {
-      steps: [{ command: 'execute-phase', args: '1' }],
-      reasoning: `Fallback: ROADMAP.md not found at ${roadmapPath}, defaulting to phase 1`,
-    };
-  }
-
   // If description is already a phase number, just execute it
   if (/^\d+$/.test(job.description.trim())) {
     return {
@@ -125,14 +113,9 @@ function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
     };
   }
 
-  // Count existing phases in ROADMAP to determine next phase number
-  const phaseMatches = roadmapContent.match(/^###\s+Phase\s+(\d+)/gm) || [];
-  const maxPhase = phaseMatches.reduce((max, match) => {
-    const numMatch = match.match(/(\d+)/);
-    const n = numMatch ? parseInt(numMatch[1], 10) : 0;
-    return Math.max(max, n);
-  }, 0);
-  const nextPhase = maxPhase + 1;
+  // Scan .planning/phases/ for existing phase directories (same logic GSD uses)
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+  const nextPhase = getNextPhaseNumber(phasesDir);
 
   // Build full lifecycle: add → plan → execute
   const addArgs = job.requirementPath
@@ -145,7 +128,76 @@ function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
       { command: 'plan-phase', args: `${nextPhase} --auto` },
       { command: 'execute-phase', args: `${nextPhase}` },
     ],
-    reasoning: `Fallback: "${job.description}" is not a phase number, creating as phase ${nextPhase}`,
+    reasoning: `Fallback: "${job.description}" is not a phase number, creating as phase ${nextPhase} (from phases/ dir scan)`,
+  };
+}
+
+/**
+ * Scan .planning/phases/ directory for existing phase dirs and return next phase number.
+ * Matches NN-* prefix pattern, same as GSD's gsd-tools.cjs.
+ * Returns 1 if no phases dir or no matching dirs.
+ */
+function getNextPhaseNumber(phasesDir: string): number {
+  try {
+    const entries = readdirSync(phasesDir);
+    let maxPhase = 0;
+    for (const entry of entries) {
+      const match = entry.match(/^(\d+)-/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxPhase) maxPhase = n;
+      }
+    }
+    return maxPhase + 1;
+  } catch {
+    return 1; // No phases dir or unreadable
+  }
+}
+
+/**
+ * Build a milestone plan for an initialized project.
+ * If requirementPath is a directory, create add→plan→execute per .md file.
+ * Otherwise, fall back to single add-phase.
+ */
+function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
+  if (job.requirementPath) {
+    try {
+      const stat = statSync(job.requirementPath);
+      if (stat.isDirectory()) {
+        const files = readdirSync(job.requirementPath)
+          .filter(f => f.endsWith('.md'))
+          .sort();
+
+        if (files.length > 0) {
+          const phasesDir = path.join(projectDir, '.planning', 'phases');
+          let nextPhase = getNextPhaseNumber(phasesDir);
+          const steps: DelegationStep[] = [];
+
+          for (const file of files) {
+            const filePath = path.join(job.requirementPath, file);
+            steps.push({ command: 'add-phase', args: `@${filePath}` });
+            steps.push({ command: 'plan-phase', args: `${nextPhase} --auto` });
+            steps.push({ command: 'execute-phase', args: `${nextPhase}` });
+            nextPhase++;
+          }
+
+          return {
+            steps,
+            reasoning: `Fallback: milestone with ${files.length} requirement files, creating one phase per file`,
+          };
+        }
+      }
+    } catch {
+      // Fall through to single add-phase
+    }
+  }
+
+  // Default: single add-phase
+  return {
+    steps: [
+      { command: 'add-phase', args: job.requirementPath ? `@${job.requirementPath}` : job.description },
+    ],
+    reasoning: 'Fallback: project already initialized, adding as new phase',
   };
 }
 
@@ -290,4 +342,15 @@ function parseDelegationOutput(content: string): DelegationPlan {
   };
 }
 
-export { delegate, parseDelegationOutput, resolveOpencodeBinary, waitForDelegationResult, resolvePhaseForFallback };
+export {
+  delegate,
+  parseDelegationOutput,
+  resolveOpencodeBinary,
+  waitForDelegationResult,
+  resolvePhaseForFallback,
+  fallbackPlan,
+  buildNewProjectArgs,
+  buildQuickArgs,
+  getNextPhaseNumber,
+  buildMilestonePlan,
+};
