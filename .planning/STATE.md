@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 18
+## Current Phase: 24
 
 ## Current Position
 
 Phase: 24 of 24 (Task/Subagent Visibility in TUI and Logs)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-03 - Completed 24-02-PLAN.md (TUI child traversal + nested rendering)
+Plan: 3 of 3 in current phase
+Status: Complete
+Last activity: 2026-03-03 - Completed 24-03-PLAN.md (CLI log child expansion + flags)
 
-Progress: ████████████████████████████░░ 92% (71/77 plans)
+Progress: ████████████████████████████░░ 94% (72/77 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 24 in progress — Task/Subagent Visibility in TUI and Logs (2/3 plans complete)
+**Current focus:** Phase 24 complete — Task/Subagent Visibility in TUI and Logs (3/3 plans complete, verified)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
