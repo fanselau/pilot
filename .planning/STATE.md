@@ -6,9 +6,9 @@
 ## Current Position
 
 Phase: 24 of 24 (Task/Subagent Visibility in TUI and Logs)
-Plan: 3 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-03 - Completed 24-03-PLAN.md (CLI log child session rendering)
+Last activity: 2026-03-03 - Completed 24-02-PLAN.md (TUI child traversal + nested rendering)
 
 Progress: ████████████████████████████░░ 92% (71/77 plans)
 
@@ -17,7 +17,7 @@ Progress: ███████████████████████�
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 24 in progress — Task/Subagent Visibility in TUI and Logs (3/3 plans complete)
+**Current focus:** Phase 24 in progress — Task/Subagent Visibility in TUI and Logs (2/3 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -275,9 +275,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 24-01 | getChildSessions returns empty array on DB unavailable | Consistent graceful degradation pattern with other query functions |
 | 24-01 | Task tool format: ▶ task: {subagent_type} — "{description}" | Matches requirements spec; human-readable subagent display |
 | 24-01 | Fallback to 'subagent' when subagent_type missing | Safe default for unknown task types |
+| 24-02 | resolveChildSections uses getChildSessions parent_id join | No heuristics needed; opencode stores parent_id on task-spawned sessions |
+| 24-02 | Max 2-level nesting with depth guard | Prevents infinite recursion; covers typical delegation → executor → subagent chains |
+| 24-02 | Inline 2-level JSX rendering instead of recursive component | Simpler; avoids SolidJS reactive pitfalls with recursive components |
+| 24-02 | Children refreshed on every poller cycle (full fetch) | Child sessions not in incremental since filter path |
 
 ## Session Continuity
 
-Last session: 2026-03-03T13:12:56Z
-Stopped at: Completed 24-03-PLAN.md
+Last session: 2026-03-03T13:13:18Z
+Stopped at: Completed 24-02-PLAN.md
 Resume file: None
