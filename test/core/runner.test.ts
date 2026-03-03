@@ -689,87 +689,211 @@ describe('evaluateStepResult', () => {
     vi.clearAllMocks();
   });
 
-  it('returns failure for "no matching phase" message', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Error: no matching phase directory found for phase 3',
-      createdAt: Date.now() - 60_000,
+  describe('failure patterns', () => {
+    it('returns definite failure for "no matching phase" message', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Error: no matching phase directory found for phase 3',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-1', 'execute-phase');
+      expect(result.success).toBe(false);
+      expect(result.reason).toContain('no matching phase');
+      expect(result.source).toBe('semantic-check');
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-1', 'execute-phase');
-    expect(result.success).toBe(false);
-    expect(result.reason).toContain('no matching phase');
-    expect(result.source).toBe('semantic-check');
-  });
+    it('returns definite failure for "failed to execute" message', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-2',
+        role: 'assistant',
+        content: 'Failed to execute phase 5 because plans are missing',
+        createdAt: Date.now() - 60_000,
+      });
 
-  it('returns failure for "failed to execute" message', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-2',
-      role: 'assistant',
-      content: 'Failed to execute phase 5 because plans are missing',
-      createdAt: Date.now() - 60_000,
+      const result = evaluateStepResult('session-2', 'execute-phase');
+      expect(result.success).toBe(false);
+      expect(result.reason).toContain('Semantic failure detected');
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-2', 'execute-phase');
-    expect(result.success).toBe(false);
-    expect(result.reason).toContain('Semantic failure detected');
-  });
+    it('returns definite failure for "no plans found" message', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-3',
+        role: 'assistant',
+        content: 'No plans found in the phase directory',
+        createdAt: Date.now() - 60_000,
+      });
 
-  it('returns failure for "no plans found" message', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-3',
-      role: 'assistant',
-      content: 'No plans found in the phase directory',
-      createdAt: Date.now() - 60_000,
+      const result = evaluateStepResult('session-3', 'plan-phase');
+      expect(result.success).toBe(false);
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-3', 'plan-phase');
-    expect(result.success).toBe(false);
-  });
+    it('returns definite failure for "phase directory not found" message', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-4',
+        role: 'assistant',
+        content: 'Phase directory not found for phase 7',
+        createdAt: Date.now() - 60_000,
+      });
 
-  it('returns failure for "phase directory not found" message', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-4',
-      role: 'assistant',
-      content: 'Phase directory not found for phase 7',
-      createdAt: Date.now() - 60_000,
+      const result = evaluateStepResult('session-4', 'execute-phase');
+      expect(result.success).toBe(false);
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-4', 'execute-phase');
-    expect(result.success).toBe(false);
+    it('returns definite failure for "error execute" pattern', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-7',
+        role: 'assistant',
+        content: 'There was an error while trying to execute the phase',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-7', 'execute-phase');
+      expect(result.success).toBe(false);
+      expect(result.certainty).toBe('definite');
+    });
   });
 
-  it('returns success for normal completion message', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-5',
-      role: 'assistant',
-      content: 'Phase 3 execution complete. All 4 plans executed successfully. Created 12 files.',
-      createdAt: Date.now() - 60_000,
+  describe('success patterns', () => {
+    it('returns definite success for "Phase 3 execution complete"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-5',
+        role: 'assistant',
+        content: 'Phase 3 execution complete. All 4 plans executed successfully. Created 12 files.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-5', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.reason).toContain('Success marker');
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-5', 'execute-phase');
-    expect(result.success).toBe(true);
-    expect(result.reason).toBe('No failure markers detected');
-  });
+    it('returns definite success for "all plans executed successfully"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-s1',
+        role: 'assistant',
+        content: 'All 5 plans executed successfully in phase 7.',
+        createdAt: Date.now() - 60_000,
+      });
 
-  it('returns success when no messages exist', () => {
-    mockGetLastMessage.mockReturnValue(null);
-
-    const result = evaluateStepResult('session-6', 'execute-phase');
-    expect(result.success).toBe(true);
-    expect(result.reason).toBe('No messages to evaluate');
-  });
-
-  it('returns failure for "error execute" pattern', () => {
-    mockGetLastMessage.mockReturnValue({
-      id: 'msg-7',
-      role: 'assistant',
-      content: 'There was an error while trying to execute the phase',
-      createdAt: Date.now() - 60_000,
+      const result = evaluateStepResult('session-s1', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('definite');
     });
 
-    const result = evaluateStepResult('session-7', 'execute-phase');
-    expect(result.success).toBe(false);
+    it('returns definite success for "verification passed"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-s2',
+        role: 'assistant',
+        content: 'Verification passed — all checks green.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-s2', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('definite');
+    });
+
+    it('returns definite success for "planning complete"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-s3',
+        role: 'assistant',
+        content: 'Planning complete. Created 3 plan files.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-s3', 'plan-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('definite');
+    });
+
+    it('returns definite success for "created 3 plan files"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-s4',
+        role: 'assistant',
+        content: 'Created 3 plan files for phase 2.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-s4', 'plan-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('definite');
+    });
+
+    it('returns definite success for "Phase 5 done"', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-s5',
+        role: 'assistant',
+        content: 'Phase 5 done. Moving to next step.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-s5', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('definite');
+    });
+  });
+
+  describe('uncertain results', () => {
+    it('returns uncertain when message has no known patterns', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-u1',
+        role: 'assistant',
+        content: 'I updated some files and made changes to the codebase.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-u1', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('uncertain');
+      expect(result.reason).toContain('uncertain');
+    });
+
+    it('returns success:true for uncertain (benefit of the doubt)', () => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-u2',
+        role: 'assistant',
+        content: 'Finished working on the task. Looks good.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      const result = evaluateStepResult('session-u2', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.certainty).toBe('uncertain');
+    });
+
+    it('logs warning to stderr for uncertain results', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-u3',
+        role: 'assistant',
+        content: 'Some ambiguous message about work.',
+        createdAt: Date.now() - 60_000,
+      });
+
+      evaluateStepResult('session-u3', 'execute-phase');
+
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[runner] Warning: Step result ambiguous'),
+      );
+
+      stderrSpy.mockRestore();
+    });
+
+    it('returns uncertain when no messages exist', () => {
+      mockGetLastMessage.mockReturnValue(null);
+
+      const result = evaluateStepResult('session-6', 'execute-phase');
+      expect(result.success).toBe(true);
+      expect(result.reason).toBe('No messages to evaluate');
+      expect(result.certainty).toBe('uncertain');
+    });
   });
 });
