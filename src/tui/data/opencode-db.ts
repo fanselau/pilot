@@ -13,6 +13,7 @@ import {
   getLastMessage,
   getSessionMessages,
   getSessionParts,
+  getChildSessions,
   isSessionActive,
 } from '../../core/opencode-db.js';
 import type { SessionMessage, SessionPart, Job } from '../../core/types.js';
@@ -21,9 +22,55 @@ import type { SessionMessage, SessionPart, Job } from '../../core/types.js';
 
 export interface SessionSection {
   title: string;
-  type: 'delegation' | 'execution';
+  type: 'delegation' | 'execution' | 'subagent';
   command?: string;       // extracted from execution title
+  agentType?: string;     // 'gsd-planner', 'gsd-executor', etc. for subagent sections
   parts: SessionPart[];
+  children?: SessionSection[];  // nested subagent sections (max 2 levels)
+}
+
+// ── Child session resolution ──────────────────────────────────────────────
+
+/**
+ * Resolve child sessions spawned by `task` tool calls within a parent session.
+ * Uses getChildSessions() which queries the parent_id column — no heuristics needed.
+ *
+ * @param sessionId - Parent session ID
+ * @param parts - Parts array for the parent session (to check for task tool calls)
+ * @param depth - Current nesting depth (max 2 levels)
+ * @returns Array of SessionSection objects for child subagent sessions
+ */
+function resolveChildSections(
+  sessionId: string,
+  parts: SessionPart[],
+  depth: number,
+): SessionSection[] {
+  if (depth >= 2) return [];
+
+  const taskParts = parts.filter(p => p.type === 'tool' && p.tool === 'task');
+  if (taskParts.length === 0) return [];
+
+  const childSessions = getChildSessions(sessionId);
+  if (childSessions.length === 0) return [];
+
+  return childSessions.map((child) => {
+    const childParts = getSessionParts(child.id);
+
+    // Extract agent type from title (e.g. contains "gsd-planner", "gsd-executor")
+    let agentType = 'subagent';
+    const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
+    if (agentMatch) agentType = agentMatch[0]; // e.g. "gsd-planner"
+
+    const grandchildren = resolveChildSections(child.id, childParts, depth + 1);
+
+    return {
+      title: child.title,
+      type: 'subagent' as const,
+      agentType,
+      parts: childParts,
+      children: grandchildren.length > 0 ? grandchildren : undefined,
+    };
+  });
 }
 
 // ── Job part fetching ─────────────────────────────────────────────────────
@@ -64,12 +111,14 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
 
     const sessionId = findSessionByTitle(title);
     const parts = sessionId ? getSessionParts(sessionId, since) : [];
+    const children = sessionId ? resolveChildSections(sessionId, parts, 0) : [];
 
     sections.push({
       title,
       type: isDelegation ? 'delegation' : 'execution',
       command,
       parts,
+      children: children.length > 0 ? children : undefined,
     });
   }
 
