@@ -505,6 +505,79 @@ function updateSessionTitles(id: string, titles: string[]): void {
   );
 }
 
+// ── Force Quit ────────────────────────────────────────────────────────
+
+/**
+ * Result of a forceQuitJob() call.
+ */
+export interface ForceQuitResult {
+  ok: boolean;
+  /** The job as it was after being transitioned to failed (only when ok=true) */
+  job?: Job;
+  /** Human-readable reason when ok=false */
+  reason?: string;
+}
+
+/**
+ * Forcibly terminate a running job: atomically mark the job and all its
+ * currently-running steps as failed, recording operator source metadata.
+ *
+ * @param id     - Job ID to force-quit
+ * @param source - Who triggered the quit ('cli' | 'tui')
+ * @param reason - Optional human-readable reason (default: 'Force-quit by operator')
+ *
+ * Returns {ok:false, reason} when:
+ *   - Job does not exist
+ *   - Job is not in 'running' status
+ *
+ * Returns {ok:true, job} on success, where job reflects the failed state.
+ */
+function forceQuitJob(
+  id: string,
+  source: 'cli' | 'tui',
+  reason?: string,
+): ForceQuitResult {
+  const db = getDb();
+
+  // Guard: job must exist and be running
+  const existing = getJob(id);
+  if (!existing) {
+    return { ok: false, reason: `Job '${id}' not found` };
+  }
+  if (existing.status !== 'running') {
+    return { ok: false, reason: `Job '${id}' is not running (status: ${existing.status})` };
+  }
+
+  const errorMessage = reason ?? 'Force-quit by operator';
+  const verdictReason = `${errorMessage} [source: ${source}]`;
+
+  const quit = db.transaction((): Job => {
+    // Mark job as failed
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'failed',
+          completed_at = datetime('now'),
+          error = ?
+      WHERE id = ? AND status = 'running'
+    `).run(verdictReason, id);
+
+    // Mark all running steps for this job as failed
+    db.prepare(`
+      UPDATE job_steps
+      SET status = 'failed',
+          completed_at = datetime('now'),
+          verdict_reason = ?
+      WHERE job_id = ? AND status = 'running'
+    `).run(verdictReason, id);
+
+    const updated = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as JobRow;
+    return rowToJob(updated);
+  });
+
+  const job = quit();
+  return { ok: true, job };
+}
+
 // ── Job Steps CRUD ────────────────────────────────────────────────────
 
 interface JobStepRow {
@@ -650,6 +723,7 @@ export {
   bump,
   updateSessionTitles,
   claimNextLaunchable,
+  forceQuitJob,
   recordStep,
   completeStep,
   getJobSteps,
