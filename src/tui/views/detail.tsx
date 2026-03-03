@@ -205,10 +205,11 @@ export function DetailView(props: { state: PilotStateStore }) {
             merged.push({
               ...existingSection,
               parts: [...existingSection.parts, ...newParts],
+              children: newSection.children,  // refresh children from latest fetch
             });
             lastSeenMap.set(newSection.title, newParts[newParts.length - 1].createdAt);
           } else {
-            merged.push(existingSection);
+            merged.push({ ...existingSection, children: newSection.children });
           }
         }
         existingMap.delete(newSection.title);
@@ -310,8 +311,10 @@ export function DetailView(props: { state: PilotStateStore }) {
                   <text
                     content={section.type === 'delegation'
                       ? `  ── Delegation ──`
-                      : `  ── Execution: ${section.command ?? 'unknown'} ──`}
-                    fg={theme.muted}
+                      : section.type === 'subagent'
+                        ? `  ── Subagent: ${section.agentType ?? 'subagent'} ──`
+                        : `  ── Execution: ${section.command ?? 'unknown'} ──`}
+                    fg={section.type === 'subagent' ? theme.border : theme.muted}
                   />
                   {/* Parts */}
                   <Show when={section.parts.length > 0} fallback={
@@ -331,6 +334,72 @@ export function DetailView(props: { state: PilotStateStore }) {
                           </box>
                         );
                       }}
+                    </For>
+                  </Show>
+                  {/* Child sections (subagent tasks) */}
+                  <Show when={section.children && section.children.length > 0}>
+                    <For each={section.children ?? []}>
+                      {(child) => (
+                        <box flexDirection="column" paddingLeft={2}>
+                          {/* Child section header */}
+                          <text
+                            content={`  ── Subagent: ${child.agentType ?? 'subagent'} ──`}
+                            fg={theme.border}
+                          />
+                          {/* Child parts */}
+                          <Show when={child.parts.length > 0} fallback={
+                            <text content="    (no activity yet)" fg={theme.muted} />
+                          }>
+                            <For each={child.parts}>
+                              {(part) => {
+                                const lines = formatPartLines(part);
+                                if (!lines) return null;
+                                return (
+                                  <box flexDirection="column">
+                                    <For each={lines}>
+                                      {(line) => (
+                                        <text content={`  ${line.text}`} fg={line.color} />
+                                      )}
+                                    </For>
+                                  </box>
+                                );
+                              }}
+                            </For>
+                          </Show>
+                          {/* Grandchild sections (level 2, no further recursion) */}
+                          <Show when={child.children && child.children.length > 0}>
+                            <For each={child.children ?? []}>
+                              {(grandchild) => (
+                                <box flexDirection="column" paddingLeft={2}>
+                                  <text
+                                    content={`    ── Subagent: ${grandchild.agentType ?? 'subagent'} ──`}
+                                    fg={theme.border}
+                                  />
+                                  <Show when={grandchild.parts.length > 0} fallback={
+                                    <text content="      (no activity yet)" fg={theme.muted} />
+                                  }>
+                                    <For each={grandchild.parts}>
+                                      {(part) => {
+                                        const lines = formatPartLines(part);
+                                        if (!lines) return null;
+                                        return (
+                                          <box flexDirection="column">
+                                            <For each={lines}>
+                                              {(line) => (
+                                                <text content={`    ${line.text}`} fg={line.color} />
+                                              )}
+                                            </For>
+                                          </box>
+                                        );
+                                      }}
+                                    </For>
+                                  </Show>
+                                </box>
+                              )}
+                            </For>
+                          </Show>
+                        </box>
+                      )}
                     </For>
                   </Show>
                 </box>
