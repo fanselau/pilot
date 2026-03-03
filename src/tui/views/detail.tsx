@@ -20,7 +20,7 @@ import { fetchJobParts } from '../data/opencode-db.js';
 import type { SessionSection } from '../data/opencode-db.js';
 import { fetchSessionEnrichment } from '../data/opencode-db.js';
 import { Scrollable } from '../widgets/scrollable.js';
-import { statusColors, theme } from '../theme.js';
+import { statusColors, theme, subagentColors } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
 import { resolveAllAgentModels } from '../../core/models.js';
 import type { PilotStateStore } from '../state.js';
@@ -91,16 +91,20 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     ? formatTime(new Date(job.startedAt).getTime())
     : '—';
 
+  // Always resolve the executor model for display
+  const models = resolveAllAgentModels(job.modelProfile, job.providerMode);
+  const executorModel = models['gsd-executor'] ?? '';
+  const executorShort = executorModel.split('/')[1] ?? executorModel;
+
   const lines = [
     `#${job.id}  ${job.project}  ${job.scope}  ${job.status}`,
     `"${truncate(job.description, descWidth)}"`,
     `separator`,
     `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
-    `Model: ${job.modelProfile}/${job.providerMode}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
+    `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
   ];
 
   if (job.modelProfile !== 'balanced') {
-    const models = resolveAllAgentModels(job.modelProfile, job.providerMode);
     const uniqueModels = new Map<string, string>();
     for (const [, model] of Object.entries(models)) {
       const shortName = model.split('/')[1] ?? model;
@@ -328,7 +332,82 @@ export function DetailView(props: { state: PilotStateStore }) {
     lastSeenMap.clear();
   }));
 
-  // ── Render ────────────────────────────────────────────────────────────
+  // ── Render helpers ─────────────────────────────────────────────────────
+
+  /** Render parts list with no indentation prefix. */
+  function renderParts(parts: SessionPart[]) {
+    return (
+      <Show when={parts.length > 0} fallback={
+        <text content="  (no activity yet)" fg={theme.muted} />
+      }>
+        <For each={parts}>
+          {(part) => {
+            const lines = formatPartLines(part);
+            if (!lines) return null;
+            return (
+              <box flexDirection="column">
+                <For each={lines}>
+                  {(line) => (
+                    <text content={line.text} fg={line.color} />
+                  )}
+                </For>
+              </box>
+            );
+          }}
+        </For>
+      </Show>
+    );
+  }
+
+  /** Render parts for child sections (2-space indent). */
+  function renderChildParts(parts: SessionPart[]) {
+    return (
+      <Show when={parts.length > 0} fallback={
+        <text content="    (no activity yet)" fg={theme.muted} />
+      }>
+        <For each={parts}>
+          {(part) => {
+            const lines = formatPartLines(part);
+            if (!lines) return null;
+            return (
+              <box flexDirection="column">
+                <For each={lines}>
+                  {(line) => (
+                    <text content={`  ${line.text}`} fg={line.color} />
+                  )}
+                </For>
+              </box>
+            );
+          }}
+        </For>
+      </Show>
+    );
+  }
+
+  /** Render parts for grandchild sections (4-space indent). */
+  function renderGrandchildParts(parts: SessionPart[]) {
+    return (
+      <Show when={parts.length > 0} fallback={
+        <text content="      (no activity yet)" fg={theme.muted} />
+      }>
+        <For each={parts}>
+          {(part) => {
+            const lines = formatPartLines(part);
+            if (!lines) return null;
+            return (
+              <box flexDirection="column">
+                <For each={lines}>
+                  {(line) => (
+                    <text content={`    ${line.text}`} fg={line.color} />
+                  )}
+                </For>
+              </box>
+            );
+          }}
+        </For>
+      </Show>
+    );
+  }
 
   const currentJob = () => job();
 
@@ -371,9 +450,15 @@ export function DetailView(props: { state: PilotStateStore }) {
             <text content={`   Step ${parseStepInfo(currentJob()!).index}: ${parseStepInfo(currentJob()!).label}`} fg={theme.muted} />
             <text content={`   ◆ ${formatTokens(totalTokens())} tokens`} fg={theme.muted} />
           </box>
-          {/* Line 5: model + attempts + started */}
+          {/* Line 5: model (always show resolved executor) + attempts + started */}
           <box flexDirection="row">
-            <text content={`Model: ${currentJob()!.modelProfile}/${currentJob()!.providerMode}`} fg={theme.muted} />
+            <text content={(() => {
+              const j = currentJob()!;
+              const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
+              const executorModel = models['gsd-executor'] ?? '';
+              const executorShort = executorModel.split('/')[1] ?? executorModel;
+              return `Model: ${j.modelProfile}/${j.providerMode} → ${executorShort}`;
+            })()} fg={theme.muted} />
             <text content={`   Attempts: ${currentJob()!.attempts}/${currentJob()!.maxAttempts}`} fg={theme.muted} />
             <text
               content={`   Started: ${currentJob()!.startedAt ? formatTime(new Date(currentJob()!.startedAt!).getTime()) : '—'}`}
@@ -417,100 +502,91 @@ export function DetailView(props: { state: PilotStateStore }) {
             <For each={sections()}>
               {(section) => (
                 <box flexDirection="column">
-                  {/* Section header */}
-                  <text
-                    content={section.type === 'delegation'
-                      ? `  ── Delegation ──`
-                      : section.type === 'subagent'
-                        ? `  ── Subagent: ${section.agentType ?? 'subagent'} ──`
-                        : `  ── Execution: ${section.command ?? 'unknown'} ──`}
-                    fg={section.type === 'subagent' ? theme.border : theme.muted}
-                  />
-                  {/* Parts */}
-                  <Show when={section.parts.length > 0} fallback={
-                    <text content="  (no activity yet)" fg={theme.muted} />
+                  <Show when={section.type === 'subagent'} fallback={
+                    <>
+                      {/* Delegation/Execution: plain text header (the "spine") */}
+                      <text
+                        content={section.type === 'delegation'
+                          ? `  ── Delegation ──`
+                          : `  ── Execution: ${section.command ?? 'unknown'} ──`}
+                        fg={theme.muted}
+                      />
+                      {renderParts(section.parts)}
+                    </>
                   }>
-                    <For each={section.parts}>
-                      {(part) => {
-                        const lines = formatPartLines(part);
-                        if (!lines) return null;
-                        return (
-                          <box flexDirection="column">
-                            <For each={lines}>
-                              {(line) => (
-                                <text content={line.text} fg={line.color} />
-                              )}
-                            </For>
-                          </box>
-                        );
-                      }}
-                    </For>
+                    {/* Subagent: bordered box (the "branches") */}
+                    <box
+                      borderStyle="rounded"
+                      border={true}
+                      borderColor={subagentColors.border}
+                      marginLeft={1}
+                      marginTop={1}
+                      flexDirection="column"
+                      focusable={false}
+                    >
+                      <text content={` ${section.agentType ?? 'subagent'} `} fg={subagentColors.header} />
+                      {renderParts(section.parts)}
+                    </box>
                   </Show>
-                  {/* Child sections (subagent tasks) */}
+                  {/* Child sections */}
                   <Show when={section.children && section.children.length > 0}>
                     <For each={section.children ?? []}>
                       {(child) => (
-                        <box flexDirection="column" paddingLeft={2}>
-                          {/* Child section header */}
-                          <text
-                            content={child.type === 'delegation'
-                              ? `  ── Delegation ──`
-                              : child.type === 'subagent'
-                                ? `  ── Subagent: ${child.agentType ?? 'subagent'} ──`
-                                : `  ── Execution: ${child.command ?? 'unknown'} ──`}
-                            fg={theme.border}
-                          />
-                          {/* Child parts */}
-                          <Show when={child.parts.length > 0} fallback={
-                            <text content="    (no activity yet)" fg={theme.muted} />
+                        <box flexDirection="column">
+                          <Show when={child.type === 'subagent'} fallback={
+                            <box flexDirection="column" paddingLeft={2}>
+                              <text
+                                content={child.type === 'delegation'
+                                  ? `  ── Delegation ──`
+                                  : `  ── Execution: ${child.command ?? 'unknown'} ──`}
+                                fg={theme.muted}
+                              />
+                              {renderChildParts(child.parts)}
+                            </box>
                           }>
-                            <For each={child.parts}>
-                              {(part) => {
-                                const lines = formatPartLines(part);
-                                if (!lines) return null;
-                                return (
-                                  <box flexDirection="column">
-                                    <For each={lines}>
-                                      {(line) => (
-                                        <text content={`  ${line.text}`} fg={line.color} />
-                                      )}
-                                    </For>
-                                  </box>
-                                );
-                              }}
-                            </For>
+                            {/* Child subagent: lighter bordered box, indented */}
+                            <box
+                              borderStyle="single"
+                              border={true}
+                              borderColor={subagentColors.borderChild}
+                              marginLeft={3}
+                              marginTop={1}
+                              flexDirection="column"
+                              focusable={false}
+                            >
+                              <text content={` ${child.agentType ?? 'subagent'} `} fg={subagentColors.headerChild} />
+                              {renderChildParts(child.parts)}
+                            </box>
                           </Show>
                           {/* Grandchild sections (level 2, no further recursion) */}
                           <Show when={child.children && child.children.length > 0}>
                             <For each={child.children ?? []}>
                               {(grandchild) => (
-                                <box flexDirection="column" paddingLeft={2}>
-                                  <text
-                                    content={grandchild.type === 'delegation'
-                                      ? `    ── Delegation ──`
-                                      : grandchild.type === 'subagent'
-                                        ? `    ── Subagent: ${grandchild.agentType ?? 'subagent'} ──`
-                                        : `    ── Execution: ${grandchild.command ?? 'unknown'} ──`}
-                                    fg={theme.border}
-                                  />
-                                  <Show when={grandchild.parts.length > 0} fallback={
-                                    <text content="      (no activity yet)" fg={theme.muted} />
+                                <box flexDirection="column">
+                                  <Show when={grandchild.type === 'subagent'} fallback={
+                                    <box flexDirection="column" paddingLeft={4}>
+                                      <text
+                                        content={grandchild.type === 'delegation'
+                                          ? `    ── Delegation ──`
+                                          : `    ── Execution: ${grandchild.command ?? 'unknown'} ──`}
+                                        fg={theme.muted}
+                                      />
+                                      {renderGrandchildParts(grandchild.parts)}
+                                    </box>
                                   }>
-                                    <For each={grandchild.parts}>
-                                      {(part) => {
-                                        const lines = formatPartLines(part);
-                                        if (!lines) return null;
-                                        return (
-                                          <box flexDirection="column">
-                                            <For each={lines}>
-                                              {(line) => (
-                                                <text content={`    ${line.text}`} fg={line.color} />
-                                              )}
-                                            </For>
-                                          </box>
-                                        );
-                                      }}
-                                    </For>
+                                    {/* Grandchild subagent: dimmest bordered box */}
+                                    <box
+                                      borderStyle="single"
+                                      border={true}
+                                      borderColor={subagentColors.borderGrandchild}
+                                      marginLeft={5}
+                                      marginTop={1}
+                                      flexDirection="column"
+                                      focusable={false}
+                                    >
+                                      <text content={` ${grandchild.agentType ?? 'subagent'} `} fg={subagentColors.headerGrandchild} />
+                                      {renderGrandchildParts(grandchild.parts)}
+                                    </box>
                                   </Show>
                                 </box>
                               )}
