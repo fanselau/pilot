@@ -82,6 +82,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 015 | Step-level observability (R4) — job_steps table + runner recording + pilot log display | 2026-03-02 | 6840417 | [015-pilot-requirement-phase-execution-succes](./quick/015-pilot-requirement-phase-execution-succes/) |
 | 016 | Phase & milestone reliability — filesystem phase resolution, success pattern gating | 2026-03-03 | 9424b3d | [016-phase-milestone-reliability-make-structu](./quick/016-phase-milestone-reliability-make-structu/) |
 | 018 | Fix premature completion detection — isSessionDone(), runner polling, evaluateStepResult fail-safe | 2026-03-03 | c1a2fe4 | [018-requirements-fix-premature-completion-de](./quick/018-requirements-fix-premature-completion-de/) |
+| 019 | Harden add-phase reliability — GSD_INSTRUCTION_BLOCKLIST, matchesBlocklist(), verifyStepArtifacts duplicate/blocklist checks, hardened gsd-add-phase.md | 2026-03-03 | b0c65dc | [019-harden-add-phase-reliability-problem-add](./quick/019-harden-add-phase-reliability-problem-add/) |
 
 ## Accumulated Context
 
@@ -310,9 +311,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 26-05 | reconcileStaleRunning tested indirectly via runner.run(once:true) | Function is private; indirect test via runner loop is correct boundary |
 | 27-02 | Test pure exported helpers without UI renderer | No SolidJS/OpenTUI rendering needed; keeps tests fast and independent |
 | 27-02 | computeRowBg(true, true) pinned to theme.highlight in test | Explicit regression guard for selection-wins-over-flash overlay fix |
+| quick-019 | matchesBlocklist uses substring not exact match | GSD instruction phrases appear mid-sentence in title slugs |
+| quick-019 | Duplicate check slug-to-words via hyphen replacement | Consistent slug ↔ title normalization without extra library |
+| quick-019 | Title similarity warning-only (non-failing) | GSD may legitimately shorten/clean phase titles |
+| quick-019 | runner.test.ts mock includes inline matchesBlocklist impl | Avoids auto-mocking stripping the function; tests exercise real logic |
 
 ## Session Continuity
 
-Last session: 2026-03-03T19:15:26Z
-Stopped at: Completed 27-02-PLAN.md (TUI test suite — detail header + completed panel regression)
+Last session: 2026-03-03T19:29:00Z
+Stopped at: Completed quick-019 (harden add-phase reliability — blocklist + duplicate detection)
 Resume file: None
