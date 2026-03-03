@@ -35,6 +35,8 @@ import {
   claimNextLaunchable,
   forceQuitJob,
   getAllRunningJobs,
+  getRunningJobsForProject,  // NEW — available for serialization guard via DB query
+  reconcileStaleJobs,         // NEW — reset ghost-running jobs to pending
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-db.js';
@@ -133,6 +135,8 @@ class Runner {
   private activeJobs: Map<string, { job: Job; title: string }> = new Map();
   private shuttingDown = false;
   private reloading = false;
+  private pollCycle = 0;
+  private static readonly RECONCILE_EVERY_N_CYCLES = 10;
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -196,9 +200,30 @@ class Runner {
     // ── Startup reconciliation: clean up jobs left running from a crashed runner ──
     await reconcileStaleRunning(this.activeJobs);
 
+    // Startup reconciliation (DB-based): reset any ghost-running jobs from a previous
+    // runner crash. On a fresh start, activeJobs is empty — so ALL running jobs in DB
+    // are stale and should be reset to pending so they can be retried.
+    const startupStale = reconcileStaleJobs(new Set(this.activeJobs.keys()));
+    if (startupStale.length > 0) {
+      process.stderr.write(
+        `[runner] Startup reconciliation: reset ${startupStale.length} stale-running job(s): ${startupStale.join(', ')}\n`,
+      );
+    }
+
     try {
     while (this.running) {
       if (this.shuttingDown) break;
+
+      // Periodic reconciliation: reset ghost-running jobs every N cycles
+      this.pollCycle++;
+      if (this.pollCycle % Runner.RECONCILE_EVERY_N_CYCLES === 0) {
+        const staleIds = reconcileStaleJobs(new Set(this.activeJobs.keys()));
+        if (staleIds.length > 0) {
+          process.stderr.write(
+            `[runner] Periodic reconciliation: reset ${staleIds.length} stale-running job(s): ${staleIds.join(', ')}\n`,
+          );
+        }
+      }
 
       // Per-cycle reconciliation: kill orphaned running jobs
       await reconcileStaleRunning(this.activeJobs);
@@ -211,6 +236,22 @@ class Runner {
       while (this.activeJobs.size < this.options.maxParallel && !this.shuttingDown) {
         const job = claimNextLaunchable();
         if (!job) break; // No more eligible jobs
+
+        // Same-project serialization guard: check if any CURRENTLY ACTIVE job has the same
+        // project name. Compare job.project (string) — NOT job.id. This prevents two jobs
+        // for 'my-project' from running in parallel even if they have different IDs.
+        // Note: claimNextLaunchable() enforces this at the DB level too; this in-memory
+        // guard is belt-and-suspenders for the runner's own tracked state.
+        const projectAlreadyActive = [...this.activeJobs.values()].some(
+          ({ job: activeJob }) => activeJob.project === job.project,
+        );
+        if (projectAlreadyActive) {
+          process.stderr.write(
+            `[runner] Skipping ${job.id} (${job.project}): same-project job already active\n`,
+          );
+          break; // Don't try more jobs this cycle — wait for the active one to finish
+        }
+
         // Job already marked running by claimNextLaunchable — do NOT call markRunning here
         this.activeJobs.set(job.id, { job, title: '' });
         // Launch without awaiting — allows parallel jobs
