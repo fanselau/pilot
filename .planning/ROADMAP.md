@@ -365,3 +365,16 @@ Plans:
 
 **Details:**
 Read requirements/delegate-phase-lifecycle-hardening.md for full spec.
+
+### Phase 23: TUI Selection Colors & Visual Polish
+
+**Goal:** Fix selection readability (white-on-blue), shorten project paths, wire completed token counts from opencode DB, add step progress for running jobs, improve focused panel indicators, and use 2-line completed layout for wide terminals.
+**Depends on:** Phase 22
+**Plans:** 2 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — Theme constants + selection colors + focused panel indicators
+- [ ] 23-02-PLAN.md — Token wiring + step progress + shortened paths + 2-line completed layout
+
+**Details:**
+Read requirements/tui-selection-colors-and-polish.md for full spec.
