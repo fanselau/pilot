@@ -3,5 +3,12 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['test/**/*.test.{ts,tsx}'],
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        minForks: 1,
+        maxForks: 1,
+      },
+    },
   },
 });
