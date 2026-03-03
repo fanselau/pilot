@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 021: Phase redesign — single-session orchestrator + judge evaluation
+Last activity: 2026-03-03 - Completed quick task 022: Dead code cleanup post-redesign
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -85,6 +85,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 019 | Harden add-phase reliability — GSD_INSTRUCTION_BLOCKLIST, matchesBlocklist(), verifyStepArtifacts duplicate/blocklist checks, hardened gsd-add-phase.md | 2026-03-03 | b0c65dc | [019-harden-add-phase-reliability-problem-add](./quick/019-harden-add-phase-reliability-problem-add/) |
 | 020 | Requirements observability and job config visibility — pilot log header with model/attempts, per-step tokens, new pilot info <id> command | 2026-03-03 | 82bcdda | [020-requirements-observability-and-job-config](./quick/020-requirements-observability-and-job-config/) |
 | 021 | Phase redesign — single-session orchestrator + judge evaluation replacing multi-step delegation → regex evaluation | 2026-03-03 | a301bed | [021-phase-redesign-single-session-orchestrat](./quick/021-phase-redesign-single-session-orchestrat/) |
+| 022 | Dead code cleanup post-redesign — remove 6 dead exports from opencode-db.ts, delete 4 empty duplicate phase dirs, scrub stale comments | 2026-03-03 | 17ec5e0 | [022-requirements-cleanup-dead-code-post-rede](./quick/022-requirements-cleanup-dead-code-post-rede/) |
 
 ## Accumulated Context
 
@@ -328,6 +329,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-03T21:18:00Z
-Stopped at: Completed quick-021 (phase redesign — single-session orchestrator + judge evaluation)
+Last session: 2026-03-03T21:26:35Z
+Stopped at: Completed quick-022 (dead code cleanup post-redesign)
 Resume file: None
