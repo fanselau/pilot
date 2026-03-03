@@ -321,6 +321,30 @@ function getQueue(): Job[] {
 }
 
 /**
+ * Get all currently running jobs for a specific project.
+ * Used for same-project serialization: don't launch a new job if one is already running.
+ */
+function getRunningJobsForProject(project: string): Job[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM jobs WHERE project = ? AND status = 'running' ORDER BY started_at ASC",
+  ).all(project) as JobRow[];
+  return rows.map(rowToJob);
+}
+
+/**
+ * Get all jobs currently in 'running' status.
+ * Used for reconciliation: compare against known active PIDs/sessions.
+ */
+function getAllRunningJobs(): Job[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM jobs WHERE status = 'running' ORDER BY started_at ASC",
+  ).all() as JobRow[];
+  return rows.map(rowToJob);
+}
+
+/**
  * Get last N completed/failed/cancelled jobs, ordered by completed_at DESC.
  * For cancelled jobs without completed_at, falls back to created_at.
  */
@@ -521,6 +545,8 @@ export {
   cancel,
   retry,
   getQueue,
+  getRunningJobsForProject,
+  getAllRunningJobs,
   getRecent,
   updateDelegationPlan,
   advanceStep,
