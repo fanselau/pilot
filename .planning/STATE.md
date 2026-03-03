@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 26
+## Current Phase: 27
 
 ## Current Position
 
-Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
-Plan: 5 of 5 in current phase (26-01 through 26-05 complete)
+Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
+Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 018: requirements/fix-premature-completion-detection.md
+Last activity: 2026-03-03 - Completed 27-02-PLAN.md (TUI test suite)
 
-Progress: ██████████████████████████████ 100% (76/76 plans)
+Progress: ██████████████████████████████ 100% (78/78 plans)
 
 ## Project Reference
 
@@ -308,9 +308,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 26-03 | DB update continues even when killJobSession returns killed:false | Process may already be gone; DB must reflect terminal state regardless |
 | 26-05 | reconcileStaleJobs must be in db mock factory for runner.run() tests | runner.run() calls it synchronously on startup; missing mock crashes tests |
 | 26-05 | reconcileStaleRunning tested indirectly via runner.run(once:true) | Function is private; indirect test via runner loop is correct boundary |
+| 27-02 | Test pure exported helpers without UI renderer | No SolidJS/OpenTUI rendering needed; keeps tests fast and independent |
+| 27-02 | computeRowBg(true, true) pinned to theme.highlight in test | Explicit regression guard for selection-wins-over-flash overlay fix |
 
 ## Session Continuity
 
-Last session: 2026-03-03T19:05:30Z
-Stopped at: Completed quick-018 (Fix premature completion detection — isSessionDone, runner polling, evaluateStepResult fail-safe)
+Last session: 2026-03-03T19:15:26Z
+Stopped at: Completed 27-02-PLAN.md (TUI test suite — detail header + completed panel regression)
 Resume file: None

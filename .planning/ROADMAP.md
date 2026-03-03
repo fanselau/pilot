@@ -441,8 +441,8 @@ Wave structure:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — Detail header rework + run info density + completed overlay fix
-- [ ] 27-02-PLAN.md — Tests for detail header layout (2 widths) + completed panel regression
+- [x] 27-01-PLAN.md — Detail header rework + run info density + completed overlay fix
+- [x] 27-02-PLAN.md — Tests for detail header layout (2 widths) + completed panel regression
 
 Wave structure:
 - Wave 1: 27-01 (implementation)
