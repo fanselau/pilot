@@ -352,3 +352,16 @@ Plans:
 
 **Details:**
 Read requirements/tui-visual-polish.md for full spec. Covers P0 (must-have), P1 (should-have), and P2 (nice-to-have) fixes.
+
+### Phase 22: Delegate Phase Lifecycle Hardening
+
+**Goal:** Make phase lifecycle (add → plan → execute) reliable with proper args and inter-step verification. Delegate passes meaningful descriptions, runner verifies artifacts between steps and dynamically patches phase numbers.
+**Depends on:** Phase 21
+**Plans:** 2 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Delegate title extraction + gsd-delegate.md prompt update
+- [ ] 22-02-PLAN.md — Runner inter-step artifact verification + dynamic arg patching
+
+**Details:**
+Read requirements/delegate-phase-lifecycle-hardening.md for full spec.
