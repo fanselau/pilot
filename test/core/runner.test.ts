@@ -88,7 +88,11 @@ vi.mock('execa', () => ({
   execa: vi.fn(() => ({ unref: vi.fn(), catch: vi.fn().mockReturnThis() })),
 }));
 
-// Mock fs reads for pre-spawn checks
+// Dynamic mock data for readdirSync (inter-step artifact verification)
+let mockPhaseDirEntries: string[] = [];   // entries in .planning/phases/
+let mockPhaseDirFiles: string[] = [];     // files inside a specific phase dir (e.g. .planning/phases/03-ui/)
+
+// Mock fs reads for pre-spawn checks + artifact verification
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return {
@@ -102,15 +106,24 @@ vi.mock('node:fs', async () => {
       }
       return actual.readFileSync(filePath, 'utf8');
     }),
-    readdirSync: vi.fn(() => []),
+    readdirSync: vi.fn((dirPath: string) => {
+      if (typeof dirPath === 'string' && dirPath.endsWith('.planning/phases')) {
+        return [...mockPhaseDirEntries];
+      }
+      // Files inside a phase directory (e.g. .planning/phases/03-ui/)
+      if (typeof dirPath === 'string' && dirPath.includes('.planning/phases/')) {
+        return [...mockPhaseDirFiles];
+      }
+      return [];
+    }),
     statSync: vi.fn(() => ({ isDirectory: () => true })),
   };
 });
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
-import { Runner, createRunner, evaluateStepResult } from '../../src/core/runner.js';
-import type { Job, DelegationPlan } from '../../src/core/types.js';
+import { Runner, createRunner, evaluateStepResult, scanPhaseDirs, verifyStepArtifacts, patchStepArgs } from '../../src/core/runner.js';
+import type { Job, DelegationPlan, DelegationStep } from '../../src/core/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -166,6 +179,9 @@ function mockSuccessfulSpawn(): void {
 describe('Runner', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    // Reset dynamic mock data
+    mockPhaseDirEntries = [];
+    mockPhaseDirFiles = [];
     // Reset spawn rate limiter between tests to avoid inter-test timing issues
     const { _resetSpawnRateLimit } = await import('../../src/core/runner.js');
     _resetSpawnRateLimit();
@@ -326,6 +342,10 @@ describe('Runner', () => {
         { command: 'execute-phase', args: '3' },
       ]);
 
+      // Set up phase dirs so artifact verification passes
+      mockPhaseDirEntries = ['03-ui'];
+      mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
+
       mockGetNextPending
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
@@ -407,6 +427,10 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'phase', description: '3' });
       const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
 
+      // Set up phase dirs so artifact verification passes
+      mockPhaseDirEntries = ['03-ui'];
+      mockPhaseDirFiles = ['03-01-SUMMARY.md'];
+
       mockGetNextPending
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
@@ -458,6 +482,10 @@ describe('Runner', () => {
     it('allows completion when no session messages exist', async () => {
       const job = makeJob({ scope: 'phase', description: '2' });
       const plan = makePlan([{ command: 'execute-phase', args: '2' }]);
+
+      // Set up phase dirs so artifact verification passes
+      mockPhaseDirEntries = ['02-core'];
+      mockPhaseDirFiles = ['02-01-SUMMARY.md'];
 
       mockGetNextPending
         .mockReturnValueOnce(job)
@@ -521,6 +549,10 @@ describe('Runner', () => {
         { command: 'execute-phase', args: '3' },
       ]);
 
+      // Set up phase dirs so artifact verification passes
+      mockPhaseDirEntries = ['03-ui'];
+      mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
+
       mockGetNextPending
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
@@ -541,6 +573,10 @@ describe('Runner', () => {
     it('completes step with verdict on semantic check', async () => {
       const job = makeJob({ scope: 'phase', description: '3' });
       const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+      // Set up phase dirs so artifact verification passes
+      mockPhaseDirEntries = ['03-ui'];
+      mockPhaseDirFiles = ['03-01-SUMMARY.md'];
 
       mockGetNextPending
         .mockReturnValueOnce(job)
@@ -633,6 +669,10 @@ describe('Runner', () => {
         { command: 'execute-phase', args: '3' },
       ]);
 
+      // Set up phase dirs so artifact verification passes for the first step
+      mockPhaseDirEntries = ['03-ui'];
+      mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
+
       mockGetNextPending
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
@@ -669,6 +709,417 @@ describe('Runner', () => {
       // Should call skipRemainingSteps for the remaining steps
       expect(mockSkipRemainingSteps).toHaveBeenCalledWith('ab12', 1, 'Runner shutdown');
     }, 30000);
+  });
+});
+
+/**
+ * Restore the default readdirSync mock that reads from module-level variables.
+ * Tests that override mockImplementation must call this to reset state.
+ */
+async function restoreDefaultReaddirSync(): Promise<void> {
+  const { readdirSync } = await import('node:fs');
+  vi.mocked(readdirSync).mockImplementation(((dirPath: unknown) => {
+    const dp = String(dirPath);
+    if (dp.endsWith('.planning/phases')) {
+      return [...mockPhaseDirEntries];
+    }
+    if (dp.includes('.planning/phases/')) {
+      return [...mockPhaseDirFiles];
+    }
+    return [];
+  }) as typeof readdirSync);
+}
+
+describe('launch — inter-step artifact verification', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPhaseDirEntries = [];
+    mockPhaseDirFiles = [];
+    await restoreDefaultReaddirSync();
+    const { _resetSpawnRateLimit } = await import('../../src/core/runner.js');
+    _resetSpawnRateLimit();
+    const { getConfig } = await import('../../src/core/config.js');
+    vi.mocked(getConfig).mockReturnValue({
+      maxParallel: 2,
+      pollInterval: 1,
+      defaultTimeout: 60,
+      projectDir: '/tmp/test-projects',
+      pilotDir: '/tmp/.pilot',
+      pilotDbPath: '/tmp/.pilot/pilot.db',
+      gsdDir: '/tmp/pilot-gsd',
+      stuckThreshold: 90,
+      logLevel: 'INFO' as const,
+      noColor: false,
+    });
+  });
+
+  afterEach(() => {
+    process.removeAllListeners('SIGTERM');
+    process.removeAllListeners('SIGINT');
+  });
+
+  it('add-phase creates dir → runner detects and patches plan-phase/execute-phase args', async () => {
+    const job = makeJob({ scope: 'phase', description: 'Dark Mode' });
+    const plan = makePlan([
+      { command: 'add-phase', args: 'Dark Mode' },
+      { command: 'plan-phase', args: '21 --auto' },
+      { command: 'execute-phase', args: '21' },
+    ]);
+
+    // Before add-phase: dirs up to 20
+    const initialDirs = Array.from({ length: 20 }, (_, i) => `${String(i + 1).padStart(2, '0')}-phase${i + 1}`);
+    // After add-phase: dirs up to 22 (actual number differs from predicted 21!)
+    const afterAddDirs = [...initialDirs, '22-dark-mode'];
+
+    // readdirSync needs to return different values before and after add-phase
+    const { readdirSync: mockReaddirSync } = await import('node:fs');
+    let addPhaseComplete = false;
+    vi.mocked(mockReaddirSync).mockImplementation(((dirPath: unknown) => {
+      const dp = String(dirPath);
+      if (dp.endsWith('.planning/phases')) {
+        return addPhaseComplete ? afterAddDirs : initialDirs;
+      }
+      if (dp.includes('.planning/phases/')) {
+        return ['22-01-PLAN.md', '22-01-SUMMARY.md'];
+      }
+      return [];
+    }) as typeof mockReaddirSync);
+
+    // Mark add-phase as complete after spawn
+    mockFindSessionByTitle.mockReturnValue('session-add');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-add',
+      role: 'assistant',
+      content: 'Phase added. Planning complete. Created 2 plan files.',
+      createdAt: Date.now() - 120_000,
+    });
+
+    // After the first spawnAndWait (add-phase), change dirs to reflect new phase
+    const origExeca = (await import('execa')).execa;
+    vi.mocked(origExeca).mockImplementation((() => {
+      addPhaseComplete = true;
+      return { unref: vi.fn(), catch: vi.fn().mockReturnThis(), pid: 12345 };
+    }) as unknown as typeof origExeca);
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    // Verify patched args were used for plan-phase and execute-phase steps
+    // The recordStep mock captures the args passed to each step
+    expect(mockRecordStep).toHaveBeenCalledTimes(3);
+    // Step 1: add-phase (unchanged)
+    expect(mockRecordStep).toHaveBeenCalledWith(expect.any(String), 0, 'add-phase', 'Dark Mode', expect.any(String));
+    // Step 2: plan-phase should have been patched from "21 --auto" to "22 --auto"
+    expect(mockRecordStep).toHaveBeenCalledWith(expect.any(String), 1, 'plan-phase', '22 --auto', expect.any(String));
+    // Step 3: execute-phase should have been patched from "21" to "22"
+    expect(mockRecordStep).toHaveBeenCalledWith(expect.any(String), 2, 'execute-phase', '22', expect.any(String));
+    expect(mockMarkCompleted).toHaveBeenCalled();
+  }, 30000);
+
+  it('add-phase fails when no new dir is created', async () => {
+    const job = makeJob({ scope: 'phase', description: 'Dark Mode' });
+    const plan = makePlan([
+      { command: 'add-phase', args: 'Dark Mode' },
+      { command: 'plan-phase', args: '21 --auto' },
+    ]);
+
+    // Same dirs before and after add-phase (no new dir created)
+    const staticDirs = ['01-setup', '02-core'];
+    mockPhaseDirEntries = staticDirs;
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+    mockSuccessfulSpawn();
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    expect(mockMarkFailed).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('did not create a new phase directory'));
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('plan-phase fails when no PLAN.md files exist', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'plan-phase', args: '3 --auto' }]);
+
+    // Phase dir exists but no PLAN.md files
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['STATE'];  // Only STATE file, no PLAN.md
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+    mockSuccessfulSpawn();
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    expect(mockMarkFailed).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('did not create any PLAN.md files'));
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('execute-phase succeeds with SUMMARY.md files', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
+
+    // Phase dir has SUMMARY.md
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['03-01-SUMMARY.md', '03-01-PLAN.md'];
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    mockFindSessionByTitle.mockReturnValue('session-exec');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-exec',
+      role: 'assistant',
+      content: 'Phase 3 execution complete.',
+      createdAt: Date.now() - 120_000,
+    });
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    expect(mockMarkCompleted).toHaveBeenCalled();
+    expect(mockMarkFailed).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('phase number mismatch logs patching to stderr', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const job = makeJob({ scope: 'phase', description: 'X' });
+    const plan = makePlan([
+      { command: 'add-phase', args: 'X' },
+      { command: 'plan-phase', args: '21 --auto' },
+      { command: 'execute-phase', args: '21' },
+    ]);
+
+    const initialDirs = ['01-setup', '02-core'];
+    const afterAddDirs = [...initialDirs, '22-new-feature'];
+
+    const { readdirSync: mockReaddirSync } = await import('node:fs');
+    let addPhaseComplete = false;
+    vi.mocked(mockReaddirSync).mockImplementation(((dirPath: unknown) => {
+      const dp = String(dirPath);
+      if (dp.endsWith('.planning/phases')) {
+        return addPhaseComplete ? afterAddDirs : initialDirs;
+      }
+      if (dp.includes('.planning/phases/')) {
+        return ['22-01-PLAN.md', '22-01-SUMMARY.md'];
+      }
+      return [];
+    }) as typeof mockReaddirSync);
+
+    mockFindSessionByTitle.mockReturnValue('session-patch');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-patch',
+      role: 'assistant',
+      content: 'Phase added. Planning complete. Created 2 plan files.',
+      createdAt: Date.now() - 120_000,
+    });
+
+    const origExeca = (await import('execa')).execa;
+    vi.mocked(origExeca).mockImplementation((() => {
+      addPhaseComplete = true;
+      return { unref: vi.fn(), catch: vi.fn().mockReturnThis(), pid: 12345 };
+    }) as unknown as typeof origExeca);
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    // Verify stderr contains patching messages
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+    expect(stderrCalls.some(c => c.includes('Patched plan-phase args: 21 --auto'))).toBe(true);
+    expect(stderrCalls.some(c => c.includes('Patched execute-phase args: 21'))).toBe(true);
+
+    stderrSpy.mockRestore();
+  }, 30000);
+
+  it('non-phase commands skip artifact verification', async () => {
+    const job = makeJob({ scope: 'quick', description: 'Fix it' });
+    const plan = makePlan([{ command: 'quick', args: 'Fix it' }]);
+
+    // No phase dir setup needed — quick commands skip verification
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+    mockSuccessfulSpawn();
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    expect(mockMarkCompleted).toHaveBeenCalled();
+    expect(mockMarkFailed).not.toHaveBeenCalled();
+  }, 30000);
+});
+
+describe('scanPhaseDirs', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPhaseDirEntries = [];
+    mockPhaseDirFiles = [];
+    await restoreDefaultReaddirSync();
+  });
+
+  it('returns sorted phase directory names', () => {
+    mockPhaseDirEntries = ['03-ui', '01-setup', '02-core'];
+    const result = scanPhaseDirs('/tmp/test-projects/myproject');
+    expect(result).toEqual(['01-setup', '02-core', '03-ui']);
+  });
+
+  it('returns empty array if no .planning/phases dir', async () => {
+    const { readdirSync: mockReaddirSync } = await import('node:fs');
+    vi.mocked(mockReaddirSync).mockImplementation(((dirPath: unknown) => {
+      const dp = String(dirPath);
+      if (dp.includes('.planning/phases')) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      }
+      return [];
+    }) as typeof mockReaddirSync);
+    const result = scanPhaseDirs('/tmp/test-projects/noproject');
+    expect(result).toEqual([]);
+  });
+
+  it('filters out non-phase entries', () => {
+    mockPhaseDirEntries = ['01-setup', 'README.md', '.gitkeep', '02-core'];
+    const result = scanPhaseDirs('/tmp/test-projects/myproject');
+    expect(result).toEqual(['01-setup', '02-core']);
+  });
+});
+
+describe('verifyStepArtifacts', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPhaseDirEntries = [];
+    mockPhaseDirFiles = [];
+    await restoreDefaultReaddirSync();
+  });
+
+  it('returns ok for non-phase commands', () => {
+    const step: DelegationStep = { command: 'quick', args: 'Fix it' };
+    const result = verifyStepArtifacts('/tmp/proj', step, []);
+    expect(result.ok).toBe(true);
+  });
+
+  it('detects new phase directory after add-phase', () => {
+    mockPhaseDirEntries = ['01-setup', '02-core', '03-new-feature'];
+    const step: DelegationStep = { command: 'add-phase', args: 'New Feature' };
+    const prevDirs = ['01-setup', '02-core'];
+    const result = verifyStepArtifacts('/tmp/proj', step, prevDirs);
+    expect(result.ok).toBe(true);
+    expect(result.newPhaseNumber).toBe(3);
+  });
+
+  it('fails when add-phase creates no new dir', () => {
+    mockPhaseDirEntries = ['01-setup', '02-core'];
+    const step: DelegationStep = { command: 'add-phase', args: 'X' };
+    const prevDirs = ['01-setup', '02-core'];
+    const result = verifyStepArtifacts('/tmp/proj', step, prevDirs);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('did not create a new phase directory');
+  });
+
+  it('verifies PLAN.md exists for plan-phase', () => {
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['03-01-PLAN.md'];
+    const step: DelegationStep = { command: 'plan-phase', args: '3 --auto' };
+    const result = verifyStepArtifacts('/tmp/proj', step, []);
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails when no PLAN.md for plan-phase', () => {
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['STATE'];
+    const step: DelegationStep = { command: 'plan-phase', args: '3 --auto' };
+    const result = verifyStepArtifacts('/tmp/proj', step, []);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('did not create any PLAN.md files');
+  });
+
+  it('verifies SUMMARY.md exists for execute-phase', () => {
+    mockPhaseDirEntries = ['05-api'];
+    mockPhaseDirFiles = ['05-01-SUMMARY.md'];
+    const step: DelegationStep = { command: 'execute-phase', args: '5' };
+    const result = verifyStepArtifacts('/tmp/proj', step, []);
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails when no SUMMARY.md for execute-phase', () => {
+    mockPhaseDirEntries = ['05-api'];
+    mockPhaseDirFiles = ['05-01-PLAN.md'];
+    const step: DelegationStep = { command: 'execute-phase', args: '5' };
+    const result = verifyStepArtifacts('/tmp/proj', step, []);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('did not create any SUMMARY.md files');
+  });
+});
+
+describe('patchStepArgs', () => {
+  it('patches phase number in plan-phase and execute-phase args', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const steps: DelegationStep[] = [
+      { command: 'add-phase', args: 'X' },
+      { command: 'plan-phase', args: '21 --auto' },
+      { command: 'execute-phase', args: '21' },
+    ];
+    patchStepArgs(steps, 1, 21, 22);
+    expect(steps[1].args).toBe('22 --auto');
+    expect(steps[2].args).toBe('22');
+    stderrSpy.mockRestore();
+  });
+
+  it('does not patch args that do not match predicted phase', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const steps: DelegationStep[] = [
+      { command: 'plan-phase', args: '10 --auto' },
+      { command: 'execute-phase', args: '10' },
+    ];
+    patchStepArgs(steps, 0, 21, 22);
+    // args should be unchanged since they don't match predicted (21)
+    expect(steps[0].args).toBe('10 --auto');
+    expect(steps[1].args).toBe('10');
+    stderrSpy.mockRestore();
+  });
+
+  it('skips non-phase commands', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const steps: DelegationStep[] = [
+      { command: 'quick', args: '21 something' },
+      { command: 'plan-phase', args: '21 --auto' },
+    ];
+    patchStepArgs(steps, 0, 21, 22);
+    expect(steps[0].args).toBe('21 something'); // quick not patched
+    expect(steps[1].args).toBe('22 --auto');     // plan-phase patched
+    stderrSpy.mockRestore();
+  });
+
+  it('patches verify-phase as well', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const steps: DelegationStep[] = [
+      { command: 'verify-phase', args: '21' },
+    ];
+    patchStepArgs(steps, 0, 21, 22);
+    expect(steps[0].args).toBe('22');
+    stderrSpy.mockRestore();
   });
 });
 
