@@ -322,7 +322,7 @@ describe('buildHeaderLines', () => {
       expect(lines[4]).toContain('Started:');
     });
 
-    it('produces valid 5-line header at wide width (160 cols)', () => {
+    it('produces valid 6-line header at wide width (160 cols) for non-balanced profile', () => {
       const plan = makeDelegationPlan([
         { command: 'plan-phase', args: '7 --auto' },
         { command: 'execute-phase', args: '7 --auto' },
@@ -343,7 +343,8 @@ describe('buildHeaderLines', () => {
       });
 
       const lines = buildHeaderLines(job, 160);
-      expect(lines).toHaveLength(5);
+      // 6 lines: identity, description, separator, step/elapsed, model/attempts, resolved models
+      expect(lines).toHaveLength(6);
 
       // Identity
       expect(lines[0]).toContain('#cd34');
@@ -366,6 +367,10 @@ describe('buildHeaderLines', () => {
       // Model
       expect(lines[4]).toContain('quality/claude-only');
       expect(lines[4]).toContain('3/3');
+
+      // Resolved models line (only for non-balanced profiles)
+      expect(lines[5]).toContain('Models:');
+      expect(lines[5]).toContain('claude-opus-4-6');
     });
 
     it('wide header description line is longer than narrow for same long description', () => {

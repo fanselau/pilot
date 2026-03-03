@@ -10,6 +10,7 @@
 
 import { getJob, getJobSteps } from '../core/db.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
+import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
 import type { DelegationPlan } from '../core/types.js';
@@ -105,12 +106,15 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
 
   // ── JSON output ────────────────────────────────────────────────────────
 
+  const resolvedModels = resolveAllAgentModels(job.modelProfile, job.providerMode);
+
   if (isJsonMode()) {
     outputJson({
       job,
       delegationPlan,
       steps,
       sessions: sessionTokens,
+      resolvedModels,
       tokenUsage: {
         totalInput,
         totalOutput,
@@ -149,6 +153,17 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     outputHuman(`  ${dim(pad('Depends On:'))} ${job.dependsOn}`);
   }
   outputHuman('');
+
+  // Resolved models (when not default profile)
+  if (job.modelProfile !== 'balanced') {
+    outputHuman(`  ${bold('Resolved Models')}`);
+    outputHuman(`  ${hr()}`);
+    for (const [agentName, modelId] of Object.entries(resolvedModels)) {
+      const shortAgent = agentName.replace('gsd-', '');
+      outputHuman(`    ${dim(shortAgent.padEnd(24))} ${modelId}`);
+    }
+    outputHuman('');
+  }
 
   // Delegation plan
   if (delegationPlan && delegationPlan.steps.length > 0) {
