@@ -5,9 +5,10 @@
 
 ## Current Position
 
-Phase: 24 of 24 (Task/Subagent Visibility in TUI and Logs)
+Phase: 24 of 27 (Task/Subagent Visibility in TUI and Logs)
 Plan: 3 of 3 in current phase
 Status: Complete
+Next Phase: 25 (Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)); then 26 (Runner Immediate Dispatch + Force Quit Controls); then 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Last activity: 2026-03-03 - Completed 24-03-PLAN.md (CLI log child expansion + flags)
 
 Progress: ████████████████████████████░░ 94% (72/77 plans)
@@ -99,6 +100,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 22 added: Delegate Phase Lifecycle Hardening
 - Phase 23 added: TUI Selection Colors & Visual Polish
 - Phase 24 added: Task/Subagent Visibility in TUI and Logs
+- Phase 25 added: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
+- Phase 26 added: Runner Immediate Dispatch + Force Quit Controls
+- Phase 27 added: TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
 
 ## Decisions
 

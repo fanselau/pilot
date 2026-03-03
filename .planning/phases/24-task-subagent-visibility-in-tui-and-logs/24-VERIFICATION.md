@@ -1,8 +1,8 @@
 ---
 phase: 24-task-subagent-visibility-in-tui-and-logs
-verified: 2026-03-03T14:00:00Z
+verified: 2026-03-03T00:00:00Z
 status: passed
-score: 10/10 must-haves verified
+score: 11/11 must-haves verified
 re_verification: false
 ---
 
@@ -24,27 +24,40 @@ re_verification: false
 | 1 | `getChildSessions(parentSessionId)` returns child sessions from the DB | ✓ VERIFIED | `src/core/opencode-db.ts:251` — function defined with SQL `WHERE parent_id = ?`; exported at line 797 |
 | 2 | task parts display as `▶ task: gsd-planner — "description"` instead of raw JSON | ✓ VERIFIED | `extractToolInput` has `if (tool === 'task')` at line 361, before `if (tool === 'bash')` at line 373; returns formatted string |
 | 3 | `getChildSessions` is exported and importable by TUI + CLI consumers | ✓ VERIFIED | Export block includes `getChildSessions`; imported in `tui/data/opencode-db.ts:16` and `commands/log.ts:18` |
-| 4 | `SessionSection` type supports `children` (nested subagent sections) | ✓ VERIFIED | `src/tui/data/opencode-db.ts:25–29` — type includes `'subagent'`, `agentType?`, `children?: SessionSection[]` |
-| 5 | `fetchJobParts` resolves task parts into child `SessionSection` objects | ✓ VERIFIED | `resolveChildSections()` defined at line 43, called from `fetchJobParts` at line 114; populates `children` array |
-| 6 | TUI detail view renders child sections indented under parent task part | ✓ VERIFIED | `detail.tsx:339–400` — `<Show when={section.children}>` block with `paddingLeft={2}` per level |
-| 7 | Subagent section headers render as `── Subagent: gsd-planner ──` in dimmer style | ✓ VERIFIED | Three-branch ternary at `detail.tsx:312–316`; `fg={theme.border}` for subagent type |
+| 4 | `SessionSection` type supports `children` (nested subagent sections) and `agentType` | ✓ VERIFIED | `src/tui/data/opencode-db.ts:23–30` — union type `'delegation' \| 'execution' \| 'subagent'`, `agentType?: string`, `children?: SessionSection[]` |
+| 5 | `fetchJobParts` resolves task parts into child `SessionSection` objects | ✓ VERIFIED | `resolveChildSections()` defined at line 43 with `depth >= 2` guard at line 48; called from `fetchJobParts` at line 114; populates `children` array |
+| 6 | TUI detail view renders child sections indented under parent task part | ✓ VERIFIED | `detail.tsx:339–412` — `<Show when={section.children}>` + `<For each={section.children}>` with `paddingLeft={2}`; grandchildren at additional `paddingLeft={2}` |
+| 7 | Subagent section headers render as `── Subagent: gsd-planner ──` in dimmer style | ✓ VERIFIED | Three-branch ternary at `detail.tsx:312–316`; `fg={section.type === 'subagent' ? theme.border : theme.muted}`; same three-branch pattern at child and grandchild levels |
 | 8 | `pilot log` shows child session activity indented after each task part | ✓ VERIFIED | `log.ts:471–473` — task part expansion with `renderChildSessions()` unless `--flat` |
-| 9 | `pilot log --flat` suppresses child expansion (old behavior) | ✓ VERIFIED | `log.ts:472` — `if (!opts.flat && part.type === 'tool' && part.tool === 'task')` guard |
-| 10 | `pilot log <id> --task N` shows only the Nth child session | ✓ VERIFIED | `log.ts:386–427` — `--task N` early-return block; exits with code 1 when not found |
+| 9 | `pilot log --flat` suppresses child expansion (old behavior) | ✓ VERIFIED | `log.ts:472` — `if (!opts.flat && part.type === 'tool' && part.tool === 'task')` guard; `flat?: boolean` in `LogOptions` line 30; registered in `index.ts` line 73 |
+| 10 | `pilot log <id> --task N` shows only the Nth child session | ✓ VERIFIED | `log.ts:386–429` — `--task N` early-return block; exits code 1 with message when not found (lines 425–426) |
+| 11 | Incremental merge in TUI poller preserves `children` field on both merge paths | ✓ VERIFIED | `detail.tsx:208` (new parts path): `children: newSection.children`; `detail.tsx:212` (unchanged path): `{ ...existingSection, children: newSection.children }` |
 
-**Score:** 10/10 truths verified
+**Score:** 11/11 truths verified
 
 ---
 
 ## Required Artifacts
 
+**Plan 24-01**
+
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/core/opencode-db.ts` | `getChildSessions` function + task part formatting | ✓ VERIFIED | 807 lines; function at line 251; task branch at line 361; exported at line 797 |
-| `src/tui/data/opencode-db.ts` | Extended `SessionSection` + `resolveChildSections` + child traversal in `fetchJobParts` | ✓ VERIFIED | 184 lines; type extended at lines 25–29; helper at line 43; integration at line 114 |
-| `src/tui/views/detail.tsx` | Recursive nested section rendering with three-branch header ternary | ✓ VERIFIED | 424 lines; three-branch ternary at lines 312–316; child block at lines 339–400; grandchild at lines 374–396 |
-| `src/commands/log.ts` | Child session display + `--flat` + `--task N` flags | ✓ VERIFIED | 536 lines; `LogOptions` at lines 30–31; `renderChildSessions` at line 231; `--task N` block at lines 386–427; child expansion at lines 471–473 |
-| `src/index.ts` | `--flat` and `--task <n>` options on log command | ✓ VERIFIED | Lines 73–74; both options registered on log command |
+| `src/core/opencode-db.ts` | `getChildSessions` function + task part formatting | ✓ VERIFIED | 807 lines; function at line 251; task branch at line 361 (before bash at 373); exported at line 797 |
+
+**Plan 24-02**
+
+| Artifact | Expected | Status | Details |
+|----------|----------|--------|---------|
+| `src/tui/data/opencode-db.ts` | Extended `SessionSection` + `resolveChildSections` + child traversal in `fetchJobParts` | ✓ VERIFIED | 184 lines; type extended at lines 23–30; helper at line 43; integration at line 114 |
+| `src/tui/views/detail.tsx` | Recursive nested section rendering with three-branch header ternary | ✓ VERIFIED | 424 lines; three-branch ternary at lines 312–316; child block at lines 339–412; grandchild at lines 374–408; JSX pragma at line 15; children preserved in merge at lines 208, 212 |
+
+**Plan 24-03**
+
+| Artifact | Expected | Status | Details |
+|----------|----------|--------|---------|
+| `src/commands/log.ts` | Child session display + `--flat` + `--task N` flags | ✓ VERIFIED | 536 lines; `LogOptions` flat+task at lines 30–31; `renderChildSessions` at line 231; `--task N` block at lines 386–429; child expansion gate at line 472 |
+| `src/index.ts` | `--flat` and `--task <n>` options on log command | ✓ VERIFIED | Lines 73–74; both options registered and passed through `opts` to `logCommand` |
 
 ---
 
@@ -99,13 +112,13 @@ re_verification: false
 
 Phase 24 goal is **fully achieved**. All three plans executed exactly as specified:
 
-- **Plan 01** (core foundation): `getChildSessions()` is in `src/core/opencode-db.ts`, correctly queries `parent_id`, is exported, and `extractToolInput` formats task parts as `▶ task: {type} — "{description}"` before the bash branch.
+- **Plan 01** (core foundation): `getChildSessions()` is in `src/core/opencode-db.ts`, correctly queries `parent_id`, is exported, and `extractToolInput` formats task parts as `▶ task: {type} — "{description}"` before the bash branch. Verified via grep showing line 361 (`task`) < line 373 (`bash`).
 
-- **Plan 02** (TUI layer): `SessionSection` type extended with `children`/`agentType`/`'subagent'` type. `resolveChildSections()` traverses child sessions up to 2 levels with a depth guard. `detail.tsx` renders nested sections with `paddingLeft={2}` indentation, three-branch section header ternaries at all three nesting levels (top, child, grandchild), and incremental merge preserves children on both code paths.
+- **Plan 02** (TUI layer): `SessionSection` type extended with `children`/`agentType`/`'subagent'` type. `resolveChildSections()` traverses child sessions up to 2 levels with a `depth >= 2` guard. `detail.tsx` renders nested sections with `paddingLeft={2}` indentation, three-branch section header ternaries at all three nesting levels (top, child, grandchild), and incremental merge preserves children on both code paths (lines 208 and 212). JSX pragma preserved at line 15.
 
-- **Plan 03** (CLI layer): `LogOptions` has `flat` and `task` fields. `renderChildSessions()` is a module-level helper in `log.ts`. Main render loop expands children unless `--flat`. `--task N` early-return block is wired. Both flags registered in `src/index.ts`. TypeScript compiles clean.
+- **Plan 03** (CLI layer): `LogOptions` has `flat` and `task` fields. `renderChildSessions()` is a module-level helper in `log.ts` with a `depth >= 2` guard. Main render loop expands children unless `--flat`. `--task N` early-return block navigates children by index with exit 1 on not-found. Both flags registered in `src/index.ts` lines 73–74. TypeScript compiles clean (zero errors).
 
-No stubs, no anti-patterns, no TypeScript errors. Code is substantive across all five files (807 / 184 / 424 / 536 / 205 lines respectively). The three automated checks that require real DB data are flagged for human verification, but the structural wiring is complete and correct.
+No stubs, no anti-patterns, no TypeScript errors. Code is substantive across all five files (807 / 184 / 424 / 536 lines respectively). The three automated checks that require real DB data are flagged for human verification, but the structural wiring is complete and correct.
 
 ---
 

@@ -972,6 +972,279 @@ describe('launch — inter-step artifact verification', () => {
   }, 30000);
 });
 
+describe('plan-phase grace window artifact verification', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPhaseDirEntries = [];
+    mockPhaseDirFiles = [];
+    await restoreDefaultReaddirSync();
+    const { _resetSpawnRateLimit } = await import('../../src/core/runner.js');
+    _resetSpawnRateLimit();
+    const { getConfig } = await import('../../src/core/config.js');
+    vi.mocked(getConfig).mockReturnValue({
+      maxParallel: 2,
+      pollInterval: 1,
+      defaultTimeout: 60,
+      projectDir: '/tmp/test-projects',
+      pilotDir: '/tmp/.pilot',
+      pilotDbPath: '/tmp/.pilot/pilot.db',
+      gsdDir: '/tmp/pilot-gsd',
+      stuckThreshold: 90,
+      logLevel: 'INFO' as const,
+      noColor: false,
+    });
+  });
+
+  afterEach(() => {
+    process.removeAllListeners('SIGTERM');
+    process.removeAllListeners('SIGINT');
+    process.removeAllListeners('SIGHUP');
+  });
+
+  it('plan-phase succeeds immediately when PLAN.md exists on first check', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'plan-phase', args: '3 --auto' }]);
+
+    // PLAN.md is present from the start
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['03-01-PLAN.md'];
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    // Spawn with success message so semantic check passes
+    mockFindSessionByTitle.mockReturnValue('session-fast');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-fast',
+      role: 'assistant',
+      content: 'Planning complete. Created 1 plan files.',
+      createdAt: Date.now() - 120_000,
+    });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+
+    // Should succeed immediately — no grace window entered
+    expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+    expect(mockMarkFailed).not.toHaveBeenCalled();
+    expect(stderrCalls.some(c => c.includes('grace window'))).toBe(false);
+
+    stderrSpy.mockRestore();
+  }, 30000);
+
+  it('plan-phase succeeds within grace window when PLAN.md appears late', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'plan-phase', args: '3 --auto' }]);
+
+    // Start with no PLAN.md, then it appears after a few calls
+    const { readdirSync: mockReaddirSync } = await import('node:fs');
+    let artifactCallCount = 0;
+    vi.mocked(mockReaddirSync).mockImplementation(((dirPath: unknown) => {
+      const dp = String(dirPath);
+      if (dp.endsWith('.planning/phases')) return ['03-ui'];
+      if (dp.includes('.planning/phases/')) {
+        artifactCallCount++;
+        // Return PLAN.md only after the 3rd call (initial check + 2 grace window polls)
+        return artifactCallCount > 2 ? ['03-01-PLAN.md'] : ['STATE'];
+      }
+      return [];
+    }) as typeof mockReaddirSync);
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    // For spawnAndWait to complete: session inactive with old message
+    // For grace window: session active with recent message
+    // Use mockReturnValueOnce to control the sequence:
+    //   - First findSessionByTitle call (spawnAndWait poll): returns session
+    //   - Subsequent calls (grace window): also returns session (active)
+    mockFindSessionByTitle.mockReturnValue('session-late');
+    // First isSessionActive call = spawnAndWait (inactive → spawn done)
+    // Subsequent = grace window (active → keep polling)
+    mockIsSessionActive.mockReturnValueOnce(false).mockReturnValue(true);
+    // First getLastMessage = spawnAndWait (old → spawn finishes immediately)
+    // Subsequent = grace window (recent → session alive)
+    mockGetLastMessage
+      .mockReturnValueOnce({
+        id: 'msg-spawn',
+        role: 'assistant',
+        content: 'Planning complete. Created 1 plan files.',
+        createdAt: Date.now() - 120_000, // Old — spawn done
+      })
+      .mockReturnValue({
+        id: 'msg-grace',
+        role: 'assistant',
+        content: 'Planning complete. Created 1 plan files.',
+        createdAt: Date.now() - 5_000, // Recent — session alive in grace window
+      });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+
+    // Job should succeed — artifacts appeared within grace window
+    expect(mockMarkCompleted).toHaveBeenCalledWith('ab12');
+    expect(mockMarkFailed).not.toHaveBeenCalled();
+
+    // Should have entered grace window and found artifacts
+    expect(stderrCalls.some(c => c.includes('entering grace window'))).toBe(true);
+    expect(stderrCalls.some(c => c.includes('Artifacts appeared after'))).toBe(true);
+
+    stderrSpy.mockRestore();
+  }, 60000);
+
+  it('plan-phase fails immediately when artifacts missing and session is dead', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'plan-phase', args: '3 --auto' }]);
+
+    // Phase dir exists but never has PLAN.md
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['STATE'];
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    // Session is NOT active and last message is old
+    mockFindSessionByTitle.mockReturnValue('session-dead');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-dead',
+      role: 'assistant',
+      content: 'Planning complete. Created 1 plan files.',
+      createdAt: Date.now() - 120_000, // 2 minutes ago — dead session
+    });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+
+    // Job should fail — session dead, no artifacts
+    expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('artifact check failed'));
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+
+    // Should have entered grace window and detected inactive session
+    expect(stderrCalls.some(c => c.includes('entering grace window'))).toBe(true);
+    expect(stderrCalls.some(c => c.includes('session inactive'))).toBe(true);
+
+    stderrSpy.mockRestore();
+  }, 30000);
+
+  it('plan-phase fails after grace window exhausted with active session', async () => {
+    const job = makeJob({ scope: 'phase', description: '3' });
+    const plan = makePlan([{ command: 'plan-phase', args: '3 --auto' }]);
+
+    // Never produce PLAN.md files
+    mockPhaseDirEntries = ['03-ui'];
+    mockPhaseDirFiles = ['STATE'];
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    // For spawnAndWait to complete quickly: inactive with old message
+    // For grace window: active with recent message (session alive, but no artifacts)
+    mockFindSessionByTitle.mockReturnValue('session-stuck');
+    // spawnAndWait poll: inactive → done. Grace window polls: active → keep retrying
+    mockIsSessionActive.mockReturnValueOnce(false).mockReturnValue(true);
+    // spawnAndWait: old message → done immediately
+    // Grace window: recent message → session alive
+    mockGetLastMessage
+      .mockReturnValueOnce({
+        id: 'msg-spawn-done',
+        role: 'assistant',
+        content: 'Planning complete. Created 1 plan files.',
+        createdAt: Date.now() - 120_000, // Old — spawn done
+      })
+      .mockReturnValue({
+        id: 'msg-grace-active',
+        role: 'assistant',
+        content: 'Planning complete. Created 1 plan files.',
+        createdAt: Date.now() - 5_000, // Recent — session alive during grace window
+      });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+
+    // Trigger graceful shutdown after grace window enters first poll (~4s: 2s initial sleep + 3s grace poll)
+    // This simulates the grace window being interrupted by shutdown (the !this.shuttingDown guard exits the loop)
+    // The job is then failed by the grace window returning the failed verification result
+    setTimeout(() => runner.stop(), 7_000);
+
+    await runner.run();
+
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+
+    // Job should fail — grace window interrupted/exhausted, artifacts never appeared
+    expect(mockMarkFailed).toHaveBeenCalled();
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+
+    // Should have entered grace window
+    expect(stderrCalls.some(c => c.includes('entering grace window'))).toBe(true);
+
+    stderrSpy.mockRestore();
+  }, 30000);
+
+  it('execute-phase does NOT use grace window — uses old 2-retry behavior', async () => {
+    const job = makeJob({ scope: 'phase', description: '5' });
+    const plan = makePlan([{ command: 'execute-phase', args: '5 --auto' }]);
+
+    // Phase dir exists but NO SUMMARY.md (execute-phase should fail without grace window)
+    mockPhaseDirEntries = ['05-api'];
+    mockPhaseDirFiles = ['05-01-PLAN.md']; // Only PLAN.md, no SUMMARY.md
+
+    mockGetNextPending
+      .mockReturnValueOnce(job)
+      .mockReturnValue(null);
+    mockDelegate.mockResolvedValue(plan);
+
+    // Session must be inactive with old message so spawnAndWait completes
+    mockFindSessionByTitle.mockReturnValue('session-exec-no-grace');
+    mockIsSessionActive.mockReturnValue(false);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-exec-ng',
+      role: 'assistant',
+      content: 'Phase 5 execution complete.',
+      createdAt: Date.now() - 120_000, // Old — spawn done
+    });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    const stderrCalls = stderrSpy.mock.calls.map(c => String(c[0]));
+
+    // execute-phase should fail — no SUMMARY.md (uses old 2-retry, no grace window)
+    expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('artifact check failed'));
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+
+    // Should NOT have entered grace window messages
+    expect(stderrCalls.some(c => c.includes('entering grace window'))).toBe(false);
+    expect(stderrCalls.some(c => c.includes('session inactive'))).toBe(false);
+
+    stderrSpy.mockRestore();
+  }, 30000);
+});
+
 describe('scanPhaseDirs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
