@@ -360,7 +360,7 @@ Read requirements/tui-visual-polish.md for full spec. Covers P0 (must-have), P1 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 22-01-PLAN.md — Delegate title extraction + gsd-delegate.md prompt update
+- [x] 22-01-PLAN.md — Delegate title extraction + gsd-delegate.md prompt update
 - [ ] 22-02-PLAN.md — Runner inter-step artifact verification + dynamic arg patching
 
 **Details:**

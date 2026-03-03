@@ -5,20 +5,19 @@
 
 ## Current Position
 
-Phase: 20 of 20 (Model profile support)
+Phase: 22 of 22 (Delegate Phase Lifecycle Hardening)
 Plan: 1 of 2 in current phase
 Status: In progress
-**Next Phase:** Phase 21 — requirements/tui-visual-polish.md
-Last activity: 2026-03-03 - Completed quick task 016: Phase & milestone reliability — filesystem-based phase resolution, success pattern gating, milestone iteration
+Last activity: 2026-03-03 - Completed 22-01-PLAN.md (delegate title extraction + prompt update)
 
-Progress: ████████████████████████████░░ 93% (67/72 plans)
+Progress: ████████████████████████████░░ 94% (68/72 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 20 in progress — Model profile support (1/2 plans complete)
+**Current focus:** Phase 22 in progress — Delegate Phase Lifecycle Hardening (1/2 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -97,6 +96,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 19 added: requirements/tui-phase-redo.md
 - Phase 20 added: requirements/model-profile-support.md
 - Phase 21 added: requirements/tui-visual-polish.md
+- Phase 22 added: Delegate Phase Lifecycle Hardening
 
 ## Decisions
 
@@ -263,9 +263,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 18-05 | formatTokens exported from running-panel for reuse | Avoids duplicate helper; completed-panel imports it |
 
 | quick-001 | parseMessageRow reads text_content from part-table subquery | message.data doesn't contain content in opencode schema |
+| 22-01 | extractRequirementTitle uses /^#\s+(.+)$/m regex for first # heading | Matches # Title but not ## Subtitle; clean title extraction |
+| 22-01 | add-phase gets title, plan-phase gets @path for GSD context | Prevents ugly slugified directory names from file paths |
+| 22-01 | Milestone dir fallback derives title from filename when no heading | Strip .md and leading digits for reasonable fallback |
 
 ## Session Continuity
 
-Last session: 2026-03-03T10:14:08Z
-Stopped at: Completed quick-016 (Phase & Milestone Reliability)
+Last session: 2026-03-03T11:08:27Z
+Stopped at: Completed 22-01-PLAN.md
 Resume file: None
