@@ -9,7 +9,7 @@ Phase: 20 of 20 (Model profile support)
 Plan: 1 of 2 in current phase
 Status: In progress
 **Next Phase:** Phase 21 — requirements/tui-visual-polish.md
-Last activity: 2026-03-02 - Completed quick task 015: Step-level observability (R4) — job_steps table, per-step recording in runner, step summary in pilot log
+Last activity: 2026-03-03 - Completed quick task 016: Phase & milestone reliability — filesystem-based phase resolution, success pattern gating, milestone iteration
 
 Progress: ████████████████████████████░░ 93% (67/72 plans)
 
@@ -78,6 +78,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 013 | Implement requirements/pilot-phase-execution-success-contract.md end-to-end in code: fix phase fallback mapping, semantic success gating, interrupted-job status handling, and phase ambiguity warning; include tests | 2026-03-02 | 979bbf3 | [013-implement-requirements-pilot-phase-execu](./quick/013-implement-requirements-pilot-phase-execu/) |
 | 014 | Model Frontmatter Patching | 2026-03-02 | 04df455 | [014-model-frontmatter-patching](./quick/014-model-frontmatter-patching/) |
 | 015 | Step-level observability (R4) — job_steps table + runner recording + pilot log display | 2026-03-02 | 6840417 | [015-pilot-requirement-phase-execution-succes](./quick/015-pilot-requirement-phase-execution-succes/) |
+| 016 | Phase & milestone reliability — filesystem phase resolution, success pattern gating | 2026-03-03 | 9424b3d | [016-phase-milestone-reliability-make-structu](./quick/016-phase-milestone-reliability-make-structu/) |
 
 ## Accumulated Context
 
@@ -265,6 +266,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-02T19:17:17Z
-Stopped at: Completed quick-015 (Step-Level Observability R4)
+Last session: 2026-03-03T10:14:08Z
+Stopped at: Completed quick-016 (Phase & Milestone Reliability)
 Resume file: None
