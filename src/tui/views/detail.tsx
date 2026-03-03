@@ -343,7 +343,11 @@ export function DetailView(props: { state: PilotStateStore }) {
                         <box flexDirection="column" paddingLeft={2}>
                           {/* Child section header */}
                           <text
-                            content={`  ── Subagent: ${child.agentType ?? 'subagent'} ──`}
+                            content={child.type === 'delegation'
+                              ? `  ── Delegation ──`
+                              : child.type === 'subagent'
+                                ? `  ── Subagent: ${child.agentType ?? 'subagent'} ──`
+                                : `  ── Execution: ${child.command ?? 'unknown'} ──`}
                             fg={theme.border}
                           />
                           {/* Child parts */}
@@ -372,7 +376,11 @@ export function DetailView(props: { state: PilotStateStore }) {
                               {(grandchild) => (
                                 <box flexDirection="column" paddingLeft={2}>
                                   <text
-                                    content={`    ── Subagent: ${grandchild.agentType ?? 'subagent'} ──`}
+                                    content={grandchild.type === 'delegation'
+                                      ? `    ── Delegation ──`
+                                      : grandchild.type === 'subagent'
+                                        ? `    ── Subagent: ${grandchild.agentType ?? 'subagent'} ──`
+                                        : `    ── Execution: ${grandchild.command ?? 'unknown'} ──`}
                                     fg={theme.border}
                                   />
                                   <Show when={grandchild.parts.length > 0} fallback={
