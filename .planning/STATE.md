@@ -81,6 +81,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 014 | Model Frontmatter Patching | 2026-03-02 | 04df455 | [014-model-frontmatter-patching](./quick/014-model-frontmatter-patching/) |
 | 015 | Step-level observability (R4) — job_steps table + runner recording + pilot log display | 2026-03-02 | 6840417 | [015-pilot-requirement-phase-execution-succes](./quick/015-pilot-requirement-phase-execution-succes/) |
 | 016 | Phase & milestone reliability — filesystem phase resolution, success pattern gating | 2026-03-03 | 9424b3d | [016-phase-milestone-reliability-make-structu](./quick/016-phase-milestone-reliability-make-structu/) |
+| 018 | Fix premature completion detection — isSessionDone(), runner polling, evaluateStepResult fail-safe | 2026-03-03 | c1a2fe4 | [018-requirements-fix-premature-completion-de](./quick/018-requirements-fix-premature-completion-de/) |
 
 ## Accumulated Context
 
@@ -310,6 +311,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-03T18:47:30Z
-Stopped at: Completed 26-05-PLAN.md (Phase 26 fully complete — tests: DB claim/force-quit, runner dispatch, CLI kill)
+Last session: 2026-03-03T19:05:30Z
+Stopped at: Completed quick-018 (Fix premature completion detection — isSessionDone, runner polling, evaluateStepResult fail-safe)
 Resume file: None
