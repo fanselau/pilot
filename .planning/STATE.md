@@ -8,6 +8,7 @@
 Phase: 22 of 22 (Delegate Phase Lifecycle Hardening)
 Plan: 2 of 2 in current phase
 Status: Phase complete
+**Next Phase:** 24 — Task/Subagent Visibility in TUI and Logs
 Last activity: 2026-03-03 - Completed 22-02-PLAN.md (runner inter-step artifact verification + dynamic arg patching)
 
 Progress: ████████████████████████████░░ 96% (69/72 plans)
@@ -97,6 +98,8 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 20 added: requirements/model-profile-support.md
 - Phase 21 added: requirements/tui-visual-polish.md
 - Phase 22 added: Delegate Phase Lifecycle Hardening
+- Phase 23 added: TUI Selection Colors & Visual Polish
+- Phase 24 added: Task/Subagent Visibility in TUI and Logs
 
 ## Decisions
 

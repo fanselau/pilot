@@ -232,8 +232,14 @@ class Runner {
         }
         currentStepRowId = null;
 
-        // Inter-step artifact verification
-        const verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+        // Inter-step artifact verification (small delay for git commits to flush)
+        await this.sleep(2000);
+        let verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+        // Retry once after 3s if failed — git commits may still be flushing
+        if (!verification.ok) {
+          await this.sleep(3000);
+          verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+        }
         process.stderr.write(`[runner] Artifact check for ${step.command}: ${verification.ok ? 'passed' : verification.error}\n`);
         if (!verification.ok) {
           throw new Error(`Step "${step.command} ${step.args}" artifact check failed: ${verification.error}`);
