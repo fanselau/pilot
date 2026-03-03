@@ -16,6 +16,7 @@ import {
   findSessionByTitle,
   getSessionParts,
   getChildSessions,
+  getSessionTokens,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
@@ -167,7 +168,17 @@ function formatStepDuration(ms: number | null): string {
 }
 
 /**
+ * Format token count compactly: >=1M → "1.2M", >=1k → "45.2k", else raw.
+ */
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+/**
  * Render a compact step summary for the human log output.
+ * Includes per-step token usage when available from opencode DB.
  */
 function formatStepsSummary(steps: JobStep[]): string[] {
   if (steps.length === 0) return [];
@@ -216,7 +227,20 @@ function formatStepsSummary(steps: JobStep[]): string[] {
       verdictStr = ` [${parts.join(': ')}]`;
     }
 
-    lines.push(`    ${statusColor(`${icon} ${num} ${cmd}${durationStr}${verdictStr}`)}`);
+    // Per-step token usage (from opencode DB via session title)
+    let tokenStr = '';
+    if (step.sessionTitle) {
+      const sessionId = findSessionByTitle(step.sessionTitle);
+      if (sessionId) {
+        const tokens = getSessionTokens(sessionId);
+        const total = tokens.input + tokens.output;
+        if (total > 0) {
+          tokenStr = ` · ${formatTokenCount(total)} tok`;
+        }
+      }
+    }
+
+    lines.push(`    ${statusColor(`${icon} ${num} ${cmd}${durationStr}${tokenStr}${verdictStr}`)}`);
   }
 
   return lines;
@@ -341,6 +365,18 @@ async function logCommand(
   // JSON mode
   if (isJsonMode()) {
     const sessionData = collectSessionParts(sessions);
+
+    // Build per-step token usage map
+    const tokenUsageByStep: Record<number, { input: number; output: number }> = {};
+    for (const step of steps) {
+      if (step.sessionTitle) {
+        const sessionId = findSessionByTitle(step.sessionTitle);
+        if (sessionId) {
+          tokenUsageByStep[step.stepIndex] = getSessionTokens(sessionId);
+        }
+      }
+    }
+
     outputJson({
       job: {
         id: job.id,
@@ -348,14 +384,22 @@ async function logCommand(
         scope: job.scope,
         description: job.description,
         status: job.status,
+        modelProfile: job.modelProfile,
+        providerMode: job.providerMode,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
       },
-      steps,
+      steps: steps.map((s) => ({
+        ...s,
+        tokenUsage: tokenUsageByStep[s.stepIndex] ?? null,
+      })),
       sessions: sessionData.map(({ session, parts }) => ({
         title: session.title,
         type: session.type,
         command: session.command,
         parts,
       })),
+      tokenUsage: tokenUsageByStep,
     });
     return;
   }
@@ -368,6 +412,9 @@ async function logCommand(
   outputHuman('');
   outputHuman(
     `  ${bold(job.project)} · ${job.scope} · "${desc}" · ${dim(job.id)}`,
+  );
+  outputHuman(
+    `  ${dim(`Model: ${job.modelProfile}/${job.providerMode}   Attempts: ${job.attempts}/${job.maxAttempts}`)}`,
   );
   outputHuman('');
 
