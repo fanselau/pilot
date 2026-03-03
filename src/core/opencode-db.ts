@@ -243,6 +243,31 @@ function findSessionByTitle(title: string): string | null {
   }
 }
 
+/**
+ * Get child sessions spawned by a parent session (via `task` tool).
+ * Queries the `parent_id` column linking child → parent.
+ * Returns array ordered by creation time (oldest first).
+ */
+function getChildSessions(parentSessionId: string): Array<{ id: string; title: string; timeCreated: number; timeUpdated: number }> {
+  const db = openDb();
+  if (db === null) return [];
+
+  try {
+    const rows = db.prepare(
+      'SELECT id, title, time_created, time_updated FROM session WHERE parent_id = ? ORDER BY time_created ASC',
+    ).all(parentSessionId) as Array<{ id: string; title: string; time_created: number; time_updated: number }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ── v2 extended queries ────────────────────────────────────────────────────
 
 /**
@@ -756,6 +781,7 @@ export {
   exportSessionFromDb,
   getSessionMessageCountFromDb,
   findSessionByTitle,
+  getChildSessions,
   getSessionMessages,
   getSessionParts,
   getLastMessage,
