@@ -345,8 +345,8 @@ export function DetailView(props: { state: PilotStateStore }) {
           <text content="  Job not found" fg={theme.muted} />
         </box>
       }>
-        {/* Header: structured metadata panel */}
-        <box flexDirection="column" paddingLeft={1} paddingRight={1}>
+        {/* Header: structured metadata panel — flexShrink={0} prevents collapse when activity grows */}
+        <box flexDirection="column" paddingLeft={1} paddingRight={1} flexShrink={0}>
           {/* Line 1: #id  project  scope  status */}
           <box flexDirection="row">
             <text
