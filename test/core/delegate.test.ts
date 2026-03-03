@@ -81,6 +81,8 @@ import {
   getNextPhaseNumber,
   buildMilestonePlan,
   extractRequirementTitle,
+  matchesBlocklist,
+  GSD_INSTRUCTION_BLOCKLIST,
 } from '../../src/core/delegate.js';
 
 // ── Test helpers ───────────────────────────────────────────────────────────
@@ -658,5 +660,56 @@ describe('extractRequirementTitle', () => {
   it('handles file with only a heading', () => {
     mockRequirementFileContent['/tmp/req.md'] = '# Just A Title';
     expect(extractRequirementTitle('/tmp/req.md')).toBe('Just A Title');
+  });
+});
+
+describe('matchesBlocklist', () => {
+  it('returns matched phrase for title containing "add a new integer phase"', () => {
+    const result = matchesBlocklist('Add a new integer phase to the end of the current milestone');
+    expect(result).toBe('add a new integer phase');
+  });
+
+  it('returns matched phrase for titles containing "execute all plans"', () => {
+    const result = matchesBlocklist('Execute all plans in the current milestone');
+    expect(result).toBe('execute all plans');
+  });
+
+  it('returns null for legitimate titles like "Fix premature completion detection"', () => {
+    expect(matchesBlocklist('Fix premature completion detection')).toBeNull();
+  });
+
+  it('returns null for another legitimate title', () => {
+    expect(matchesBlocklist('TUI Visual Polish')).toBeNull();
+  });
+
+  it('returns null for "Harden add-phase reliability"', () => {
+    expect(matchesBlocklist('Harden add-phase reliability')).toBeNull();
+  });
+
+  it('is case-insensitive', () => {
+    expect(matchesBlocklist('ADD A NEW INTEGER PHASE to the end')).toBe('add a new integer phase');
+    expect(matchesBlocklist('EXECUTE ALL PLANS for this milestone')).toBe('execute all plans');
+  });
+
+  it('returns matched phrase for "current milestone in the roadmap"', () => {
+    expect(matchesBlocklist('current milestone in the roadmap')).toBe('current milestone in the roadmap');
+  });
+
+  it('returns matched phrase for "spawn subagents"', () => {
+    expect(matchesBlocklist('spawn subagents for parallel execution')).toBe('spawn subagents');
+  });
+
+  it('returns null for partial matches that are not blocklisted', () => {
+    // "phase" alone is fine — only full phrases are blocklisted
+    expect(matchesBlocklist('Fix phase detection logic')).toBeNull();
+    expect(matchesBlocklist('Add planned features')).toBeNull();
+  });
+
+  it('GSD_INSTRUCTION_BLOCKLIST is exported and non-empty', () => {
+    expect(GSD_INSTRUCTION_BLOCKLIST).toBeDefined();
+    expect(GSD_INSTRUCTION_BLOCKLIST.length).toBeGreaterThan(0);
+    // Verify it contains the key phrases
+    expect(GSD_INSTRUCTION_BLOCKLIST).toContain('add a new integer phase');
+    expect(GSD_INSTRUCTION_BLOCKLIST).toContain('execute all plans');
   });
 });

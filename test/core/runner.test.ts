@@ -47,6 +47,26 @@ vi.mock('../../src/core/db.js', () => ({
 vi.mock('../../src/core/delegate.js', () => ({
   delegate: vi.fn(),
   resolveOpencodeBinary: vi.fn(() => '/usr/bin/opencode'),
+  // matchesBlocklist is used directly in verifyStepArtifacts — use real implementation
+  matchesBlocklist: (title: string) => {
+    const GSD_BLOCKLIST = [
+      'add a new integer phase',
+      'add a new phase to the end',
+      'execute all plans',
+      'spawn subagents',
+      'current milestone in the roadmap',
+      'phase to the end of',
+      'run /gsd-plan-phase',
+      'run /gsd-execute-phase',
+      'break down into tasks',
+      'to be planned',
+    ];
+    const lower = title.toLowerCase();
+    for (const phrase of GSD_BLOCKLIST) {
+      if (lower.includes(phrase)) return phrase;
+    }
+    return null;
+  },
 }));
 
 vi.mock('../../src/core/models.js', () => ({
@@ -66,9 +86,11 @@ vi.mock('execa', () => ({
   execa: vi.fn(() => ({ unref: vi.fn(), catch: vi.fn().mockReturnThis(), stdout: '' })),
 }));
 
-// Dynamic mock data for readdirSync
+// Dynamic mock data for readdirSync and readFileSync
 let mockPhaseDirEntries: string[] = [];
 let mockPhaseDirFiles: string[] = [];
+// null = file not found (throw ENOENT), undefined = no mock (fall through)
+let mockRoadmapContent: string | null | undefined = undefined;
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
@@ -80,6 +102,15 @@ vi.mock('node:fs', async () => {
       }
       if (typeof filePath === 'string' && filePath.endsWith('opencode.json')) {
         return JSON.stringify({ permission: { allow: true } });
+      }
+      if (typeof filePath === 'string' && filePath.endsWith('ROADMAP.md')) {
+        if (mockRoadmapContent === null) {
+          const err = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+          throw err;
+        }
+        if (mockRoadmapContent !== undefined) {
+          return mockRoadmapContent;
+        }
       }
       return actual.readFileSync(filePath, 'utf8');
     }),
@@ -175,6 +206,7 @@ describe('verifyStepArtifacts', () => {
     vi.clearAllMocks();
     mockPhaseDirEntries = [];
     mockPhaseDirFiles = [];
+    mockRoadmapContent = undefined; // no ROADMAP mock by default
     await resetReaddirMock();
   });
 
@@ -231,6 +263,71 @@ describe('verifyStepArtifacts', () => {
     const result = verifyStepArtifacts('/tmp/proj', { command: 'execute-phase', args: '5' }, []);
     expect(result.ok).toBe(false);
     expect(result.error).toContain('did not create any SUMMARY.md files');
+  });
+
+  // ── Blocklist guard tests ──────────────────────────────────────────────
+
+  it('fails add-phase when new directory name matches GSD instruction blocklist', async () => {
+    mockPhaseDirEntries = ['01-setup', '02-add-a-new-integer-phase-to-the-end'];
+    mockRoadmapContent = null; // ROADMAP not found — skip duplicate check
+    await resetReaddirMock();
+    const result = verifyStepArtifacts(
+      '/tmp/proj',
+      { command: 'add-phase', args: 'Fix premature completion' },
+      ['01-setup'],
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('GSD instruction text');
+    expect(result.error).toContain('add a new integer phase');
+  });
+
+  it('succeeds add-phase with a legitimate directory name', async () => {
+    mockPhaseDirEntries = ['01-setup', '02-fix-premature-completion'];
+    mockRoadmapContent = null; // No ROADMAP — skip duplicate check
+    await resetReaddirMock();
+    const result = verifyStepArtifacts(
+      '/tmp/proj',
+      { command: 'add-phase', args: 'Fix premature completion' },
+      ['01-setup'],
+    );
+    expect(result.ok).toBe(true);
+    expect(result.newPhaseNumber).toBe(2);
+  });
+
+  it('fails add-phase when new directory duplicates an existing ROADMAP phase title', async () => {
+    mockPhaseDirEntries = ['01-fix-premature-completion-detection', '02-fix-premature-completion-detection'];
+    // ROADMAP has an existing phase with the same title
+    mockRoadmapContent = `# Roadmap
+
+## Current Milestone: v1.0
+
+### Phase 1: Fix premature completion detection
+
+**Goal:** To be planned
+`;
+    await resetReaddirMock();
+    const result = verifyStepArtifacts(
+      '/tmp/proj',
+      { command: 'add-phase', args: 'Fix premature completion detection' },
+      ['01-fix-premature-completion-detection'],
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('duplicate');
+    expect(result.error).toContain('Fix premature completion detection');
+  });
+
+  it('succeeds add-phase with no ROADMAP (ROADMAP read throws) — skips duplicate check', async () => {
+    mockPhaseDirEntries = ['01-setup', '02-new-feature'];
+    mockRoadmapContent = null; // throws ENOENT
+    await resetReaddirMock();
+    const result = verifyStepArtifacts(
+      '/tmp/proj',
+      { command: 'add-phase', args: 'New feature' },
+      ['01-setup'],
+    );
+    // Should succeed — no ROADMAP means no duplicate check
+    expect(result.ok).toBe(true);
+    expect(result.newPhaseNumber).toBe(2);
   });
 });
 

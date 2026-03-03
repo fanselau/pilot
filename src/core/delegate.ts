@@ -16,6 +16,39 @@ import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
+ * Known GSD instruction text fragments that should NEVER appear in a phase title.
+ * If an add-phase directory name contains any of these phrases, it means the AI
+ * misinterpreted the prompt instructions as the phase title.
+ */
+const GSD_INSTRUCTION_BLOCKLIST: readonly string[] = [
+  'add a new integer phase',
+  'add a new phase to the end',
+  'execute all plans',
+  'spawn subagents',
+  'current milestone in the roadmap',
+  'phase to the end of',
+  'run /gsd-plan-phase',
+  'run /gsd-execute-phase',
+  'break down into tasks',
+  'to be planned',
+];
+
+/**
+ * Check if a title contains any known GSD instruction phrase.
+ * Returns the matched blocklist phrase if found (case-insensitive substring match),
+ * or null if the title is clean.
+ */
+function matchesBlocklist(title: string): string | null {
+  const lower = title.toLowerCase();
+  for (const phrase of GSD_INSTRUCTION_BLOCKLIST) {
+    if (lower.includes(phrase)) {
+      return phrase;
+    }
+  }
+  return null;
+}
+
+/**
  * Extract a human-readable title from a requirement file's `# Title` heading.
  * Returns the title text (trimmed), or null if no heading found or file unreadable.
  *
@@ -396,4 +429,6 @@ export {
   getNextPhaseNumber,
   buildMilestonePlan,
   extractRequirementTitle,
+  GSD_INSTRUCTION_BLOCKLIST,
+  matchesBlocklist,
 };
