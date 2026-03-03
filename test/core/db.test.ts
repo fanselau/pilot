@@ -24,6 +24,10 @@ import {
   bump,
   updateSessionTitles,
   _getTestDb,
+  claimNextLaunchable,
+  forceQuitJob,
+  getJobSteps,
+  recordStep,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -381,6 +385,123 @@ describe('pilot.db', () => {
       const updated = getJob(job.id);
       const titles = JSON.parse(updated!.sessionTitles!) as string[];
       expect(titles).toEqual(['first-session']);
+    });
+  });
+
+  // ── claimNextLaunchable ───────────────────────────────────────────────
+
+  describe('claimNextLaunchable', () => {
+    it('returns null when no pending jobs exist', () => {
+      const result = claimNextLaunchable();
+      expect(result).toBeNull();
+    });
+
+    it('claims a pending job and marks it running atomically', () => {
+      const job = addJob('proj-a', 'quick', 'task 1');
+      const claimed = claimNextLaunchable();
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(job.id);
+      expect(claimed!.status).toBe('running');
+      // Verify DB was updated too
+      const fresh = getJob(job.id)!;
+      expect(fresh.status).toBe('running');
+      expect(fresh.startedAt).not.toBeNull();
+      expect(fresh.attempts).toBe(1);
+    });
+
+    it('respects project serialization: does not claim if project already running', () => {
+      const job1 = addJob('proj-x', 'quick', 'task 1');
+      const job2 = addJob('proj-x', 'quick', 'task 2');  // same project
+
+      // Claim first job
+      const first = claimNextLaunchable();
+      expect(first!.id).toBe(job1.id);
+
+      // Second job from same project should NOT be claimed
+      const second = claimNextLaunchable();
+      expect(second).toBeNull();
+
+      // job2 remains pending
+      const j2 = getJob(job2.id)!;
+      expect(j2.status).toBe('pending');
+    });
+
+    it('claims from a different project while one project is running', () => {
+      const jobA = addJob('proj-a', 'quick', 'task 1');
+      const jobB = addJob('proj-b', 'quick', 'task 2');  // different project
+
+      // Claim proj-a job
+      claimNextLaunchable();
+      expect(getJob(jobA.id)!.status).toBe('running');
+
+      // proj-b job should be claimable
+      const claimed = claimNextLaunchable();
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(jobB.id);
+      expect(claimed!.status).toBe('running');
+    });
+
+    it('returns null when only running jobs exist (all pending claimed)', () => {
+      addJob('proj-a', 'quick', 'task 1');
+      claimNextLaunchable();  // claims it
+      const second = claimNextLaunchable();
+      expect(second).toBeNull();
+    });
+  });
+
+  // ── forceQuitJob ──────────────────────────────────────────────────────
+
+  describe('forceQuitJob', () => {
+    it('returns ok:false when job not found', () => {
+      const result = forceQuitJob('nonexistent', 'cli');
+      expect(result.ok).toBe(false);
+      expect(result.reason).toMatch(/not found|not running/i);
+    });
+
+    it('returns ok:false when job is not running', () => {
+      const job = addJob('proj-a', 'quick', 'task 1');  // pending
+      const result = forceQuitJob(job.id, 'cli');
+      expect(result.ok).toBe(false);
+    });
+
+    it('marks running job as failed with operator audit message', () => {
+      const job = addJob('proj-a', 'quick', 'task 1');
+      markRunning(job.id);
+
+      const result = forceQuitJob(job.id, 'cli', 'stuck process');
+      expect(result.ok).toBe(true);
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('failed');
+      expect(updated.error).toMatch(/stuck process/i);
+      expect(updated.error).toMatch(/cli/);
+      expect(updated.completedAt).not.toBeNull();
+    });
+
+    it('marks running job_steps as failed with audit message', () => {
+      const job = addJob('proj-a', 'quick', 'task 1');
+      markRunning(job.id);
+      const stepId = recordStep(job.id, 0, 'execute-phase', '1');
+
+      forceQuitJob(job.id, 'tui');
+
+      const steps = getJobSteps(job.id);
+      const step = steps.find(s => s.id === stepId)!;
+      expect(step.status).toBe('failed');
+      expect(step.verdictReason).toMatch(/tui/i);
+    });
+
+    it('records source=cli vs source=tui in the error message', () => {
+      const job1 = addJob('proj-a', 'quick', 'task 1');
+      const job2 = addJob('proj-b', 'quick', 'task 2');
+      markRunning(job1.id);
+      markRunning(job2.id);
+
+      forceQuitJob(job1.id, 'cli');
+      forceQuitJob(job2.id, 'tui');
+
+      expect(getJob(job1.id)!.error).toMatch(/cli/);
+      expect(getJob(job2.id)!.error).toMatch(/tui/);
     });
   });
 });
