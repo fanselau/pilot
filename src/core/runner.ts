@@ -379,13 +379,39 @@ class Runner {
 
         // Step 3: For phase commands, spawn judge to evaluate results
         if (step.command === 'phase') {
-          const judgeVerdict = await this.runJudge(job, projectDir, title);
+          // Guard: check shutdown before starting judge — phase session already completed,
+          // so reset to pending to preserve that work rather than marking failed
+          if (this.shuttingDown) {
+            resetToPending(job.id, 'Interrupted before judge evaluation');
+            process.stderr.write(
+              `[runner] Shutdown during phase — resetting ${job.id} to pending (phase completed, judge skipped)\n`,
+            );
+            return; // Don't mark completed or failed — it's pending for retry
+          }
+
+          let judgeVerdict: JudgeVerdict | null;
+          try {
+            judgeVerdict = await this.runJudge(job, projectDir, title);
+          } catch (judgeErr) {
+            // If judge threw because of shutdown, reset to pending (preserve phase work)
+            if (this.shuttingDown) {
+              resetToPending(job.id, 'Interrupted during judge evaluation');
+              process.stderr.write(
+                `[runner] Shutdown during judge — resetting ${job.id} to pending\n`,
+              );
+              return;
+            }
+            // Non-shutdown judge error: benefit of doubt, fall through to markCompleted
+            judgeVerdict = null;
+          }
 
           if (judgeVerdict) {
             updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
 
             if (judgeVerdict.verdict === 'fail') {
-              if (judgeVerdict.retryRecommendation !== 'none' && job.attempts < job.maxAttempts) {
+              // Re-fetch job to get fresh attempts count (claimNextLaunchable already incremented it)
+              const freshJob = getJob(job.id);
+              if (judgeVerdict.retryRecommendation !== 'none' && freshJob && freshJob.attempts < freshJob.maxAttempts) {
                 resetToPending(job.id, judgeVerdict.retryHint);
                 process.stderr.write(
                   `[runner] Judge verdict: fail (retryable). Resetting ${job.id} to pending.\n`,
@@ -396,7 +422,9 @@ class Runner {
             }
 
             if (judgeVerdict.verdict === 'partial') {
-              if (judgeVerdict.retryRecommendation === 'retry-resume' && job.attempts < job.maxAttempts) {
+              // Re-fetch job to get fresh attempts count (claimNextLaunchable already incremented it)
+              const freshJob = getJob(job.id);
+              if (judgeVerdict.retryRecommendation === 'retry-resume' && freshJob && freshJob.attempts < freshJob.maxAttempts) {
                 resetToPending(job.id, judgeVerdict.retryHint ?? '--resume');
                 process.stderr.write(
                   `[runner] Judge verdict: partial. Resetting ${job.id} to pending with resume hint.\n`,
@@ -469,18 +497,7 @@ class Runner {
     const lastMsg = getLastMessage(sessionId);
     if (!lastMsg) return null;
 
-    try {
-      const jsonMatch = lastMsg.content.match(/```json\s*\n([\s\S]*?)\n```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : lastMsg.content.trim();
-      const verdict = JSON.parse(jsonStr) as JudgeVerdict;
-
-      // Validate required fields
-      if (!['pass', 'fail', 'partial'].includes(verdict.verdict)) return null;
-      return verdict;
-    } catch {
-      process.stderr.write(`[runner] Failed to parse judge verdict from session ${judgeTitle}\n`);
-      return null;
-    }
+    return parseJudgeVerdict(lastMsg.content, judgeTitle);
   }
 
   /**
@@ -676,6 +693,56 @@ class Runner {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(r => setTimeout(r, ms));
+  }
+}
+
+// ── Judge verdict parsing ──────────────────────────────────────────────────
+
+/**
+ * Parse judge verdict from session output content.
+ * Handles three formats in priority order:
+ *   1. Fenced ```json block
+ *   2. Raw JSON (entire content is valid JSON)
+ *   3. Text-wrapped JSON (first {...} block extracted via regex)
+ *
+ * Returns null on parse failure or invalid verdict field.
+ * Exported for direct unit testing.
+ */
+function parseJudgeVerdict(content: string, sessionTitle?: string): JudgeVerdict | null {
+  try {
+    let jsonStr: string;
+
+    // Format 1: fenced ```json block
+    const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1];
+    } else {
+      // Format 2: raw JSON (try parsing the whole trimmed content)
+      try {
+        JSON.parse(content.trim());
+        jsonStr = content.trim();
+      } catch {
+        // Format 3: text-wrapped JSON — extract first {...} block
+        const braceMatch = content.match(/(\{[\s\S]*\})/);
+        if (braceMatch) {
+          jsonStr = braceMatch[1];
+        } else {
+          if (sessionTitle) {
+            process.stderr.write(`[runner] No JSON found in judge output for session ${sessionTitle}\n`);
+          }
+          return null;
+        }
+      }
+    }
+
+    const verdict = JSON.parse(jsonStr) as JudgeVerdict;
+    if (!['pass', 'fail', 'partial'].includes(verdict.verdict)) return null;
+    return verdict;
+  } catch {
+    if (sessionTitle) {
+      process.stderr.write(`[runner] Failed to parse judge verdict from session ${sessionTitle}\n`);
+    }
+    return null;
   }
 }
 
@@ -925,7 +992,7 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner, killJobSession };
+export { Runner, createRunner, killJobSession, parseJudgeVerdict };
 export type { RunnerOptions, RunnerState, JudgeVerdict, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing
