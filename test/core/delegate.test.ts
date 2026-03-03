@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { parseDelegationOutput, resolvePhaseForFallback } from '../../src/core/delegate.js';
 import type { Job } from '../../src/core/types.js';
+
+// ── Mock state ─────────────────────────────────────────────────────────────
 
 // Sentinel value: when set, readFileSync throws ENOENT for ROADMAP.md
 const THROW_ENOENT = '__THROW_ENOENT__';
+const THROW_READDIRSYNC = '__THROW_READDIRSYNC__';
 
-// Mock fs.readFileSync for resolvePhaseForFallback tests
+let mockRoadmapContent: string = '';
+let mockRoadmapExists = true;
+let mockPhaseDirs: string[] = [];
+let mockRequirementDirFiles: string[] = [];
+let mockRequirementIsDir = false;
+
+// ── Mock node:fs ───────────────────────────────────────────────────────────
+
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return {
@@ -27,11 +36,47 @@ vi.mock('node:fs', async () => {
       }
       return actual.existsSync(filePath);
     }),
+    readdirSync: vi.fn((dirPath: string) => {
+      if (typeof dirPath === 'string' && dirPath.includes('.planning/phases')) {
+        if (mockPhaseDirs as unknown === THROW_READDIRSYNC) {
+          const err = new Error('ENOENT: no such file or directory');
+          (err as NodeJS.ErrnoException).code = 'ENOENT';
+          throw err;
+        }
+        return mockPhaseDirs;
+      }
+      // Requirement directory reads
+      if (typeof dirPath === 'string' && dirPath.includes('requirements')) {
+        return mockRequirementDirFiles;
+      }
+      return actual.readdirSync(dirPath);
+    }),
+    statSync: vi.fn((filePath: string) => {
+      // For requirement paths in buildMilestonePlan
+      if (typeof filePath === 'string' && filePath.includes('requirements')) {
+        return {
+          isDirectory: () => mockRequirementIsDir,
+          isFile: () => !mockRequirementIsDir,
+        };
+      }
+      return actual.statSync(filePath);
+    }),
   };
 });
 
-let mockRoadmapContent: string = '';
-let mockRoadmapExists = true;
+// ── Imports (after mocks) ──────────────────────────────────────────────────
+
+import {
+  parseDelegationOutput,
+  resolvePhaseForFallback,
+  fallbackPlan,
+  buildNewProjectArgs,
+  buildQuickArgs,
+  getNextPhaseNumber,
+  buildMilestonePlan,
+} from '../../src/core/delegate.js';
+
+// ── Test helpers ───────────────────────────────────────────────────────────
 
 function makeTestJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -57,6 +102,8 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     ...overrides,
   };
 }
+
+// ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('parseDelegationOutput', () => {
   it('parses JSON from markdown code block', () => {
@@ -156,6 +203,42 @@ describe('parseDelegationOutput', () => {
   });
 });
 
+describe('getNextPhaseNumber', () => {
+  beforeEach(() => {
+    mockPhaseDirs = [];
+  });
+
+  it('returns 1 when phases dir is empty', () => {
+    mockPhaseDirs = [];
+    expect(getNextPhaseNumber('/tmp/project/.planning/phases')).toBe(1);
+  });
+
+  it('returns max+1 from existing dirs', () => {
+    mockPhaseDirs = ['01-setup', '02-core', '03-ui'];
+    expect(getNextPhaseNumber('/tmp/project/.planning/phases')).toBe(4);
+  });
+
+  it('handles gaps in phase numbering', () => {
+    mockPhaseDirs = ['01-setup', '05-deploy', '10-testing'];
+    expect(getNextPhaseNumber('/tmp/project/.planning/phases')).toBe(11);
+  });
+
+  it('ignores non-phase entries', () => {
+    mockPhaseDirs = ['README.md', '01-setup', 'notes'];
+    expect(getNextPhaseNumber('/tmp/project/.planning/phases')).toBe(2);
+  });
+
+  it('handles unpadded phase numbers', () => {
+    mockPhaseDirs = ['1-setup', '2-core'];
+    expect(getNextPhaseNumber('/tmp/project/.planning/phases')).toBe(3);
+  });
+
+  it('returns 1 when dir does not exist', () => {
+    mockPhaseDirs = THROW_READDIRSYNC as unknown as string[];
+    expect(getNextPhaseNumber('/nonexistent/.planning/phases')).toBe(1);
+  });
+});
+
 describe('resolvePhaseForFallback', () => {
   beforeEach(() => {
     mockRoadmapContent = `# Roadmap
@@ -167,6 +250,7 @@ describe('resolvePhaseForFallback', () => {
 ### Phase 5: Deployment
 `;
     mockRoadmapExists = true;
+    mockPhaseDirs = ['01-setup', '02-core', '03-ui', '04-testing', '05-deploy'];
   });
 
   it('returns execute-phase when description is numeric', () => {
@@ -187,13 +271,14 @@ describe('resolvePhaseForFallback', () => {
   });
 
   it('builds add→plan→execute lifecycle for non-numeric description', () => {
+    mockPhaseDirs = ['01-setup', '02-core', '03-ui', '04-testing', '05-deploy'];
     const job = makeTestJob({ description: 'Add dark mode support' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     expect(plan.steps).toHaveLength(3);
     expect(plan.steps[0].command).toBe('add-phase');
     expect(plan.steps[0].args).toBe('Add dark mode support');
     expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toBe('6 --auto'); // next after 5
+    expect(plan.steps[1].args).toBe('6 --auto'); // next after 5 dirs
     expect(plan.steps[2].command).toBe('execute-phase');
     expect(plan.steps[2].args).toBe('6');
     expect(plan.reasoning).toContain('phase 6');
@@ -210,12 +295,7 @@ describe('resolvePhaseForFallback', () => {
   });
 
   it('calculates next phase correctly with gaps in phase numbers', () => {
-    mockRoadmapContent = `# Roadmap
-
-### Phase 1: Setup
-### Phase 3: Engine
-### Phase 10: Deploy
-`;
+    mockPhaseDirs = ['01-setup', '03-engine', '10-deploy'];
     const job = makeTestJob({ description: 'New feature' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     // Max phase is 10, next is 11
@@ -223,21 +303,40 @@ describe('resolvePhaseForFallback', () => {
     expect(plan.steps[2].args).toBe('11');
   });
 
-  it('defaults to phase 1 when ROADMAP has no phases', () => {
-    mockRoadmapContent = '# Empty Roadmap\n\nNo phases yet.\n';
+  it('defaults to phase 1 when phases dir is empty', () => {
+    mockPhaseDirs = [];
     const job = makeTestJob({ description: 'Start fresh' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     expect(plan.steps[1].args).toBe('1 --auto');
     expect(plan.steps[2].args).toBe('1');
   });
 
-  it('falls back gracefully when ROADMAP.md is missing', () => {
-    mockRoadmapContent = THROW_ENOENT;
+  it('defaults to phase 1 when phases dir does not exist', () => {
+    mockPhaseDirs = THROW_READDIRSYNC as unknown as string[];
     const job = makeTestJob({ description: 'Something' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // Should still produce a valid plan (fallback to execute-phase 1)
-    expect(plan.steps.length).toBeGreaterThan(0);
-    expect(plan.reasoning).toContain('ROADMAP.md not found');
+    // Should still produce a valid plan with phase 1
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[1].args).toBe('1 --auto');
+    expect(plan.steps[2].args).toBe('1');
+    expect(plan.reasoning).toContain('phase 1');
+  });
+
+  it('uses filesystem scan not ROADMAP heading count', () => {
+    // ROADMAP has 5 phases but filesystem has only 2 dirs
+    mockRoadmapContent = `# Roadmap
+### Phase 1: Setup
+### Phase 2: Core
+### Phase 3: UI
+### Phase 4: Testing
+### Phase 5: Deploy
+`;
+    mockPhaseDirs = ['01-setup', '02-core'];
+    const job = makeTestJob({ description: 'New feature' });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    // Should be phase 3 (from filesystem scan), NOT phase 6 (from ROADMAP headings)
+    expect(plan.steps[1].args).toBe('3 --auto');
+    expect(plan.steps[2].args).toBe('3');
   });
 
   it('never passes requirement titles directly to execute-phase for non-numeric descriptions', () => {
@@ -250,5 +349,208 @@ describe('resolvePhaseForFallback', () => {
     expect(executeStep).toBeDefined();
     // execute-phase args should be numeric
     expect(executeStep!.args).toMatch(/^\d+$/);
+  });
+});
+
+describe('fallbackPlan', () => {
+  beforeEach(() => {
+    mockRoadmapExists = true;
+    mockPhaseDirs = ['01-setup', '02-core'];
+  });
+
+  it('returns quick steps for quick scope with planning', () => {
+    mockRoadmapExists = true;
+    const job = makeTestJob({ scope: 'quick', description: 'Fix navbar' });
+    const plan = fallbackPlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('quick');
+    expect(plan.reasoning).toContain('quick');
+  });
+
+  it('returns new-project + quick for uninitialized quick', () => {
+    mockRoadmapExists = false;
+    const job = makeTestJob({ scope: 'quick', description: 'Fix bug' });
+    const plan = fallbackPlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(2);
+    expect(plan.steps[0].command).toBe('new-project');
+    expect(plan.steps[1].command).toBe('quick');
+  });
+
+  it('returns new-project + plan + execute for uninitialized phase', () => {
+    mockRoadmapExists = false;
+    const job = makeTestJob({ scope: 'phase', description: 'Add auth' });
+    const plan = fallbackPlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('new-project');
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[1].args).toBe('1 --auto');
+    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps[2].args).toBe('1');
+  });
+
+  it('delegates to resolvePhaseForFallback for initialized phase', () => {
+    mockRoadmapExists = true;
+    mockPhaseDirs = ['01-setup', '02-core', '03-ui'];
+    const job = makeTestJob({ scope: 'phase', description: 'Add dark mode' });
+    const plan = fallbackPlan(job, '/tmp/project');
+    // Should produce add→plan→execute lifecycle via resolvePhaseForFallback
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[1].args).toBe('4 --auto');
+    expect(plan.steps[2].command).toBe('execute-phase');
+  });
+
+  it('returns new-project lifecycle for uninitialized milestone', () => {
+    mockRoadmapExists = false;
+    const job = makeTestJob({ scope: 'milestone', description: 'Build CRM' });
+    const plan = fallbackPlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('new-project');
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[2].command).toBe('execute-phase');
+  });
+
+  it('delegates to buildMilestonePlan for initialized milestone', () => {
+    mockRoadmapExists = true;
+    const job = makeTestJob({
+      scope: 'milestone',
+      description: 'Big milestone',
+      requirementPath: null,
+    });
+    const plan = fallbackPlan(job, '/tmp/project');
+    // Without requirementPath, falls back to single add-phase
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.reasoning).toContain('adding as new phase');
+  });
+});
+
+describe('buildNewProjectArgs', () => {
+  it('uses requirementPath with @ prefix when available', () => {
+    const job = makeTestJob({ requirementPath: 'requirements/auth.md' });
+    const result = buildNewProjectArgs(job);
+    expect(result).toBe('@requirements/auth.md --auto');
+  });
+
+  it('uses description when no requirementPath', () => {
+    const job = makeTestJob({ description: 'Build a CRM', requirementPath: null });
+    const result = buildNewProjectArgs(job);
+    expect(result).toBe('Build a CRM --auto');
+  });
+
+  it('appends --auto flag', () => {
+    const job = makeTestJob({ description: 'Test' });
+    const result = buildNewProjectArgs(job);
+    expect(result).toContain('--auto');
+    expect(result).toMatch(/--auto$/);
+  });
+});
+
+describe('buildQuickArgs', () => {
+  it('prefixes with file read instruction when requirementPath exists', () => {
+    const job = makeTestJob({
+      description: 'Fix navbar',
+      requirementPath: 'requirements/navbar-fix.md',
+    });
+    const result = buildQuickArgs(job);
+    expect(result).toContain('Read requirements/navbar-fix.md');
+    expect(result).toContain('for full details');
+    expect(result).toContain('Fix navbar');
+  });
+
+  it('returns description directly when no requirementPath', () => {
+    const job = makeTestJob({ description: 'Fix the bug', requirementPath: null });
+    const result = buildQuickArgs(job);
+    expect(result).toBe('Fix the bug');
+  });
+});
+
+describe('buildMilestonePlan', () => {
+  beforeEach(() => {
+    mockPhaseDirs = ['01-setup', '02-core'];
+    mockRequirementDirFiles = [];
+    mockRequirementIsDir = false;
+  });
+
+  it('creates one phase per .md file in requirement directory', () => {
+    mockRequirementIsDir = true;
+    mockRequirementDirFiles = ['01-auth.md', '02-payments.md', '03-ui.md'];
+    mockPhaseDirs = ['01-setup', '02-core'];
+
+    const job = makeTestJob({
+      scope: 'milestone',
+      requirementPath: '/tmp/requirements/milestone-v2',
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+
+    // 3 files × 3 steps (add + plan + execute) = 9 steps
+    expect(plan.steps).toHaveLength(9);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].args).toContain('01-auth.md');
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[1].args).toBe('3 --auto'); // next after 02-core
+    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps[2].args).toBe('3');
+
+    expect(plan.steps[3].command).toBe('add-phase');
+    expect(plan.steps[3].args).toContain('02-payments.md');
+    expect(plan.steps[4].args).toBe('4 --auto');
+    expect(plan.steps[5].args).toBe('4');
+
+    expect(plan.steps[6].command).toBe('add-phase');
+    expect(plan.steps[6].args).toContain('03-ui.md');
+    expect(plan.steps[7].args).toBe('5 --auto');
+    expect(plan.steps[8].args).toBe('5');
+
+    expect(plan.reasoning).toContain('3 requirement files');
+  });
+
+  it('falls back to single add-phase when requirementPath is a file', () => {
+    mockRequirementIsDir = false;
+    const job = makeTestJob({
+      scope: 'milestone',
+      requirementPath: '/tmp/requirements/single-req.md',
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].args).toBe('@/tmp/requirements/single-req.md');
+  });
+
+  it('falls back to single add-phase when no .md files in dir', () => {
+    mockRequirementIsDir = true;
+    mockRequirementDirFiles = ['README.txt', 'notes.json'];
+
+    const job = makeTestJob({
+      scope: 'milestone',
+      requirementPath: '/tmp/requirements/empty-dir',
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('add-phase');
+  });
+
+  it('falls back to single add-phase when no requirementPath', () => {
+    const job = makeTestJob({
+      scope: 'milestone',
+      description: 'Build everything',
+      requirementPath: null,
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].args).toBe('Build everything');
+  });
+
+  it('uses description when no requirementPath in single add-phase fallback', () => {
+    const job = makeTestJob({
+      scope: 'milestone',
+      description: 'Custom milestone description',
+      requirementPath: null,
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+    expect(plan.steps[0].args).toBe('Custom milestone description');
+    expect(plan.reasoning).toContain('adding as new phase');
   });
 });
