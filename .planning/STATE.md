@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 020: Requirements observability and job config visibility
+Last activity: 2026-03-03 - Completed quick task 021: Phase redesign — single-session orchestrator + judge evaluation
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -84,6 +84,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 018 | Fix premature completion detection — isSessionDone(), runner polling, evaluateStepResult fail-safe | 2026-03-03 | c1a2fe4 | [018-requirements-fix-premature-completion-de](./quick/018-requirements-fix-premature-completion-de/) |
 | 019 | Harden add-phase reliability — GSD_INSTRUCTION_BLOCKLIST, matchesBlocklist(), verifyStepArtifacts duplicate/blocklist checks, hardened gsd-add-phase.md | 2026-03-03 | b0c65dc | [019-harden-add-phase-reliability-problem-add](./quick/019-harden-add-phase-reliability-problem-add/) |
 | 020 | Requirements observability and job config visibility — pilot log header with model/attempts, per-step tokens, new pilot info <id> command | 2026-03-03 | 82bcdda | [020-requirements-observability-and-job-config](./quick/020-requirements-observability-and-job-config/) |
+| 021 | Phase redesign — single-session orchestrator + judge evaluation replacing multi-step delegation → regex evaluation | 2026-03-03 | a301bed | [021-phase-redesign-single-session-orchestrat](./quick/021-phase-redesign-single-session-orchestrat/) |
 
 ## Accumulated Context
 
@@ -320,9 +321,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-020 | Cost estimate uses Sonnet pricing ($3/$15 per 1M), local only | No external API; rough estimate sufficient for operator awareness |
 | quick-020 | Log header config line uses dim() for metadata subordination | Primary identity (project/scope/desc/id) stays visually dominant |
 | quick-020 | info command logs per-step tokens via sessionTitle → findSessionByTitle | Consistent with TUI token lookup pattern |
+| quick-021 | Judge failure = benefit of doubt (markCompleted) | Prevents judge bugs from blocking all phase work |
+| quick-021 | Shutdown-interrupted jobs reset to pending via resetToPending | Jobs retried on next runner start instead of being lost |
+| quick-021 | pilot- prefix commands handled alongside gsd- in spawnAndWait | Avoids double-prefixing pilot-judge as gsd-pilot-judge |
+| quick-021 | Execa mock must be re-initialized per test suite | vi.clearAllMocks only clears call counts, not mockResolvedValue overrides |
 
 ## Session Continuity
 
-Last session: 2026-03-03T19:42:00Z
-Stopped at: Completed quick-020 (requirements observability and job config visibility)
+Last session: 2026-03-03T21:18:00Z
+Stopped at: Completed quick-021 (phase redesign — single-session orchestrator + judge evaluation)
 Resume file: None
