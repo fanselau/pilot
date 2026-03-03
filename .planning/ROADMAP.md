@@ -386,7 +386,7 @@ Read requirements/tui-selection-colors-and-polish.md for full spec.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 24-01-PLAN.md — Core DB: getChildSessions() + task part formatting in core/opencode-db.ts
+- [x] 24-01-PLAN.md — Core DB: getChildSessions() + task part formatting in core/opencode-db.ts
 - [ ] 24-02-PLAN.md — TUI: extend SessionSection + fetchJobParts child traversal + detail.tsx nested rendering
 - [ ] 24-03-PLAN.md — CLI: pilot log child expansion, --flat flag, --task N flag
 

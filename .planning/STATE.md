@@ -5,20 +5,19 @@
 
 ## Current Position
 
-Phase: 22 of 22 (Delegate Phase Lifecycle Hardening)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-**Next Phase:** 24 — Task/Subagent Visibility in TUI and Logs
-Last activity: 2026-03-03 - Completed 22-02-PLAN.md (runner inter-step artifact verification + dynamic arg patching)
+Phase: 24 of 24 (Task/Subagent Visibility in TUI and Logs)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-03 - Completed 24-01-PLAN.md (getChildSessions + task part formatting)
 
-Progress: ████████████████████████████░░ 96% (69/72 plans)
+Progress: ████████████████████████████░░ 91% (70/77 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 22 complete — Delegate Phase Lifecycle Hardening (2/2 plans complete)
+**Current focus:** Phase 24 in progress — Task/Subagent Visibility in TUI and Logs (1/3 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -273,9 +272,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 22-02 | patchStepArgs mutates plan.steps in place for remaining steps only | Simpler than cloning; patching is always forward-only |
 | 22-02 | Non-phase commands skip artifact verification entirely | quick/new-project/debug have no phase directory expectations |
 | 22-02 | restoreDefaultReaddirSync helper pattern for test mock state | vi.clearAllMocks doesn't restore mockImplementation overrides |
+| 24-01 | getChildSessions returns empty array on DB unavailable | Consistent graceful degradation pattern with other query functions |
+| 24-01 | Task tool format: ▶ task: {subagent_type} — "{description}" | Matches requirements spec; human-readable subagent display |
+| 24-01 | Fallback to 'subagent' when subagent_type missing | Safe default for unknown task types |
 
 ## Session Continuity
 
-Last session: 2026-03-03T11:13:35Z
-Stopped at: Completed 22-02-PLAN.md
+Last session: 2026-03-03T12:47:19Z
+Stopped at: Completed 24-01-PLAN.md
 Resume file: None
