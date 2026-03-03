@@ -1,17 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 26
+## Current Phase: 27
 
 ## Current Position
 
-Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
-Plan: 1 of 2 in current phase
-Status: In progress
-Next: 26-02-PLAN.md
-Last activity: 2026-03-03 - Completed 26-01-PLAN.md (DB layer: claimNextLaunchable, forceQuitJob, getRunningJobsByProject)
+Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-03-03 - Completed 27-01-PLAN.md (structured detail header + completed panel fix)
 
-Progress: █████████████████████████████░ 95% (74/77 plans)
+Progress: ██████████████████████████████ 100% (75/75 plans)
 
 ## Project Reference
 
@@ -295,9 +294,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 26-01 | Re-fetch row after UPDATE inside transaction | Returns accurate started_at/attempts values post-mutation |
 | 26-01 | getRunningJobsByProject is thin alias for getRunningJobsForProject | Same logic, cleaner name for runner dispatch path |
 | 26-01 | forceQuitJob embeds source in verdict_reason string | Audit trail without schema change |
+| 27-01 | Selection always wins over flash in rowBg() | Deterministic cursor visibility in completed panel |
+| 27-01 | countDescendants uses loaded sections signal | Avoids extra DB calls — derived from already-loaded memory |
+| 27-01 | Dark tint flash (#0d2b0d / #2b0d0d) not harsh inverse | Subtle enough to notice without disrupting readability |
+| 27-01 | Token fetch in completed panel on job change (no timer) | Completed job data is static — one fetch when jobs list changes |
 
 ## Session Continuity
 
-Last session: 2026-03-03T17:16:17Z
-Stopped at: Completed 26-01-PLAN.md
+Last session: 2026-03-03T17:44:36Z
+Stopped at: Completed 27-01-PLAN.md (Phase 27 complete — TUI detail header + completed panel fix)
 Resume file: None
