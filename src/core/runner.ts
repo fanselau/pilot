@@ -235,11 +235,16 @@ class Runner {
 
         // Inter-step artifact verification (small delay for git commits to flush)
         await this.sleep(2000);
-        let verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
-        // Retry once after 3s if failed — git commits may still be flushing
-        if (!verification.ok) {
-          await this.sleep(3000);
+        let verification: ArtifactVerification;
+        if (step.command === 'plan-phase') {
+          verification = await this.verifyWithGraceWindow(projectDir, step, prevPhaseDirs, title);
+        } else {
           verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+          // Retry once after 3s if failed — git commits may still be flushing
+          if (!verification.ok) {
+            await this.sleep(3000);
+            verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+          }
         }
         process.stderr.write(`[runner] Artifact check for ${step.command}: ${verification.ok ? 'passed' : verification.error}\n`);
         if (!verification.ok) {
@@ -450,6 +455,84 @@ class Runner {
   stop(): void {
     this.shuttingDown = true;
     this.running = false;
+  }
+
+  /**
+   * Grace window artifact verification for plan-phase steps.
+   *
+   * Retries artifact checks for up to GRACE_WINDOW_MS, polling every POLL_INTERVAL_MS.
+   * Session liveness is checked each poll cycle:
+   *   - If session is still active, keep waiting (artifacts may still be materializing).
+   *   - If session is dead and artifacts still absent, fail immediately (no point waiting).
+   * Exits early (success) as soon as artifacts appear.
+   */
+  private async verifyWithGraceWindow(
+    projectDir: string,
+    step: DelegationStep,
+    prevPhaseDirs: string[],
+    sessionTitle: string,
+  ): Promise<ArtifactVerification> {
+    const GRACE_WINDOW_MS = 120_000; // 2 minutes
+    const POLL_INTERVAL_MS = 3_000;  // 3 seconds
+
+    // Initial check (the 2s sleep already happened in launch() before calling this)
+    let verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+    if (verification.ok) {
+      return verification;
+    }
+
+    // Enter grace window
+    process.stderr.write(
+      `[runner] Artifact check failed for ${step.command}, entering grace window (${GRACE_WINDOW_MS / 1000}s)...\n`,
+    );
+
+    const graceStart = Date.now();
+    while (Date.now() - graceStart < GRACE_WINDOW_MS && !this.shuttingDown) {
+      await this.sleep(POLL_INTERVAL_MS);
+      const elapsed = Date.now() - graceStart;
+
+      // Check session liveness
+      const sessionId = findSessionByTitle(sessionTitle);
+      let sessionAlive = false;
+      let lastMsgAgeMs: number | null = null;
+
+      if (sessionId) {
+        const active = isSessionActive(sessionId);
+        const lastMsg = getLastMessage(sessionId);
+        lastMsgAgeMs = lastMsg ? Date.now() - lastMsg.createdAt : null;
+
+        // Session is alive if: still active, OR last message was recent (within 60s)
+        sessionAlive = active || (lastMsgAgeMs !== null && lastMsgAgeMs < 60_000);
+      }
+
+      // Retry artifact check
+      verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+
+      if (verification.ok) {
+        process.stderr.write(
+          `[runner] Artifacts appeared after ${elapsed}ms grace window\n`,
+        );
+        return verification;
+      }
+
+      if (!sessionAlive) {
+        const ageInfo = lastMsgAgeMs !== null ? `${lastMsgAgeMs}ms ago` : 'unknown';
+        process.stderr.write(
+          `[runner] Artifacts still missing and session inactive (last update: ${ageInfo}). Failing.\n`,
+        );
+        return verification;
+      }
+
+      process.stderr.write(
+        `[runner] Artifacts not yet present, session still active. Retrying... (${elapsed}ms / ${GRACE_WINDOW_MS}ms)\n`,
+      );
+    }
+
+    // Grace window exhausted
+    process.stderr.write(
+      `[runner] Grace window exhausted (${GRACE_WINDOW_MS}ms). Final artifact check failed: ${verification.error}\n`,
+    );
+    return verification;
   }
 
   private sleep(ms: number): Promise<void> {
