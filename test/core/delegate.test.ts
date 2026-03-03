@@ -102,6 +102,7 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     startedAt: null,
     completedAt: null,
     error: null,
+    resumeHint: null,
     attempts: 0,
     maxAttempts: 3,
     delegationPlan: null,
@@ -456,6 +457,33 @@ describe('buildPhaseArgs', () => {
     const job = makeTestJob({ description: '3', requirementPath: 'requirements/auth.md' });
     const result = buildPhaseArgs(job);
     expect(result).toBe('@requirements/auth.md --auto');
+  });
+
+  // ── resumeHint tests ──────────────────────────────────────────────────
+
+  it('does NOT append --resume when resumeHint is null', () => {
+    const job = makeTestJob({ description: 'Add dark mode', requirementPath: null, resumeHint: null });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('Add dark mode --auto');
+    expect(result).not.toContain('--resume');
+  });
+
+  it('appends --resume when resumeHint is set', () => {
+    const job = makeTestJob({ description: 'Add dark mode', requirementPath: null, resumeHint: 'Resume from plan 04' });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('Add dark mode --auto --resume');
+  });
+
+  it('appends --resume with requirementPath when resumeHint is set', () => {
+    const job = makeTestJob({ requirementPath: 'requirements/auth.md', resumeHint: 'Fix type errors' });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('@requirements/auth.md --auto --resume');
+  });
+
+  it('appends --resume with --phase N when resumeHint is set on bare number description', () => {
+    const job = makeTestJob({ description: '5', requirementPath: null, resumeHint: 'Continue phase 5' });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('--phase 5 --auto --resume');
   });
 });
 
