@@ -1,13 +1,14 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 27
+## Current Phase: 25
 
 ## Current Position
 
-Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
-Plan: 1 of 1 in current phase
-Status: Phase complete
+Phase: 25 of 27 (Pilot Learnings Consolidation + Reliability Guardrails)
+Plan: 1 of 4 in current phase (25-01 complete, 25-02 through 25-04 remaining)
+Status: In progress
+**Next Phase:** 28 — Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
 Last activity: 2026-03-03 - Completed 27-01-PLAN.md (structured detail header + completed panel fix)
 
 Progress: ██████████████████████████████ 100% (75/75 plans)
@@ -105,6 +106,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 25 added: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
 - Phase 26 added: Runner Immediate Dispatch + Force Quit Controls
 - Phase 27 added: TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
+- Phase 28 added: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
 
 ## Decisions
 

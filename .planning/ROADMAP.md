@@ -450,3 +450,5 @@ Wave structure:
 
 **Details:**
 Read requirements/tui-detail-header-and-completions-polish.md for full spec.
+
+<!-- Phase 28 removed: duplicate of Phase 25 -->
