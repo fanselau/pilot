@@ -75,6 +75,12 @@ function extractRequirementTitle(requirementPath: string): string | null {
  * Tries delegation AI once, then falls back to deterministic scope-based mapping.
  */
 async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
+  // Bare-number descriptions (e.g. "25") are explicit phase identifiers —
+  // skip delegation AI entirely, go straight to deterministic execute-phase.
+  if (job.scope === 'phase' && /^\d+$/.test(job.description.trim())) {
+    return fallbackPlan(job, projectDir);
+  }
+
   const MAX_RETRIES = 1;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
