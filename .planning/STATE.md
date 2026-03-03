@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed 27-02-PLAN.md (TUI test suite)
+Last activity: 2026-03-03 - Completed quick task 019: Harden add-phase reliability
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
