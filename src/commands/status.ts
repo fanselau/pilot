@@ -9,9 +9,10 @@ import { getQueue, getRecent } from '../core/db.js';
 import {
   getLastMessage,
   findSessionByTitle,
+  isSessionActive,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
-import { bold, dim, green, red, blue } from '../util/colors.js';
+import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
 import type { Job } from '../core/types.js';
 
@@ -69,6 +70,37 @@ function getSessionActivity(job: Job): string | null {
   }
 }
 
+/**
+ * Status integrity check: determine if a 'running' job has no backing opencode session.
+ *
+ * A job is stale when its most recent session title maps to a session in opencode DB
+ * that is no longer active (isSessionActive returns false).
+ *
+ * Returns false (not stale) when:
+ * - No session titles recorded yet (job may just be starting)
+ * - Most recent session not yet in opencode DB (session may still be initialising)
+ * - On any parse/read error (err on side of caution)
+ */
+function isJobStale(job: Job): boolean {
+  if (!job.sessionTitles) return false; // No titles yet — job may be starting
+
+  try {
+    const titles = JSON.parse(job.sessionTitles) as string[];
+    if (titles.length === 0) return false;
+
+    // Check ONLY the most recent session title (last element)
+    const lastTitle = titles[titles.length - 1];
+    const sessionId = findSessionByTitle(lastTitle);
+    if (!sessionId) return false; // Not in opencode DB yet — might be initialising
+
+    // Session exists in opencode DB — check if it's still active
+    // isSessionActive returns false when the session has ended
+    return !isSessionActive(sessionId);
+  } catch {
+    return false; // Err on side of caution — don't show false stale warnings
+  }
+}
+
 async function statusCommand(opts: StatusOptions): Promise<void> {
   const queue = getQueue();
   const recent = getRecent(10);
@@ -76,11 +108,16 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   const active = queue.filter((j) => j.status === 'running');
   const pending = queue.filter((j) => j.status === 'pending');
 
+  // Status integrity: separate active jobs into healthy (session alive) and stale (session gone)
+  const healthyActive = active.filter((j) => !isJobStale(j));
+  const staleActive = active.filter((j) => isJobStale(j));
+
   if (isJsonMode()) {
     outputJson({
       version: '2.0.0',
       daemon: { active: false }, // TODO: detect daemon via PID/service
-      active,
+      active: healthyActive,
+      stale: staleActive,
       queue: pending,
       recent,
     });
@@ -92,10 +129,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   outputHuman(`  ${bold('pilot')} v2`);
   outputHuman('');
 
-  // Active section
-  if (active.length > 0) {
-    outputHuman(`  ${bold('Active')} (${active.length})`);
-    for (const job of active) {
+  // Active section (healthy — session is alive)
+  if (healthyActive.length > 0) {
+    outputHuman(`  ${bold('Active')} (${healthyActive.length})`);
+    for (const job of healthyActive) {
       const elapsed = getJobElapsed(job);
       const desc = sanitizeDesc(job.description);
       outputHuman(
@@ -107,6 +144,19 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       if (activity) {
         outputHuman(`    ${dim('└ ' + activity)}`);
       }
+    }
+    outputHuman('');
+  }
+
+  // Stale active section (DB says running, session is gone)
+  if (staleActive.length > 0) {
+    outputHuman(`  ${bold('Stale')} (${staleActive.length}) — session ended but job not closed`);
+    for (const job of staleActive) {
+      const elapsed = getJobElapsed(job);
+      const desc = sanitizeDesc(job.description);
+      outputHuman(
+        `  ${yellow('⚠')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim('[stale — will be reconciled]')}`,
+      );
     }
     outputHuman('');
   }
@@ -143,7 +193,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     outputHuman('');
   }
 
-  if (active.length === 0 && pending.length === 0 && recent.length === 0) {
+  if (healthyActive.length === 0 && staleActive.length === 0 && pending.length === 0 && recent.length === 0) {
     outputHuman(`  ${dim('No jobs. Run: pilot add <project> <requirement>')}`);
     outputHuman('');
   }
