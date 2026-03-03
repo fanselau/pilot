@@ -98,6 +98,15 @@ program
   });
 
 program
+  .command('kill <id>')
+  .description('Force-quit a running job (kills opencode session + marks failed)')
+  .option('--force', 'Required flag to confirm termination')
+  .action(async (id: string, opts: Record<string, unknown>) => {
+    const { killCommand } = await import('./commands/kill.js');
+    await killCommand(id, opts as { force?: boolean });
+  });
+
+program
   .command('retry <id>')
   .description('Retry a failed job')
   .action(async (id: string) => {
