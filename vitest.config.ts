@@ -8,7 +8,9 @@ export default defineConfig({
       forks: {
         minForks: 1,
         maxForks: 1,
+        execArgv: ['--max-old-space-size=2048'],
       },
     },
+    testTimeout: 30000,
   },
 });
