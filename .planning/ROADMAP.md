@@ -378,3 +378,17 @@ Plans:
 
 **Details:**
 Read requirements/tui-selection-colors-and-polish.md for full spec.
+
+### Phase 24: Task/Subagent Visibility in TUI and Logs
+
+**Goal:** Make task subagent sessions visible in both `pilot log` and the TUI detail view — users can see what each spawned subagent actually did, inline and indented, without leaving the current context.
+**Depends on:** Phase 23
+**Plans:** 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — Core DB: getChildSessions() + task part formatting in core/opencode-db.ts
+- [ ] 24-02-PLAN.md — TUI: extend SessionSection + fetchJobParts child traversal + detail.tsx nested rendering
+- [ ] 24-03-PLAN.md — CLI: pilot log child expansion, --flat flag, --task N flag
+
+**Details:**
+Read requirements/task-subagent-visibility.md for full spec.
