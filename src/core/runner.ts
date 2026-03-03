@@ -38,7 +38,7 @@ import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-
 import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { dim } from '../util/colors.js';
-import type { Job, DelegationPlan } from './types.js';
+import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +199,8 @@ class Runner {
         // Record step as running before spawn
         currentStepRowId = recordStep(job.id, i, step.command, step.args, title);
 
+        // Snapshot phase dirs before add-phase for diff detection
+        const prevPhaseDirs = step.command === 'add-phase' ? scanPhaseDirs(projectDir) : [];
 
         try {
           await this.spawnAndWait(projectDir, step.command, step.args, title);
@@ -229,6 +231,27 @@ class Runner {
           completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         }
         currentStepRowId = null;
+
+        // Inter-step artifact verification
+        const verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
+        process.stderr.write(`[runner] Artifact check for ${step.command}: ${verification.ok ? 'passed' : verification.error}\n`);
+        if (!verification.ok) {
+          throw new Error(`Step "${step.command} ${step.args}" artifact check failed: ${verification.error}`);
+        }
+
+        // Dynamic arg patching after add-phase
+        if (step.command === 'add-phase' && verification.newPhaseNumber !== undefined) {
+          if (i + 1 < plan.steps.length) {
+            const nextArgs = plan.steps[i + 1].args;
+            const predictedMatch = nextArgs.match(/^(\d+)/);
+            if (predictedMatch) {
+              const predicted = parseInt(predictedMatch[1], 10);
+              if (predicted !== verification.newPhaseNumber) {
+                patchStepArgs(plan.steps, i + 1, predicted, verification.newPhaseNumber);
+              }
+            }
+          }
+        }
 
         advanceStep(job.id);
       }
@@ -641,6 +664,134 @@ async function validateProjectConfig(cwd: string): Promise<void> {
   }
 }
 
+// ── Inter-step verification helpers ────────────────────────────────────────
+
+/**
+ * Scan .planning/phases/ directory and return sorted list of phase directory names.
+ * Returns empty array if directory doesn't exist.
+ */
+function scanPhaseDirs(projectDir: string): string[] {
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+  try {
+    const entries = readdirSync(phasesDir);
+    return entries.filter((e: string) => /^\d+/.test(e)).sort();
+  } catch {
+    return [];
+  }
+}
+
+interface ArtifactVerification {
+  ok: boolean;
+  error?: string;
+  newPhaseNumber?: number;
+}
+
+/**
+ * Verify expected artifacts exist after a phase lifecycle step completes.
+ *
+ * - add-phase: checks a new phase directory was created, returns its number
+ * - plan-phase: checks at least one *-PLAN.md exists in the phase directory
+ * - execute-phase: checks at least one *-SUMMARY.md exists in the phase directory
+ * - all others: returns ok:true (skip verification)
+ */
+function verifyStepArtifacts(
+  projectDir: string,
+  step: DelegationStep,
+  prevPhaseDirs: string[],
+): ArtifactVerification {
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+
+  if (step.command === 'add-phase') {
+    const currentDirs = scanPhaseDirs(projectDir);
+    const newDirs = currentDirs.filter(d => !prevPhaseDirs.includes(d));
+    if (newDirs.length === 0) {
+      return { ok: false, error: 'add-phase did not create a new phase directory' };
+    }
+    const match = newDirs[0].match(/^(\d+)/);
+    const newPhaseNumber = match ? parseInt(match[1], 10) : undefined;
+    return { ok: true, newPhaseNumber };
+  }
+
+  if (step.command === 'plan-phase') {
+    const phaseNum = step.args.match(/^(\d+)/);
+    if (!phaseNum) return { ok: true }; // Can't determine phase number, skip
+    const padded = phaseNum[1].padStart(2, '0');
+    const phaseDir = findPhaseDir(phasesDir, padded);
+    if (!phaseDir) {
+      return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files (phase directory not found)` };
+    }
+    try {
+      const files = readdirSync(path.join(phasesDir, phaseDir));
+      const planFiles = files.filter((f: string) => /-PLAN\.md$/.test(f));
+      if (planFiles.length === 0) {
+        return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files` };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files (cannot read phase directory)` };
+    }
+  }
+
+  if (step.command === 'execute-phase') {
+    const phaseNum = step.args.match(/^(\d+)/);
+    if (!phaseNum) return { ok: true };
+    const padded = phaseNum[1].padStart(2, '0');
+    const phaseDir = findPhaseDir(phasesDir, padded);
+    if (!phaseDir) {
+      return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files (phase directory not found)` };
+    }
+    try {
+      const files = readdirSync(path.join(phasesDir, phaseDir));
+      const summaryFiles = files.filter((f: string) => /-SUMMARY\.md$/.test(f));
+      if (summaryFiles.length === 0) {
+        return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files` };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files (cannot read phase directory)` };
+    }
+  }
+
+  // All other commands: skip verification
+  return { ok: true };
+}
+
+/**
+ * Find a phase directory matching the padded phase number prefix.
+ * E.g. padded="03" matches "03-ui", "03-core", etc.
+ */
+function findPhaseDir(phasesDir: string, padded: string): string | null {
+  try {
+    const entries = readdirSync(phasesDir);
+    return entries.find((e: string) => e.startsWith(`${padded}-`)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mutate remaining step args when actual phase number differs from predicted.
+ * Only patches plan-phase, execute-phase, and verify-phase commands.
+ */
+function patchStepArgs(
+  steps: DelegationStep[],
+  fromIndex: number,
+  predictedPhase: number,
+  actualPhase: number,
+): void {
+  for (let j = fromIndex; j < steps.length; j++) {
+    const s = steps[j];
+    if (s.command === 'plan-phase' || s.command === 'execute-phase' || s.command === 'verify-phase') {
+      const argsMatch = s.args.match(/^(\d+)(.*)/);
+      if (argsMatch && parseInt(argsMatch[1], 10) === predictedPhase) {
+        const oldArgs = s.args;
+        s.args = `${actualPhase}${argsMatch[2]}`;
+        process.stderr.write(`[runner] Patched ${s.command} args: ${oldArgs} → ${s.args}\n`);
+      }
+    }
+  }
+}
+
 // ── Factory ────────────────────────────────────────────────────────────────
 
 function createRunner(options?: Partial<RunnerOptions>): Runner {
@@ -660,6 +811,9 @@ export {
   validateProjectConfig,
   getAvailableMemoryMb,
 };
+
+// Export inter-step verification helpers for direct testing
+export { scanPhaseDirs, verifyStepArtifacts, patchStepArgs };
 
 /**
  * Reset the module-level spawn rate limiter.
