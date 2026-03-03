@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 019: Harden add-phase reliability
+Last activity: 2026-03-03 - Completed quick task 020: Requirements observability and job config visibility
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -83,6 +83,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 016 | Phase & milestone reliability — filesystem phase resolution, success pattern gating | 2026-03-03 | 9424b3d | [016-phase-milestone-reliability-make-structu](./quick/016-phase-milestone-reliability-make-structu/) |
 | 018 | Fix premature completion detection — isSessionDone(), runner polling, evaluateStepResult fail-safe | 2026-03-03 | c1a2fe4 | [018-requirements-fix-premature-completion-de](./quick/018-requirements-fix-premature-completion-de/) |
 | 019 | Harden add-phase reliability — GSD_INSTRUCTION_BLOCKLIST, matchesBlocklist(), verifyStepArtifacts duplicate/blocklist checks, hardened gsd-add-phase.md | 2026-03-03 | b0c65dc | [019-harden-add-phase-reliability-problem-add](./quick/019-harden-add-phase-reliability-problem-add/) |
+| 020 | Requirements observability and job config visibility — pilot log header with model/attempts, per-step tokens, new pilot info <id> command | 2026-03-03 | 82bcdda | [020-requirements-observability-and-job-config](./quick/020-requirements-observability-and-job-config/) |
 
 ## Accumulated Context
 
@@ -315,9 +316,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-019 | Duplicate check slug-to-words via hyphen replacement | Consistent slug ↔ title normalization without extra library |
 | quick-019 | Title similarity warning-only (non-failing) | GSD may legitimately shorten/clean phase titles |
 | quick-019 | runner.test.ts mock includes inline matchesBlocklist impl | Avoids auto-mocking stripping the function; tests exercise real logic |
+| quick-020 | Token formatting: >=1M → M, >=1k → k, else raw | Compact display for wide range of token counts |
+| quick-020 | Cost estimate uses Sonnet pricing ($3/$15 per 1M), local only | No external API; rough estimate sufficient for operator awareness |
+| quick-020 | Log header config line uses dim() for metadata subordination | Primary identity (project/scope/desc/id) stays visually dominant |
+| quick-020 | info command logs per-step tokens via sessionTitle → findSessionByTitle | Consistent with TUI token lookup pattern |
 
 ## Session Continuity
 
-Last session: 2026-03-03T19:29:00Z
-Stopped at: Completed quick-019 (harden add-phase reliability — blocklist + duplicate detection)
+Last session: 2026-03-03T19:42:00Z
+Stopped at: Completed quick-020 (requirements observability and job config visibility)
 Resume file: None
