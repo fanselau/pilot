@@ -78,6 +78,14 @@ program
   });
 
 program
+  .command('info <id>')
+  .description('Full job metadata, config, tokens, and cost')
+  .action(async (id: string) => {
+    const { infoCommand } = await import('./commands/info.js');
+    await infoCommand(id, program.opts() as { json?: boolean });
+  });
+
+program
   .command('queue')
   .alias('q')
   .description('Show job queue')
