@@ -123,17 +123,16 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
 
     case 'phase':
       if (!hasPlanning) {
-        // Phase on uninitialized project — full milestone lifecycle
+        // Phase on uninitialized project — init then single-session phase
         return {
           steps: [
             { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'plan-phase', args: '1 --auto' },
-            { command: 'execute-phase', args: '1' },
+            { command: 'phase', args: buildPhaseArgs(job) },
           ],
-          reasoning: 'Fallback: project not initialized, running full lifecycle',
+          reasoning: 'Fallback: project not initialized, running new-project then single-session phase',
         };
       }
-      // Project exists — resolve phase identifier safely (R1)
+      // Project exists — single-session phase orchestration
       return resolvePhaseForFallback(projectDir, job);
 
     case 'milestone':
@@ -141,10 +140,9 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
         return {
           steps: [
             { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'plan-phase', args: '1 --auto' },
-            { command: 'execute-phase', args: '1' },
+            { command: 'phase', args: buildPhaseArgs(job) },
           ],
-          reasoning: 'Fallback: full milestone lifecycle: init → plan → execute',
+          reasoning: 'Fallback: project not initialized, running new-project then single-session phase',
         };
       }
       // Milestone on initialized project: if requirementPath is a directory,
@@ -154,50 +152,33 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
 }
 
 /**
+ * Build args for gsd-phase single-session orchestrator.
+ *
+ * Routes based on job state:
+ * - requirementPath exists: `@path --auto`
+ * - description is a bare number: `--phase N --auto`
+ * - otherwise: `description --auto`
+ */
+function buildPhaseArgs(job: Job): string {
+  if (job.requirementPath) {
+    return `@${job.requirementPath} --auto`;
+  }
+  if (/^\d+$/.test(job.description.trim())) {
+    return `--phase ${job.description.trim()} --auto`;
+  }
+  return `${job.description} --auto`;
+}
+
+/**
  * R1: Resolve phase identifier for fallback when scope='phase' and project has ROADMAP.md.
  *
- * If job.description is a numeric phase identifier, execute it directly.
- * Otherwise, build a full lifecycle: add-phase → plan-phase → execute-phase.
- * Never blindly pass requirement titles to execute-phase.
- *
- * Phase number resolution uses filesystem scan of .planning/phases/ dirs
- * (same logic GSD uses) instead of counting ROADMAP headings which diverge.
+ * Returns a single `{ command: 'phase' }` step that delegates the full lifecycle
+ * (add→plan→execute) to gsd-phase single-session orchestrator.
  */
-function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
-  // If description is already a phase number, just execute it
-  if (/^\d+$/.test(job.description.trim())) {
-    return {
-      steps: [{ command: 'execute-phase', args: job.description.trim() }],
-      reasoning: 'Fallback: description is numeric phase identifier',
-    };
-  }
-
-  // Scan .planning/phases/ for existing phase directories (same logic GSD uses)
-  const phasesDir = path.join(projectDir, '.planning', 'phases');
-  const nextPhase = getNextPhaseNumber(phasesDir);
-
-  // Build full lifecycle: add → plan → execute
-  // add-phase gets a human-readable title (NOT file path) to avoid ugly slugified dir names
-  // plan-phase gets @requirementPath for GSD context reference
-  let addArgs: string;
-  let planArgs = `${nextPhase} --auto`;
-
-  if (job.requirementPath) {
-    const title = extractRequirementTitle(job.requirementPath);
-    addArgs = title ?? job.description;
-    // Include @path in plan-phase args so GSD can read the requirement file for context
-    planArgs = `${nextPhase} @${job.requirementPath} --auto`;
-  } else {
-    addArgs = job.description;
-  }
-
+function resolvePhaseForFallback(_projectDir: string, job: Job): DelegationPlan {
   return {
-    steps: [
-      { command: 'add-phase', args: addArgs },
-      { command: 'plan-phase', args: planArgs },
-      { command: 'execute-phase', args: `${nextPhase}` },
-    ],
-    reasoning: `Fallback: "${job.description}" is not a phase number, creating as phase ${nextPhase} (from phases/ dir scan)`,
+    steps: [{ command: 'phase', args: buildPhaseArgs(job) }],
+    reasoning: 'Single-session phase orchestration via gsd-phase',
   };
 }
 
@@ -238,25 +219,16 @@ function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
           .sort();
 
         if (files.length > 0) {
-          const phasesDir = path.join(projectDir, '.planning', 'phases');
-          let nextPhase = getNextPhaseNumber(phasesDir);
           const steps: DelegationStep[] = [];
 
           for (const file of files) {
             const filePath = path.join(job.requirementPath, file);
-            // add-phase gets a human-readable title (NOT file path)
-            const title = extractRequirementTitle(filePath);
-            const addArgs = title ?? file.replace(/\.md$/, '').replace(/^\d+-/, '');
-            steps.push({ command: 'add-phase', args: addArgs });
-            // plan-phase gets @filePath for GSD context reference
-            steps.push({ command: 'plan-phase', args: `${nextPhase} @${filePath} --auto` });
-            steps.push({ command: 'execute-phase', args: `${nextPhase}` });
-            nextPhase++;
+            steps.push({ command: 'phase', args: `@${filePath} --auto` });
           }
 
           return {
             steps,
-            reasoning: `Fallback: milestone with ${files.length} requirement files, creating one phase per file`,
+            reasoning: `Fallback: milestone with ${files.length} requirement files, one phase command per file`,
           };
         }
       }
@@ -432,6 +404,7 @@ export {
   fallbackPlan,
   buildNewProjectArgs,
   buildQuickArgs,
+  buildPhaseArgs,
   getNextPhaseNumber,
   buildMilestonePlan,
   extractRequirementTitle,
