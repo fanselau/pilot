@@ -1,15 +1,14 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 25
+## Current Phase: 26
 
 ## Current Position
 
-Phase: 25 of 27 (Pilot Learnings Consolidation + Reliability Guardrails)
-Plan: 1 of 4 in current phase (25-01 complete, 25-02 through 25-04 remaining)
-Status: In progress
-**Next Phase:** 28 — Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
-Last activity: 2026-03-03 - Completed 27-01-PLAN.md (structured detail header + completed panel fix)
+Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
+Plan: 2 of 2 in current phase (26-01 complete, 26-02 complete)
+Status: Phase complete
+Last activity: 2026-03-03 - Completed 26-02-PLAN.md (immediate dispatch drain loop + killJobSession)
 
 Progress: ██████████████████████████████ 100% (75/75 plans)
 
@@ -106,7 +105,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 25 added: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
 - Phase 26 added: Runner Immediate Dispatch + Force Quit Controls
 - Phase 27 added: TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
-- Phase 28 added: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
+- Phase 28 added: Runner Immediate Dispatch + Force Quit Controls
 
 ## Decisions
 
@@ -300,9 +299,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 27-01 | countDescendants uses loaded sections signal | Avoids extra DB calls — derived from already-loaded memory |
 | 27-01 | Dark tint flash (#0d2b0d / #2b0d0d) not harsh inverse | Subtle enough to notice without disrupting readability |
 | 27-01 | Token fetch in completed panel on job change (no timer) | Completed job data is static — one fetch when jobs list changes |
+| 26-02 | Periodic reconcileStaleJobs every RECONCILE_EVERY_N_CYCLES=10 | Long-running daemons need ongoing DB-level ghost cleanup, not just startup |
+| 26-02 | In-memory same-project guard alongside claimNextLaunchable DB guard | Belt-and-suspenders prevents edge cases between DB claim and activeJobs.set() |
 
 ## Session Continuity
 
-Last session: 2026-03-03T17:44:36Z
-Stopped at: Completed 27-01-PLAN.md (Phase 27 complete — TUI detail header + completed panel fix)
+Last session: 2026-03-03T18:37:25Z
+Stopped at: Completed 26-02-PLAN.md (Phase 26 complete — immediate dispatch drain loop + killJobSession)
 Resume file: None
