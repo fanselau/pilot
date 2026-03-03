@@ -115,6 +115,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       steps,
       sessions: sessionTokens,
       resolvedModels,
+      actualModels: job.actualModels,
       tokenUsage: {
         totalInput,
         totalOutput,
@@ -145,6 +146,15 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
 
   // Config / timing
   outputHuman(`  ${dim(pad('Model:'))}    ${job.modelProfile}/${job.providerMode}`);
+  if (job.actualModels && job.actualModels.length > 0) {
+    const actualStr = job.actualModels.join(', ');
+    const resolvedExecutor = resolvedModels['gsd-executor'] ?? '';
+    const hasMismatch = !job.actualModels.some(m => m === resolvedExecutor);
+    const colorFn = hasMismatch ? yellow : dim;
+    outputHuman(`  ${colorFn(pad('Actual:'))}   ${colorFn(actualStr)}${hasMismatch ? yellow(' (differs from intended)') : ''}`);
+  } else if (job.status === 'completed' || job.status === 'failed') {
+    outputHuman(`  ${dim(pad('Actual:'))}   ${dim('—')}`);
+  }
   outputHuman(`  ${dim(pad('Attempts:'))} ${job.attempts}/${job.maxAttempts}`);
   outputHuman(`  ${dim(pad('Created:'))}  ${job.createdAt}`);
   outputHuman(`  ${dim(pad('Started:'))}  ${job.startedAt ?? '—'}`);
