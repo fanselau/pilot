@@ -70,6 +70,8 @@ program
   .option('--last <n>', 'Show last N parts', parseInt)
   .option('-v, --verbose', 'Show reasoning and full tool output')
   .option('--delegation', 'Show only delegation session')
+  .option('--flat', 'Show task parts without expanding child sessions')
+  .option('--task <n>', 'Show only the Nth child session (1-indexed)', (v: string) => parseInt(v, 10))
   .action(async (id: string | undefined, opts: Record<string, unknown>) => {
     const { logCommand } = await import('./commands/log.js');
     await logCommand(id, { ...program.opts(), ...opts } as Parameters<typeof logCommand>[1]);

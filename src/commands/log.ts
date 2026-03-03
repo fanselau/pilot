@@ -15,6 +15,7 @@ import { getJob, getQueue, getJobSteps } from '../core/db.js';
 import {
   findSessionByTitle,
   getSessionParts,
+  getChildSessions,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
@@ -26,6 +27,8 @@ interface LogOptions {
   last?: number;
   verbose?: boolean;
   delegation?: boolean;
+  flat?: boolean;    // suppress child session expansion
+  task?: number;     // show only the Nth child session (1-indexed)
 }
 
 // ── Session categorization ────────────────────────────────────────────────
@@ -219,6 +222,49 @@ function formatStepsSummary(steps: JobStep[]): string[] {
   return lines;
 }
 
+// ── Child session rendering ───────────────────────────────────────────────
+
+/**
+ * Render child sessions for a parent session inline.
+ * Used for expanding task tool parts to show subagent activity.
+ */
+function renderChildSessions(
+  parentSessionId: string,
+  verbose: boolean,
+  indent: string = '    ',
+  depth: number = 0,
+): void {
+  if (depth >= 2) return;  // max 2 levels
+
+  const children = getChildSessions(parentSessionId);
+  if (children.length === 0) return;
+
+  for (const child of children) {
+    // Extract agent type from title
+    let agentType = 'subagent';
+    const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
+    if (agentMatch) agentType = agentMatch[0];
+
+    outputHuman(`${indent}${dim(`── Subagent: ${agentType} ──`)}`);
+    outputHuman('');
+
+    const childParts = getSessionParts(child.id);
+    if (childParts.length === 0) {
+      outputHuman(`${indent}${dim('(no activity yet)')}`);
+    } else {
+      for (const part of childParts) {
+        const lines = formatPart(part, verbose);
+        for (const line of lines) {
+          outputHuman(`${indent}${line}`);
+        }
+      }
+      // Recurse into grandchildren
+      renderChildSessions(child.id, verbose, indent + '  ', depth + 1);
+    }
+    outputHuman('');
+  }
+}
+
 // ── Part collection ───────────────────────────────────────────────────────
 
 /**
@@ -334,6 +380,54 @@ async function logCommand(
     outputHuman('');
   }
 
+  const verbose = opts.verbose ?? false;
+
+  // --task N: show only the Nth child session across all sessions
+  if (opts.task !== undefined) {
+    let taskIndex = 0;
+    let found = false;
+
+    for (const sess of sessions) {
+      if (!sess.sessionId) continue;
+      const children = getChildSessions(sess.sessionId);
+      for (const child of children) {
+        taskIndex++;
+        if (taskIndex === opts.task) {
+          // Extract agent type from title
+          let agentType = 'subagent';
+          const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
+          if (agentMatch) agentType = agentMatch[0];
+
+          outputHuman('');
+          outputHuman(`  ${bold(agentType)} · ${dim(child.title)}`);
+          outputHuman('');
+
+          const childParts = getSessionParts(child.id);
+          if (childParts.length === 0) {
+            outputHuman(`  ${dim('No activity yet')}`);
+          } else {
+            for (const part of childParts) {
+              const lines = formatPart(part, verbose);
+              for (const line of lines) {
+                outputHuman(line);
+              }
+            }
+          }
+          outputHuman('');
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+
+    if (!found) {
+      process.stderr.write(`Task ${opts.task} not found. Use pilot log ${jobId} to see available tasks.\n`);
+      process.exit(1);
+    }
+    return;
+  }
+
   // "Waiting" state: job is running but no sessions yet
   if (job.status === 'running' && (sessionTitles.length === 0 || sessions.every((s) => s.sessionId === null))) {
     outputHuman(`  ${dim('Waiting for session to start...')}`);
@@ -345,7 +439,6 @@ async function logCommand(
 
   // Collect and render parts by session
   const sessionData = collectSessionParts(sessions);
-  const verbose = opts.verbose ?? false;
   let totalParts = 0;
 
   for (const { session, parts } of sessionData) {
@@ -373,6 +466,11 @@ async function logCommand(
       const lines = formatPart(part, verbose);
       for (const line of lines) {
         outputHuman(line);
+      }
+
+      // Expand child sessions for task parts (unless --flat)
+      if (!opts.flat && part.type === 'tool' && part.tool === 'task' && session.sessionId) {
+        renderChildSessions(session.sessionId, verbose, '    ');
       }
     }
     totalParts += displayParts.length;
