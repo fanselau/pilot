@@ -392,3 +392,35 @@ Plans:
 
 **Details:**
 Read requirements/task-subagent-visibility.md for full spec.
+
+### Phase 25: Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)
+
+**Goal:** Codify hard-earned operational learnings into enforceable reliability guardrails: same-project serialization, stale-running reconciliation on startup and periodic cycles, status integrity check for ghost-running jobs, and a date-stamped in-repo incident document.
+**Depends on:** Phase 24
+**Plans:** 4 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — DB layer: getRunningJobsForProject, getAllRunningJobs, reconcileStaleJobs, markStale
+- [ ] 25-02-PLAN.md — Runner: same-project serialization guard + startup/periodic reconciliation
+- [ ] 25-03-PLAN.md — Status integrity check (stale display) + docs/RELIABILITY-LEARNINGS-2026-03-03.md
+- [ ] 25-04-PLAN.md — Tests for all guardrails (db reconciliation, runner guard, status stale display)
+
+**Details:**
+Read requirements/pilot-learnings-consolidation-and-guardrails-2026-03-03.md for full spec.
+
+Wave structure:
+- Wave 1: 25-01 (DB foundation)
+- Wave 2: 25-02 + 25-03 (runner + status, both depend on 25-01, independent of each other)
+- Wave 3: 25-04 (tests, depends on all above)
+
+### Phase 26: Runner Immediate Dispatch + Force Quit Controls
+
+**Goal:** [To be planned]
+**Depends on:** Phase 25
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 26 to break down)
+
+**Details:**
+[To be added during planning]
