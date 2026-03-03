@@ -115,6 +115,7 @@ interface JobRow {
   model_profile: string;
   provider_mode: string;
   judge_verdict: string | null;
+  actual_models: string | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -140,6 +141,10 @@ function rowToJob(row: JobRow): Job {
     modelProfile: (row.model_profile ?? 'balanced') as Job['modelProfile'],
     providerMode: (row.provider_mode ?? 'claude-only') as Job['providerMode'],
     judgeVerdict: row.judge_verdict ?? null,
+    actualModels: (() => {
+      if (!row.actual_models) return null;
+      try { return JSON.parse(row.actual_models) as string[]; } catch { return null; }
+    })(),
   };
 }
 
@@ -159,6 +164,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'claude-only'",
     "ALTER TABLE jobs ADD COLUMN judge_verdict TEXT",
     "ALTER TABLE jobs ADD COLUMN resume_hint TEXT",
+    "ALTER TABLE jobs ADD COLUMN actual_models TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -739,6 +745,16 @@ function updateJudgeVerdict(id: string, verdict: string): void {
   db.prepare('UPDATE jobs SET judge_verdict = ? WHERE id = ?').run(verdict, id);
 }
 
+/**
+ * Store the actual provider/model strings used by opencode for a job.
+ * Models are collected from all session titles recorded for this job.
+ * Stored as a JSON array in the actual_models column.
+ */
+function updateActualModels(id: string, models: string[]): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET actual_models = ? WHERE id = ?').run(JSON.stringify(models), id);
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -771,4 +787,5 @@ export {
   skipRemainingSteps,
   resetToPending,
   updateJudgeVerdict,
+  updateActualModels,
 };
