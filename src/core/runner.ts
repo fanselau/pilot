@@ -15,7 +15,7 @@
  */
 
 import { execa } from 'execa';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync, watch as fsWatch } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { getConfig } from './config.js';
@@ -32,6 +32,9 @@ import {
   recordStep,
   completeStep,
   skipRemainingSteps,
+  claimNextLaunchable,
+  forceQuitJob,
+  getAllRunningJobs,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-db.js';
@@ -59,6 +62,69 @@ interface RunnerState {
 let lastSpawnTime = 0;
 const MIN_SPAWN_INTERVAL_MS = 5_000;
 
+// ── Stale-running reconciler ───────────────────────────────────────────────
+
+/**
+ * Reconcile stale-running jobs: query all jobs with status='running' and for each,
+ * check if a corresponding opencode process is still alive via pgrep.
+ * Jobs whose process is no longer alive are force-quit so the runner can retry them.
+ *
+ * Called on startup (to clean up jobs from a previous crashed runner instance)
+ * and at the start of each poll cycle (ongoing reconciliation).
+ *
+ * @param activeJobs - The runner's current in-memory active job map (to skip jobs
+ *   that are actively being managed by this runner instance)
+ */
+async function reconcileStaleRunning(
+  activeJobs: Map<string, { job: Job; title: string }>,
+): Promise<void> {
+  let runningJobs: Job[];
+  try {
+    runningJobs = getAllRunningJobs();
+  } catch {
+    // DB may not be accessible yet — skip reconciliation
+    return;
+  }
+
+  for (const job of runningJobs) {
+    // Skip jobs actively managed by this runner instance
+    if (activeJobs.has(job.id)) continue;
+
+    const sessionTitles: string[] = [];
+    try {
+      const parsed = JSON.parse(job.sessionTitles ?? '[]') as string[];
+      sessionTitles.push(...parsed);
+    } catch {
+      // Ignore malformed session_titles
+    }
+
+    let processAlive = false;
+    for (const title of sessionTitles) {
+      try {
+        const { stdout } = await execa('pgrep', ['-f', title], { reject: false });
+        if (stdout.trim()) {
+          processAlive = true;
+          break;
+        }
+      } catch {
+        // pgrep error = not found
+      }
+    }
+
+    if (!processAlive) {
+      // Orphan: force-quit so the runner can re-queue or report
+      try {
+        forceQuitJob(job.id, 'cli', 'Stale-running reconciler: process not found');
+        process.stderr.write(
+          `[runner] Reconciler: force-quit orphaned job ${job.id} (${job.project}) — no live process found\n`,
+        );
+      } catch {
+        // Best effort — don't crash the reconciler
+      }
+    }
+  }
+}
+
 // ── Runner Class ───────────────────────────────────────────────────────────
 
 class Runner {
@@ -80,6 +146,11 @@ class Runner {
   /**
    * Start the runner event loop.
    * Polls for pending jobs, launches them up to maxParallel, waits, repeats.
+   *
+   * Immediate multi-slot dispatch: drains all available slots before sleeping.
+   * Event-driven wake: fs.watch on pilot.db fires when new jobs are inserted.
+   * Stale-running reconciliation: on startup and each poll cycle, orphaned jobs
+   * (running in DB but no live process) are force-quit so they can be retried.
    */
   async run(): Promise<void> {
     this.running = true;
@@ -89,31 +160,74 @@ class Runner {
     const pidFilePath = this.getPidFilePath();
     this.writePidFile(pidFilePath);
 
+    // ── Event-driven wake-up via fs.watch on pilot.db ─────────────────────
+    const config = getConfig();
+    const dbPath = config.pilotDbPath;
+
+    let wakeResolve: (() => void) | null = null;
+
+    const wakeOrTimeout = (ms: number): Promise<void> => {
+      return new Promise(resolve => {
+        wakeResolve = resolve;
+        setTimeout(() => {
+          wakeResolve = null;
+          resolve();
+        }, ms);
+      });
+    };
+
+    const triggerWake = (): void => {
+      if (wakeResolve) {
+        wakeResolve();
+        wakeResolve = null;
+      }
+    };
+
+    let dbWatcher: ReturnType<typeof fsWatch> | null = null;
+    try {
+      dbWatcher = fsWatch(dbPath, { persistent: false }, () => {
+        triggerWake();
+      });
+      dbWatcher.on('error', () => { /* ignore — DB may not exist yet */ });
+    } catch {
+      // fs.watch may fail if DB doesn't exist yet — fallback to pure polling
+    }
+
+    // ── Startup reconciliation: clean up jobs left running from a crashed runner ──
+    await reconcileStaleRunning(this.activeJobs);
+
     try {
     while (this.running) {
       if (this.shuttingDown) break;
 
-      // Check for launchable jobs if we have capacity
-      if (this.activeJobs.size < this.options.maxParallel) {
-        const job = getNextPending();
-        if (job && !this.activeJobs.has(job.id)) {
-          // Track BEFORE async launch so --once mode sees active jobs
-          this.activeJobs.set(job.id, { job, title: '' });
-          // Launch without awaiting — allows parallel jobs
-          this.launch(job).catch(() => {
-            // Error already handled in launch() via markFailed
-          });
-          continue; // Check for more immediately
-        }
+      // Per-cycle reconciliation: kill orphaned running jobs
+      await reconcileStaleRunning(this.activeJobs);
+
+      // ── Immediate multi-slot drain loop ────────────────────────────────
+      // Fill ALL available slots before sleeping — not just one per iteration.
+      // claimNextLaunchable() atomically selects + marks-running the next eligible
+      // job, enforcing project-level serialization within the transaction.
+      let launched = false;
+      while (this.activeJobs.size < this.options.maxParallel && !this.shuttingDown) {
+        const job = claimNextLaunchable();
+        if (!job) break; // No more eligible jobs
+        // Job already marked running by claimNextLaunchable — do NOT call markRunning here
+        this.activeJobs.set(job.id, { job, title: '' });
+        // Launch without awaiting — allows parallel jobs
+        this.launch(job).catch(() => {
+          // Error already handled in launch() via markFailed
+        });
+        launched = true;
       }
+      if (launched) continue; // If we launched anything, check for more immediately
 
       // If --once and no active jobs, exit
       if (this.options.once && this.activeJobs.size === 0) {
         break;
       }
 
-      // Wait before next poll
-      await this.sleep(this.options.pollInterval * 1000);
+      // Wait for DB change event (new job inserted) or poll interval timeout
+      await wakeOrTimeout(this.options.pollInterval * 1000);
     }
 
     // Wait for active jobs to finish
@@ -122,7 +236,8 @@ class Runner {
     }
 
     } finally {
-      // Clean up PID file on exit
+      // Clean up DB watcher and PID file on exit
+      dbWatcher?.close();
       this.removePidFile(pidFilePath);
     }
 
@@ -155,7 +270,12 @@ class Runner {
   }
 
   /**
-   * Launch a job: mark running → delegate → execute steps → mark complete/failed.
+   * Launch a job: delegate → execute steps → mark complete/failed.
+   *
+   * NOTE: markRunning() is NOT called here. claimNextLaunchable() already sets
+   * status=running, started_at=datetime('now'), and increments attempts atomically
+   * in the dispatch loop. Calling markRunning again would double-increment attempts
+   * and overwrite started_at with a slightly later timestamp.
    */
   private async launch(job: Job): Promise<void> {
     const config = getConfig();
@@ -163,7 +283,7 @@ class Runner {
     let currentStepRowId: number | null = null;
 
     try {
-      markRunning(job.id);
+      // Job already marked running by claimNextLaunchable — do not call markRunning here
       // activeJobs already set in run() before launch() is called
 
       this.patchModelsForJob(job, projectDir);
