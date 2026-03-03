@@ -345,6 +345,46 @@ function getAllRunningJobs(): Job[] {
 }
 
 /**
+ * Reconcile stale-running jobs: reset any 'running' job whose ID is NOT in the
+ * provided set of known-active job IDs back to 'pending'.
+ *
+ * Called on runner startup and periodically during the event loop.
+ * Returns the list of job IDs that were reset.
+ *
+ * @param activeJobIds - Set of job IDs the runner currently tracks as active
+ */
+function reconcileStaleJobs(activeJobIds: Set<string>): string[] {
+  const running = getAllRunningJobs();
+  const staleIds: string[] = [];
+
+  for (const job of running) {
+    if (!activeJobIds.has(job.id)) {
+      // This job is marked running in DB but runner doesn't know about it
+      markStale(job.id);
+      staleIds.push(job.id);
+    }
+  }
+
+  return staleIds;
+}
+
+/**
+ * Mark a running job as 'pending' with a stale termination note.
+ * Used when the runner detects a job is running in DB but has no backing session.
+ * Resets started_at so it gets a fresh attempt, and records the stale event in error.
+ */
+function markStale(id: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'pending',
+        started_at = NULL,
+        error = 'Reset from stale-running state by reconciliation (backing session/process gone)'
+    WHERE id = ? AND status = 'running'
+  `).run(id);
+}
+
+/**
  * Get last N completed/failed/cancelled jobs, ordered by completed_at DESC.
  * For cancelled jobs without completed_at, falls back to created_at.
  */
@@ -547,6 +587,8 @@ export {
   getQueue,
   getRunningJobsForProject,
   getAllRunningJobs,
+  reconcileStaleJobs,
+  markStale,
   getRecent,
   updateDelegationPlan,
   advanceStep,
