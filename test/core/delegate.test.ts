@@ -12,6 +12,8 @@ let mockRoadmapExists = true;
 let mockPhaseDirs: string[] = [];
 let mockRequirementDirFiles: string[] = [];
 let mockRequirementIsDir = false;
+// Map of requirement file path → content (for extractRequirementTitle mock)
+let mockRequirementFileContent: Record<string, string> = {};
 
 // ── Mock node:fs ───────────────────────────────────────────────────────────
 
@@ -27,6 +29,10 @@ vi.mock('node:fs', async () => {
           throw err;
         }
         return mockRoadmapContent;
+      }
+      // Requirement file reads (for extractRequirementTitle)
+      if (typeof filePath === 'string' && filePath in mockRequirementFileContent) {
+        return mockRequirementFileContent[filePath];
       }
       return actual.readFileSync(filePath, encoding as BufferEncoding);
     }),
@@ -74,6 +80,7 @@ import {
   buildQuickArgs,
   getNextPhaseNumber,
   buildMilestonePlan,
+  extractRequirementTitle,
 } from '../../src/core/delegate.js';
 
 // ── Test helpers ───────────────────────────────────────────────────────────
@@ -251,6 +258,7 @@ describe('resolvePhaseForFallback', () => {
 `;
     mockRoadmapExists = true;
     mockPhaseDirs = ['01-setup', '02-core', '03-ui', '04-testing', '05-deploy'];
+    mockRequirementFileContent = {};
   });
 
   it('returns execute-phase when description is numeric', () => {
@@ -284,14 +292,33 @@ describe('resolvePhaseForFallback', () => {
     expect(plan.reasoning).toContain('phase 6');
   });
 
-  it('uses requirementPath in add-phase args when available', () => {
+  it('uses extracted title from requirementPath for add-phase, not file path', () => {
+    mockRequirementFileContent['requirements/dark-mode.md'] = '# Dark Mode Support\n\nAdd dark mode to the app.';
     const job = makeTestJob({
       description: 'Dark mode',
       requirementPath: 'requirements/dark-mode.md',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('@requirements/dark-mode.md');
+    // add-phase gets the human-readable title, NOT the file path
+    expect(plan.steps[0].args).toBe('Dark Mode Support');
+    // plan-phase gets @path for GSD context reference
+    expect(plan.steps[1].command).toBe('plan-phase');
+    expect(plan.steps[1].args).toContain('@requirements/dark-mode.md');
+  });
+
+  it('falls back to description when requirementPath has no title heading', () => {
+    mockRequirementFileContent['requirements/no-heading.md'] = 'Just some content without a heading.';
+    const job = makeTestJob({
+      description: 'No heading feature',
+      requirementPath: 'requirements/no-heading.md',
+    });
+    const plan = resolvePhaseForFallback('/tmp/project', job);
+    expect(plan.steps[0].command).toBe('add-phase');
+    // Falls back to job.description when no # heading found
+    expect(plan.steps[0].args).toBe('No heading feature');
+    // plan-phase still gets @path
+    expect(plan.steps[1].args).toContain('@requirements/no-heading.md');
   });
 
   it('calculates next phase correctly with gaps in phase numbers', () => {
@@ -356,6 +383,7 @@ describe('fallbackPlan', () => {
   beforeEach(() => {
     mockRoadmapExists = true;
     mockPhaseDirs = ['01-setup', '02-core'];
+    mockRequirementFileContent = {};
   });
 
   it('returns quick steps for quick scope with planning', () => {
@@ -471,12 +499,17 @@ describe('buildMilestonePlan', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockRequirementDirFiles = [];
     mockRequirementIsDir = false;
+    mockRequirementFileContent = {};
   });
 
-  it('creates one phase per .md file in requirement directory', () => {
+  it('creates one phase per .md file in requirement directory with titles', () => {
     mockRequirementIsDir = true;
     mockRequirementDirFiles = ['01-auth.md', '02-payments.md', '03-ui.md'];
     mockPhaseDirs = ['01-setup', '02-core'];
+    // Mock requirement file contents with titles
+    mockRequirementFileContent['/tmp/requirements/milestone-v2/01-auth.md'] = '# Authentication\n\nAuth requirements.';
+    mockRequirementFileContent['/tmp/requirements/milestone-v2/02-payments.md'] = '# Payment Integration\n\nPayment requirements.';
+    mockRequirementFileContent['/tmp/requirements/milestone-v2/03-ui.md'] = '# UI Components\n\nUI requirements.';
 
     const job = makeTestJob({
       scope: 'milestone',
@@ -486,28 +519,50 @@ describe('buildMilestonePlan', () => {
 
     // 3 files × 3 steps (add + plan + execute) = 9 steps
     expect(plan.steps).toHaveLength(9);
+    // add-phase gets human-readable title, NOT file path
     expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toContain('01-auth.md');
+    expect(plan.steps[0].args).toBe('Authentication');
     expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toBe('3 --auto'); // next after 02-core
+    expect(plan.steps[1].args).toContain('@/tmp/requirements/milestone-v2/01-auth.md');
+    expect(plan.steps[1].args).toContain('--auto');
     expect(plan.steps[2].command).toBe('execute-phase');
     expect(plan.steps[2].args).toBe('3');
 
     expect(plan.steps[3].command).toBe('add-phase');
-    expect(plan.steps[3].args).toContain('02-payments.md');
-    expect(plan.steps[4].args).toBe('4 --auto');
+    expect(plan.steps[3].args).toBe('Payment Integration');
+    expect(plan.steps[4].args).toContain('@/tmp/requirements/milestone-v2/02-payments.md');
     expect(plan.steps[5].args).toBe('4');
 
     expect(plan.steps[6].command).toBe('add-phase');
-    expect(plan.steps[6].args).toContain('03-ui.md');
-    expect(plan.steps[7].args).toBe('5 --auto');
+    expect(plan.steps[6].args).toBe('UI Components');
+    expect(plan.steps[7].args).toContain('@/tmp/requirements/milestone-v2/03-ui.md');
     expect(plan.steps[8].args).toBe('5');
 
     expect(plan.reasoning).toContain('3 requirement files');
   });
 
-  it('falls back to single add-phase when requirementPath is a file', () => {
+  it('falls back to filename-derived title when no heading in file', () => {
+    mockRequirementIsDir = true;
+    mockRequirementDirFiles = ['01-auth.md'];
+    mockPhaseDirs = ['01-setup'];
+    // No heading in file content
+    mockRequirementFileContent['/tmp/requirements/milestone-v2/01-auth.md'] = 'No heading here, just content.';
+
+    const job = makeTestJob({
+      scope: 'milestone',
+      requirementPath: '/tmp/requirements/milestone-v2',
+    });
+    const plan = buildMilestonePlan(job, '/tmp/project');
+
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('add-phase');
+    // Falls back to filename without .md and without number prefix
+    expect(plan.steps[0].args).toBe('auth');
+  });
+
+  it('falls back to single add-phase with title when requirementPath is a file', () => {
     mockRequirementIsDir = false;
+    mockRequirementFileContent['/tmp/requirements/single-req.md'] = '# Single Requirement\n\nDetails here.';
     const job = makeTestJob({
       scope: 'milestone',
       requirementPath: '/tmp/requirements/single-req.md',
@@ -515,7 +570,8 @@ describe('buildMilestonePlan', () => {
     const plan = buildMilestonePlan(job, '/tmp/project');
     expect(plan.steps).toHaveLength(1);
     expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('@/tmp/requirements/single-req.md');
+    // Uses extracted title, not file path
+    expect(plan.steps[0].args).toBe('Single Requirement');
   });
 
   it('falls back to single add-phase when no .md files in dir', () => {
@@ -552,5 +608,55 @@ describe('buildMilestonePlan', () => {
     const plan = buildMilestonePlan(job, '/tmp/project');
     expect(plan.steps[0].args).toBe('Custom milestone description');
     expect(plan.reasoning).toContain('adding as new phase');
+  });
+});
+
+describe('extractRequirementTitle', () => {
+  beforeEach(() => {
+    mockRequirementFileContent = {};
+  });
+
+  it('extracts # Title heading from first line', () => {
+    mockRequirementFileContent['/tmp/req.md'] = '# TUI Visual Polish\n\nContent here.';
+    expect(extractRequirementTitle('/tmp/req.md')).toBe('TUI Visual Polish');
+  });
+
+  it('extracts # Title heading from first non-empty line', () => {
+    mockRequirementFileContent['/tmp/req.md'] = '\n\n# Delegate Phase Lifecycle Hardening\n\nBody.';
+    expect(extractRequirementTitle('/tmp/req.md')).toBe('Delegate Phase Lifecycle Hardening');
+  });
+
+  it('returns null when file has no heading', () => {
+    mockRequirementFileContent['/tmp/no-heading.md'] = 'Just some content.\nNo markdown heading.';
+    expect(extractRequirementTitle('/tmp/no-heading.md')).toBeNull();
+  });
+
+  it('returns null when file does not exist', () => {
+    // No entry in mockRequirementFileContent → will call actual readFileSync → ENOENT
+    expect(extractRequirementTitle('/tmp/nonexistent-file.md')).toBeNull();
+  });
+
+  it('trims whitespace from title', () => {
+    mockRequirementFileContent['/tmp/req.md'] = '#   Padded Title   \n\nBody.';
+    expect(extractRequirementTitle('/tmp/req.md')).toBe('Padded Title');
+  });
+
+  it('matches ## heading but extracts only first # heading', () => {
+    mockRequirementFileContent['/tmp/req.md'] = '## Sub Heading\n\n# Main Heading\n\nBody.';
+    // The regex /^#\s+(.+)$/m matches first occurrence of any # heading
+    // ## Sub Heading doesn't match /^#\s+/ because it starts with ##
+    // Wait — actually ## matches ^# too. Let's check the actual behavior.
+    // The regex /^#\s+(.+)$/m will match "## Sub Heading" because ^# matches the first #
+    // But ## starts with "# " — no, ## is "##" followed by space, which matches /^#\s/ as # then #(as \s? no)
+    // Actually /^#\s+(.+)$/m: ^ = start of line, # = literal hash, \s+ = one or more whitespace
+    // "## Sub Heading" → first char is #, second is #, which is NOT \s → no match
+    // "# Main Heading" → first char is #, second is space → match!
+    const result = extractRequirementTitle('/tmp/req.md');
+    expect(result).toBe('Main Heading');
+  });
+
+  it('handles file with only a heading', () => {
+    mockRequirementFileContent['/tmp/req.md'] = '# Just A Title';
+    expect(extractRequirementTitle('/tmp/req.md')).toBe('Just A Title');
   });
 });
