@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 024: requirements/phase-redesign-edge-cases-and-retry-fixes.md
+Last activity: 2026-03-03 - Completed quick task 025: requirements/tui-bugs-and-polish.md
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -88,6 +88,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 022 | Dead code cleanup post-redesign — remove 6 dead exports from opencode-db.ts, delete 4 empty duplicate phase dirs, scrub stale comments | 2026-03-03 | 17ec5e0 | [022-requirements-cleanup-dead-code-post-rede](./quick/022-requirements-cleanup-dead-code-post-rede/) |
 | 023 | requirements/model-control-and-tui-visibility.md | 2026-03-03 | 9eb94ea | [023-requirements-model-control-and-tui-visib](./quick/023-requirements-model-control-and-tui-visib/) |
 | 024 | requirements/phase-redesign-edge-cases-and-retry-fixes.md | 2026-03-03 | bb3ddcc | [024-requirements-phase-redesign-edge-cases-a](./quick/024-requirements-phase-redesign-edge-cases-a/) |
+| 025 | requirements/tui-bugs-and-polish.md | 2026-03-03 | 9f252d7 | [025-requirements-tui-bugs-and-polish-md](./quick/025-requirements-tui-bugs-and-polish-md/) |
 
 ## Accumulated Context
 
@@ -337,9 +338,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-024 | getJob re-fetch before retry decision | claimNextLaunchable already incremented attempts; stale job object would give wrong retry count |
 | quick-024 | Shutdown during judge → resetToPending not markFailed | Phase session completed — marking failed loses work; pending preserves it for retry |
 | quick-024 | resetToPending clears session_titles and job_steps | Prevents stale reconciler pgrep matches and stale TUI step display across retries |
+| quick-025 | scrollbox focusable={false} + ref callback for keyboard passthrough | Belt-and-suspenders: prop may not apply at construction time, ref guarantees it |
+| quick-025 | Always show resolved executor model in detail header | Users need concrete model name, not just profile name |
+| quick-025 | Rounded border parent / single border child subagent boxes | Visual weight decreases with nesting depth |
+| quick-025 | Render helpers (not components) for part indentation levels | Avoids duplication while keeping JSX readable; captures closure state |
 
 ## Session Continuity
 
-Last session: 2026-03-03T21:53:00Z
-Stopped at: Completed quick-024 (phase redesign edge cases — resume_hint, resetToPending cleanup, judge JSON parsing, shutdown guard, attempts off-by-one)
+Last session: 2026-03-03T22:07:00Z
+Stopped at: Completed quick-025 (TUI bugs & polish — keyboard shortcuts, detail header stability, model visibility, subagent bordered boxes)
 Resume file: None
