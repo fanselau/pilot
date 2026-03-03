@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
-Plan: 4 of 4 in current phase (26-01 through 26-04 complete)
+Plan: 5 of 5 in current phase (26-01 through 26-05 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed 26-04-PLAN.md (TUI force-quit UX: ConfirmOverlay + K key)
+Last activity: 2026-03-03 - Completed 26-05-PLAN.md (tests: DB claim/force-quit, runner dispatch, CLI kill)
 
-Progress: ██████████████████████████████ 100% (75/75 plans)
+Progress: ██████████████████████████████ 100% (76/76 plans)
 
 ## Project Reference
 
@@ -305,9 +305,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 26-04 | pendingConfirmAction signal stores async thunk; executed on y-key | Clean separation between showing overlay and executing action |
 | 26-03 | Kill-then-update order: OS kill first, DB update always | Prevents ghost-running jobs even if process already exited before kill |
 | 26-03 | DB update continues even when killJobSession returns killed:false | Process may already be gone; DB must reflect terminal state regardless |
+| 26-05 | reconcileStaleJobs must be in db mock factory for runner.run() tests | runner.run() calls it synchronously on startup; missing mock crashes tests |
+| 26-05 | reconcileStaleRunning tested indirectly via runner.run(once:true) | Function is private; indirect test via runner loop is correct boundary |
 
 ## Session Continuity
 
-Last session: 2026-03-03T18:41:43Z
-Stopped at: Completed 26-04-PLAN.md (Phase 26 complete — TUI force-quit UX: ConfirmOverlay + K key)
+Last session: 2026-03-03T18:47:30Z
+Stopped at: Completed 26-05-PLAN.md (Phase 26 fully complete — tests: DB claim/force-quit, runner dispatch, CLI kill)
 Resume file: None
