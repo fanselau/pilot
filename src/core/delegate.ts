@@ -158,15 +158,26 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
  * - requirementPath exists: `@path --auto`
  * - description is a bare number: `--phase N --auto`
  * - otherwise: `description --auto`
+ *
+ * Appends `--resume` when job.resumeHint is set, so retried phase jobs
+ * pick up where they left off instead of starting fresh.
  */
 function buildPhaseArgs(job: Job): string {
+  let args: string;
   if (job.requirementPath) {
-    return `@${job.requirementPath} --auto`;
+    args = `@${job.requirementPath} --auto`;
+  } else if (/^\d+$/.test(job.description.trim())) {
+    args = `--phase ${job.description.trim()} --auto`;
+  } else {
+    args = `${job.description} --auto`;
   }
-  if (/^\d+$/.test(job.description.trim())) {
-    return `--phase ${job.description.trim()} --auto`;
+
+  // Append resume flag when job has a resume hint from a prior attempt
+  if (job.resumeHint) {
+    args += ' --resume';
   }
-  return `${job.description} --auto`;
+
+  return args;
 }
 
 /**
