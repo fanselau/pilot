@@ -457,16 +457,29 @@ function parsePartRow(
   }
 
   if (type === 'patch') {
-    const operations = Array.isArray(partData.operations) ? partData.operations : [];
     const files: string[] = [];
-    for (const op of operations) {
-      if (typeof op === 'object' && op !== null) {
-        const opObj = op as Record<string, unknown>;
-        if (typeof opObj.path === 'string') {
-          files.push(opObj.path);
+
+    // Try `partData.files` first (flat string array — actual DB schema)
+    if (Array.isArray(partData.files)) {
+      for (const f of partData.files) {
+        if (typeof f === 'string') {
+          files.push(f);
         }
       }
     }
+
+    // Fall back to `partData.operations[].path` for backward compatibility
+    if (files.length === 0 && Array.isArray(partData.operations)) {
+      for (const op of partData.operations) {
+        if (typeof op === 'object' && op !== null) {
+          const opObj = op as Record<string, unknown>;
+          if (typeof opObj.path === 'string') {
+            files.push(opObj.path);
+          }
+        }
+      }
+    }
+
     if (files.length > 0) {
       base.patchFiles = files;
     }
@@ -552,12 +565,19 @@ function getLastMessage(sessionId: string): SessionMessage | null {
 }
 
 /**
- * Check if a session has any actively running parts.
- * Replaces PID tracking — if opencode shows running parts, the session is alive.
+ * Check if a session has completed by querying the most recent `step-finish` part.
  *
- * Queries the part table's data JSON for state.status = 'running'.
+ * Uses `step-finish` reason as the ground truth for session completion:
+ *   - reason = 'stop'       → session is done ✅
+ *   - reason = 'tool-calls' → still working (between steps) → NOT done
+ *   - reason = 'length'     → hit token limit, treat as done (logs warning)
+ *   - No rows               → just started, still working → NOT done
+ *
+ * This replaces the broken `isSessionActive()` which checked for running tool
+ * parts — between tool calls, no parts are "running", causing premature completion
+ * detection. Using step-finish reason is the ground truth approach.
  */
-function isSessionActive(sessionId: string): boolean {
+function isSessionDone(sessionId: string): boolean {
   const db = openDb();
   if (db === null) {
     return false;
@@ -565,15 +585,50 @@ function isSessionActive(sessionId: string): boolean {
 
   try {
     const row = db.prepare(
-      `SELECT COUNT(*) as cnt FROM part
+      `SELECT json_extract(data, '$.reason') as reason
+       FROM part
        WHERE session_id = ?
-         AND json_extract(data, '$.state.status') = 'running'`,
-    ).get(sessionId) as { cnt: number } | undefined;
+         AND json_extract(data, '$.type') = 'step-finish'
+       ORDER BY time_created DESC
+       LIMIT 1`,
+    ).get(sessionId) as { reason: string | null } | undefined;
 
-    return (row?.cnt ?? 0) > 0;
+    if (!row) {
+      // No step-finish parts — session just started or still working
+      return false;
+    }
+
+    const reason = row.reason;
+
+    if (reason === 'stop') {
+      return true;
+    }
+
+    if (reason === 'length') {
+      // Hit token limit — treat as done but warn
+      process.stderr.write(`[opencode-db] Warning: session ${sessionId} ended with reason='length' (token limit hit)\n`);
+      return true;
+    }
+
+    // reason = 'tool-calls' or unknown → still working
+    return false;
   } catch {
     return false;
   }
+}
+
+/**
+ * Check if a session has any actively running parts.
+ * Replaces PID tracking — if opencode shows running parts, the session is alive.
+ *
+ * Queries the part table's data JSON for state.status = 'running'.
+ *
+ * @deprecated Use isSessionDone() instead. This function returns false between
+ * tool calls (when no parts are "running"), causing premature completion detection.
+ * isSessionDone() uses step-finish reason as ground truth and is more reliable.
+ */
+function isSessionActive(sessionId: string): boolean {
+  return !isSessionDone(sessionId);
 }
 
 /**
@@ -685,76 +740,89 @@ function isStuck(
   }
 
   try {
-    // Query last part for this session
-    const lastPart = db.prepare(`
+    // Query for ANY running part in this session (not just the last one)
+    // The old code only checked the last part — if the last part was 'text' or 'step-start',
+    // a running tool part earlier in the session would be missed.
+    const runningPart = db.prepare(`
       SELECT json_extract(p.data, '$.tool') as tool,
              json_extract(p.data, '$.state.status') as status,
              p.time_updated
       FROM part p
       WHERE p.session_id = ?
+        AND json_extract(p.data, '$.state.status') = 'running'
       ORDER BY p.time_created DESC
       LIMIT 1
     `).get(sessionId) as { tool: string | null; status: string | null; time_updated: number } | undefined;
 
-    // Case 6: No parts → not stuck
-    if (!lastPart) {
-      return NOT_STUCK;
-    }
+    if (runningPart) {
+      const { tool, time_updated } = runningPart;
 
-    const { tool, status, time_updated } = lastPart;
-
-    // Case 5: completed/error → not stuck
-    if (status === 'completed' || status === 'error') {
-      return NOT_STUCK;
-    }
-
-    // Only check running/pending parts for stuck
-    if (status !== 'running') {
-      return NOT_STUCK;
-    }
-
-    // Case 1: question + running → immediately stuck
-    if (tool === 'question') {
-      return {
-        stuck: true,
-        reason: 'waiting_for_user_input',
-        detail: 'Session waiting for user input (stdin is /dev/null)',
-      };
-    }
-
-    // Case 2: task + running → check child session recursively
-    if (tool === 'task') {
-      const child = db.prepare(
-        'SELECT id FROM session WHERE parent_id = ? ORDER BY time_created DESC LIMIT 1',
-      ).get(sessionId) as { id: string } | undefined;
-
-      if (child) {
-        const childResult = isStuck(child.id, stuckThresholdMinutes, depth + 1);
-        if (childResult.stuck) {
-          return {
-            stuck: true,
-            reason: 'child_stuck',
-            detail: `Child session stuck: ${childResult.detail}`,
-          };
-        }
+      // Case 1: question + running → immediately stuck
+      if (tool === 'question') {
+        return {
+          stuck: true,
+          reason: 'waiting_for_user_input',
+          detail: 'Session waiting for user input (stdin is /dev/null)',
+        };
       }
-      // Child not stuck (or no child found) → parent not stuck
+
+      // Case 2: task + running → check child session recursively
+      if (tool === 'task') {
+        const child = db.prepare(
+          'SELECT id FROM session WHERE parent_id = ? ORDER BY time_created DESC LIMIT 1',
+        ).get(sessionId) as { id: string } | undefined;
+
+        if (child) {
+          const childResult = isStuck(child.id, stuckThresholdMinutes, depth + 1);
+          if (childResult.stuck) {
+            return {
+              stuck: true,
+              reason: 'child_stuck',
+              detail: `Child session stuck: ${childResult.detail}`,
+            };
+          }
+        }
+        // Child not stuck (or no child found) → parent not stuck
+        return NOT_STUCK;
+      }
+
+      // Case 3 & 4: bash or other tool + running → check duration
+      const now = Date.now();
+      const elapsedMs = now - time_updated;
+      const thresholdMs = stuckThresholdMinutes * 60 * 1000;
+
+      if (elapsedMs > thresholdMs) {
+        return {
+          stuck: true,
+          reason: 'long_running_command',
+          detail: `${tool ?? 'unknown'} running for ${Math.round(elapsedMs / 60000)}m (threshold: ${stuckThresholdMinutes}m)`,
+        };
+      }
+
       return NOT_STUCK;
     }
 
-    // Case 3 & 4: bash or other tool + running → check duration
-    const now = Date.now();
-    const elapsedMs = now - time_updated;
-    const thresholdMs = stuckThresholdMinutes * 60 * 1000;
+    // No running parts found — check for stale pending parts (killed-session indicator)
+    // Pending parts with stale timestamps (>120s since time_updated) suggest a killed session
+    const stalePendingPart = db.prepare(`
+      SELECT json_extract(p.data, '$.tool') as tool,
+             p.time_updated
+      FROM part p
+      WHERE p.session_id = ?
+        AND json_extract(p.data, '$.state.status') = 'pending'
+      ORDER BY p.time_created DESC
+      LIMIT 1
+    `).get(sessionId) as { tool: string | null; time_updated: number } | undefined;
 
-    if (elapsedMs > thresholdMs) {
-      return {
-        stuck: true,
-        reason: 'long_running_command',
-        detail: `${tool ?? 'unknown'} running for ${Math.round(elapsedMs / 60000)}m (threshold: ${stuckThresholdMinutes}m)`,
-      };
+    if (stalePendingPart) {
+      const stalePendingAgeMs = Date.now() - stalePendingPart.time_updated;
+      if (stalePendingAgeMs > 120_000) {
+        // Pending part stale for >120s — likely a killed session
+        return NOT_STUCK; // Not "stuck" per se, but session is likely dead — isSessionDone handles this
+      }
     }
 
+    // Case 6: No running parts → not stuck
     return NOT_STUCK;
   } catch {
     // DB error — fail safe, not stuck
@@ -798,6 +866,7 @@ export {
   getSessionMessages,
   getSessionParts,
   getLastMessage,
+  isSessionDone,
   isSessionActive,
   getSessionTokens,
   getRecentSessions,
