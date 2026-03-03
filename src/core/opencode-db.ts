@@ -541,6 +541,32 @@ function getSessionTokens(sessionId: string): { input: number; output: number } 
   }
 }
 
+// ── Model queries ──────────────────────────────────────────────────────────
+
+/**
+ * Get distinct provider/model strings used in a session's assistant messages.
+ * Reads providerID and modelID from the message data JSON column.
+ * Returns an empty array if DB is unavailable or session has no assistant messages.
+ *
+ * Result format: "providerID/modelID" (e.g. "anthropic/claude-sonnet-4-6")
+ * Filters out null entries (messages without modelID set).
+ */
+function getSessionModels(sessionTitle: string): string[] {
+  const db = openDb();
+  if (db === null) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT DISTINCT json_extract(m.data, '$.providerID') || '/' || json_extract(m.data, '$.modelID') as model
+      FROM message m JOIN session s ON m.session_id = s.id
+      WHERE s.title = ? AND json_extract(m.data, '$.role') = 'assistant'
+        AND json_extract(m.data, '$.modelID') IS NOT NULL
+    `).all(sessionTitle) as Array<{ model: string }>;
+    return rows.map(r => r.model).filter(m => m && !m.startsWith('null'));
+  } catch {
+    return [];
+  }
+}
+
 // ── Test helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -576,6 +602,7 @@ export {
   getLastMessage,
   isSessionDone,
   getSessionTokens,
+  getSessionModels,
   _resetDbCache,
   _setTestDb,
 };

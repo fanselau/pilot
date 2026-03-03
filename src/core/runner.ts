@@ -39,9 +39,10 @@ import {
   reconcileStaleJobs,
   resetToPending,
   updateJudgeVerdict,
+  updateActualModels,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
-import { findSessionByTitle, isSessionDone, getLastMessage } from './opencode-db.js';
+import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { dim } from '../util/colors.js';
@@ -444,6 +445,7 @@ class Runner {
       }
 
       if (allStepsCompleted) {
+        this.collectActualModels(job.id);
         markCompleted(job.id);
       } else {
         // Shutdown interrupted — reset to pending instead of cancel
@@ -451,6 +453,7 @@ class Runner {
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      this.collectActualModels(job.id);
       markFailed(job.id, error);
     } finally {
       this.activeJobs.delete(job.id);
@@ -466,6 +469,37 @@ class Runner {
     process.stderr.write(dim(`Patching agent models: ${job.modelProfile}/${providerMode}`) + '\n');
     const models = resolveAllAgentModels(job.modelProfile, providerMode);
     patchAgentFrontmatter(projectDir, models);
+  }
+
+  /**
+   * Collect actual models used across all sessions for a job and persist to DB.
+   * Queries opencode DB for distinct provider/model strings from assistant messages.
+   * Called before markCompleted() and markFailed() to capture ground-truth model usage.
+   */
+  private collectActualModels(jobId: string): void {
+    try {
+      const freshJob = getJob(jobId);
+      if (!freshJob?.sessionTitles) return;
+
+      let sessionTitles: string[] = [];
+      try {
+        sessionTitles = JSON.parse(freshJob.sessionTitles) as string[];
+      } catch {
+        return;
+      }
+
+      const allActualModels = new Set<string>();
+      for (const sessionTitle of sessionTitles) {
+        const models = getSessionModels(sessionTitle);
+        for (const m of models) allActualModels.add(m);
+      }
+
+      if (allActualModels.size > 0) {
+        updateActualModels(jobId, [...allActualModels]);
+      }
+    } catch {
+      // Best effort — don't fail the job due to model collection error
+    }
   }
 
   /**

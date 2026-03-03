@@ -49,6 +49,7 @@ export interface Job {
   modelProfile: ModelProfile;
   providerMode: ProviderMode;
   judgeVerdict: string | null;  // JSON string of judge verdict
+  actualModels: string[] | null;  // actual provider/model strings from opencode DB
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
