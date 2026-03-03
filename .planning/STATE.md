@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 025: requirements/tui-bugs-and-polish.md
+Last activity: 2026-03-03 - Completed quick task 026: show actual model used from opencode DB
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -89,6 +89,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 023 | requirements/model-control-and-tui-visibility.md | 2026-03-03 | 9eb94ea | [023-requirements-model-control-and-tui-visib](./quick/023-requirements-model-control-and-tui-visib/) |
 | 024 | requirements/phase-redesign-edge-cases-and-retry-fixes.md | 2026-03-03 | bb3ddcc | [024-requirements-phase-redesign-edge-cases-a](./quick/024-requirements-phase-redesign-edge-cases-a/) |
 | 025 | requirements/tui-bugs-and-polish.md | 2026-03-03 | 9f252d7 | [025-requirements-tui-bugs-and-polish-md](./quick/025-requirements-tui-bugs-and-polish-md/) |
+| 026 | Show actual model used from opencode DB | 2026-03-03 | 6a408e2 | [026-show-actual-model-used-from-opencode-db-](./quick/026-show-actual-model-used-from-opencode-db-/) |
 
 ## Accumulated Context
 
@@ -342,9 +343,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-025 | Always show resolved executor model in detail header | Users need concrete model name, not just profile name |
 | quick-025 | Rounded border parent / single border child subagent boxes | Visual weight decreases with nesting depth |
 | quick-025 | Render helpers (not components) for part indentation levels | Avoids duplication while keeping JSX readable; captures closure state |
+| quick-026 | actual_models stored as JSON TEXT array via additive migration | Backward compat — existing jobs show null until next completion |
+| quick-026 | collectActualModels() called before both markCompleted and markFailed | Ensures model data captured regardless of success/failure path |
+| quick-026 | Mismatch = actual models don't contain resolved gsd-executor string | Executor is the primary agent; other agents using different models is expected |
+| quick-026 | log header shows actual model without mismatch color | Cleaner for stream context; full highlighting in info/TUI detail is sufficient |
 
 ## Session Continuity
 
-Last session: 2026-03-03T22:07:00Z
-Stopped at: Completed quick-025 (TUI bugs & polish — keyboard shortcuts, detail header stability, model visibility, subagent bordered boxes)
+Last session: 2026-03-03T22:18:00Z
+Stopped at: Completed quick-026 (show actual model used from opencode DB — getSessionModels, actual_models column, info/log/TUI display)
 Resume file: None
