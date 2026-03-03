@@ -71,7 +71,7 @@ export function parseStepInfo(job: Job): { label: string; index: string } {
     const step = plan.steps[job.currentStep];
     const total = plan.steps.length;
     const label = step ? `${step.command} "${truncate(step.args, 20)}"` : '—';
-    const index = `${job.currentStep + 1}/${total}`;
+    const index = `${Math.min(job.currentStep + 1, total)}/${total}`;
     return { label, index };
   } catch { return { label: '—', index: '—' }; }
 }
