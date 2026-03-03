@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 023: requirements/model-control-and-tui-visibility.md
+Last activity: 2026-03-03 - Completed quick task 024: requirements/phase-redesign-edge-cases-and-retry-fixes.md
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -87,6 +87,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 021 | Phase redesign — single-session orchestrator + judge evaluation replacing multi-step delegation → regex evaluation | 2026-03-03 | a301bed | [021-phase-redesign-single-session-orchestrat](./quick/021-phase-redesign-single-session-orchestrat/) |
 | 022 | Dead code cleanup post-redesign — remove 6 dead exports from opencode-db.ts, delete 4 empty duplicate phase dirs, scrub stale comments | 2026-03-03 | 17ec5e0 | [022-requirements-cleanup-dead-code-post-rede](./quick/022-requirements-cleanup-dead-code-post-rede/) |
 | 023 | requirements/model-control-and-tui-visibility.md | 2026-03-03 | 9eb94ea | [023-requirements-model-control-and-tui-visib](./quick/023-requirements-model-control-and-tui-visib/) |
+| 024 | requirements/phase-redesign-edge-cases-and-retry-fixes.md | 2026-03-03 | bb3ddcc | [024-requirements-phase-redesign-edge-cases-a](./quick/024-requirements-phase-redesign-edge-cases-a/) |
 
 ## Accumulated Context
 
@@ -331,9 +332,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-023 | Judge scope → haiku always regardless of profile | Judge only parses/evaluates a transcript — cheap tier is sufficient |
 | quick-023 | balanced profile shows NO TUI badge to reduce noise | Badges signal non-default config; 90% of jobs use balanced |
 | quick-023 | resolvedModels always in pilot info JSON output | Programmatic consumers shouldn't need profile-conditional logic |
+| quick-024 | resume_hint in dedicated column, not error field | Clean separation: error = why it failed, resume_hint = how to continue |
+| quick-024 | parseJudgeVerdict exported as module-level function | Enables direct unit testing without fighting private method access |
+| quick-024 | getJob re-fetch before retry decision | claimNextLaunchable already incremented attempts; stale job object would give wrong retry count |
+| quick-024 | Shutdown during judge → resetToPending not markFailed | Phase session completed — marking failed loses work; pending preserves it for retry |
+| quick-024 | resetToPending clears session_titles and job_steps | Prevents stale reconciler pgrep matches and stale TUI step display across retries |
 
 ## Session Continuity
 
-Last session: 2026-03-03T21:38:00Z
-Stopped at: Completed quick-023 (model control enforcement + TUI model visibility)
+Last session: 2026-03-03T21:53:00Z
+Stopped at: Completed quick-024 (phase redesign edge cases — resume_hint, resetToPending cleanup, judge JSON parsing, shutdown guard, attempts off-by-one)
 Resume file: None
