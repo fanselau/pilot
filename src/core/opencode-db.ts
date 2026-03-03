@@ -357,6 +357,19 @@ function truncateStr(s: string | null | undefined, maxLen: number): string | und
 function extractToolInput(tool: string, stateInput: unknown): string | undefined {
   if (stateInput == null) return undefined;
 
+  // task tool: extract description + subagent_type for clean display
+  if (tool === 'task') {
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      const subagentType = typeof inp.subagent_type === 'string' ? inp.subagent_type : 'subagent';
+      if (typeof inp.description === 'string') {
+        return `▶ task: ${subagentType} — "${inp.description}"`;
+      }
+    }
+    // Fallback: truncate full JSON if description missing
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
   if (tool === 'bash') {
     // bash input has { command, description }
     if (typeof stateInput === 'object' && stateInput !== null) {
