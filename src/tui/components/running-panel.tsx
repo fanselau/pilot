@@ -114,11 +114,11 @@ export function RunningPanel(props: {
                 flexDirection="column"
                 paddingBottom={1}
               >
-                {/* Line 1: ● #id  project  scope */}
+                {/* Line 1: ● #id  project  scope  [profile] */}
                 <box flexDirection="row">
                   <PulseDot active={true} />
                   <text
-                    content={` #${job.id}  ${job.project}  ${job.scope}`}
+                    content={` #${job.id}  ${job.project}  ${job.scope}${job.modelProfile !== 'balanced' ? `  [${job.modelProfile}]` : ''}`}
                     fg={statusColors.running}
                   />
                 </box>

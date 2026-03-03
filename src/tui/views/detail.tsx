@@ -22,6 +22,7 @@ import { fetchSessionEnrichment } from '../data/opencode-db.js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
+import { resolveAllAgentModels } from '../../core/models.js';
 import type { PilotStateStore } from '../state.js';
 import type { Job, SessionPart, DelegationPlan } from '../../core/types.js';
 
@@ -90,13 +91,25 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     ? formatTime(new Date(job.startedAt).getTime())
     : '—';
 
-  return [
+  const lines = [
     `#${job.id}  ${job.project}  ${job.scope}  ${job.status}`,
     `"${truncate(job.description, descWidth)}"`,
     `separator`,
     `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
     `Model: ${job.modelProfile}/${job.providerMode}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
   ];
+
+  if (job.modelProfile !== 'balanced') {
+    const models = resolveAllAgentModels(job.modelProfile, job.providerMode);
+    const uniqueModels = new Map<string, string>();
+    for (const [, model] of Object.entries(models)) {
+      const shortName = model.split('/')[1] ?? model;
+      uniqueModels.set(shortName, model);
+    }
+    lines.push(`Models: ${[...uniqueModels.keys()].join('  ')}`);
+  }
+
+  return lines;
 }
 
 function countDescendants(sections: import('../data/opencode-db.js').SessionSection[]): number {
@@ -367,6 +380,21 @@ export function DetailView(props: { state: PilotStateStore }) {
               fg={theme.muted}
             />
           </box>
+          {/* Line 5b: resolved models (only for non-default profiles) */}
+          <Show when={currentJob()!.modelProfile !== 'balanced'}>
+            <text
+              content={(() => {
+                const models = resolveAllAgentModels(currentJob()!.modelProfile, currentJob()!.providerMode);
+                const uniqueModels = new Map<string, string>();
+                for (const [, model] of Object.entries(models)) {
+                  const shortName = model.split('/')[1] ?? model;
+                  uniqueModels.set(shortName, model);
+                }
+                return `Models: ${[...uniqueModels.keys()].join('  ')}`;
+              })()}
+              fg={theme.muted}
+            />
+          </Show>
           {/* Line 6: session title */}
           <text
             content={`Session: ${truncate(getSessionTitle(currentJob()!), 80)}`}

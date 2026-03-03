@@ -40,7 +40,7 @@ export function QueuePanel(props: {
             const selected = () => props.focused && i() === props.selectedIndex;
             const indicator = () => selected() ? '▸' : ' ';
             const line = () =>
-              `${indicator()} #${job.id}  ${job.project}  ${job.scope}  "${truncate(job.description, 30)}"`;
+              `${indicator()} #${job.id}  ${job.project}  ${job.scope}${job.modelProfile !== 'balanced' ? `  [${job.modelProfile}]` : ''}  "${truncate(job.description, 30)}"`;
 
             return (
               <box backgroundColor={selected() ? theme.highlight : undefined}>
