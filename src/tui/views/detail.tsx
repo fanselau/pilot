@@ -104,6 +104,17 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
   ];
 
+  if (job.actualModels && job.actualModels.length > 0) {
+    const actualStr = job.actualModels.join(', ');
+    const resolvedExecutor = executorModel;
+    const hasMismatch = !job.actualModels.some(m => m === resolvedExecutor);
+    if (hasMismatch) {
+      lines.push(`Actual: ${actualStr} (MISMATCH)`);
+    } else {
+      lines.push(`Actual: ${actualStr}`);
+    }
+  }
+
   if (job.modelProfile !== 'balanced') {
     const uniqueModels = new Map<string, string>();
     for (const [, model] of Object.entries(models)) {
@@ -465,7 +476,29 @@ export function DetailView(props: { state: PilotStateStore }) {
               fg={theme.muted}
             />
           </box>
-          {/* Line 5b: resolved models (only for non-default profiles) */}
+          {/* Line 5b: actual model (when available, from opencode DB) */}
+          <Show when={currentJob()!.actualModels !== null && (currentJob()!.actualModels?.length ?? 0) > 0}>
+            <text
+              content={(() => {
+                const j = currentJob()!;
+                const actualStr = j.actualModels!.join(', ');
+                const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
+                const resolvedExecutor = models['gsd-executor'] ?? '';
+                const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
+                return hasMismatch
+                  ? `Actual: ${actualStr} (MISMATCH)`
+                  : `Actual: ${actualStr}`;
+              })()}
+              fg={(() => {
+                const j = currentJob()!;
+                const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
+                const resolvedExecutor = models['gsd-executor'] ?? '';
+                const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
+                return hasMismatch ? '#FACC15' : theme.muted; // yellow for mismatch, muted for match
+              })()}
+            />
+          </Show>
+          {/* Line 5c: resolved models (only for non-default profiles) */}
           <Show when={currentJob()!.modelProfile !== 'balanced'}>
             <text
               content={(() => {

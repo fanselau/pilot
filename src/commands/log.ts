@@ -388,6 +388,7 @@ async function logCommand(
         providerMode: job.providerMode,
         attempts: job.attempts,
         maxAttempts: job.maxAttempts,
+        actualModels: job.actualModels,
       },
       steps: steps.map((s) => ({
         ...s,
@@ -416,6 +417,10 @@ async function logCommand(
   outputHuman(
     `  ${dim(`Model: ${job.modelProfile}/${job.providerMode}   Attempts: ${job.attempts}/${job.maxAttempts}`)}`,
   );
+  if (job.actualModels && job.actualModels.length > 0) {
+    const actualStr = job.actualModels.join(', ');
+    outputHuman(`  ${dim(`Actual model: ${actualStr}`)}`);
+  }
   outputHuman('');
 
   // Step summary (if steps exist)
