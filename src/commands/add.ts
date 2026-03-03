@@ -49,11 +49,21 @@ function isDirPath(str: string): boolean {
  * Detect scope from requirement type:
  *   - File path → phase
  *   - Directory → milestone
- *   - Short string → quick
+ *   - Long string (>100 chars) → phase (likely a requirement description)
+ *   - String with requirements-like verbs → phase
+ *   - Short imperative string → quick
  */
 function detectScope(requirement: string): JobScope {
   if (isFilePath(requirement)) return 'phase';
   if (isDirPath(requirement)) return 'milestone';
+
+  // Long descriptions are likely requirements, not quick fixes
+  if (requirement.length > 100) return 'phase';
+
+  // Requirements-like language patterns suggest phase scope
+  const requirementsPatterns = /\b(implement|build|create|add|integrate|migrate|refactor|redesign|overhaul|set\s?up|introduce)\b/i;
+  if (requirementsPatterns.test(requirement)) return 'phase';
+
   return 'quick';
 }
 
@@ -73,6 +83,14 @@ async function addCommand(
     : undefined;
 
   const scope = opts.as ?? detectScope(requirement);
+
+  // Warn when quick scope is used (explicitly or auto-detected) — encourage phase
+  if (scope === 'quick' && !isJsonMode()) {
+    process.stderr.write(
+      `  ${yellow('⚠')} Quick mode skips planning. Consider phase mode for better results:\n` +
+      `    pilot add ${project} ${requirement.includes(' ') ? `"${requirement.slice(0, 50)}"` : requirement} --as phase\n\n`,
+    );
+  }
 
   let description = requirement;
   let requirementPath: string | null = null;
