@@ -35,3 +35,14 @@ export const theme = {
   panelGap: 1,
   padding: 1,
 } as const;
+
+// ── Subagent visual nesting colors ────────────────────────────────────────
+
+export const subagentColors = {
+  border: '#4A9EFF',       // blue border for subagent boxes
+  borderChild: '#555555',  // dimmer for nested children
+  borderGrandchild: '#3a3a3a', // dimmest for grandchildren
+  header: '#4A9EFF',       // bright blue header text
+  headerChild: '#888888',  // dimmer for nested
+  headerGrandchild: '#666666', // dimmest for grandchildren
+} as const;
