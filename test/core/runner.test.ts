@@ -58,7 +58,7 @@ const mockGetLastMessage = vi.fn();
 
 vi.mock('../../src/core/opencode-db.js', () => ({
   findSessionByTitle: vi.fn(),
-  isSessionActive: vi.fn(),
+  isSessionDone: vi.fn(),
   getLastMessage: (...args: unknown[]) => mockGetLastMessage(...args),
 }));
 
@@ -465,18 +465,20 @@ describe('evaluateStepResult', () => {
   });
 
   describe('uncertain results', () => {
-    it('returns uncertain with success:true for unknown patterns', () => {
+    it('returns uncertain with success:false (fail-safe) for unknown patterns', () => {
       mockGetLastMessage.mockReturnValue({
         id: 'msg-u', role: 'assistant', content: 'I updated some files.', createdAt: Date.now() - 60_000,
       });
       const result = evaluateStepResult('s1', 'execute-phase');
-      expect(result.success).toBe(true);
+      // Uncertain now returns fail-safe (success: false) to prevent phantom completions
+      expect(result.success).toBe(false);
       expect(result.certainty).toBe('uncertain');
     });
 
-    it('returns uncertain when no messages exist', () => {
+    it('returns uncertain when no messages exist (success:true — no content to evaluate)', () => {
       mockGetLastMessage.mockReturnValue(null);
       const result = evaluateStepResult('s1', 'execute-phase');
+      // No messages = cannot evaluate = give benefit of the doubt (early stage)
       expect(result.success).toBe(true);
       expect(result.reason).toBe('No messages to evaluate');
     });
@@ -489,6 +491,28 @@ describe('evaluateStepResult', () => {
       evaluateStepResult('s1', 'execute-phase');
       expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('[runner] Warning: Step result ambiguous'));
       stderrSpy.mockRestore();
+    });
+  });
+
+  describe('expanded failure patterns', () => {
+    const expandedFailureCases = [
+      ['compilation failed', 'The TypeScript compilation failed with 5 errors'],
+      ['build error', 'Build error: cannot resolve module'],
+      ['tests failed', 'Tests failed: 3 of 10 tests did not pass'],
+      ['syntax error', 'Syntax error in src/index.ts on line 42'],
+      ['I was unable to', 'I was unable to complete the phase due to missing files'],
+      ["I couldn't", "I couldn't find the required configuration files"],
+      ['Unfortunately, I', 'Unfortunately, I encountered an error while executing the phase'],
+      ['fatal error', 'A fatal error occurred during execution'],
+    ];
+
+    it.each(expandedFailureCases)('detects "%s" as definite failure', (_label, content) => {
+      mockGetLastMessage.mockReturnValue({
+        id: 'msg-ef', role: 'assistant', content, createdAt: Date.now() - 60_000,
+      });
+      const result = evaluateStepResult('s1', 'execute-phase');
+      expect(result.success).toBe(false);
+      expect(result.certainty).toBe('definite');
     });
   });
 });

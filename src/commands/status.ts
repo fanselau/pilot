@@ -9,7 +9,7 @@ import { getQueue, getRecent } from '../core/db.js';
 import {
   getLastMessage,
   findSessionByTitle,
-  isSessionActive,
+  isSessionDone,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
@@ -74,7 +74,7 @@ function getSessionActivity(job: Job): string | null {
  * Status integrity check: determine if a 'running' job has no backing opencode session.
  *
  * A job is stale when its most recent session title maps to a session in opencode DB
- * that is no longer active (isSessionActive returns false).
+ * that is done (isSessionDone returns true — step-finish reason=stop/length).
  *
  * Returns false (not stale) when:
  * - No session titles recorded yet (job may just be starting)
@@ -93,9 +93,9 @@ function isJobStale(job: Job): boolean {
     const sessionId = findSessionByTitle(lastTitle);
     if (!sessionId) return false; // Not in opencode DB yet — might be initialising
 
-    // Session exists in opencode DB — check if it's still active
-    // isSessionActive returns false when the session has ended
-    return !isSessionActive(sessionId);
+    // Session exists in opencode DB — check if it's done (completed)
+    // isSessionDone returns true when the session has ended (step-finish reason=stop/length)
+    return isSessionDone(sessionId);
   } catch {
     return false; // Err on side of caution — don't show false stale warnings
   }
