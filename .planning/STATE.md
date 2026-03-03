@@ -6,9 +6,9 @@
 ## Current Position
 
 Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
-Plan: 2 of 2 in current phase (26-01 complete, 26-02 complete)
+Plan: 3 of 3 in current phase (26-01 complete, 26-02 complete, 26-03 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed 26-02-PLAN.md (immediate dispatch drain loop + killJobSession)
+Last activity: 2026-03-03 - Completed 26-03-PLAN.md (pilot kill <id> --force CLI command)
 
 Progress: ██████████████████████████████ 100% (75/75 plans)
 
@@ -301,9 +301,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 27-01 | Token fetch in completed panel on job change (no timer) | Completed job data is static — one fetch when jobs list changes |
 | 26-02 | Periodic reconcileStaleJobs every RECONCILE_EVERY_N_CYCLES=10 | Long-running daemons need ongoing DB-level ghost cleanup, not just startup |
 | 26-02 | In-memory same-project guard alongside claimNextLaunchable DB guard | Belt-and-suspenders prevents edge cases between DB claim and activeJobs.set() |
+| 26-03 | Kill-then-update order: OS kill first, DB update always | Prevents ghost-running jobs even if process already exited before kill |
+| 26-03 | DB update continues even when killJobSession returns killed:false | Process may already be gone; DB must reflect terminal state regardless |
 
 ## Session Continuity
 
-Last session: 2026-03-03T18:37:25Z
-Stopped at: Completed 26-02-PLAN.md (Phase 26 complete — immediate dispatch drain loop + killJobSession)
+Last session: 2026-03-03T18:43:00Z
+Stopped at: Completed 26-03-PLAN.md (Phase 26 complete — pilot kill <id> --force CLI command)
 Resume file: None
