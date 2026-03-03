@@ -27,12 +27,12 @@ import type { Job, SessionPart, DelegationPlan } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function truncate(str: string, maxLen: number): string {
+export function truncate(str: string, maxLen: number): string {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + '…';
 }
 
-function formatElapsed(startedAt: string | null): string {
+export function formatElapsed(startedAt: string | null): string {
   if (!startedAt) return '0s';
   const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
   if (elapsed < 0) return '0s';
@@ -44,7 +44,7 @@ function formatElapsed(startedAt: string | null): string {
   return `${secs}s`;
 }
 
-function formatTime(epochMs: number): string {
+export function formatTime(epochMs: number): string {
   return new Date(epochMs).toLocaleTimeString('en-US', {
     hour12: false,
     hour: '2-digit',
@@ -64,7 +64,7 @@ function statusColor(status: string): string {
   }
 }
 
-function parseStepInfo(job: Job): { label: string; index: string } {
+export function parseStepInfo(job: Job): { label: string; index: string } {
   if (!job.delegationPlan) return { label: '—', index: '—' };
   try {
     const plan = JSON.parse(job.delegationPlan) as DelegationPlan;
@@ -74,6 +74,29 @@ function parseStepInfo(job: Job): { label: string; index: string } {
     const index = `${job.currentStep + 1}/${total}`;
     return { label, index };
   } catch { return { label: '—', index: '—' }; }
+}
+
+/**
+ * Build an array of line strings representing the header for a job.
+ * Used for testing header composition without a UI renderer.
+ *
+ * @param job - The job to build header for
+ * @param cols - Terminal width (default 80)
+ */
+export function buildHeaderLines(job: Job, cols: number = 80): string[] {
+  const descWidth = Math.max(20, cols - 4);
+  const stepInfo = parseStepInfo(job);
+  const startedStr = job.startedAt
+    ? formatTime(new Date(job.startedAt).getTime())
+    : '—';
+
+  return [
+    `#${job.id}  ${job.project}  ${job.scope}  ${job.status}`,
+    `"${truncate(job.description, descWidth)}"`,
+    `separator`,
+    `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
+    `Model: ${job.modelProfile}/${job.providerMode}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
+  ];
 }
 
 function countDescendants(sections: import('../data/opencode-db.js').SessionSection[]): number {
