@@ -14,7 +14,7 @@ import {
   getSessionMessages,
   getSessionParts,
   getChildSessions,
-  isSessionActive,
+  isSessionDone,
 } from '../../core/opencode-db.js';
 import type { SessionMessage, SessionPart, Job } from '../../core/types.js';
 
@@ -181,4 +181,4 @@ export function fetchJobMessages(sessionTitle: string, since?: number): SessionM
 
 // ── Re-exports ────────────────────────────────────────────────────────────
 
-export { isSessionActive, getSessionTokens, findSessionByTitle };
+export { isSessionDone, getSessionTokens, findSessionByTitle };

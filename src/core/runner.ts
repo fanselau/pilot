@@ -39,7 +39,7 @@ import {
   reconcileStaleJobs,         // NEW — reset ghost-running jobs to pending
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
-import { findSessionByTitle, isSessionActive, getLastMessage } from './opencode-db.js';
+import { findSessionByTitle, isSessionDone, getLastMessage } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { dim } from '../util/colors.js';
@@ -506,9 +506,13 @@ class Runner {
     proc.catch(() => {});
     proc.unref();
 
-    // Poll opencode DB for session completion
+    // Poll opencode DB for session completion using isSessionDone() + PID liveness.
+    // isSessionDone() uses step-finish reason as ground truth — eliminates the broken
+    // isSessionActive() + 60s message age heuristic that caused premature completions
+    // when sessions had long-running tool calls.
     const pollMs = config.pollInterval * 1000;
     let sessionFound = false;
+    const procPid = proc.pid;
 
     while (Date.now() - start < timeoutMs) {
       await this.sleep(pollMs);
@@ -518,24 +522,43 @@ class Runner {
       }
 
       const sessionId = findSessionByTitle(title);
-      if (!sessionId) continue;
+      if (!sessionId) {
+        // Session not yet in DB — check PID liveness as early termination guard
+        if (procPid !== undefined) {
+          try {
+            process.kill(procPid, 0);
+            // PID alive, session not in DB yet — keep waiting
+          } catch {
+            // PID dead before session appeared — bail out early
+            if (Date.now() - start > 10_000) {
+              throw new Error(`Session never appeared in opencode DB: ${title} (process died)`);
+            }
+          }
+        }
+        continue;
+      }
       sessionFound = true;
 
-      // Check if session is still active
-      const active = isSessionActive(sessionId);
-      if (!active) {
-        // Session finished — check if it was >60s since last message
-        const lastMsg = getLastMessage(sessionId);
-        if (lastMsg) {
-          const ageMs = Date.now() - lastMsg.createdAt;
-          if (ageMs > 60_000) {
-            return; // Session done
+      // Primary completion check: step-finish reason is the ground truth
+      if (isSessionDone(sessionId)) {
+        return; // Session completed normally
+      }
+
+      // Belt-and-suspenders: check PID liveness
+      if (procPid !== undefined) {
+        try {
+          process.kill(procPid, 0);
+          // PID alive — session still in progress, keep polling
+        } catch {
+          // PID dead — do one final isSessionDone check
+          if (isSessionDone(sessionId)) {
+            return; // Completed just as process exited
           }
-        } else {
-          // No messages but session exists and isn't active — might just be starting
-          if (Date.now() - start > 30_000) {
-            return; // Been waiting 30s with no messages and no activity — done
-          }
+          // Process died without stop signal — log and return
+          process.stderr.write(
+            `[runner] Warning: process died without stop signal for session ${title}. Treating as complete.\n`,
+          );
+          return;
         }
       }
     }
@@ -652,18 +675,14 @@ class Runner {
       await this.sleep(POLL_INTERVAL_MS);
       const elapsed = Date.now() - graceStart;
 
-      // Check session liveness
+      // Check session liveness using isSessionDone() — ground truth completion check.
+      // Replaces the broken isSessionActive() + 60s message age heuristic.
       const sessionId = findSessionByTitle(sessionTitle);
       let sessionAlive = false;
-      let lastMsgAgeMs: number | null = null;
 
       if (sessionId) {
-        const active = isSessionActive(sessionId);
-        const lastMsg = getLastMessage(sessionId);
-        lastMsgAgeMs = lastMsg ? Date.now() - lastMsg.createdAt : null;
-
-        // Session is alive if: still active, OR last message was recent (within 60s)
-        sessionAlive = active || (lastMsgAgeMs !== null && lastMsgAgeMs < 60_000);
+        // Session is alive if NOT done (step-finish reason != 'stop'/'length')
+        sessionAlive = !isSessionDone(sessionId);
       }
 
       // Retry artifact check
@@ -677,9 +696,8 @@ class Runner {
       }
 
       if (!sessionAlive) {
-        const ageInfo = lastMsgAgeMs !== null ? `${lastMsgAgeMs}ms ago` : 'unknown';
         process.stderr.write(
-          `[runner] Artifacts still missing and session inactive (last update: ${ageInfo}). Failing.\n`,
+          `[runner] Artifacts still missing and session done (step-finish reason=stop). Failing.\n`,
         );
         return verification;
       }
@@ -735,6 +753,14 @@ function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
     /cannot find phase/i,
     /failed to (plan|execute|verify)/i,
     /\berror\b.*\b(execute|plan|verify)\b/i,
+    /compilation failed/i,
+    /build error/i,
+    /test(s)? failed/i,
+    /syntax error/i,
+    /i was unable to/i,
+    /i couldn't/i,
+    /unfortunately,?\s+i/i,
+    /fatal error/i,
   ];
 
   for (const pattern of failurePatterns) {
@@ -770,13 +796,14 @@ function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
     }
   }
 
-  // Neither success nor failure patterns matched — uncertain
+  // Neither success nor failure patterns matched — uncertain.
+  // Fail-safe: return success:false to prevent phantom completion (better to retry than to silently skip).
   process.stderr.write(
     `[runner] Warning: Step result ambiguous — neither success nor failure patterns matched. Last message: ${content.slice(0, 100)}\n`,
   );
   return {
-    success: true,
-    reason: 'No failure markers detected (uncertain — no success markers either)',
+    success: false,
+    reason: 'No success markers detected (uncertain — failing safe)',
     source: 'semantic-check',
     certainty: 'uncertain',
   };
