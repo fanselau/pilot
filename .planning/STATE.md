@@ -8,7 +8,7 @@
 Phase: 27 of 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
 Plan: 2 of 2 in current phase (27-01 and 27-02 complete)
 Status: Phase complete
-Last activity: 2026-03-03 - Completed quick task 022: Dead code cleanup post-redesign
+Last activity: 2026-03-03 - Completed quick task 023: Model control enforcement + TUI model visibility
 
 Progress: ██████████████████████████████ 100% (78/78 plans)
 
@@ -86,6 +86,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 020 | Requirements observability and job config visibility — pilot log header with model/attempts, per-step tokens, new pilot info <id> command | 2026-03-03 | 82bcdda | [020-requirements-observability-and-job-config](./quick/020-requirements-observability-and-job-config/) |
 | 021 | Phase redesign — single-session orchestrator + judge evaluation replacing multi-step delegation → regex evaluation | 2026-03-03 | a301bed | [021-phase-redesign-single-session-orchestrat](./quick/021-phase-redesign-single-session-orchestrat/) |
 | 022 | Dead code cleanup post-redesign — remove 6 dead exports from opencode-db.ts, delete 4 empty duplicate phase dirs, scrub stale comments | 2026-03-03 | 17ec5e0 | [022-requirements-cleanup-dead-code-post-rede](./quick/022-requirements-cleanup-dead-code-post-rede/) |
+| 023 | Model control enforcement + TUI model visibility — resolveTopLevelModel(), --model flag in spawnAndWait, TUI badges, pilot info resolved models | 2026-03-03 | 8a8fb8b | [023-requirements-model-control-and-tui-visib](./quick/023-requirements-model-control-and-tui-visib/) |
 
 ## Accumulated Context
 
@@ -326,9 +327,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | quick-021 | Shutdown-interrupted jobs reset to pending via resetToPending | Jobs retried on next runner start instead of being lost |
 | quick-021 | pilot- prefix commands handled alongside gsd- in spawnAndWait | Avoids double-prefixing pilot-judge as gsd-pilot-judge |
 | quick-021 | Execa mock must be re-initialized per test suite | vi.clearAllMocks only clears call counts, not mockResolvedValue overrides |
+| quick-023 | resolveTopLevelModel() reuses AGENT_PROFILE_TIERS entries for scope→tier mapping | Avoids separate mapping table; scope→agent is a logical alias |
+| quick-023 | Judge scope → haiku always regardless of profile | Judge only parses/evaluates a transcript — cheap tier is sufficient |
+| quick-023 | balanced profile shows NO TUI badge to reduce noise | Badges signal non-default config; 90% of jobs use balanced |
+| quick-023 | resolvedModels always in pilot info JSON output | Programmatic consumers shouldn't need profile-conditional logic |
 
 ## Session Continuity
 
-Last session: 2026-03-03T21:26:35Z
-Stopped at: Completed quick-022 (dead code cleanup post-redesign)
+Last session: 2026-03-03T21:38:00Z
+Stopped at: Completed quick-023 (model control enforcement + TUI model visibility)
 Resume file: None
