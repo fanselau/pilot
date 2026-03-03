@@ -25,8 +25,9 @@ const HELP_TEXT = `
   Enter        Open job detail
   a            Add new job
   r            Retry failed job
-  x            Cancel job
-  g            Jump to top
+   x            Cancel pending job
+   K            Force-quit running job
+   g            Jump to top
   G            Jump to bottom
 
  ── Detail ──────────────────────────
@@ -35,8 +36,9 @@ const HELP_TEXT = `
   j / k        Scroll log
   g / G        Top / bottom of log
   /            Search in log
-  r            Retry this job
-  x            Cancel this job
+   r            Retry this job
+   x            Cancel pending job
+   K            Force-quit running job
 `.trim();
 
 export function HelpOverlay() {

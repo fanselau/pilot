@@ -18,8 +18,11 @@ import { StatusBar } from './components/status-bar.js';
 import { FooterBar } from './components/footer-bar.js';
 import { HelpOverlay } from './components/help-overlay.js';
 import { FilterOverlay } from './components/filter-overlay.js';
+import { ConfirmOverlay } from './components/confirm-overlay.js';
 import { Dashboard } from './views/dashboard.js';
 import { DetailView } from './views/detail.js';
+import { forceQuitJob } from '../core/db.js';
+import { killJobSession } from '../core/runner.js';
 import type { Job } from '../core/types.js';
 
 // ── Keyboard event interface (matches OpenTUI KeyEvent shape) ─────────────
@@ -112,6 +115,24 @@ export function App(_props: { interval?: number }) {
   // ── Keyboard handler ──────────────────────────────────────────────────
 
   useKeyboard((key: TuiKeyEvent) => {
+    // Confirm overlay captures y/n/Esc when open
+    if (state.showConfirm()) {
+      if (key.sequence === 'y' || key.sequence === 'Y') {
+        const action = state.pendingConfirmAction();
+        if (action) {
+          state.setShowConfirm(false);
+          state.setPendingConfirmAction(null);
+          action().catch((err: unknown) => {
+            process.stderr.write(`[tui] force-quit error: ${String(err)}\n`);
+          });
+        }
+      } else if (key.sequence === 'n' || key.sequence === 'N' || key.name === 'escape') {
+        state.setShowConfirm(false);
+        state.setPendingConfirmAction(null);
+      }
+      return;
+    }
+
     // Filter overlay captures input when open — only handle Esc
     if (state.showFilter()) {
       if (key.name === 'escape') {
@@ -234,6 +255,30 @@ export function App(_props: { interval?: number }) {
         }
         return;
       }
+
+      // K — force-quit running job (only when running panel focused)
+      if (key.sequence === 'K' && state.panelFocus() === 'running') {
+        const job = state.selectedJob();
+        if (job && job.status === 'running') {
+          state.setPendingConfirmAction(() => async () => {
+            // Kill process first, then update DB
+            await killJobSession(job);
+            forceQuitJob(job.id, 'tui');
+            // Force immediate queue refresh
+            try {
+              const { pending, running } = fetchQueueData();
+              batch(() => {
+                state.setQueue(pending);
+                state.setRunning(running);
+              });
+            } catch {
+              // Refresh on next poll cycle if immediate fails
+            }
+          });
+          state.setShowConfirm(true);
+        }
+        return;
+      }
     }
   });
 
@@ -265,6 +310,23 @@ export function App(_props: { interval?: number }) {
             state.setShowFilter(false);
           }}
           onClose={() => state.setShowFilter(false)}
+        />
+      </Show>
+      <Show when={state.showConfirm()}>
+        <ConfirmOverlay
+          message={`Kill job ${state.selectedJob()?.id ?? ''} (${state.selectedJob()?.project ?? ''})?`}
+          onConfirm={() => {
+            const action = state.pendingConfirmAction();
+            if (action) {
+              state.setShowConfirm(false);
+              state.setPendingConfirmAction(null);
+              action().catch(() => {});
+            }
+          }}
+          onCancel={() => {
+            state.setShowConfirm(false);
+            state.setPendingConfirmAction(null);
+          }}
         />
       </Show>
       <FooterBar view={state.view()} />
