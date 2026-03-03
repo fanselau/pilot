@@ -47,6 +47,7 @@ export interface Job {
   sessionTitles: string | null;   // JSON array of session titles
   modelProfile: ModelProfile;
   providerMode: ProviderMode;
+  judgeVerdict: string | null;  // JSON string of judge verdict
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────

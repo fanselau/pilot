@@ -78,6 +78,7 @@ import {
   fallbackPlan,
   buildNewProjectArgs,
   buildQuickArgs,
+  buildPhaseArgs,
   getNextPhaseNumber,
   buildMilestonePlan,
   extractRequirementTitle,
@@ -108,6 +109,7 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     sessionTitles: null,
     modelProfile: 'balanced',
     providerMode: 'claude-only',
+    judgeVerdict: null,
     ...overrides,
   };
 }
@@ -263,121 +265,94 @@ describe('resolvePhaseForFallback', () => {
     mockRequirementFileContent = {};
   });
 
-  it('returns execute-phase when description is numeric', () => {
+  it('returns single phase step with --phase flag for numeric description', () => {
     const job = makeTestJob({ description: '3' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('execute-phase');
-    expect(plan.steps[0].args).toBe('3');
-    expect(plan.reasoning).toContain('numeric phase identifier');
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('--phase 3 --auto');
+    expect(plan.reasoning).toContain('gsd-phase');
   });
 
-  it('returns execute-phase for numeric with whitespace', () => {
+  it('returns single phase step with --phase flag for numeric with whitespace', () => {
     const job = makeTestJob({ description: ' 12 ' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('execute-phase');
-    expect(plan.steps[0].args).toBe('12');
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('--phase 12 --auto');
   });
 
-  it('builds add→plan→execute lifecycle for non-numeric description', () => {
+  it('returns single phase step with description for non-numeric description', () => {
     mockPhaseDirs = ['01-setup', '02-core', '03-ui', '04-testing', '05-deploy'];
     const job = makeTestJob({ description: 'Add dark mode support' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Add dark mode support');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toBe('6 --auto'); // next after 5 dirs
-    expect(plan.steps[2].command).toBe('execute-phase');
-    expect(plan.steps[2].args).toBe('6');
-    expect(plan.reasoning).toContain('phase 6');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Add dark mode support --auto');
+    expect(plan.reasoning).toContain('gsd-phase');
   });
 
-  it('uses extracted title from requirementPath for add-phase, not file path', () => {
+  it('uses @requirementPath in phase args when available', () => {
     mockRequirementFileContent['requirements/dark-mode.md'] = '# Dark Mode Support\n\nAdd dark mode to the app.';
     const job = makeTestJob({
       description: 'Dark mode',
       requirementPath: 'requirements/dark-mode.md',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps[0].command).toBe('add-phase');
-    // add-phase gets the human-readable title, NOT the file path
-    expect(plan.steps[0].args).toBe('Dark Mode Support');
-    // plan-phase gets @path for GSD context reference
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toContain('@requirements/dark-mode.md');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@requirements/dark-mode.md --auto');
   });
 
-  it('falls back to description when requirementPath has no title heading', () => {
+  it('uses @requirementPath even when file has no title heading', () => {
     mockRequirementFileContent['requirements/no-heading.md'] = 'Just some content without a heading.';
     const job = makeTestJob({
       description: 'No heading feature',
       requirementPath: 'requirements/no-heading.md',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps[0].command).toBe('add-phase');
-    // Falls back to job.description when no # heading found
-    expect(plan.steps[0].args).toBe('No heading feature');
-    // plan-phase still gets @path
-    expect(plan.steps[1].args).toContain('@requirements/no-heading.md');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@requirements/no-heading.md --auto');
   });
 
-  it('calculates next phase correctly with gaps in phase numbers', () => {
+  it('always produces a single step regardless of phase count', () => {
     mockPhaseDirs = ['01-setup', '03-engine', '10-deploy'];
     const job = makeTestJob({ description: 'New feature' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // Max phase is 10, next is 11
-    expect(plan.steps[1].args).toBe('11 --auto');
-    expect(plan.steps[2].args).toBe('11');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
   });
 
-  it('defaults to phase 1 when phases dir is empty', () => {
+  it('returns single phase step even when phases dir is empty', () => {
     mockPhaseDirs = [];
     const job = makeTestJob({ description: 'Start fresh' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps[1].args).toBe('1 --auto');
-    expect(plan.steps[2].args).toBe('1');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Start fresh --auto');
   });
 
-  it('defaults to phase 1 when phases dir does not exist', () => {
+  it('returns single phase step even when phases dir does not exist', () => {
     mockPhaseDirs = THROW_READDIRSYNC as unknown as string[];
     const job = makeTestJob({ description: 'Something' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // Should still produce a valid plan with phase 1
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[1].args).toBe('1 --auto');
-    expect(plan.steps[2].args).toBe('1');
-    expect(plan.reasoning).toContain('phase 1');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Something --auto');
+    expect(plan.reasoning).toContain('gsd-phase');
   });
 
-  it('uses filesystem scan not ROADMAP heading count', () => {
-    // ROADMAP has 5 phases but filesystem has only 2 dirs
-    mockRoadmapContent = `# Roadmap
-### Phase 1: Setup
-### Phase 2: Core
-### Phase 3: UI
-### Phase 4: Testing
-### Phase 5: Deploy
-`;
-    mockPhaseDirs = ['01-setup', '02-core'];
-    const job = makeTestJob({ description: 'New feature' });
-    const plan = resolvePhaseForFallback('/tmp/project', job);
-    // Should be phase 3 (from filesystem scan), NOT phase 6 (from ROADMAP headings)
-    expect(plan.steps[1].args).toBe('3 --auto');
-    expect(plan.steps[2].args).toBe('3');
-  });
-
-  it('never passes requirement titles directly to execute-phase for non-numeric descriptions', () => {
+  it('never passes requirement titles directly — always delegates to gsd-phase', () => {
     const job = makeTestJob({
       description: 'Pilot Requirement: Phase Execution Success Contract',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // The key assertion: execute-phase should NOT get the title string
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    // No execute-phase step at all — gsd-phase handles everything
     const executeStep = plan.steps.find(s => s.command === 'execute-phase');
-    expect(executeStep).toBeDefined();
-    // execute-phase args should be numeric
-    expect(executeStep!.args).toMatch(/^\d+$/);
+    expect(executeStep).toBeUndefined();
   });
 });
 
@@ -406,39 +381,35 @@ describe('fallbackPlan', () => {
     expect(plan.steps[1].command).toBe('quick');
   });
 
-  it('returns new-project + plan + execute for uninitialized phase', () => {
+  it('returns new-project + phase for uninitialized phase', () => {
     mockRoadmapExists = false;
     const job = makeTestJob({ scope: 'phase', description: 'Add auth' });
     const plan = fallbackPlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps).toHaveLength(2);
     expect(plan.steps[0].command).toBe('new-project');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toBe('1 --auto');
-    expect(plan.steps[2].command).toBe('execute-phase');
-    expect(plan.steps[2].args).toBe('1');
+    expect(plan.steps[1].command).toBe('phase');
+    expect(plan.steps[1].args).toBe('Add auth --auto');
   });
 
-  it('delegates to resolvePhaseForFallback for initialized phase', () => {
+  it('delegates to resolvePhaseForFallback for initialized phase — single step', () => {
     mockRoadmapExists = true;
     mockPhaseDirs = ['01-setup', '02-core', '03-ui'];
     const job = makeTestJob({ scope: 'phase', description: 'Add dark mode' });
     const plan = fallbackPlan(job, '/tmp/project');
-    // Should produce add→plan→execute lifecycle via resolvePhaseForFallback
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toBe('4 --auto');
-    expect(plan.steps[2].command).toBe('execute-phase');
+    // Should produce single phase step via resolvePhaseForFallback
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Add dark mode --auto');
   });
 
-  it('returns new-project lifecycle for uninitialized milestone', () => {
+  it('returns new-project + phase for uninitialized milestone', () => {
     mockRoadmapExists = false;
     const job = makeTestJob({ scope: 'milestone', description: 'Build CRM' });
     const plan = fallbackPlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps).toHaveLength(2);
     expect(plan.steps[0].command).toBe('new-project');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps[1].command).toBe('phase');
+    expect(plan.steps[1].args).toBe('Build CRM --auto');
   });
 
   it('delegates to buildMilestonePlan for initialized milestone', () => {
@@ -453,6 +424,38 @@ describe('fallbackPlan', () => {
     expect(plan.steps).toHaveLength(1);
     expect(plan.steps[0].command).toBe('add-phase');
     expect(plan.reasoning).toContain('adding as new phase');
+  });
+});
+
+describe('buildPhaseArgs', () => {
+  it('uses @requirementPath when available', () => {
+    const job = makeTestJob({ requirementPath: 'requirements/auth.md' });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('@requirements/auth.md --auto');
+  });
+
+  it('uses --phase N for numeric descriptions', () => {
+    const job = makeTestJob({ description: '3', requirementPath: null });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('--phase 3 --auto');
+  });
+
+  it('uses --phase N for numeric with whitespace', () => {
+    const job = makeTestJob({ description: ' 12 ', requirementPath: null });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('--phase 12 --auto');
+  });
+
+  it('uses description directly for non-numeric without requirementPath', () => {
+    const job = makeTestJob({ description: 'Add dark mode', requirementPath: null });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('Add dark mode --auto');
+  });
+
+  it('prioritizes requirementPath over description', () => {
+    const job = makeTestJob({ description: '3', requirementPath: 'requirements/auth.md' });
+    const result = buildPhaseArgs(job);
+    expect(result).toBe('@requirements/auth.md --auto');
   });
 });
 
@@ -504,7 +507,7 @@ describe('buildMilestonePlan', () => {
     mockRequirementFileContent = {};
   });
 
-  it('creates one phase per .md file in requirement directory with titles', () => {
+  it('creates one phase command per .md file in requirement directory', () => {
     mockRequirementIsDir = true;
     mockRequirementDirFiles = ['01-auth.md', '02-payments.md', '03-ui.md'];
     mockPhaseDirs = ['01-setup', '02-core'];
@@ -519,31 +522,19 @@ describe('buildMilestonePlan', () => {
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
 
-    // 3 files × 3 steps (add + plan + execute) = 9 steps
-    expect(plan.steps).toHaveLength(9);
-    // add-phase gets human-readable title, NOT file path
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Authentication');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toContain('@/tmp/requirements/milestone-v2/01-auth.md');
-    expect(plan.steps[1].args).toContain('--auto');
-    expect(plan.steps[2].command).toBe('execute-phase');
-    expect(plan.steps[2].args).toBe('3');
-
-    expect(plan.steps[3].command).toBe('add-phase');
-    expect(plan.steps[3].args).toBe('Payment Integration');
-    expect(plan.steps[4].args).toContain('@/tmp/requirements/milestone-v2/02-payments.md');
-    expect(plan.steps[5].args).toBe('4');
-
-    expect(plan.steps[6].command).toBe('add-phase');
-    expect(plan.steps[6].args).toBe('UI Components');
-    expect(plan.steps[7].args).toContain('@/tmp/requirements/milestone-v2/03-ui.md');
-    expect(plan.steps[8].args).toBe('5');
+    // 3 files × 1 step (phase command) = 3 steps
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@/tmp/requirements/milestone-v2/01-auth.md --auto');
+    expect(plan.steps[1].command).toBe('phase');
+    expect(plan.steps[1].args).toBe('@/tmp/requirements/milestone-v2/02-payments.md --auto');
+    expect(plan.steps[2].command).toBe('phase');
+    expect(plan.steps[2].args).toBe('@/tmp/requirements/milestone-v2/03-ui.md --auto');
 
     expect(plan.reasoning).toContain('3 requirement files');
   });
 
-  it('falls back to filename-derived title when no heading in file', () => {
+  it('uses @path for phase command even when no heading in file', () => {
     mockRequirementIsDir = true;
     mockRequirementDirFiles = ['01-auth.md'];
     mockPhaseDirs = ['01-setup'];
@@ -556,10 +547,9 @@ describe('buildMilestonePlan', () => {
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
 
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    // Falls back to filename without .md and without number prefix
-    expect(plan.steps[0].args).toBe('auth');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@/tmp/requirements/milestone-v2/01-auth.md --auto');
   });
 
   it('falls back to single add-phase with title when requirementPath is a file', () => {

@@ -113,6 +113,7 @@ interface JobRow {
   session_titles: string | null;
   model_profile: string;
   provider_mode: string;
+  judge_verdict: string | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -136,6 +137,7 @@ function rowToJob(row: JobRow): Job {
     sessionTitles: row.session_titles,
     modelProfile: (row.model_profile ?? 'balanced') as Job['modelProfile'],
     providerMode: (row.provider_mode ?? 'claude-only') as Job['providerMode'],
+    judgeVerdict: row.judge_verdict ?? null,
   };
 }
 
@@ -153,6 +155,7 @@ function migrateSchema(db: DatabaseType): void {
   const migrations = [
     "ALTER TABLE jobs ADD COLUMN model_profile TEXT NOT NULL DEFAULT 'balanced'",
     "ALTER TABLE jobs ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'claude-only'",
+    "ALTER TABLE jobs ADD COLUMN judge_verdict TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -698,6 +701,34 @@ function skipRemainingSteps(
   }
 }
 
+// ── Reset to Pending ──────────────────────────────────────────────────
+
+/**
+ * Reset a job back to pending status for retry.
+ * Used by the judge-based evaluation when a retryable failure is detected.
+ * Clears started_at for fresh timing on next attempt.
+ * Optionally records a resume hint in the error field.
+ */
+function resetToPending(id: string, resumeHint?: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'pending',
+        started_at = NULL,
+        error = ?,
+        current_step = 0
+    WHERE id = ?
+  `).run(resumeHint ? `Reset: ${resumeHint}` : null, id);
+}
+
+/**
+ * Store judge verdict JSON string on a job.
+ */
+function updateJudgeVerdict(id: string, verdict: string): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET judge_verdict = ? WHERE id = ?').run(verdict, id);
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -728,4 +759,6 @@ export {
   completeStep,
   getJobSteps,
   skipRemainingSteps,
+  resetToPending,
+  updateJudgeVerdict,
 };
