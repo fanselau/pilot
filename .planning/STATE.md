@@ -1,24 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 24
+## Current Phase: 25
 
 ## Current Position
 
-Phase: 24 of 27 (Task/Subagent Visibility in TUI and Logs)
-Plan: 3 of 3 in current phase
-Status: Complete
-Next Phase: 25 (Pilot Learnings Consolidation + Reliability Guardrails (2026-03-03)); then 26 (Runner Immediate Dispatch + Force Quit Controls); then 27 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
-Last activity: 2026-03-03 - Completed 24-03-PLAN.md (CLI log child expansion + flags)
+Phase: 25 of 27 (Pilot Learnings Consolidation + Reliability Guardrails)
+Plan: 1 of 4 in current phase
+Status: In progress
+Next: 25-02-PLAN.md (runner serialization guard + startup reconciliation)
+Last activity: 2026-03-03 - Completed 25-01-PLAN.md (DB layer: getRunningJobsForProject, getAllRunningJobs, reconcileStaleJobs, markStale)
 
-Progress: ████████████████████████████░░ 94% (72/77 plans)
+Progress: ████████████████████████████░░ 94% (73/77 plans)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 24 complete — Task/Subagent Visibility in TUI and Logs (3/3 plans complete, verified)
+**Current focus:** Phase 25 in progress — Pilot Learnings Consolidation + Reliability Guardrails (1/4 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -64,6 +64,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 15: E2E test suite per requirements/e2e-test-suite.md
 - **Status:** in progress (1/3 plans complete)
+
+### Phase 25: Pilot Learnings Consolidation + Reliability Guardrails
+- **Status:** in progress (1/4 plans complete)
 
 ### Quick Tasks Completed
 
@@ -283,9 +286,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 24-02 | Max 2-level nesting with depth guard | Prevents infinite recursion; covers typical delegation → executor → subagent chains |
 | 24-02 | Inline 2-level JSX rendering instead of recursive component | Simpler; avoids SolidJS reactive pitfalls with recursive components |
 | 24-02 | Children refreshed on every poller cycle (full fetch) | Child sessions not in incremental since filter path |
+| 25-01 | reconcileStaleJobs calls getAllRunningJobs internally | Consistent reuse of existing helper, not raw getDb() |
+| 25-01 | markStale sets started_at = NULL | Fresh timing on next run, not stale duration from ghost session |
+| 25-01 | error field records reconciliation reason | Debugging ghost-running jobs without separate audit log |
+| 25-01 | WHERE status = 'running' guard on markStale | Safe idempotency — calling twice doesn't reset a completed job |
 
 ## Session Continuity
 
-Last session: 2026-03-03T13:13:18Z
-Stopped at: Completed 24-02-PLAN.md
+Last session: 2026-03-03T17:09:44Z
+Stopped at: Completed 25-01-PLAN.md
 Resume file: None
