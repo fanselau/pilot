@@ -35,10 +35,12 @@ import {
   claimNextLaunchable,
   forceQuitJob,
   getAllRunningJobs,
-  getRunningJobsForProject,  // NEW — available for serialization guard via DB query
-  reconcileStaleJobs,         // NEW — reset ghost-running jobs to pending
+  getRunningJobsForProject,
+  reconcileStaleJobs,
+  resetToPending,
+  updateJudgeVerdict,
 } from './db.js';
-import { delegate, resolveOpencodeBinary, matchesBlocklist } from './delegate.js';
+import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionDone, getLastMessage } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
 import { truncateTitle } from '../util/format.js';
@@ -57,6 +59,14 @@ interface RunnerState {
   active: boolean;
   activeJobs: number;
   jobIds: string[];
+}
+
+interface JudgeVerdict {
+  verdict: 'pass' | 'fail' | 'partial';
+  confidence: number;
+  summary: string;
+  retryRecommendation: 'none' | 'retry-full' | 'retry-resume';
+  retryHint?: string;
 }
 
 // ── Spawn rate limiter (module-level) ──────────────────────────────────────
@@ -311,7 +321,7 @@ class Runner {
   }
 
   /**
-   * Launch a job: delegate → execute steps → mark complete/failed.
+   * Launch a job: delegate → execute steps → judge (for phase steps) → mark complete/failed.
    *
    * NOTE: markRunning() is NOT called here. claimNextLaunchable() already sets
    * status=running, started_at=datetime('now'), and increments attempts atomically
@@ -321,16 +331,11 @@ class Runner {
   private async launch(job: Job): Promise<void> {
     const config = getConfig();
     const projectDir = path.isAbsolute(job.project) ? job.project : path.join(config.projectDir, job.project);
-    let currentStepRowId: number | null = null;
 
     try {
-      // Job already marked running by claimNextLaunchable — do not call markRunning here
-      // activeJobs already set in run() before launch() is called
-
       this.patchModelsForJob(job, projectDir);
 
-      // Step 1: Delegation AI decides what GSD commands to run
-      // Track delegation session title so `pilot log` can find it
+      // Step 1: Delegation — get execution plan (typically single step for phase jobs)
       updateSessionTitles(job.id, [`pilot-delegate-${job.id}-1`]);
       let plan: DelegationPlan;
       try {
@@ -340,12 +345,11 @@ class Runner {
       }
       updateDelegationPlan(job.id, plan);
 
-      // Step 2: Execute each step sequentially
+      // Step 2: Execute each step
       let allStepsCompleted = true;
       for (let i = 0; i < plan.steps.length; i++) {
         if (this.shuttingDown) {
           allStepsCompleted = false;
-          // Mark remaining steps as skipped
           skipRemainingSteps(job.id, i, 'Runner shutdown');
           break;
         }
@@ -355,94 +359,70 @@ class Runner {
         const title = truncateTitle(`${job.project}-${step.command}-${job.id}-${ts}`, 80);
         this.activeJobs.set(job.id, { job, title });
         updateSessionTitles(job.id, [title]);
-
         this.patchModelsForJob(job, projectDir);
 
-        // Record step as running before spawn
-        currentStepRowId = recordStep(job.id, i, step.command, step.args, title);
-
-        // Snapshot phase dirs before add-phase for diff detection
-        const prevPhaseDirs = step.command === 'add-phase' ? scanPhaseDirs(projectDir) : [];
+        const currentStepRowId = recordStep(job.id, i, step.command, step.args, title);
 
         try {
           await this.spawnAndWait(projectDir, step.command, step.args, title);
         } catch (spawnErr) {
-          // Mark step failed, then re-throw
           const sessionId = findSessionByTitle(title);
-          completeStep(currentStepRowId, 'failed', null, spawnErr instanceof Error ? spawnErr.message : String(spawnErr), sessionId ?? null);
-          currentStepRowId = null;
+          completeStep(currentStepRowId, 'failed', null,
+            spawnErr instanceof Error ? spawnErr.message : String(spawnErr),
+            sessionId ?? null);
           throw spawnErr;
         }
 
-        // R2: Semantic success gating for phase commands
-        if (step.command === 'execute-phase' || step.command === 'plan-phase') {
-          const sessionId = findSessionByTitle(title);
-          if (sessionId) {
-            const verdict = evaluateStepResult(sessionId, step.command);
-            if (!verdict.success) {
-              completeStep(currentStepRowId, 'failed', verdict.source, verdict.reason, sessionId);
-              currentStepRowId = null;
-              throw new Error(`Step "${step.command} ${step.args}" failed: ${verdict.reason}`);
-            }
-            completeStep(currentStepRowId, 'completed', verdict.source, verdict.reason, sessionId);
-          } else {
-            completeStep(currentStepRowId, 'completed', null, 'Session not found for verdict check');
-          }
-        } else {
-          const sessionId = findSessionByTitle(title);
-          completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
-        }
-        currentStepRowId = null;
-
-        // Inter-step artifact verification (small delay for git commits to flush)
-        await this.sleep(2000);
-        let verification: ArtifactVerification;
-        if (step.command === 'plan-phase') {
-          verification = await this.verifyWithGraceWindow(projectDir, step, prevPhaseDirs, title);
-        } else {
-          verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
-          // Retry once after 3s if failed — git commits may still be flushing
-          if (!verification.ok) {
-            await this.sleep(3000);
-            verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
-          }
-        }
-        process.stderr.write(`[runner] Artifact check for ${step.command}: ${verification.ok ? 'passed' : verification.error}\n`);
-        if (!verification.ok) {
-          throw new Error(`Step "${step.command} ${step.args}" artifact check failed: ${verification.error}`);
-        }
-
-        // Dynamic arg patching after add-phase
-        if (step.command === 'add-phase' && verification.newPhaseNumber !== undefined) {
-          if (i + 1 < plan.steps.length) {
-            const nextArgs = plan.steps[i + 1].args;
-            const predictedMatch = nextArgs.match(/^(\d+)/);
-            if (predictedMatch) {
-              const predicted = parseInt(predictedMatch[1], 10);
-              if (predicted !== verification.newPhaseNumber) {
-                patchStepArgs(plan.steps, i + 1, predicted, verification.newPhaseNumber);
-              }
-            }
-          }
-        }
-
+        const sessionId = findSessionByTitle(title);
+        completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         advanceStep(job.id);
+
+        // Step 3: For phase commands, spawn judge to evaluate results
+        if (step.command === 'phase') {
+          const judgeVerdict = await this.runJudge(job, projectDir, title);
+
+          if (judgeVerdict) {
+            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+
+            if (judgeVerdict.verdict === 'fail') {
+              if (judgeVerdict.retryRecommendation !== 'none' && job.attempts < job.maxAttempts) {
+                resetToPending(job.id, judgeVerdict.retryHint);
+                process.stderr.write(
+                  `[runner] Judge verdict: fail (retryable). Resetting ${job.id} to pending.\n`,
+                );
+                return; // Don't mark completed or failed — it's pending again
+              }
+              throw new Error(`Judge verdict: fail — ${judgeVerdict.summary}`);
+            }
+
+            if (judgeVerdict.verdict === 'partial') {
+              if (judgeVerdict.retryRecommendation === 'retry-resume' && job.attempts < job.maxAttempts) {
+                resetToPending(job.id, judgeVerdict.retryHint ?? '--resume');
+                process.stderr.write(
+                  `[runner] Judge verdict: partial. Resetting ${job.id} to pending with resume hint.\n`,
+                );
+                return;
+              }
+              // Partial but no retries left — accept as completed
+              process.stderr.write(
+                `[runner] Judge verdict: partial (no retries left). Accepting ${job.id}.\n`,
+              );
+            }
+
+            // verdict === 'pass' or accepted partial — fall through to markCompleted
+          }
+          // If judge failed to produce verdict, fall through to markCompleted (benefit of doubt)
+        }
       }
 
-      // R3: Only mark completed if all steps actually ran
       if (allStepsCompleted) {
         markCompleted(job.id);
       } else {
-        cancel(job.id);
+        // Shutdown interrupted — reset to pending instead of cancel
+        resetToPending(job.id, 'Interrupted by shutdown');
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      // Safety net: if a step was in-flight when error occurred, mark it failed
-      if (currentStepRowId !== null) {
-        try {
-          completeStep(currentStepRowId, 'failed', null, error);
-        } catch { /* best effort */ }
-      }
       markFailed(job.id, error);
     } finally {
       this.activeJobs.delete(job.id);
@@ -458,6 +438,49 @@ class Runner {
     process.stderr.write(dim(`Patching agent models: ${job.modelProfile}/${providerMode}`) + '\n');
     const models = resolveAllAgentModels(job.modelProfile, providerMode);
     patchAgentFrontmatter(projectDir, models);
+  }
+
+  /**
+   * Spawn a pilot-judge session to evaluate whether a phase job succeeded.
+   * Reads the opencode DB transcript and outputs a structured JSON verdict.
+   * Returns null on any failure (benefit of doubt — mark as completed).
+   */
+  private async runJudge(job: Job, projectDir: string, phaseSessionTitle: string): Promise<JudgeVerdict | null> {
+    const ts = Date.now().toString(36).slice(-4);
+    const judgeTitle = truncateTitle(`pilot-judge-${job.id}-${ts}`, 80);
+
+    // Build judge args: requirement source + session title
+    const requirementArg = job.requirementPath ?? job.description;
+    const judgeArgs = `${requirementArg} ${phaseSessionTitle}`;
+
+    try {
+      await this.spawnAndWait(projectDir, 'pilot-judge', judgeArgs, judgeTitle);
+    } catch (err) {
+      process.stderr.write(
+        `[runner] Judge session failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return null; // Judge failure = benefit of doubt
+    }
+
+    // Parse judge output from opencode DB
+    const sessionId = findSessionByTitle(judgeTitle);
+    if (!sessionId) return null;
+
+    const lastMsg = getLastMessage(sessionId);
+    if (!lastMsg) return null;
+
+    try {
+      const jsonMatch = lastMsg.content.match(/```json\s*\n([\s\S]*?)\n```/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : lastMsg.content.trim();
+      const verdict = JSON.parse(jsonStr) as JudgeVerdict;
+
+      // Validate required fields
+      if (!['pass', 'fail', 'partial'].includes(verdict.verdict)) return null;
+      return verdict;
+    } catch {
+      process.stderr.write(`[runner] Failed to parse judge verdict from session ${judgeTitle}\n`);
+      return null;
+    }
   }
 
   /**
@@ -482,7 +505,7 @@ class Runner {
     await validateProjectConfig(cwd);
 
     // Spawn detached opencode session (setsid via detached:true, NEVER nohup)
-    const gsdCommand = command.startsWith('gsd-') ? command : `gsd-${command}`;
+    const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
     const proc = execa(opencodeBin, [
       'run',
       '--format', 'default',
@@ -641,172 +664,9 @@ class Runner {
     this.running = false;
   }
 
-  /**
-   * Grace window artifact verification for plan-phase steps.
-   *
-   * Retries artifact checks for up to GRACE_WINDOW_MS, polling every POLL_INTERVAL_MS.
-   * Session liveness is checked each poll cycle:
-   *   - If session is still active, keep waiting (artifacts may still be materializing).
-   *   - If session is dead and artifacts still absent, fail immediately (no point waiting).
-   * Exits early (success) as soon as artifacts appear.
-   */
-  private async verifyWithGraceWindow(
-    projectDir: string,
-    step: DelegationStep,
-    prevPhaseDirs: string[],
-    sessionTitle: string,
-  ): Promise<ArtifactVerification> {
-    const GRACE_WINDOW_MS = 120_000; // 2 minutes
-    const POLL_INTERVAL_MS = 3_000;  // 3 seconds
-
-    // Initial check (the 2s sleep already happened in launch() before calling this)
-    let verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
-    if (verification.ok) {
-      return verification;
-    }
-
-    // Enter grace window
-    process.stderr.write(
-      `[runner] Artifact check failed for ${step.command}, entering grace window (${GRACE_WINDOW_MS / 1000}s)...\n`,
-    );
-
-    const graceStart = Date.now();
-    while (Date.now() - graceStart < GRACE_WINDOW_MS && !this.shuttingDown) {
-      await this.sleep(POLL_INTERVAL_MS);
-      const elapsed = Date.now() - graceStart;
-
-      // Check session liveness using isSessionDone() — ground truth completion check.
-      // Replaces the broken isSessionActive() + 60s message age heuristic.
-      const sessionId = findSessionByTitle(sessionTitle);
-      let sessionAlive = false;
-
-      if (sessionId) {
-        // Session is alive if NOT done (step-finish reason != 'stop'/'length')
-        sessionAlive = !isSessionDone(sessionId);
-      }
-
-      // Retry artifact check
-      verification = verifyStepArtifacts(projectDir, step, prevPhaseDirs);
-
-      if (verification.ok) {
-        process.stderr.write(
-          `[runner] Artifacts appeared after ${elapsed}ms grace window\n`,
-        );
-        return verification;
-      }
-
-      if (!sessionAlive) {
-        process.stderr.write(
-          `[runner] Artifacts still missing and session done (step-finish reason=stop). Failing.\n`,
-        );
-        return verification;
-      }
-
-      process.stderr.write(
-        `[runner] Artifacts not yet present, session still active. Retrying... (${elapsed}ms / ${GRACE_WINDOW_MS}ms)\n`,
-      );
-    }
-
-    // Grace window exhausted
-    process.stderr.write(
-      `[runner] Grace window exhausted (${GRACE_WINDOW_MS}ms). Final artifact check failed: ${verification.error}\n`,
-    );
-    return verification;
-  }
-
   private sleep(ms: number): Promise<void> {
     return new Promise(r => setTimeout(r, ms));
   }
-}
-
-// ── Semantic success gating (R2) ───────────────────────────────────────────
-
-interface StepVerdict {
-  success: boolean;
-  reason: string;
-  source: 'semantic-check';
-  certainty: 'definite' | 'uncertain';
-}
-
-/**
- * R2: Evaluate whether a phase command (execute-phase, plan-phase) succeeded
- * by checking the last assistant message for semantic failure and success markers.
- *
- * Returns { success: false, certainty: 'definite' } for known failure patterns.
- * Returns { success: true, certainty: 'definite' } for known success patterns.
- * Returns { success: true, certainty: 'uncertain' } when neither matched (benefit of the doubt).
- */
-function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
-  const lastMsg = getLastMessage(sessionId);
-  if (!lastMsg) {
-    return { success: true, reason: 'No messages to evaluate', source: 'semantic-check', certainty: 'uncertain' };
-  }
-
-  const content = lastMsg.content;
-
-  // Failure markers — these indicate the command semantically failed
-  const failurePatterns = [
-    /no matching phase/i,
-    /error.*phase.*not found/i,
-    /no plans? found/i,
-    /phase directory.*not found/i,
-    /cannot find phase/i,
-    /failed to (plan|execute|verify)/i,
-    /\berror\b.*\b(execute|plan|verify)\b/i,
-    /compilation failed/i,
-    /build error/i,
-    /test(s)? failed/i,
-    /syntax error/i,
-    /i was unable to/i,
-    /i couldn't/i,
-    /unfortunately,?\s+i/i,
-    /fatal error/i,
-  ];
-
-  for (const pattern of failurePatterns) {
-    if (pattern.test(content)) {
-      return {
-        success: false,
-        reason: `Semantic failure detected: ${content.slice(0, 200)}`,
-        source: 'semantic-check',
-        certainty: 'definite',
-      };
-    }
-  }
-
-  // Success markers — these indicate the command completed successfully
-  const successPatterns = [
-    /phase\s+\d+\s+(execution\s+)?complete/i,
-    /all\s+plans?\s+executed/i,
-    /verification\s+passed/i,
-    /planning\s+complete/i,
-    /all\s+\d+\s+plans?\s+executed\s+successfully/i,
-    /phase\s+\d+\s+done/i,
-    /created?\s+\d+\s+plan\s+files?/i,
-  ];
-
-  for (const pattern of successPatterns) {
-    if (pattern.test(content)) {
-      return {
-        success: true,
-        reason: `Success marker: ${content.slice(0, 200)}`,
-        source: 'semantic-check',
-        certainty: 'definite',
-      };
-    }
-  }
-
-  // Neither success nor failure patterns matched — uncertain.
-  // Fail-safe: return success:false to prevent phantom completion (better to retry than to silently skip).
-  process.stderr.write(
-    `[runner] Warning: Step result ambiguous — neither success nor failure patterns matched. Last message: ${content.slice(0, 100)}\n`,
-  );
-  return {
-    success: false,
-    reason: 'No success markers detected (uncertain — failing safe)',
-    source: 'semantic-check',
-    certainty: 'uncertain',
-  };
 }
 
 // ── Pre-spawn safety checks ────────────────────────────────────────────────
@@ -942,184 +802,7 @@ async function validateProjectConfig(cwd: string): Promise<void> {
   }
 }
 
-// ── Inter-step verification helpers ────────────────────────────────────────
 
-/**
- * Scan .planning/phases/ directory and return sorted list of phase directory names.
- * Returns empty array if directory doesn't exist.
- */
-function scanPhaseDirs(projectDir: string): string[] {
-  const phasesDir = path.join(projectDir, '.planning', 'phases');
-  try {
-    const entries = readdirSync(phasesDir);
-    return entries.filter((e: string) => /^\d+/.test(e)).sort();
-  } catch {
-    return [];
-  }
-}
-
-interface ArtifactVerification {
-  ok: boolean;
-  error?: string;
-  newPhaseNumber?: number;
-  warning?: string;
-}
-
-/**
- * Verify expected artifacts exist after a phase lifecycle step completes.
- *
- * - add-phase: checks a new phase directory was created, returns its number
- * - plan-phase: checks at least one *-PLAN.md exists in the phase directory
- * - execute-phase: checks at least one *-SUMMARY.md exists in the phase directory
- * - all others: returns ok:true (skip verification)
- */
-function verifyStepArtifacts(
-  projectDir: string,
-  step: DelegationStep,
-  prevPhaseDirs: string[],
-): ArtifactVerification {
-  const phasesDir = path.join(projectDir, '.planning', 'phases');
-
-  if (step.command === 'add-phase') {
-    const currentDirs = scanPhaseDirs(projectDir);
-    const newDirs = currentDirs.filter(d => !prevPhaseDirs.includes(d));
-    if (newDirs.length === 0) {
-      return { ok: false, error: 'add-phase did not create a new phase directory' };
-    }
-    const newDirName = newDirs[0];
-    const match = newDirName.match(/^(\d+)/);
-    const newPhaseNumber = match ? parseInt(match[1], 10) : undefined;
-
-    // a) Blocklist check: ensure the new directory name doesn't contain GSD instruction text
-    const slugAsWords = newDirName.replace(/^[\d]+-/, '').replace(/-/g, ' ');
-    const blocklistMatch = matchesBlocklist(slugAsWords);
-    if (blocklistMatch) {
-      return {
-        ok: false,
-        error: `add-phase created directory with GSD instruction text as title: "${blocklistMatch}" — directory: ${newDirName}`,
-      };
-    }
-
-    // b) Title similarity check (warning only): compare expected title with actual dir name
-    let warning: string | undefined;
-    if (step.args && step.args.trim().length > 0) {
-      const expectedWords = step.args.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
-      const actualWords = slugAsWords.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
-      if (actualWords.length >= 3) {
-        const expectedSet = new Set(expectedWords);
-        const sharedCount = actualWords.filter(w => expectedSet.has(w)).length;
-        const overlapRatio = actualWords.length > 0 ? sharedCount / actualWords.length : 1;
-        if (overlapRatio < 0.5) {
-          const warningMsg = `[runner] WARNING: add-phase directory "${newDirName}" does not match expected title "${step.args}"`;
-          process.stderr.write(warningMsg + '\n');
-          warning = warningMsg;
-        }
-      }
-    }
-
-    // c) Duplicate detection: check ROADMAP.md for existing phase with same title
-    const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
-    try {
-      const roadmapContent = readFileSync(roadmapPath, 'utf8');
-      const phaseHeadings = [...roadmapContent.matchAll(/^###\s+Phase\s+\d+[.:)]\s+(.+)$/gm)];
-      const normalizedNewSlug = slugAsWords.toLowerCase().trim();
-      for (const heading of phaseHeadings) {
-        const existingTitle = heading[1].trim();
-        const normalizedExisting = existingTitle.toLowerCase().trim();
-        // Check if the new dir slug matches an existing phase title (case-insensitive)
-        if (normalizedExisting === normalizedNewSlug) {
-          return {
-            ok: false,
-            error: `add-phase created duplicate phase: "${existingTitle}" already exists`,
-          };
-        }
-      }
-    } catch {
-      // ROADMAP.md doesn't exist or can't be read — skip duplicate check
-    }
-
-    return { ok: true, newPhaseNumber, warning };
-  }
-
-  if (step.command === 'plan-phase') {
-    const phaseNum = step.args.match(/^(\d+)/);
-    if (!phaseNum) return { ok: true }; // Can't determine phase number, skip
-    const padded = phaseNum[1].padStart(2, '0');
-    const phaseDir = findPhaseDir(phasesDir, padded);
-    if (!phaseDir) {
-      return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files (phase directory not found)` };
-    }
-    try {
-      const files = readdirSync(path.join(phasesDir, phaseDir));
-      const planFiles = files.filter((f: string) => /-PLAN\.md$/.test(f));
-      if (planFiles.length === 0) {
-        return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files` };
-      }
-      return { ok: true };
-    } catch {
-      return { ok: false, error: `plan-phase ${phaseNum[1]} did not create any PLAN.md files (cannot read phase directory)` };
-    }
-  }
-
-  if (step.command === 'execute-phase') {
-    const phaseNum = step.args.match(/^(\d+)/);
-    if (!phaseNum) return { ok: true };
-    const padded = phaseNum[1].padStart(2, '0');
-    const phaseDir = findPhaseDir(phasesDir, padded);
-    if (!phaseDir) {
-      return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files (phase directory not found)` };
-    }
-    try {
-      const files = readdirSync(path.join(phasesDir, phaseDir));
-      const summaryFiles = files.filter((f: string) => /-SUMMARY\.md$/.test(f));
-      if (summaryFiles.length === 0) {
-        return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files` };
-      }
-      return { ok: true };
-    } catch {
-      return { ok: false, error: `execute-phase ${phaseNum[1]} did not create any SUMMARY.md files (cannot read phase directory)` };
-    }
-  }
-
-  // All other commands: skip verification
-  return { ok: true };
-}
-
-/**
- * Find a phase directory matching the padded phase number prefix.
- * E.g. padded="03" matches "03-ui", "03-core", etc.
- */
-function findPhaseDir(phasesDir: string, padded: string): string | null {
-  try {
-    const entries = readdirSync(phasesDir);
-    return entries.find((e: string) => e.startsWith(`${padded}-`)) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Mutate remaining step args when actual phase number differs from predicted.
- * Only patches plan-phase, execute-phase, and verify-phase commands.
- */
-function patchStepArgs(
-  steps: DelegationStep[],
-  fromIndex: number,
-  predictedPhase: number,
-  actualPhase: number,
-): void {
-  for (let j = fromIndex; j < steps.length; j++) {
-    const s = steps[j];
-    if (s.command === 'plan-phase' || s.command === 'execute-phase' || s.command === 'verify-phase') {
-      const argsMatch = s.args.match(/^(\d+)(.*)/);
-      if (argsMatch && parseInt(argsMatch[1], 10) === predictedPhase) {
-        const oldArgs = s.args;
-        s.args = `${actualPhase}${argsMatch[2]}`;
-        process.stderr.write(`[runner] Patched ${s.command} args: ${oldArgs} → ${s.args}\n`);
-      }
-    }
-  }
-}
 
 // ── killJobSession ─────────────────────────────────────────────────────────
 
@@ -1232,8 +915,8 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner, evaluateStepResult, killJobSession };
-export type { RunnerOptions, RunnerState, StepVerdict, KillJobSessionResult };
+export { Runner, createRunner, killJobSession };
+export type { RunnerOptions, RunnerState, JudgeVerdict, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing
 export {
@@ -1243,9 +926,6 @@ export {
   validateProjectConfig,
   getAvailableMemoryMb,
 };
-
-// Export inter-step verification helpers for direct testing
-export { scanPhaseDirs, verifyStepArtifacts, patchStepArgs };
 
 /**
  * Reset the module-level spawn rate limiter.
