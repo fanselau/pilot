@@ -415,12 +415,38 @@ Wave structure:
 
 ### Phase 26: Runner Immediate Dispatch + Force Quit Controls
 
-**Goal:** [To be planned]
+**Goal:** Make runner scheduling and operator controls predictable: fill all available parallel slots immediately when eligible jobs exist (no idle wait), enforce project-level serialization via DB-backed atomic claim, and provide first-class force-quit controls in both CLI (`pilot kill <id> --force`) and TUI (`K` key) that deterministically terminate active jobs and update DB state consistently.
 **Depends on:** Phase 25
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 26 to break down)
+- [ ] 26-01-PLAN.md — DB layer: claimNextLaunchable (atomic + project serialization), forceQuitJob, getRunningJobsByProject
+- [ ] 26-02-PLAN.md — Runner: immediate multi-slot dispatch loop, event-driven DB watch wake-up, killJobSession export
+- [ ] 26-03-PLAN.md — CLI: pilot kill <id> --force command + wire in index.ts
+- [ ] 26-04-PLAN.md — TUI: ConfirmOverlay component, K key force-quit, state signals, help text update
+- [ ] 26-05-PLAN.md — Tests: dispatch immediacy, project serialization, DB force-quit, CLI kill command
 
 **Details:**
-[To be added during planning]
+Read requirements/runner-immediate-dispatch-and-force-quit.md for full spec.
+
+Wave structure:
+- Wave 1: 26-01 + 26-02 (independent: DB layer and runner loop, parallel)
+- Wave 2: 26-03 + 26-04 (both depend on 26-01: CLI kill + TUI force-quit, parallel)
+- Wave 3: 26-05 (tests, depends on all above)
+
+### Phase 27: TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
+
+**Goal:** Improve TUI operational clarity: rework detail header into a structured, readable summary panel with rich run metadata; fix completed panel hover/overlay rendering glitches; add regression tests for both areas.
+**Depends on:** Phase 26
+**Plans:** 2 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — Detail header rework + run info density + completed overlay fix
+- [ ] 27-02-PLAN.md — Tests for detail header layout (2 widths) + completed panel regression
+
+Wave structure:
+- Wave 1: 27-01 (implementation)
+- Wave 2: 27-02 (tests, depends on 27-01)
+
+**Details:**
+Read requirements/tui-detail-header-and-completions-polish.md for full spec.
