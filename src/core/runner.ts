@@ -433,20 +433,24 @@ interface StepVerdict {
   success: boolean;
   reason: string;
   source: 'semantic-check';
+  certainty: 'definite' | 'uncertain';
 }
 
 /**
  * R2: Evaluate whether a phase command (execute-phase, plan-phase) succeeded
- * by checking the last assistant message for semantic failure markers.
+ * by checking the last assistant message for semantic failure and success markers.
  *
- * Returns { success: false } when the output contains known failure patterns
- * like "no matching phase", "error phase not found", etc.
+ * Returns { success: false, certainty: 'definite' } for known failure patterns.
+ * Returns { success: true, certainty: 'definite' } for known success patterns.
+ * Returns { success: true, certainty: 'uncertain' } when neither matched (benefit of the doubt).
  */
 function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
   const lastMsg = getLastMessage(sessionId);
   if (!lastMsg) {
-    return { success: true, reason: 'No messages to evaluate', source: 'semantic-check' };
+    return { success: true, reason: 'No messages to evaluate', source: 'semantic-check', certainty: 'uncertain' };
   }
+
+  const content = lastMsg.content;
 
   // Failure markers — these indicate the command semantically failed
   const failurePatterns = [
@@ -460,16 +464,48 @@ function evaluateStepResult(sessionId: string, _command: string): StepVerdict {
   ];
 
   for (const pattern of failurePatterns) {
-    if (pattern.test(lastMsg.content)) {
+    if (pattern.test(content)) {
       return {
         success: false,
-        reason: `Semantic failure detected: ${lastMsg.content.slice(0, 200)}`,
+        reason: `Semantic failure detected: ${content.slice(0, 200)}`,
         source: 'semantic-check',
+        certainty: 'definite',
       };
     }
   }
 
-  return { success: true, reason: 'No failure markers detected', source: 'semantic-check' };
+  // Success markers — these indicate the command completed successfully
+  const successPatterns = [
+    /phase\s+\d+\s+(execution\s+)?complete/i,
+    /all\s+plans?\s+executed/i,
+    /verification\s+passed/i,
+    /planning\s+complete/i,
+    /all\s+\d+\s+plans?\s+executed\s+successfully/i,
+    /phase\s+\d+\s+done/i,
+    /created?\s+\d+\s+plan\s+files?/i,
+  ];
+
+  for (const pattern of successPatterns) {
+    if (pattern.test(content)) {
+      return {
+        success: true,
+        reason: `Success marker: ${content.slice(0, 200)}`,
+        source: 'semantic-check',
+        certainty: 'definite',
+      };
+    }
+  }
+
+  // Neither success nor failure patterns matched — uncertain
+  process.stderr.write(
+    `[runner] Warning: Step result ambiguous — neither success nor failure patterns matched. Last message: ${content.slice(0, 100)}\n`,
+  );
+  return {
+    success: true,
+    reason: 'No failure markers detected (uncertain — no success markers either)',
+    source: 'semantic-check',
+    certainty: 'uncertain',
+  };
 }
 
 // ── Pre-spawn safety checks ────────────────────────────────────────────────
