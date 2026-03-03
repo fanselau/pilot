@@ -28,6 +28,7 @@ import {
   forceQuitJob,
   getJobSteps,
   recordStep,
+  resetToPending,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -502,6 +503,83 @@ describe('pilot.db', () => {
 
       expect(getJob(job1.id)!.error).toMatch(/cli/);
       expect(getJob(job2.id)!.error).toMatch(/tui/);
+    });
+  });
+
+  // ── resetToPending ────────────────────────────────────────────────────
+
+  describe('resetToPending', () => {
+    it('sets status to pending and clears started_at', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      resetToPending(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('pending');
+      expect(updated.startedAt).toBeNull();
+    });
+
+    it('clears session_titles to prevent stale reconciler matches', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      updateSessionTitles(job.id, ['proj-phase-abc-1234']);
+      expect(getJob(job.id)!.sessionTitles).not.toBeNull();
+
+      resetToPending(job.id);
+      expect(getJob(job.id)!.sessionTitles).toBeNull();
+    });
+
+    it('deletes all job_steps for the job', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      recordStep(job.id, 0, 'execute-phase', '3 --auto');
+      recordStep(job.id, 1, 'verify-phase', '3');
+      expect(getJobSteps(job.id)).toHaveLength(2);
+
+      resetToPending(job.id);
+      expect(getJobSteps(job.id)).toHaveLength(0);
+    });
+
+    it('stores resume_hint in dedicated column (not in error)', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      resetToPending(job.id, 'Resume from plan 04');
+
+      const updated = getJob(job.id)!;
+      expect(updated.resumeHint).toBe('Resume from plan 04');
+      expect(updated.error).toBeNull(); // error must NOT be overloaded
+    });
+
+    it('sets resume_hint to null when no hint provided', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      resetToPending(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.resumeHint).toBeNull();
+      expect(updated.error).toBeNull();
+    });
+
+    it('resume_hint persists through getJob and is accessible as job.resumeHint', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      resetToPending(job.id, 'Fix tsconfig first');
+
+      const fetched = getJob(job.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.resumeHint).toBe('Fix tsconfig first');
+    });
+
+    it('clears previous resume_hint when called without hint after a hinted reset', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      // First reset with hint
+      resetToPending(job.id, 'Some hint');
+      markRunning(job.id);
+      // Second reset without hint — should clear the previous hint
+      resetToPending(job.id);
+
+      expect(getJob(job.id)!.resumeHint).toBeNull();
     });
   });
 });
