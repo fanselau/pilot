@@ -2,8 +2,8 @@
  * Tests for extended opencode-db.ts v2 queries.
  *
  * Uses an in-memory SQLite database with the same schema as opencode's real DB.
- * Tests cover: getSessionMessages, getLastMessage, isSessionActive,
- * getSessionTokens, getRecentSessions, and error/edge cases.
+ * Tests cover: getSessionMessages, getSessionParts, getLastMessage, isSessionDone,
+ * getSessionTokens, and error/edge cases.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -13,9 +13,7 @@ import {
   getSessionParts,
   getLastMessage,
   isSessionDone,
-  isSessionActive,
   getSessionTokens,
-  getRecentSessions,
   _resetDbCache,
   _setTestDb,
 } from '../../src/core/opencode-db.js';
@@ -487,65 +485,6 @@ describe('isSessionDone', () => {
   });
 });
 
-// ── isSessionActive ────────────────────────────────────────────────────────
-
-describe('isSessionActive', () => {
-  it('returns false when session is done (step-finish reason=stop)', () => {
-    // isSessionActive is now deprecated — it delegates to !isSessionDone()
-    insertSession(db, 'sess1', 'test-session', 1000, 2000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
-    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'step-start' });
-    insertPart(db, 'p2', 'msg1', 'sess1', 2000, { type: 'step-finish', reason: 'stop' });
-
-    expect(isSessionActive('sess1')).toBe(false);
-  });
-
-  it('returns true when session is not done (no step-finish / tool-calls)', () => {
-    insertSession(db, 'sess1', 'test-session', 1000, 2000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
-    insertPart(db, 'part1', 'msg1', 'sess1', 2000, {
-      type: 'tool',
-      tool: 'bash',
-      state: { status: 'running' },
-    });
-
-    // No step-finish → isSessionDone=false → isSessionActive=true
-    expect(isSessionActive('sess1')).toBe(true);
-  });
-
-  it('returns true when step-finish has reason=tool-calls (still working)', () => {
-    insertSession(db, 'sess1', 'test-session', 1000, 2000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
-    insertPart(db, 'part1', 'msg1', 'sess1', 2000, { type: 'step-finish', reason: 'tool-calls' });
-
-    expect(isSessionActive('sess1')).toBe(true);
-  });
-
-  it('returns false when session has no parts', () => {
-    insertSession(db, 'sess1', 'test-session', 1000, 1000);
-    // No step-finish → isSessionDone=false → isSessionActive=true... but wait:
-    // No parts at all → isSessionDone returns false (session just starting)
-    // isSessionActive = !isSessionDone = !false = true
-    // This is a behavior change from the old impl but more correct:
-    // A session that hasn't started any steps is NOT active (not started yet)
-    // The old impl returned false too (no running parts), new impl also returns true
-    // because isSessionDone=false means !false=true
-    // Actually for empty sessions we want to return false for isSessionActive
-    // The deprecated function correctly returns !isSessionDone = !false = true
-    // which means "not done yet" = "still active" - semantically correct for new sessions
-    expect(isSessionActive('sess1')).toBe(true);
-  });
-
-  it('returns false for nonexistent session', () => {
-    // isSessionDone returns false for nonexistent → !false = true
-    // Meaning: session doesn't exist, it's "not done" → isSessionActive=true
-    // This is the same behavior as before (old impl returned false for no running parts)
-    // HOWEVER: callers that depend on isSessionActive should migrate to isSessionDone
-    // This test documents the deprecated behavior
-    expect(isSessionActive('nonexistent')).toBe(true);
-  });
-});
-
 // ── getSessionTokens ───────────────────────────────────────────────────────
 
 describe('getSessionTokens', () => {
@@ -598,47 +537,6 @@ describe('getSessionTokens', () => {
   });
 });
 
-// ── getRecentSessions ──────────────────────────────────────────────────────
-
-describe('getRecentSessions', () => {
-  it('returns sessions ordered by updated desc', () => {
-    insertSession(db, 'sess1', 'oldest-session', 1000, 1000);
-    insertSession(db, 'sess2', 'middle-session', 2000, 3000);
-    insertSession(db, 'sess3', 'newest-session', 3000, 5000);
-
-    const sessions = getRecentSessions(3);
-    expect(sessions).toHaveLength(3);
-    expect(sessions[0].title).toBe('newest-session');
-    expect(sessions[1].title).toBe('middle-session');
-    expect(sessions[2].title).toBe('oldest-session');
-  });
-
-  it('respects limit parameter', () => {
-    insertSession(db, 'sess1', 'session-1', 1000, 1000);
-    insertSession(db, 'sess2', 'session-2', 2000, 2000);
-    insertSession(db, 'sess3', 'session-3', 3000, 3000);
-
-    const sessions = getRecentSessions(2);
-    expect(sessions).toHaveLength(2);
-  });
-
-  it('includes message count', () => {
-    insertSession(db, 'sess1', 'test-session', 1000, 3000);
-    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user', content: 'Hello' });
-    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant', content: 'Hi' });
-    insertMessage(db, 'msg3', 'sess1', 3000, { role: 'user', content: 'Bye' });
-
-    const sessions = getRecentSessions(10);
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].messageCount).toBe(3);
-  });
-
-  it('returns empty array when no sessions exist', () => {
-    const sessions = getRecentSessions(10);
-    expect(sessions).toEqual([]);
-  });
-});
-
 // ── Safe defaults when DB unavailable ──────────────────────────────────────
 
 describe('safe defaults when DB unavailable', () => {
@@ -663,18 +561,9 @@ describe('safe defaults when DB unavailable', () => {
     expect(isSessionDone('any')).toBe(false);
   });
 
-  it('isSessionActive returns true (delegates to !isSessionDone which is false)', () => {
-    // With DB unavailable, isSessionDone returns false → !false = true
-    expect(isSessionActive('any')).toBe(true);
-  });
-
   it('getSessionTokens returns zeros', () => {
     const tokens = getSessionTokens('any');
     expect(tokens.input).toBe(0);
     expect(tokens.output).toBe(0);
-  });
-
-  it('getRecentSessions returns empty array', () => {
-    expect(getRecentSessions(10)).toEqual([]);
   });
 });

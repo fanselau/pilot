@@ -530,9 +530,8 @@ class Runner {
     proc.unref();
 
     // Poll opencode DB for session completion using isSessionDone() + PID liveness.
-    // isSessionDone() uses step-finish reason as ground truth — eliminates the broken
-    // isSessionActive() + 60s message age heuristic that caused premature completions
-    // when sessions had long-running tool calls.
+    // isSessionDone() uses step-finish reason as ground truth — eliminated the broken
+    // premature completion heuristic that fired when sessions had long-running tool calls.
     const pollMs = config.pollInterval * 1000;
     let sessionFound = false;
     const procPid = proc.pid;
