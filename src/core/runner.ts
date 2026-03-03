@@ -38,7 +38,7 @@ import {
   getRunningJobsForProject,  // NEW — available for serialization guard via DB query
   reconcileStaleJobs,         // NEW — reset ghost-running jobs to pending
 } from './db.js';
-import { delegate, resolveOpencodeBinary } from './delegate.js';
+import { delegate, resolveOpencodeBinary, matchesBlocklist } from './delegate.js';
 import { findSessionByTitle, isSessionDone, getLastMessage } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
 import { truncateTitle } from '../util/format.js';
@@ -962,6 +962,7 @@ interface ArtifactVerification {
   ok: boolean;
   error?: string;
   newPhaseNumber?: number;
+  warning?: string;
 }
 
 /**
@@ -985,9 +986,59 @@ function verifyStepArtifacts(
     if (newDirs.length === 0) {
       return { ok: false, error: 'add-phase did not create a new phase directory' };
     }
-    const match = newDirs[0].match(/^(\d+)/);
+    const newDirName = newDirs[0];
+    const match = newDirName.match(/^(\d+)/);
     const newPhaseNumber = match ? parseInt(match[1], 10) : undefined;
-    return { ok: true, newPhaseNumber };
+
+    // a) Blocklist check: ensure the new directory name doesn't contain GSD instruction text
+    const slugAsWords = newDirName.replace(/^[\d]+-/, '').replace(/-/g, ' ');
+    const blocklistMatch = matchesBlocklist(slugAsWords);
+    if (blocklistMatch) {
+      return {
+        ok: false,
+        error: `add-phase created directory with GSD instruction text as title: "${blocklistMatch}" — directory: ${newDirName}`,
+      };
+    }
+
+    // b) Title similarity check (warning only): compare expected title with actual dir name
+    let warning: string | undefined;
+    if (step.args && step.args.trim().length > 0) {
+      const expectedWords = step.args.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+      const actualWords = slugAsWords.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+      if (actualWords.length >= 3) {
+        const expectedSet = new Set(expectedWords);
+        const sharedCount = actualWords.filter(w => expectedSet.has(w)).length;
+        const overlapRatio = actualWords.length > 0 ? sharedCount / actualWords.length : 1;
+        if (overlapRatio < 0.5) {
+          const warningMsg = `[runner] WARNING: add-phase directory "${newDirName}" does not match expected title "${step.args}"`;
+          process.stderr.write(warningMsg + '\n');
+          warning = warningMsg;
+        }
+      }
+    }
+
+    // c) Duplicate detection: check ROADMAP.md for existing phase with same title
+    const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
+    try {
+      const roadmapContent = readFileSync(roadmapPath, 'utf8');
+      const phaseHeadings = [...roadmapContent.matchAll(/^###\s+Phase\s+\d+[.:)]\s+(.+)$/gm)];
+      const normalizedNewSlug = slugAsWords.toLowerCase().trim();
+      for (const heading of phaseHeadings) {
+        const existingTitle = heading[1].trim();
+        const normalizedExisting = existingTitle.toLowerCase().trim();
+        // Check if the new dir slug matches an existing phase title (case-insensitive)
+        if (normalizedExisting === normalizedNewSlug) {
+          return {
+            ok: false,
+            error: `add-phase created duplicate phase: "${existingTitle}" already exists`,
+          };
+        }
+      }
+    } catch {
+      // ROADMAP.md doesn't exist or can't be read — skip duplicate check
+    }
+
+    return { ok: true, newPhaseNumber, warning };
   }
 
   if (step.command === 'plan-phase') {
