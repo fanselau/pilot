@@ -31,6 +31,7 @@ vi.mock('../../src/core/config.js', () => ({
 }));
 
 const mockGetNextPending = vi.fn();
+const mockClaimNextLaunchable = vi.fn();
 const mockMarkRunning = vi.fn();
 const mockMarkCompleted = vi.fn();
 const mockMarkFailed = vi.fn();
@@ -42,9 +43,12 @@ const mockUpdateSessionTitles = vi.fn();
 const mockRecordStep = vi.fn(() => 1);  // returns row ID
 const mockCompleteStep = vi.fn();
 const mockSkipRemainingSteps = vi.fn();
+const mockGetAllRunningJobs = vi.fn(() => []);  // returns empty array by default
+const mockForceQuitJob = vi.fn(() => ({ ok: true }));
 
 vi.mock('../../src/core/db.js', () => ({
   getNextPending: (...args: unknown[]) => mockGetNextPending(...args),
+  claimNextLaunchable: (...args: unknown[]) => mockClaimNextLaunchable(...args),
   markRunning: (...args: unknown[]) => mockMarkRunning(...args),
   markCompleted: (...args: unknown[]) => mockMarkCompleted(...args),
   markFailed: (...args: unknown[]) => mockMarkFailed(...args),
@@ -56,6 +60,8 @@ vi.mock('../../src/core/db.js', () => ({
   recordStep: (...args: unknown[]) => mockRecordStep(...args),
   completeStep: (...args: unknown[]) => mockCompleteStep(...args),
   skipRemainingSteps: (...args: unknown[]) => mockSkipRemainingSteps(...args),
+  getAllRunningJobs: (...args: unknown[]) => mockGetAllRunningJobs(...args),
+  forceQuitJob: (...args: unknown[]) => mockForceQuitJob(...args),
 }));
 
 const mockDelegate = vi.fn();
@@ -117,6 +123,11 @@ vi.mock('node:fs', async () => {
       return [];
     }),
     statSync: vi.fn(() => ({ isDirectory: () => true })),
+    // Stub fs.watch — runner uses it for DB file change events
+    watch: vi.fn(() => ({
+      on: vi.fn().mockReturnThis(),
+      close: vi.fn(),
+    })),
   };
 });
 
@@ -245,20 +256,20 @@ describe('Runner', () => {
 
   describe('run() with --once', () => {
     it('exits immediately when queue is empty', async () => {
-      mockGetNextPending.mockReturnValue(null);
+      mockClaimNextLaunchable.mockReturnValue(null);
 
       const runner = createRunner({ once: true, pollInterval: 1 });
       await runner.run();
 
-      expect(mockGetNextPending).toHaveBeenCalled();
-      expect(mockMarkRunning).not.toHaveBeenCalled();
+      expect(mockClaimNextLaunchable).toHaveBeenCalled();
+      // markRunning is no longer called in launch() — claimNextLaunchable handles it atomically
     });
 
     it('processes one job then exits', async () => {
       const job = makeJob();
       const plan = makePlan();
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -269,7 +280,7 @@ describe('Runner', () => {
       await runner.run();
 
       // Verify job lifecycle
-      expect(mockMarkRunning).toHaveBeenCalledWith('ab12');
+      // markRunning no longer called here — claimNextLaunchable handles it atomically
       expect(mockUpdateDelegationPlan).toHaveBeenCalledWith('ab12', plan);
       expect(mockUpdateSessionTitles).toHaveBeenCalledWith('ab12', expect.arrayContaining([expect.any(String)]));
       expect(mockAdvanceStep).toHaveBeenCalledWith('ab12');
@@ -283,7 +294,7 @@ describe('Runner', () => {
     it('marks job failed when delegate throws', async () => {
       const job = makeJob();
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -292,7 +303,7 @@ describe('Runner', () => {
       const runner = createRunner({ once: true, pollInterval: 1 });
       await runner.run();
 
-      expect(mockMarkRunning).toHaveBeenCalledWith('ab12');
+      // markRunning no longer called here — claimNextLaunchable handles it atomically
       expect(mockMarkFailed).toHaveBeenCalledWith('ab12', expect.stringContaining('Delegation failed'));
       expect(mockMarkCompleted).not.toHaveBeenCalled();
     }, 15000);
@@ -303,7 +314,7 @@ describe('Runner', () => {
       const job = makeJob();
       const plan = makePlan();
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -346,7 +357,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['03-ui'];
       mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -368,7 +379,7 @@ describe('Runner', () => {
       let jobCounter = 0;
 
       // Return unique jobs to simulate realistic queue behavior
-      mockGetNextPending.mockImplementation(() => {
+      mockClaimNextLaunchable.mockImplementation(() => {
         jobCounter++;
         if (jobCounter > 3) return null; // Limit jobs
         return makeJob({ id: `j${String(jobCounter).padStart(3, '0')}` });
@@ -390,8 +401,8 @@ describe('Runner', () => {
       // Runner should have stopped
       const state = runner.getState();
       expect(state.active).toBe(false);
-      // At least one job was picked up
-      expect(mockMarkRunning).toHaveBeenCalled();
+      // At least one job was picked up (claimNextLaunchable was called)
+      expect(mockClaimNextLaunchable).toHaveBeenCalled();
     }, 15000);
   });
 
@@ -400,7 +411,7 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'phase', description: '3' });
       const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -431,7 +442,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['03-ui'];
       mockPhaseDirFiles = ['03-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -457,7 +468,7 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'phase', description: '5' });
       const plan = makePlan([{ command: 'plan-phase', args: '5 --auto' }]);
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -487,7 +498,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['02-core'];
       mockPhaseDirFiles = ['02-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -517,7 +528,7 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'quick', description: 'Fix navbar' });
       const plan = makePlan([{ command: 'quick', args: 'Fix navbar' }]);
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -553,7 +564,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['03-ui'];
       mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -578,7 +589,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['03-ui'];
       mockPhaseDirFiles = ['03-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -607,7 +618,7 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'phase', description: '3' });
       const plan = makePlan([{ command: 'execute-phase', args: '3' }]);
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -643,7 +654,7 @@ describe('Runner', () => {
       const job = makeJob({ scope: 'quick', description: 'Fix navbar' });
       const plan = makePlan([{ command: 'quick', args: 'Fix navbar' }]);
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -673,7 +684,7 @@ describe('Runner', () => {
       mockPhaseDirEntries = ['03-ui'];
       mockPhaseDirFiles = ['03-01-PLAN.md', '03-01-SUMMARY.md'];
 
-      mockGetNextPending
+      mockClaimNextLaunchable
         .mockReturnValueOnce(job)
         .mockReturnValue(null);
 
@@ -802,7 +813,7 @@ describe('launch — inter-step artifact verification', () => {
       return { unref: vi.fn(), catch: vi.fn().mockReturnThis(), pid: 12345 };
     }) as unknown as typeof origExeca);
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -833,7 +844,7 @@ describe('launch — inter-step artifact verification', () => {
     const staticDirs = ['01-setup', '02-core'];
     mockPhaseDirEntries = staticDirs;
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -854,7 +865,7 @@ describe('launch — inter-step artifact verification', () => {
     mockPhaseDirEntries = ['03-ui'];
     mockPhaseDirFiles = ['STATE'];  // Only STATE file, no PLAN.md
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -875,7 +886,7 @@ describe('launch — inter-step artifact verification', () => {
     mockPhaseDirEntries = ['03-ui'];
     mockPhaseDirFiles = ['03-01-SUMMARY.md', '03-01-PLAN.md'];
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -937,7 +948,7 @@ describe('launch — inter-step artifact verification', () => {
       return { unref: vi.fn(), catch: vi.fn().mockReturnThis(), pid: 12345 };
     }) as unknown as typeof origExeca);
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -958,7 +969,7 @@ describe('launch — inter-step artifact verification', () => {
     const plan = makePlan([{ command: 'quick', args: 'Fix it' }]);
 
     // No phase dir setup needed — quick commands skip verification
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -1009,7 +1020,7 @@ describe('plan-phase grace window artifact verification', () => {
     mockPhaseDirEntries = ['03-ui'];
     mockPhaseDirFiles = ['03-01-PLAN.md'];
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -1057,7 +1068,7 @@ describe('plan-phase grace window artifact verification', () => {
       return [];
     }) as typeof mockReaddirSync);
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -1113,7 +1124,7 @@ describe('plan-phase grace window artifact verification', () => {
     mockPhaseDirEntries = ['03-ui'];
     mockPhaseDirFiles = ['STATE'];
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -1154,7 +1165,7 @@ describe('plan-phase grace window artifact verification', () => {
     mockPhaseDirEntries = ['03-ui'];
     mockPhaseDirFiles = ['STATE'];
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);
@@ -1211,7 +1222,7 @@ describe('plan-phase grace window artifact verification', () => {
     mockPhaseDirEntries = ['05-api'];
     mockPhaseDirFiles = ['05-01-PLAN.md']; // Only PLAN.md, no SUMMARY.md
 
-    mockGetNextPending
+    mockClaimNextLaunchable
       .mockReturnValueOnce(job)
       .mockReturnValue(null);
     mockDelegate.mockResolvedValue(plan);

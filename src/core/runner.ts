@@ -1002,6 +1002,109 @@ function patchStepArgs(
   }
 }
 
+// ── killJobSession ─────────────────────────────────────────────────────────
+
+interface KillJobSessionResult {
+  killed: boolean;
+  reason: string;
+}
+
+/**
+ * Find and terminate the opencode process for a running job.
+ *
+ * Parses job.sessionTitles JSON to get the list of session title strings.
+ * Uses pgrep -f to find PIDs running that title as part of their command line.
+ * Sends SIGTERM, waits up to 5s, then SIGKILL if still alive.
+ *
+ * Returns { killed: true } even if the process died on SIGTERM before SIGKILL.
+ * Returns { killed: false, reason } if no process was found or an error occurred.
+ */
+async function killJobSession(job: Job): Promise<KillJobSessionResult> {
+  // Parse session titles — most recent (last) is tried first
+  let sessionTitles: string[] = [];
+  try {
+    sessionTitles = JSON.parse(job.sessionTitles ?? '[]') as string[];
+  } catch {
+    return { killed: false, reason: 'Could not parse job.sessionTitles' };
+  }
+
+  if (sessionTitles.length === 0) {
+    return { killed: false, reason: 'No session titles recorded for this job' };
+  }
+
+  // Try titles in reverse order (most recent first)
+  let foundPid: number | null = null;
+  for (let i = sessionTitles.length - 1; i >= 0; i--) {
+    const title = sessionTitles[i];
+    try {
+      const { stdout } = await execa('pgrep', ['-f', title], { reject: false });
+      const pidStr = stdout.trim().split('\n')[0];
+      if (pidStr) {
+        const pid = parseInt(pidStr, 10);
+        if (!isNaN(pid)) {
+          foundPid = pid;
+          break;
+        }
+      }
+    } catch {
+      // pgrep error = not found
+    }
+  }
+
+  if (foundPid === null) {
+    return { killed: false, reason: 'Process not found for session titles' };
+  }
+
+  const pid = foundPid;
+
+  // Send SIGTERM
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ESRCH') {
+      // Process already gone — consider it killed
+      return { killed: true, reason: `Process ${pid} already gone (ESRCH on SIGTERM)` };
+    }
+    return { killed: false, reason: `SIGTERM failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  // Wait up to 5 seconds for the process to exit (poll every 500ms)
+  const pollMs = 500;
+  const maxWaitMs = 5_000;
+  const start = Date.now();
+
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, pollMs));
+    // Check if process is still alive via kill -0
+    try {
+      process.kill(pid, 0);
+      // kill -0 succeeded: process still alive, keep waiting
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ESRCH') {
+        // Process gone — SIGTERM worked
+        return { killed: true, reason: `Sent SIGTERM to PID ${pid}` };
+      }
+      // EPERM or other error — process may still be alive, fall through to SIGKILL
+      break;
+    }
+  }
+
+  // Process survived SIGTERM — send SIGKILL
+  try {
+    process.kill(pid, 'SIGKILL');
+    return { killed: true, reason: `Sent SIGTERM/SIGKILL to PID ${pid}` };
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ESRCH') {
+      // Died between SIGTERM check and SIGKILL
+      return { killed: true, reason: `Sent SIGTERM to PID ${pid} (process exited before SIGKILL)` };
+    }
+    return {
+      killed: false,
+      reason: `SIGKILL failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 // ── Factory ────────────────────────────────────────────────────────────────
 
 function createRunner(options?: Partial<RunnerOptions>): Runner {
@@ -1010,8 +1113,8 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner, evaluateStepResult };
-export type { RunnerOptions, RunnerState, StepVerdict };
+export { Runner, createRunner, evaluateStepResult, killJobSession };
+export type { RunnerOptions, RunnerState, StepVerdict, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing
 export {
