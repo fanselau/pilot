@@ -23,7 +23,7 @@ import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
 import type { PilotStateStore } from '../state.js';
-import type { Job, SessionPart } from '../../core/types.js';
+import type { Job, SessionPart, DelegationPlan } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -62,6 +62,41 @@ function statusColor(status: string): string {
     case 'pending': return statusColors.pending;
     default: return theme.muted;
   }
+}
+
+function parseStepInfo(job: Job): { label: string; index: string } {
+  if (!job.delegationPlan) return { label: '—', index: '—' };
+  try {
+    const plan = JSON.parse(job.delegationPlan) as DelegationPlan;
+    const step = plan.steps[job.currentStep];
+    const total = plan.steps.length;
+    const label = step ? `${step.command} "${truncate(step.args, 20)}"` : '—';
+    const index = `${job.currentStep + 1}/${total}`;
+    return { label, index };
+  } catch { return { label: '—', index: '—' }; }
+}
+
+function countDescendants(sections: import('../data/opencode-db.js').SessionSection[]): number {
+  let count = 0;
+  for (const section of sections) {
+    if (section.type === 'subagent') {
+      count++;
+      if (section.children) {
+        count += section.children.filter(c => c.type === 'subagent').length;
+      }
+    }
+  }
+  return count;
+}
+
+function getSessionTitle(job: Job): string {
+  if (!job.sessionTitles) return '—';
+  try {
+    const titles = JSON.parse(job.sessionTitles) as string[];
+    // Return the most relevant (non-delegation) title, or last one
+    const execTitle = titles.find(t => !t.startsWith('pilot-delegate-'));
+    return execTitle ?? titles[titles.length - 1] ?? '—';
+  } catch { return '—'; }
 }
 
 // ── Part formatting ───────────────────────────────────────────────────────
@@ -274,7 +309,7 @@ export function DetailView(props: { state: PilotStateStore }) {
           <text content="  Job not found" fg={theme.muted} />
         </box>
       }>
-        {/* Header: fixed height */}
+        {/* Header: structured metadata panel */}
         <box flexDirection="column" paddingLeft={1} paddingRight={1}>
           {/* Line 1: #id  project  scope  status */}
           <box flexDirection="row">
@@ -292,13 +327,37 @@ export function DetailView(props: { state: PilotStateStore }) {
             content={`"${truncate(currentJob()!.description, 80)}"`}
             fg={theme.fg}
           />
-          {/* Line 3: elapsed + tokens */}
+          {/* Line 3: separator */}
+          <text content="────────────────────────────────────────────────────────────────────────────" fg={theme.border} />
+          {/* Line 4: elapsed + step + tokens */}
+          <box flexDirection="row">
+            <text content={`⏱ ${elapsed()}`} fg={theme.muted} />
+            <text content={`   Step ${parseStepInfo(currentJob()!).index}: ${parseStepInfo(currentJob()!).label}`} fg={theme.muted} />
+            <text content={`   ◆ ${formatTokens(totalTokens())} tokens`} fg={theme.muted} />
+          </box>
+          {/* Line 5: model + attempts + started */}
+          <box flexDirection="row">
+            <text content={`Model: ${currentJob()!.modelProfile}/${currentJob()!.providerMode}`} fg={theme.muted} />
+            <text content={`   Attempts: ${currentJob()!.attempts}/${currentJob()!.maxAttempts}`} fg={theme.muted} />
+            <text
+              content={`   Started: ${currentJob()!.startedAt ? formatTime(new Date(currentJob()!.startedAt!).getTime()) : '—'}`}
+              fg={theme.muted}
+            />
+          </box>
+          {/* Line 6: session title */}
           <text
-            content={`⏱ ${elapsed()}  ◆ ${formatTokens(totalTokens())} tokens`}
+            content={`Session: ${truncate(getSessionTitle(currentJob()!), 80)}`}
             fg={theme.muted}
           />
-          {/* Line 4: separator */}
-          <text content="────────────────────────────────────────" fg={theme.border} />
+          {/* Line 7: descendant count (only when > 0) */}
+          <Show when={countDescendants(sections()) > 0}>
+            <text
+              content={`Descendants: ${countDescendants(sections())} subagent ${countDescendants(sections()) === 1 ? 'session' : 'sessions'}`}
+              fg={theme.muted}
+            />
+          </Show>
+          {/* Line 8: separator */}
+          <text content="────────────────────────────────────────────────────────────────────────────" fg={theme.border} />
         </box>
 
         {/* Activity stream: scrollable */}
