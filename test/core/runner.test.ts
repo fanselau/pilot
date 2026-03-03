@@ -6,7 +6,7 @@
  * evaluateStepResult, createRunner) cover the core logic without async overhead.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ vi.mock('../../src/core/db.js', () => ({
   skipRemainingSteps: vi.fn(),
   getAllRunningJobs: vi.fn(() => []),
   forceQuitJob: vi.fn(() => ({ ok: true })),
+  reconcileStaleJobs: vi.fn(() => []),
 }));
 
 vi.mock('../../src/core/delegate.js', () => ({
@@ -62,7 +63,7 @@ vi.mock('../../src/core/opencode-db.js', () => ({
 }));
 
 vi.mock('execa', () => ({
-  execa: vi.fn(() => ({ unref: vi.fn(), catch: vi.fn().mockReturnThis() })),
+  execa: vi.fn(() => ({ unref: vi.fn(), catch: vi.fn().mockReturnThis(), stdout: '' })),
 }));
 
 // Dynamic mock data for readdirSync
@@ -99,7 +100,10 @@ vi.mock('node:fs', async () => {
 // ── Imports ────────────────────────────────────────────────────────────────
 
 import { Runner, createRunner, evaluateStepResult, scanPhaseDirs, verifyStepArtifacts, patchStepArgs } from '../../src/core/runner.js';
-import type { DelegationStep } from '../../src/core/types.js';
+import { claimNextLaunchable, markCompleted, getAllRunningJobs, forceQuitJob, reconcileStaleJobs } from '../../src/core/db.js';
+import { delegate } from '../../src/core/delegate.js';
+import { execa } from 'execa';
+import type { DelegationStep, Job } from '../../src/core/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -274,6 +278,147 @@ describe('patchStepArgs', () => {
     patchStepArgs(steps, 0, 21, 22);
     expect(steps[0].args).toBe('22');
     stderrSpy.mockRestore();
+  });
+});
+
+// ── Dispatch + reconcileStaleRunning test helpers ──────────────────────────
+
+function makeJob(id: string, project: string, overrides: Partial<Job> = {}): Job {
+  return {
+    id,
+    project,
+    scope: 'quick',
+    description: 'test job',
+    requirementPath: null,
+    status: 'pending',
+    priority: 0,
+    dependsOn: null,
+    createdAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
+    error: null,
+    attempts: 0,
+    maxAttempts: 3,
+    delegationPlan: null,
+    currentStep: 0,
+    sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'claude-only',
+    ...overrides,
+  };
+}
+
+// ── Immediate dispatch tests ───────────────────────────────────────────────
+
+describe('immediate dispatch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset claimNextLaunchable to return null by default (no jobs)
+    vi.mocked(claimNextLaunchable).mockReturnValue(null);
+    // Default delegate resolves immediately with empty steps
+    vi.mocked(delegate).mockResolvedValue({ steps: [], reasoning: 'test' });
+    // Default markCompleted is a no-op
+    vi.mocked(markCompleted).mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fills multiple slots in one iteration when capacity exists', async () => {
+    const job1 = makeJob('j1', 'proj-a');
+    const job2 = makeJob('j2', 'proj-b');
+    let claimCount = 0;
+    vi.mocked(claimNextLaunchable).mockImplementation(() => {
+      if (claimCount === 0) { claimCount++; return job1; }
+      if (claimCount === 1) { claimCount++; return job2; }
+      return null;
+    });
+    vi.mocked(delegate).mockResolvedValue({ steps: [], reasoning: 'test' });
+
+    const runner = createRunner({ maxParallel: 2, once: true, pollInterval: 60 });
+    await runner.run();
+
+    // Both jobs should have been launched — claimNextLaunchable called 3 times (j1, j2, null)
+    expect(vi.mocked(claimNextLaunchable).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(vi.mocked(markCompleted)).toHaveBeenCalledWith('j1');
+    expect(vi.mocked(markCompleted)).toHaveBeenCalledWith('j2');
+  });
+
+  it('stops claiming when maxParallel reached', async () => {
+    const job1 = makeJob('j1', 'proj-a');
+    const job2 = makeJob('j2', 'proj-b');
+    let claimCount = 0;
+    vi.mocked(claimNextLaunchable).mockImplementation(() => {
+      if (claimCount === 0) { claimCount++; return job1; }
+      if (claimCount === 1) { claimCount++; return job2; }
+      return null;
+    });
+    vi.mocked(delegate).mockResolvedValue({ steps: [], reasoning: 'test' });
+
+    const runner = createRunner({ maxParallel: 1, once: true, pollInterval: 60 });
+    await runner.run();
+
+    // With maxParallel=1: j1 runs, completes, j2 runs, completes, then null
+    expect(vi.mocked(markCompleted)).toHaveBeenCalledWith('j1');
+    expect(vi.mocked(markCompleted)).toHaveBeenCalledWith('j2');
+  });
+});
+
+// ── reconcileStaleRunning (via runner.run) ────────────────────────────────
+
+describe('reconcileStaleRunning (via runner.run)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(claimNextLaunchable).mockReturnValue(null);
+    vi.mocked(delegate).mockResolvedValue({ steps: [], reasoning: 'test' });
+    vi.mocked(markCompleted).mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls forceQuitJob for running jobs whose process is not found', async () => {
+    const staleJob = makeJob('stale1', 'proj-a', {
+      status: 'running',
+      sessionTitles: JSON.stringify(['proj-a-execute-phase-1']),
+    });
+    vi.mocked(getAllRunningJobs).mockReturnValue([staleJob]);
+    // pgrep returns empty stdout → process not found
+    vi.mocked(execa).mockResolvedValue({
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+    } as Awaited<ReturnType<typeof execa>>);
+
+    const runner = createRunner({ maxParallel: 2, once: true, pollInterval: 60 });
+    await runner.run();
+
+    expect(vi.mocked(forceQuitJob)).toHaveBeenCalledWith(
+      'stale1',
+      'cli',
+      expect.stringMatching(/stale|reconcil/i),
+    );
+  });
+
+  it('does NOT call forceQuitJob for jobs whose process is alive', async () => {
+    const liveJob = makeJob('live1', 'proj-b', {
+      status: 'running',
+      sessionTitles: JSON.stringify(['proj-b-execute-phase-2']),
+    });
+    vi.mocked(getAllRunningJobs).mockReturnValue([liveJob]);
+    // pgrep returns a PID → process found
+    vi.mocked(execa).mockResolvedValue({
+      stdout: '12345\n',
+      stderr: '',
+      exitCode: 0,
+    } as Awaited<ReturnType<typeof execa>>);
+
+    const runner = createRunner({ maxParallel: 2, once: true, pollInterval: 60 });
+    await runner.run();
+
+    expect(vi.mocked(forceQuitJob)).not.toHaveBeenCalled();
   });
 });
 
