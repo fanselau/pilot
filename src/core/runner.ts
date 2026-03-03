@@ -42,7 +42,7 @@ import {
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { findSessionByTitle, isSessionDone, getLastMessage } from './opencode-db.js';
-import { patchAgentFrontmatter, resolveAllAgentModels } from './models.js';
+import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
@@ -504,11 +504,22 @@ class Runner {
     await enforceSpawnRateLimit();
     await validateProjectConfig(cwd);
 
+    // Resolve top-level model for --model flag
+    // Judge sessions use 'judge' scope; all others use job scope from activeJobs
+    const isJudge = command === 'pilot-judge';
+    const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
+    const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
+    const profile = jobEntry?.job.modelProfile ?? 'balanced';
+    const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
+    const topLevelModel = resolveTopLevelModel(scope, profile, providerMode);
+    process.stderr.write(dim(`Top-level model: ${topLevelModel}`) + '\n');
+
     // Spawn detached opencode session (setsid via detached:true, NEVER nohup)
     const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
     const proc = execa(opencodeBin, [
       'run',
       '--format', 'default',
+      '--model', topLevelModel,      // enforce model at session level
       '--title', title,
       '--command', gsdCommand,
       // Pass args as a single positional string. NEVER use -- separator

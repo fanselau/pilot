@@ -111,4 +111,36 @@ function patchAgentFrontmatter(projectDir: string, models: Record<string, string
   }
 }
 
-export { resolveAgentModel, resolveAllAgentModels, patchAgentFrontmatter };
+/**
+ * Resolve the top-level session model for --model flag based on scope.
+ * - phase scope: orchestrator agent = uses planner tier (opus/sonnet per profile)
+ * - quick scope: executor tier (opus/sonnet per profile)
+ * - judge sessions: always haiku tier (cheapest — just parsing a transcript)
+ * - milestone: same as phase (orchestrator)
+ */
+function resolveTopLevelModel(
+  scope: 'phase' | 'quick' | 'milestone' | 'judge',
+  profile: ModelProfile,
+  providerMode: ProviderMode,
+): string {
+  // Map scope to the equivalent agent tier lookup
+  const SCOPE_TIER_MAP: Record<string, Record<ModelProfile, ModelTier>> = {
+    'phase':     AGENT_PROFILE_TIERS['gsd-planner']!,    // Orchestrator = planner tier
+    'milestone': AGENT_PROFILE_TIERS['gsd-planner']!,   // Same as phase
+    'quick':     AGENT_PROFILE_TIERS['gsd-executor']!,   // Direct executor
+    'judge': { quality: 'haiku', balanced: 'haiku', budget: 'haiku' },  // Always cheapest
+  };
+
+  const tiers = SCOPE_TIER_MAP[scope];
+  if (!tiers) {
+    // Fallback: use executor tier for unknown scopes
+    const fallbackTiers = AGENT_PROFILE_TIERS['gsd-executor']!;
+    const tier = fallbackTiers[profile];
+    return PROVIDER_MODELS[providerMode][tier];
+  }
+
+  const tier = tiers[profile];
+  return PROVIDER_MODELS[providerMode][tier];
+}
+
+export { resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, patchAgentFrontmatter, PROVIDER_MODELS };
