@@ -269,7 +269,8 @@ function buildQuickArgs(job: Job): string {
  * Single delegation attempt: spawn opencode, wait for result, parse output.
  */
 async function attemptDelegation(job: Job, projectDir: string, attempt: number): Promise<DelegationPlan> {
-  const title = `pilot-delegate-${job.id}-${attempt}`;
+  const ts = Date.now().toString(36).slice(-4);
+  const title = `pilot-delegate-${job.id}-${attempt}-${ts}`;
 
   const args = [
     `scope: ${job.scope}`,

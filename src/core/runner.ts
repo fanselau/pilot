@@ -190,7 +190,8 @@ class Runner {
         }
 
         const step = plan.steps[i];
-        const title = truncateTitle(`${job.project}-${step.command}-${job.id}`, 80);
+        const ts = Date.now().toString(36).slice(-4);
+        const title = truncateTitle(`${job.project}-${step.command}-${job.id}-${ts}`, 80);
         this.activeJobs.set(job.id, { job, title });
         updateSessionTitles(job.id, [title]);
 
