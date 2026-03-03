@@ -3,15 +3,19 @@
  *
  * Most recent first. Shows status icon (✓/✗/–), job info,
  * duration, token total, and relative time.
- * New completions flash inverse for 2 seconds.
+ * New completions flash a subtle status-tinted background for 2 seconds.
+ *
+ * Fixed: selection always wins over flash; status icon color is isolated
+ * from content text color so project/description use normal fg.
  */
 
 /* @jsxImportSource @opentui/solid */
 
-import { For, createSignal, createEffect, on } from 'solid-js';
+import { For, createSignal, createEffect, on, onMount } from 'solid-js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
 import { formatTokens } from './running-panel.js';
+import { fetchSessionEnrichment } from '../data/opencode-db.js';
 import type { Job, JobStatus } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -55,6 +59,16 @@ function statusIcon(status: JobStatus): { icon: string; color: string } {
   }
 }
 
+// Subtle flash background per status — dark tint, not harsh inverse
+function flashBg(status: JobStatus): string {
+  switch (status) {
+    case 'completed': return '#0d2b0d';  // dark green tint
+    case 'failed': return '#2b0d0d';     // dark red tint
+    case 'cancelled': return '#1a1a1a';  // dark neutral
+    default: return '#111111';
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function CompletedPanel(props: {
@@ -65,6 +79,9 @@ export function CompletedPanel(props: {
   // Track flashing IDs for new completions
   const [flashingIds, setFlashingIds] = createSignal<Set<string>>(new Set());
   const [prevIds, setPrevIds] = createSignal<Set<string>>(new Set());
+
+  // Per-job token counts fetched from opencode DB
+  const [jobTokens, setJobTokens] = createSignal<Map<string, number>>(new Map());
 
   // Detect new completions by comparing current vs previous job IDs
   createEffect(on(() => props.jobs, (jobs) => {
@@ -98,6 +115,34 @@ export function CompletedPanel(props: {
     setPrevIds(currentIds);
   }));
 
+  // Fetch token counts for all completed jobs on mount and when jobs change
+  createEffect(on(() => props.jobs, (jobs) => {
+    if (jobs.length === 0) return;
+    try {
+      const tokenMap = new Map<string, number>();
+      for (const job of jobs) {
+        if (!job.sessionTitles) continue;
+        let titles: string[] = [];
+        try {
+          titles = JSON.parse(job.sessionTitles) as string[];
+        } catch { continue; }
+        if (titles.length === 0) continue;
+
+        const { tokens } = fetchSessionEnrichment(titles);
+        let total = 0;
+        for (const [, t] of tokens) {
+          total += t.input + t.output;
+        }
+        if (total > 0) {
+          tokenMap.set(job.id, total);
+        }
+      }
+      setJobTokens(tokenMap);
+    } catch {
+      // ignore enrichment errors — completed data is best-effort
+    }
+  }));
+
   return (
     <box
       borderStyle="rounded"
@@ -115,24 +160,37 @@ export function CompletedPanel(props: {
             const { icon, color } = statusIcon(job.status);
             const duration = () => formatDuration(job.startedAt, job.completedAt);
             const relative = () => formatRelativeTime(job.completedAt);
+            const tokenCount = () => jobTokens().get(job.id) ?? 0;
 
-            const bg = () => {
-              if (flashing()) return theme.fg;  // inverse flash
+            // Selection always wins over flash — user always knows cursor position
+            const rowBg = () => {
               if (selected()) return theme.highlight;
+              if (flashing()) return flashBg(job.status);
               return undefined;
             };
 
-            const fg = () => {
-              if (flashing()) return theme.bg;  // inverse flash
-              return color;
-            };
-
-            const line = () =>
-              `${icon} #${job.id}  ${job.project}  ${job.scope}  "${truncate(job.description, 20)}"  ${duration()}  ${formatTokens(0)} tok  ${relative()}`;
+            // Content text color: normal fg, slightly muted for metadata
+            const contentFg = () => selected() ? theme.fg : theme.fg;
 
             return (
-              <box backgroundColor={bg()}>
-                <text content={line()} fg={fg()} />
+              <box flexDirection="row" backgroundColor={rowBg()}>
+                {/* Status icon: always uses status color */}
+                <text content={`${icon} `} fg={color} />
+                {/* Job identity: normal fg */}
+                <text
+                  content={`#${job.id}  ${job.project}  ${job.scope}  `}
+                  fg={contentFg()}
+                />
+                {/* Description: muted */}
+                <text
+                  content={`"${truncate(job.description, 20)}"  `}
+                  fg={selected() ? theme.fg : theme.muted}
+                />
+                {/* Metrics: muted */}
+                <text
+                  content={`${duration()}  ${formatTokens(tokenCount())} tok  ${relative()}`}
+                  fg={selected() ? theme.fg : theme.muted}
+                />
               </box>
             );
           }}
