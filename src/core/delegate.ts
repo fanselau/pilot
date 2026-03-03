@@ -16,6 +16,26 @@ import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
+ * Extract a human-readable title from a requirement file's `# Title` heading.
+ * Returns the title text (trimmed), or null if no heading found or file unreadable.
+ *
+ * Used to pass clean titles to add-phase instead of file paths, preventing
+ * ugly slugified phase directory names like `requirements-tui-visual-polish-md`.
+ */
+function extractRequirementTitle(requirementPath: string): string | null {
+  try {
+    const content = readFileSync(requirementPath, 'utf8');
+    const match = content.match(/^#\s+(.+)$/m);
+    if (match) {
+      return match[1].trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Spawn a delegation AI session to determine what GSD commands to run for a job.
  * Uses a short cheap AI session that reads .planning/ and outputs a JSON plan.
  *
@@ -118,14 +138,24 @@ function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
   const nextPhase = getNextPhaseNumber(phasesDir);
 
   // Build full lifecycle: add → plan → execute
-  const addArgs = job.requirementPath
-    ? `@${job.requirementPath}`
-    : job.description;
+  // add-phase gets a human-readable title (NOT file path) to avoid ugly slugified dir names
+  // plan-phase gets @requirementPath for GSD context reference
+  let addArgs: string;
+  let planArgs = `${nextPhase} --auto`;
+
+  if (job.requirementPath) {
+    const title = extractRequirementTitle(job.requirementPath);
+    addArgs = title ?? job.description;
+    // Include @path in plan-phase args so GSD can read the requirement file for context
+    planArgs = `${nextPhase} @${job.requirementPath} --auto`;
+  } else {
+    addArgs = job.description;
+  }
 
   return {
     steps: [
       { command: 'add-phase', args: addArgs },
-      { command: 'plan-phase', args: `${nextPhase} --auto` },
+      { command: 'plan-phase', args: planArgs },
       { command: 'execute-phase', args: `${nextPhase}` },
     ],
     reasoning: `Fallback: "${job.description}" is not a phase number, creating as phase ${nextPhase} (from phases/ dir scan)`,
@@ -175,8 +205,12 @@ function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
 
           for (const file of files) {
             const filePath = path.join(job.requirementPath, file);
-            steps.push({ command: 'add-phase', args: `@${filePath}` });
-            steps.push({ command: 'plan-phase', args: `${nextPhase} --auto` });
+            // add-phase gets a human-readable title (NOT file path)
+            const title = extractRequirementTitle(filePath);
+            const addArgs = title ?? file.replace(/\.md$/, '').replace(/^\d+-/, '');
+            steps.push({ command: 'add-phase', args: addArgs });
+            // plan-phase gets @filePath for GSD context reference
+            steps.push({ command: 'plan-phase', args: `${nextPhase} @${filePath} --auto` });
             steps.push({ command: 'execute-phase', args: `${nextPhase}` });
             nextPhase++;
           }
@@ -192,10 +226,17 @@ function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
     }
   }
 
-  // Default: single add-phase
+  // Default: single add-phase with human-readable title
+  let addArgs: string;
+  if (job.requirementPath) {
+    const title = extractRequirementTitle(job.requirementPath);
+    addArgs = title ?? job.description;
+  } else {
+    addArgs = job.description;
+  }
   return {
     steps: [
-      { command: 'add-phase', args: job.requirementPath ? `@${job.requirementPath}` : job.description },
+      { command: 'add-phase', args: addArgs },
     ],
     reasoning: 'Fallback: project already initialized, adding as new phase',
   };
@@ -353,4 +394,5 @@ export {
   buildQuickArgs,
   getNextPhaseNumber,
   buildMilestonePlan,
+  extractRequirementTitle,
 };
