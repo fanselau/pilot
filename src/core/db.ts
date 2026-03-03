@@ -333,6 +333,60 @@ function getRunningJobsForProject(project: string): Job[] {
 }
 
 /**
+ * Get all currently running jobs for a specific project.
+ * Alias for getRunningJobsForProject — used by the runner's immediate dispatch path.
+ */
+function getRunningJobsByProject(project: string): Job[] {
+  return getRunningJobsForProject(project);
+}
+
+/**
+ * Atomically claim the next launchable pending job, enforcing project-level serialization.
+ *
+ * Runs entirely inside a db.transaction():
+ *   1. SELECT the next pending job whose project has no currently-running job
+ *      (ORDER BY priority DESC, created_at ASC)
+ *   2. If found, UPDATE status='running', started_at=now(), attempts+1
+ *   3. Return the mapped Job, or null if none available
+ *
+ * The transaction guarantees that no two callers can claim the same job concurrently,
+ * and that a second job for the same project cannot be claimed while one is running.
+ */
+function claimNextLaunchable(): Job | null {
+  const db = getDb();
+
+  const claim = db.transaction((): Job | null => {
+    // Select next pending job where no running job exists for the same project
+    const row = db.prepare(`
+      SELECT * FROM jobs
+      WHERE status = 'pending'
+        AND project NOT IN (
+          SELECT DISTINCT project FROM jobs WHERE status = 'running'
+        )
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `).get() as JobRow | undefined;
+
+    if (!row) return null;
+
+    // Atomically mark as running within the same transaction
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'running',
+          started_at = datetime('now'),
+          attempts = attempts + 1
+      WHERE id = ?
+    `).run(row.id);
+
+    // Return the updated row (re-fetch to get new values)
+    const updated = db.prepare('SELECT * FROM jobs WHERE id = ?').get(row.id) as JobRow;
+    return rowToJob(updated);
+  });
+
+  return claim();
+}
+
+/**
  * Get all jobs currently in 'running' status.
  * Used for reconciliation: compare against known active PIDs/sessions.
  */
@@ -586,6 +640,7 @@ export {
   retry,
   getQueue,
   getRunningJobsForProject,
+  getRunningJobsByProject,
   getAllRunningJobs,
   reconcileStaleJobs,
   markStale,
@@ -594,6 +649,7 @@ export {
   advanceStep,
   bump,
   updateSessionTitles,
+  claimNextLaunchable,
   recordStep,
   completeStep,
   getJobSteps,
