@@ -192,7 +192,7 @@ export function CompletedPanel(props: {
                 <text content={`${icon} `} fg={color} />
                 {/* Job identity: normal fg */}
                 <text
-                  content={`#${job.id}  ${job.project}  ${job.scope}  `}
+                  content={`#${job.id}  ${job.project}  ${job.scope}${job.modelProfile !== 'balanced' ? `  [${job.modelProfile}]` : ''}  `}
                   fg={contentFg()}
                 />
                 {/* Description: muted */}
