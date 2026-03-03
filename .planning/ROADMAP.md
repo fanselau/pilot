@@ -420,11 +420,11 @@ Wave structure:
 **Plans:** 5 plans
 
 Plans:
-- [x] 26-01-PLAN.md — DB layer: claimNextLaunchable (atomic + project serialization), forceQuitJob, getRunningJobsByProject
-- [x] 26-02-PLAN.md — Runner: immediate multi-slot dispatch loop, event-driven DB watch wake-up, killJobSession export
-- [x] 26-03-PLAN.md — CLI: pilot kill <id> --force command + wire in index.ts
-- [x] 26-04-PLAN.md — TUI: ConfirmOverlay component, K key force-quit, state signals, help text update
-- [x] 26-05-PLAN.md — Tests: dispatch immediacy, project serialization, DB force-quit, CLI kill command
+- [ ] 26-01-PLAN.md — DB layer: claimNextLaunchable (atomic + project serialization), forceQuitJob, getRunningJobsByProject
+- [ ] 26-02-PLAN.md — Runner: immediate multi-slot dispatch loop, event-driven DB watch wake-up, killJobSession export
+- [ ] 26-03-PLAN.md — CLI: pilot kill <id> --force command + wire in index.ts
+- [ ] 26-04-PLAN.md — TUI: ConfirmOverlay component, K key force-quit, state signals, help text update
+- [ ] 26-05-PLAN.md — Tests: dispatch immediacy, project serialization, DB force-quit, CLI kill command
 
 **Details:**
 Read requirements/runner-immediate-dispatch-and-force-quit.md for full spec.
@@ -451,26 +451,4 @@ Wave structure:
 **Details:**
 Read requirements/tui-detail-header-and-completions-polish.md for full spec.
 
-### Phase 28: Runner Immediate Dispatch + Force Quit Controls
-
-**Goal:** [To be planned]
-**Depends on:** Phase 27
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 28 to break down)
-
-**Details:**
-[To be added during planning]
-
-### Phase 29: Add a new integer phase to the end of the current milestone in the roadmap.
-
-**Goal:** [To be planned]
-**Depends on:** Phase 28
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 29 to break down)
-
-**Details:**
-[To be added during planning]
+<!-- Phase 28 removed: duplicate of Phase 25 -->

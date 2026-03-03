@@ -1,15 +1,14 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 27
+## Current Phase: 26
 
 ## Current Position
 
-Phase: 27 of 29 (TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix)
-Plan: 0 of 2 in current phase (ready to execute)
-Status: Ready for planning
-**Next Phase:** Phase 29 - Add a new integer phase to the end of the current milestone in the roadmap.
-Last activity: 2026-03-03 - Phase 26 verified passed (14/14 must-haves)
+Phase: 26 of 27 (Runner Immediate Dispatch + Force Quit Controls)
+Plan: 5 of 5 in current phase (26-01 through 26-05 complete)
+Status: Phase complete
+Last activity: 2026-03-03 - Completed 26-05-PLAN.md (tests: DB claim/force-quit, runner dispatch, CLI kill)
 
 Progress: ██████████████████████████████ 100% (76/76 plans)
 
@@ -18,7 +17,7 @@ Progress: ███████████████████████�
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 27 pending — TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
+**Current focus:** Phase 25 in progress — Pilot Learnings Consolidation + Reliability Guardrails (1/4 plans complete)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -107,7 +106,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 26 added: Runner Immediate Dispatch + Force Quit Controls
 - Phase 27 added: TUI Detail Header Rework + Run Info Density + Completed Hover Overlay Fix
 - Phase 28 added: Runner Immediate Dispatch + Force Quit Controls
-- Phase 29 added: Add a new integer phase to the end of the current milestone in the roadmap.
 
 ## Decisions
 
