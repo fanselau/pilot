@@ -109,7 +109,7 @@ export interface JobStep {
   sessionId: string | null;       // opencode session ID (if found)
   status: 'running' | 'completed' | 'failed' | 'skipped';
   verdictSource: string | null;   // e.g. "semantic-check", null for non-phase commands
-  verdictReason: string | null;   // reason from evaluateStepResult
+  verdictReason: string | null;   // reason for the verdict
   startedAt: string;              // ISO 8601
   completedAt: string | null;
   durationMs: number | null;
