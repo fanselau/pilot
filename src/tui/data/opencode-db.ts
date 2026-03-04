@@ -17,6 +17,7 @@ import {
   isSessionDone,
 } from '../../core/opencode-db.js';
 import type { SessionMessage, SessionPart, Job } from '../../core/types.js';
+import { getJobSteps } from '../../core/db.js';
 
 // ── Session section types ─────────────────────────────────────────────────
 
@@ -95,9 +96,29 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
 
   if (sessionTitles.length === 0) return [];
 
+  // Deduplicate titles (can accumulate across retries)
+  const seenTitles = new Set<string>();
+  const uniqueTitles = sessionTitles.filter((t) => {
+    if (seenTitles.has(t)) return false;
+    seenTitles.add(t);
+    return true;
+  });
+
+  // If job has step records, only show sessions referenced by current steps
+  let stepTitles: Set<string> | null = null;
+  try {
+    const steps = getJobSteps(job.id);
+    if (steps.length > 0) {
+      stepTitles = new Set(steps.filter(s => s.sessionTitle).map(s => s.sessionTitle!));
+    }
+  } catch { /* db not available */ }
+
   const sections: SessionSection[] = [];
 
-  for (const title of sessionTitles) {
+  for (const title of uniqueTitles) {
+    // Filter: only show delegation + step-referenced execution sessions
+    const isDelegationTitle = title.startsWith('pilot-delegate-');
+    if (stepTitles && !isDelegationTitle && !stepTitles.has(title)) continue;
     const isDelegation = title.startsWith('pilot-delegate-');
 
     let command: string | undefined;
