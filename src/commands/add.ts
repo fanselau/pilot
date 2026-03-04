@@ -185,8 +185,9 @@ async function addCommand(
         outputJson({ duplicate: true, existingJob: existing });
         return;
       }
-      const statusLabel = existing.status === 'running' ? 'running' : 'queued';
+      const statusLabel = existing.status === 'completed' ? 'recently completed' : existing.status === 'running' ? 'running' : 'queued';
       outputHuman(`  ${yellow('⚠')} Job already ${statusLabel}: ${dim(existing.id)} — "${existing.description.length > 50 ? existing.description.slice(0, 50) + '…' : existing.description}"`);
+      outputHuman(`  ${dim('Use --force to queue anyway')}`);
       return;  // exit cleanly — not an error
     }
   }

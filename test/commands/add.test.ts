@@ -466,6 +466,16 @@ describe('duplicate detection', () => {
     expect(output).toContain('running');
   });
 
+  it('skips addJob when recently completed duplicate exists', async () => {
+    vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'completed' as const });
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).not.toHaveBeenCalled();
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('recently completed');
+  });
+
   it('--force bypasses duplicate check', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
 
