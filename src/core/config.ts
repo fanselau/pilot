@@ -42,6 +42,15 @@ function getConfig(): PilotConfig {
   const defaultTimeoutRaw = parseInt(process.env.PILOT_DEFAULT_TIMEOUT ?? '60', 10);
   const defaultTimeout = Number.isNaN(defaultTimeoutRaw) ? 60 : defaultTimeoutRaw;
 
+  const sessionMemoryMaxMbRaw = parseInt(process.env.PILOT_SESSION_MEMORY_MAX_MB ?? '8192', 10);
+  const sessionMemoryMaxMb = Number.isNaN(sessionMemoryMaxMbRaw) ? 8192 : sessionMemoryMaxMbRaw;
+
+  const reservedMemoryMbRaw = parseInt(process.env.PILOT_RESERVED_MEMORY_MB ?? '4096', 10);
+  const reservedMemoryMb = Number.isNaN(reservedMemoryMbRaw) ? 4096 : reservedMemoryMbRaw;
+
+  const memoryKillThresholdMbRaw = parseInt(process.env.PILOT_MEMORY_KILL_THRESHOLD_MB ?? '2048', 10);
+  const memoryKillThresholdMb = Number.isNaN(memoryKillThresholdMbRaw) ? 2048 : memoryKillThresholdMbRaw;
+
   // Log level: DEBUG, INFO, WARN, ERROR (default INFO)
   const validLogLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const;
   type LogLevel = typeof validLogLevels[number];
@@ -65,6 +74,9 @@ function getConfig(): PilotConfig {
     maxParallel,
     pollInterval,
     defaultTimeout,
+    sessionMemoryMaxMb,
+    reservedMemoryMb,
+    memoryKillThresholdMb,
     logLevel,
     noColor,
   };

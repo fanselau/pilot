@@ -16,6 +16,9 @@ export interface PilotConfig {
   maxParallel: number;       // auto from RAM, default 1
   pollInterval: number;      // seconds, default 5
   defaultTimeout: number;    // minutes per job, default 60
+  sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)
+  reservedMemoryMb: number;        // reserved for OS/SSH/pilot before dynamic maxParallel calc, default 4096
+  memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048
   logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   noColor: boolean;
 }
