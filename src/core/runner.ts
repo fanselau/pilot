@@ -472,6 +472,14 @@ class Runner {
           }
           // Judge failed to produce verdict — benefit of doubt only because session had real activity
           // (no-activity sessions are already caught above)
+          // Store as inconclusive (confidence=0) so status displays can differentiate
+          // from verified completions — green should mean verified-green, not "we-have-no-idea-green"
+          updateJudgeVerdict(job.id, JSON.stringify({
+            verdict: 'pass',
+            confidence: 0,
+            summary: 'Judge failed — benefit of doubt applied (session had real activity)',
+            retryRecommendation: 'none',
+          }));
           process.stderr.write(
             `[runner] ⚠ Judge failed to produce verdict for ${job.id} — marking as completed (benefit of doubt)\n`,
           );
