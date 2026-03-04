@@ -118,6 +118,8 @@ interface JobRow {
   provider_mode: string;
   judge_verdict: string | null;
   actual_models: string | null;
+  callback_url: string | null;
+  callback_session_key: string | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -148,6 +150,8 @@ function rowToJob(row: JobRow): Job {
       if (!row.actual_models) return null;
       try { return JSON.parse(row.actual_models) as string[]; } catch { return null; }
     })(),
+    callbackUrl: row.callback_url ?? null,
+    callbackSessionKey: row.callback_session_key ?? null,
   };
 }
 
@@ -169,6 +173,8 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN resume_hint TEXT",
     "ALTER TABLE jobs ADD COLUMN actual_models TEXT",
     "ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)",
+    "ALTER TABLE jobs ADD COLUMN callback_url TEXT DEFAULT NULL",
+    "ALTER TABLE jobs ADD COLUMN callback_session_key TEXT DEFAULT NULL",
   ];
   for (const sql of migrations) {
     try {
@@ -233,6 +239,8 @@ function addJob(
   providerMode?: ProviderMode,
   dependsOn?: string,
   parentJobId?: string,
+  callbackSessionKey?: string,
+  callbackUrl?: string,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -240,9 +248,9 @@ function addJob(
   const provider = providerMode ?? 'claude-only';
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null);
 
   return getJob(id)!;
 }

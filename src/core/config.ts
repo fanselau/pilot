@@ -65,6 +65,10 @@ function getConfig(): PilotConfig {
   const telegramBotToken = process.env.PILOT_TELEGRAM_BOT_TOKEN ?? null;
   const telegramChatId = process.env.PILOT_TELEGRAM_CHAT_ID ?? null;
 
+  // Optional OpenClaw hooks fields (for job completion callbacks)
+  const openclawHooksUrl = process.env.PILOT_OPENCLAW_HOOKS_URL ?? null;
+  const openclawHooksToken = process.env.PILOT_OPENCLAW_HOOKS_TOKEN ?? null;
+
   // Derived paths (not from env vars)
   const pilotDir = path.join(home, '.pilot');
   const pilotDbPath = path.join(pilotDir, 'pilot.db');
@@ -85,6 +89,8 @@ function getConfig(): PilotConfig {
     noColor,
     telegramBotToken,
     telegramChatId,
+    openclawHooksUrl,
+    openclawHooksToken,
   };
 }
 

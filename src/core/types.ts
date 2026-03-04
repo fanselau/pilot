@@ -23,6 +23,8 @@ export interface PilotConfig {
   noColor: boolean;
   telegramBotToken: string | null;   // PILOT_TELEGRAM_BOT_TOKEN — optional Telegram notifications
   telegramChatId: string | null;     // PILOT_TELEGRAM_CHAT_ID — optional Telegram chat ID
+  openclawHooksUrl: string | null;   // PILOT_OPENCLAW_HOOKS_URL — base webhook URL for session wake
+  openclawHooksToken: string | null; // PILOT_OPENCLAW_HOOKS_TOKEN — auth token for hooks endpoint
 }
 
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
@@ -56,6 +58,8 @@ export interface Job {
   providerMode: ProviderMode;
   judgeVerdict: string | null;  // JSON string of judge verdict
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
+  callbackUrl: string | null;     // custom webhook URL for job completion notification
+  callbackSessionKey: string | null;  // OpenClaw session key to wake on completion
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
