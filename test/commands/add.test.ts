@@ -5,7 +5,10 @@
  *        node:fs (accessSync/statSync/readFileSync).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +59,24 @@ vi.mock('../../src/util/colors.js', () => ({
   blue: (s: string) => s,
 }));
 
+// Mock getConfig so we control projectDir
+let mockedProjectDir = '/tmp/pilot-test-projects';
+
+vi.mock('../../src/core/config.js', () => ({
+  getConfig: vi.fn(() => ({
+    projectDir: mockedProjectDir,
+    gsdDir: '/tmp/pilot-gsd',
+    pilotDir: '/tmp/.pilot',
+    pilotDbPath: '/tmp/.pilot/pilot.db',
+    stuckThreshold: 90,
+    maxParallel: 1,
+    pollInterval: 5,
+    defaultTimeout: 60,
+    logLevel: 'INFO' as const,
+    noColor: false,
+  })),
+}));
+
 import { addCommand, detectScope } from '../../src/commands/add.js';
 import { addJob } from '../../src/core/db.js';
 import type { JobScope } from '../../src/core/types.js';
@@ -92,6 +113,25 @@ describe('detectScope', () => {
 // ── addCommand ─────────────────────────────────────────────────────────────
 
 describe('addCommand', () => {
+  // Create a configured my-project dir for existing tests
+  let existingTestsDir: string;
+
+  beforeAll(() => {
+    existingTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-existing-'));
+    mockedProjectDir = existingTestsDir;
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(existingTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(existingTestsDir, { recursive: true, force: true });
+  });
+
   it('queues a string requirement as quick scope', async () => {
     await addCommand('my-project', 'fix the navbar', {});
 
@@ -206,5 +246,103 @@ describe('addCommand', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).not.toContain('[');
+  });
+});
+
+// ── project setup validation ───────────────────────────────────────────────
+
+describe('project setup validation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'pilot-setup-validation-'));
+    mockedProjectDir = tmpDir;
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rejects project without .opencode/command/', async () => {
+    // Create a bare project dir — no .opencode/
+    const projectDir = path.join(tmpDir, 'test-proj');
+    mkdirSync(projectDir, { recursive: true });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('test-proj', 'fix stuff', {})).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('not configured');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('rejects project with broken .opencode/command/ symlink', async () => {
+    // Create project dir with .opencode/ dir, but broken symlink for command/
+    const projectDir = path.join(tmpDir, 'test-proj');
+    mkdirSync(path.join(projectDir, '.opencode'), { recursive: true });
+    // Create a symlink pointing to a nonexistent target
+    symlinkSync('/nonexistent/path/that/does/not/exist', path.join(projectDir, '.opencode', 'command'));
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('test-proj', 'fix stuff', {})).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('broken setup');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('accepts properly configured project', async () => {
+    // Create project dir with real .opencode/command/ and .opencode/agents/ directories
+    const projectDir = path.join(tmpDir, 'test-proj');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+
+    // Should not exit — addJob should be called
+    await addCommand('test-proj', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+  });
+
+  it('--force bypasses setup check', async () => {
+    // Bare project dir — no .opencode/ at all
+    const projectDir = path.join(tmpDir, 'test-proj');
+    mkdirSync(projectDir, { recursive: true });
+    // Add opencode.json so we don't get the missing-config warning
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+
+    // With --force, should bypass validation and call addJob
+    await addCommand('test-proj', 'fix stuff', { force: true });
+
+    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+  });
+
+  it('warns but does not block when opencode.json is missing', async () => {
+    // Create project dir with .opencode/command/ and .opencode/agents/ but no opencode.json
+    const projectDir = path.join(tmpDir, 'test-proj');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    // No opencode.json
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    // Should NOT exit — addJob should be called despite warning
+    await addCommand('test-proj', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('opencode.json');
+
+    stderrSpy.mockRestore();
   });
 });

@@ -67,7 +67,14 @@ function validateProjectSetup(project: string, force: boolean): void {
   for (const dirName of criticalDirs) {
     const dirPath = path.join(projectDir, '.opencode', dirName);
 
-    if (!existsSync(dirPath)) {
+    // Use lstatSync first — it stats the link itself (not the target), so it
+    // works even for broken symlinks. existsSync follows the link and returns
+    // false for broken symlinks, masking the "broken setup" case.
+    let linkStats: ReturnType<typeof lstatSync> | null = null;
+    try {
+      linkStats = lstatSync(dirPath);
+    } catch {
+      // Path doesn't exist at all — not configured
       process.stderr.write(
         `  ✗ Project "${project}" not configured. Run: pilot setup ${project}\n`,
       );
@@ -75,25 +82,17 @@ function validateProjectSetup(project: string, force: boolean): void {
     }
 
     // If it IS a symlink, verify the target exists (not broken)
-    try {
-      const linkStats = lstatSync(dirPath);
-      if (linkStats.isSymbolicLink()) {
-        try {
-          realpathSync(dirPath);
-        } catch {
-          process.stderr.write(
-            `  ✗ Project "${project}" has broken setup (symlink target missing). Run: pilot setup ${project}\n`,
-          );
-          process.exit(1);
-        }
+    if (linkStats.isSymbolicLink()) {
+      try {
+        realpathSync(dirPath);
+      } catch {
+        process.stderr.write(
+          `  ✗ Project "${project}" has broken setup (symlink target missing). Run: pilot setup ${project}\n`,
+        );
+        process.exit(1);
       }
-    } catch {
-      // lstatSync failed — treat as missing
-      process.stderr.write(
-        `  ✗ Project "${project}" not configured. Run: pilot setup ${project}\n`,
-      );
-      process.exit(1);
     }
+    // If it's a real directory, existsSync already confirmed it's there — accept it
   }
 
   // Warn-only: check for opencode.json / claude.json
