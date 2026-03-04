@@ -69,6 +69,73 @@ function extractRequirementTitle(requirementPath: string): string | null {
 }
 
 /**
+ * Slugify a title to lowercase-hyphenated form for directory matching.
+ * e.g. "Phase Delegation: Revert to Multi-Step" → "phase-delegation-revert-to-multi-step"
+ */
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Find an existing phase directory in .planning/phases/ that matches a title.
+ * Scans for dirs matching `NN-slug` where slug is a substring match against the
+ * slugified title.
+ *
+ * Returns { phaseNumber, dirName } or null if not found.
+ */
+function findExistingPhaseDir(phasesDir: string, title: string): { phaseNumber: number; dirName: string } | null {
+  try {
+    const titleSlug = slugifyTitle(title);
+    const entries = readdirSync(phasesDir);
+
+    for (const entry of entries) {
+      const match = entry.match(/^(\d+)-(.+)$/);
+      if (!match) continue;
+
+      const phaseNumber = parseInt(match[1], 10);
+      const dirSlug = match[2];
+
+      // Check if the directory slug is a substring of the title slug, or vice versa
+      // This handles both exact and partial matches (e.g. shortened slugs)
+      if (titleSlug.includes(dirSlug) || dirSlug.includes(titleSlug)) {
+        return { phaseNumber, dirName: entry };
+      }
+
+      // Also check word-level overlap: if the directory slug words appear in title slug
+      const titleWords = titleSlug.split('-').filter(w => w.length > 3);
+      const dirWords = dirSlug.split('-').filter(w => w.length > 3);
+      const overlap = titleWords.filter(w => dirWords.includes(w));
+      if (overlap.length >= 2) {
+        return { phaseNumber, dirName: entry };
+      }
+    }
+    return null;
+  } catch {
+    return null; // ENOENT or other error
+  }
+}
+
+/**
+ * Get the state of a phase directory: plan count, summary count, and whether complete.
+ * isComplete = planCount > 0 && planCount === summaryCount
+ */
+function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: number; summaryCount: number; isComplete: boolean } {
+  try {
+    const phaseDir = path.join(phasesDir, phaseDirName);
+    const entries = readdirSync(phaseDir);
+    const planCount = entries.filter(f => f.endsWith('-PLAN.md')).length;
+    const summaryCount = entries.filter(f => f.endsWith('-SUMMARY.md')).length;
+    const isComplete = planCount > 0 && planCount === summaryCount;
+    return { planCount, summaryCount, isComplete };
+  } catch {
+    return { planCount: 0, summaryCount: 0, isComplete: false };
+  }
+}
+
+/**
  * Spawn a delegation AI session to determine what GSD commands to run for a job.
  * Uses a short cheap AI session that reads .planning/ and outputs a JSON plan.
  *
@@ -123,73 +190,169 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
 
     case 'phase':
       if (!hasPlanning) {
-        // Phase on uninitialized project — init then single-session phase
+        // Phase on uninitialized project — init then multi-step phase lifecycle
+        const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
+          ?? job.description;
+        const addPhaseArgs = title;
+        const planPhaseArgs = job.requirementPath ? `1 @${job.requirementPath}` : '1';
+        const executePhaseArgs = '1';
         return {
           steps: [
             { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'phase', args: buildPhaseArgs(job) },
+            { command: 'add-phase', args: addPhaseArgs },
+            { command: 'plan-phase', args: planPhaseArgs },
+            { command: 'execute-phase', args: executePhaseArgs },
           ],
-          reasoning: 'Fallback: project not initialized, running new-project then single-session phase',
+          reasoning: 'Fallback: project not initialized, running new-project then multi-step phase lifecycle (add→plan→execute)',
         };
       }
-      // Project exists — single-session phase orchestration
+      // Project exists — multi-step phase orchestration with state-aware step selection
       return resolvePhaseForFallback(projectDir, job);
 
     case 'milestone':
       if (!hasPlanning) {
+        // Milestone on uninitialized project — init then multi-step phase lifecycle
+        const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
+          ?? job.description;
+        const addPhaseArgs = title;
+        const planPhaseArgs = job.requirementPath ? `1 @${job.requirementPath}` : '1';
+        const executePhaseArgs = '1';
         return {
           steps: [
             { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'phase', args: buildPhaseArgs(job) },
+            { command: 'add-phase', args: addPhaseArgs },
+            { command: 'plan-phase', args: planPhaseArgs },
+            { command: 'execute-phase', args: executePhaseArgs },
           ],
-          reasoning: 'Fallback: project not initialized, running new-project then single-session phase',
+          reasoning: 'Fallback: project not initialized, running new-project then multi-step phase lifecycle (add→plan→execute)',
         };
       }
       // Milestone on initialized project: if requirementPath is a directory,
-      // iterate files and create one phase per file
+      // iterate files and create one multi-step phase lifecycle per file
       return buildMilestonePlan(job, projectDir);
   }
 }
 
 /**
- * Build args for gsd-phase single-session orchestrator.
- *
- * Routes based on job state:
- * - requirementPath exists: `@path --auto`
- * - description is a bare number: `--phase N --auto`
- * - otherwise: `description --auto`
- *
- * Appends `--resume` when job.resumeHint is set, so retried phase jobs
- * pick up where they left off instead of starting fresh.
- */
-function buildPhaseArgs(job: Job): string {
-  let args: string;
-  if (job.requirementPath) {
-    args = `@${job.requirementPath} --auto`;
-  } else if (/^\d+$/.test(job.description.trim())) {
-    args = `--phase ${job.description.trim()} --auto`;
-  } else {
-    args = `${job.description} --auto`;
-  }
-
-  // Append resume flag when job has a resume hint from a prior attempt
-  if (job.resumeHint) {
-    args += ' --resume';
-  }
-
-  return args;
-}
-
-/**
  * R1: Resolve phase identifier for fallback when scope='phase' and project has ROADMAP.md.
  *
- * Returns a single `{ command: 'phase' }` step that delegates the full lifecycle
- * (add→plan→execute) to gsd-phase single-session orchestrator.
+ * Produces multi-step delegation plans: [add-phase, plan-phase, execute-phase]
+ * with state-aware step selection that skips already-completed steps.
+ *
+ * - Existing phase dir found → skip add-phase
+ * - Existing plans found → skip plan-phase
+ * - All plans have summaries → all steps skipped (phase complete)
+ * - Bare number description → only execute-phase (or nothing if complete)
  */
-function resolvePhaseForFallback(_projectDir: string, job: Job): DelegationPlan {
+function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+
+  // Handle bare number descriptions (e.g. job.description === "25")
+  if (/^\d+$/.test(job.description.trim())) {
+    const phaseNumber = parseInt(job.description.trim(), 10);
+    // Find the phase directory by number
+    let phaseDirName: string | null = null;
+    try {
+      const entries = readdirSync(phasesDir);
+      for (const entry of entries) {
+        const match = entry.match(/^(\d+)-/);
+        if (match && parseInt(match[1], 10) === phaseNumber) {
+          phaseDirName = entry;
+          break;
+        }
+      }
+    } catch {
+      // No phases dir
+    }
+
+    if (phaseDirName) {
+      const state = getPhaseState(phasesDir, phaseDirName);
+      if (state.isComplete) {
+        return {
+          steps: [],
+          reasoning: `Phase ${phaseNumber} already complete (${state.planCount}/${state.summaryCount} plans have summaries)`,
+        };
+      }
+      if (state.planCount > 0) {
+        // Plans exist but not all executed — only execute-phase needed
+        return {
+          steps: [{ command: 'execute-phase', args: String(phaseNumber) }],
+          reasoning: `Phase ${phaseNumber} has ${state.planCount} plans, ${state.summaryCount} summaries — running execute-phase only`,
+        };
+      }
+      // Phase dir exists but no plans — plan-phase + execute-phase
+      return {
+        steps: [
+          { command: 'plan-phase', args: String(phaseNumber) },
+          { command: 'execute-phase', args: String(phaseNumber) },
+        ],
+        reasoning: `Phase ${phaseNumber} directory exists but has no plans — running plan-phase then execute-phase`,
+      };
+    } else {
+      // Phase dir not found — can't add without a title, just execute
+      return {
+        steps: [{ command: 'execute-phase', args: String(phaseNumber) }],
+        reasoning: `Phase ${phaseNumber} explicitly requested — running execute-phase`,
+      };
+    }
+  }
+
+  // Non-numeric: use title-based phase lookup
+  const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
+    ?? job.description;
+
+  const existing = findExistingPhaseDir(phasesDir, title);
+
+  if (existing) {
+    // Phase directory exists — check state to determine which steps are needed
+    const state = getPhaseState(phasesDir, existing.dirName);
+
+    if (state.isComplete) {
+      return {
+        steps: [],
+        reasoning: `Phase "${title}" already complete (dir: ${existing.dirName}, ${state.planCount}/${state.summaryCount} plans have summaries)`,
+      };
+    }
+
+    if (state.planCount > 0) {
+      // Plans exist but not all executed — only execute-phase
+      return {
+        steps: [{ command: 'execute-phase', args: String(existing.phaseNumber) }],
+        reasoning: `Phase "${title}" (${existing.dirName}) has ${state.planCount} plans, ${state.summaryCount} summaries — running execute-phase only`,
+      };
+    }
+
+    // Phase dir exists but no plans — plan-phase + execute-phase
+    const planPhaseArgs = job.requirementPath
+      ? `${existing.phaseNumber} @${job.requirementPath}`
+      : String(existing.phaseNumber);
+    return {
+      steps: [
+        { command: 'plan-phase', args: planPhaseArgs },
+        { command: 'execute-phase', args: String(existing.phaseNumber) },
+      ],
+      reasoning: `Phase "${title}" directory ${existing.dirName} exists but has no plans — running plan-phase then execute-phase`,
+    };
+  }
+
+  // No existing phase — generate all 3 steps: add-phase, plan-phase, execute-phase
+  // We don't know the phase number yet (add-phase will create it), so plan-phase
+  // and execute-phase use a placeholder. The runner's arg patching will update them
+  // after add-phase creates the directory.
+  const nextPhaseNumber = getNextPhaseNumber(phasesDir);
+  const addPhaseArgs = title;
+  const planPhaseArgs = job.requirementPath
+    ? `${nextPhaseNumber} @${job.requirementPath}`
+    : String(nextPhaseNumber);
+  const executePhaseArgs = String(nextPhaseNumber);
+
   return {
-    steps: [{ command: 'phase', args: buildPhaseArgs(job) }],
-    reasoning: 'Single-session phase orchestration via gsd-phase',
+    steps: [
+      { command: 'add-phase', args: addPhaseArgs },
+      { command: 'plan-phase', args: planPhaseArgs },
+      { command: 'execute-phase', args: executePhaseArgs },
+    ],
+    reasoning: `No existing phase for "${title}" — running full lifecycle: add-phase → plan-phase → execute-phase`,
   };
 }
 
@@ -217,10 +380,12 @@ function getNextPhaseNumber(phasesDir: string): number {
 
 /**
  * Build a milestone plan for an initialized project.
- * If requirementPath is a directory, create add→plan→execute per .md file.
- * Otherwise, fall back to single add-phase.
+ * If requirementPath is a directory, create multi-step add→plan→execute per .md file.
+ * Otherwise, fall back to single multi-step phase lifecycle.
  */
 function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+
   if (job.requirementPath) {
     try {
       const stat = statSync(job.requirementPath);
@@ -234,29 +399,97 @@ function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
 
           for (const file of files) {
             const filePath = path.join(job.requirementPath, file);
-            steps.push({ command: 'phase', args: `@${filePath} --auto` });
+            const title = extractRequirementTitle(filePath) ?? file.replace(/\.md$/, '');
+
+            // Check if this requirement already has a phase
+            const existing = findExistingPhaseDir(phasesDir, title);
+            if (existing) {
+              const state = getPhaseState(phasesDir, existing.dirName);
+              if (state.isComplete) {
+                // Skip entirely — already complete
+                continue;
+              }
+              if (state.planCount > 0) {
+                // Plans exist — only execute-phase
+                steps.push({ command: 'execute-phase', args: String(existing.phaseNumber) });
+                continue;
+              }
+              // Phase dir exists but no plans
+              steps.push({ command: 'plan-phase', args: `${existing.phaseNumber} @${filePath}` });
+              steps.push({ command: 'execute-phase', args: String(existing.phaseNumber) });
+            } else {
+              // New requirement — full lifecycle
+              // Phase number will be determined at runtime by runner arg patching
+              const nextNum = getNextPhaseNumber(phasesDir) + steps.filter(s => s.command === 'add-phase').length;
+              steps.push({ command: 'add-phase', args: title });
+              steps.push({ command: 'plan-phase', args: `${nextNum} @${filePath}` });
+              steps.push({ command: 'execute-phase', args: String(nextNum) });
+            }
+          }
+
+          if (steps.length === 0) {
+            return {
+              steps: [],
+              reasoning: `Milestone: all ${files.length} requirement phases already complete`,
+            };
           }
 
           return {
             steps,
-            reasoning: `Fallback: milestone with ${files.length} requirement files, one phase command per file`,
+            reasoning: `Fallback: milestone with ${files.length} requirement files, multi-step phase lifecycle per file`,
           };
         }
       }
     } catch {
-      // Fall through to single add-phase
+      // Fall through to single multi-step plan
     }
   }
 
-  // Default: full phase lifecycle (add + plan + execute)
-  const phaseArgs = job.requirementPath
-    ? `@${job.requirementPath} --auto`
-    : `${job.description} --auto`;
+  // Default: full multi-step phase lifecycle (add + plan + execute)
+  const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
+    ?? job.description;
+
+  const existing = findExistingPhaseDir(phasesDir, title);
+  if (existing) {
+    const state = getPhaseState(phasesDir, existing.dirName);
+    if (state.isComplete) {
+      return {
+        steps: [],
+        reasoning: `Phase "${title}" already complete`,
+      };
+    }
+    if (state.planCount > 0) {
+      return {
+        steps: [{ command: 'execute-phase', args: String(existing.phaseNumber) }],
+        reasoning: `Phase "${title}" has plans, running execute-phase only`,
+      };
+    }
+    const planPhaseArgs = job.requirementPath
+      ? `${existing.phaseNumber} @${job.requirementPath}`
+      : String(existing.phaseNumber);
+    return {
+      steps: [
+        { command: 'plan-phase', args: planPhaseArgs },
+        { command: 'execute-phase', args: String(existing.phaseNumber) },
+      ],
+      reasoning: `Phase "${title}" directory exists but no plans — running plan-phase + execute-phase`,
+    };
+  }
+
+  const nextPhaseNumber = getNextPhaseNumber(phasesDir);
+  const addPhaseArgs = title;
+  const planPhaseArgs = job.requirementPath
+    ? `${nextPhaseNumber} @${job.requirementPath}`
+    : String(nextPhaseNumber);
+  const executePhaseArgs = String(nextPhaseNumber);
+
   return {
     steps: [
-      { command: 'phase', args: phaseArgs },
+      { command: 'add-phase', args: addPhaseArgs },
+      { command: 'plan-phase', args: planPhaseArgs },
+      { command: 'execute-phase', args: executePhaseArgs },
     ],
-    reasoning: 'Fallback: project already initialized, running full phase lifecycle',
+    reasoning: 'Fallback: project already initialized, running full phase lifecycle (add→plan→execute)',
   };
 }
 
@@ -414,10 +647,11 @@ export {
   fallbackPlan,
   buildNewProjectArgs,
   buildQuickArgs,
-  buildPhaseArgs,
   getNextPhaseNumber,
   buildMilestonePlan,
   extractRequirementTitle,
+  findExistingPhaseDir,
+  getPhaseState,
   GSD_INSTRUCTION_BLOCKLIST,
   matchesBlocklist,
 };
