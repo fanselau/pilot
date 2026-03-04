@@ -59,23 +59,26 @@ vi.mock('../../src/util/colors.js', () => ({
   blue: (s: string) => s,
 }));
 
-// Mock getConfig so we control projectDir
+// Control projectDir via PILOT_PROJECT_DIR env var.
+// resolveProjectDir() calls getConfig() internally which reads env vars, so
+// setting process.env.PILOT_PROJECT_DIR gives us full control without mocking
+// module internals. Tests update `mockedProjectDir` and sync it to the env var.
 let mockedProjectDir = '/tmp/pilot-test-projects';
 
-vi.mock('../../src/core/config.js', () => ({
-  getConfig: vi.fn(() => ({
-    projectDir: mockedProjectDir,
-    gsdDir: '/tmp/pilot-gsd',
-    pilotDir: '/tmp/.pilot',
-    pilotDbPath: '/tmp/.pilot/pilot.db',
-    stuckThreshold: 90,
-    maxParallel: 1,
-    pollInterval: 5,
-    defaultTimeout: 60,
-    logLevel: 'INFO' as const,
-    noColor: false,
-  })),
-}));
+function syncProjectDirEnv(): void {
+  process.env.PILOT_PROJECT_DIR = mockedProjectDir;
+}
+
+vi.mock('../../src/core/config.js', async (importOriginal) => {
+  // Keep the real resolveProjectDir (it reads PILOT_PROJECT_DIR via getConfig).
+  // Only provide the mock getConfig for callers in add.ts that use getConfig()
+  // directly — after the refactor there are none, but keep for safety.
+  const original = await importOriginal<typeof import('../../src/core/config.js')>();
+  return {
+    ...original,
+    // resolveProjectDir is the real implementation from original (spread above)
+  };
+});
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
 import { addJob } from '../../src/core/db.js';
@@ -86,6 +89,8 @@ import type { JobScope } from '../../src/core/types.js';
 beforeEach(() => {
   vi.clearAllMocks();
   mockJsonMode = false;
+  // Sync the env var so resolveProjectDir uses the current mockedProjectDir
+  syncProjectDirEnv();
 });
 
 // ── detectScope ────────────────────────────────────────────────────────────
@@ -119,6 +124,7 @@ describe('addCommand', () => {
   beforeAll(() => {
     existingTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-existing-'));
     mockedProjectDir = existingTestsDir;
+    syncProjectDirEnv();
 
     // Set up my-project with proper structure
     const projectDir = path.join(existingTestsDir, 'my-project');
@@ -130,12 +136,16 @@ describe('addCommand', () => {
 
   afterAll(() => {
     rmSync(existingTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
   });
 
   it('queues a string requirement as quick scope', async () => {
     await addCommand('my-project', 'fix the navbar', {});
 
-    expect(addJob).toHaveBeenCalledWith('my-project', 'quick', 'fix the navbar', undefined, undefined, undefined);
+    // addJob receives the resolved absolute path (not the raw shorthand name)
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, undefined, undefined,
+    );
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('Queued');
@@ -145,7 +155,9 @@ describe('addCommand', () => {
   it('--as overrides auto-detected scope', async () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope });
 
-    expect(addJob).toHaveBeenCalledWith('my-project', 'phase', 'fix the navbar', undefined, undefined, undefined);
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, undefined, undefined,
+    );
   });
 
   it('detects file path and uses phase scope with title extraction', async () => {
@@ -154,7 +166,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'package.json', {});
 
     expect(addJob).toHaveBeenCalledWith(
-      'my-project',
+      expect.stringContaining('my-project'),
       'phase',
       expect.any(String),
       expect.stringContaining('package.json'),
@@ -196,7 +208,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
 
     expect(addJob).toHaveBeenCalledWith(
-      'my-project', 'quick', 'fix stuff', undefined, 'budget', 'hybrid',
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid',
     );
   });
 
@@ -204,7 +216,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', {});
 
     expect(addJob).toHaveBeenCalledWith(
-      'my-project', 'quick', 'fix stuff', undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, undefined, undefined,
     );
   });
 
@@ -257,10 +269,12 @@ describe('project setup validation', () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'pilot-setup-validation-'));
     mockedProjectDir = tmpDir;
+    syncProjectDirEnv();
   });
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
   });
 
   it('rejects project without .opencode/command/', async () => {
@@ -308,10 +322,12 @@ describe('project setup validation', () => {
     mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
-    // Should not exit — addJob should be called
+    // Should not exit — addJob should be called with the resolved absolute path
     await addCommand('test-proj', 'fix stuff', {});
 
-    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+    expect(addJob).toHaveBeenCalledWith(
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
   });
 
   it('--force bypasses setup check', async () => {
@@ -321,10 +337,12 @@ describe('project setup validation', () => {
     // Add opencode.json so we don't get the missing-config warning
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
-    // With --force, should bypass validation and call addJob
+    // With --force, should bypass validation and call addJob with resolved path
     await addCommand('test-proj', 'fix stuff', { force: true });
 
-    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+    expect(addJob).toHaveBeenCalledWith(
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
   });
 
   it('warns but does not block when opencode.json is missing', async () => {
@@ -339,10 +357,31 @@ describe('project setup validation', () => {
     // Should NOT exit — addJob should be called despite warning
     await addCommand('test-proj', 'fix stuff', {});
 
-    expect(addJob).toHaveBeenCalledWith('test-proj', 'quick', 'fix stuff', undefined, undefined, undefined);
+    expect(addJob).toHaveBeenCalledWith(
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('opencode.json');
 
     stderrSpy.mockRestore();
+  });
+
+  it('resolves "." to cwd when --force is set', async () => {
+    // "." resolves to process.cwd() — no project dir creation needed with --force
+    await addCommand('.', 'fix stuff', { force: true });
+
+    expect(addJob).toHaveBeenCalledWith(
+      process.cwd(), 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
+  });
+
+  it('uses absolute path as-is when --force is set', async () => {
+    const absPath = '/tmp/some-abs-path';
+
+    await addCommand(absPath, 'fix stuff', { force: true });
+
+    expect(addJob).toHaveBeenCalledWith(
+      absPath, 'quick', 'fix stuff', undefined, undefined, undefined,
+    );
   });
 });
