@@ -55,13 +55,14 @@ function categorizeSessions(sessionTitles: string[]): CategorizedSession[] {
       return { title, sessionId, type: 'delegation' as const };
     }
 
-    // Extract command from execution title: "{project}-{command}-{jobId}"
-    // e.g. "resume-roast-quick-ab12" → command = "quick"
-    const parts = title.split('-');
-    // The last part is the jobId (4 chars), second-to-last is the command
+    // Extract command from title by matching against known GSD commands
+    const knownCommands = ['add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'phase', 'quick', 'new-project'];
     let command: string | undefined;
-    if (parts.length >= 3) {
-      command = parts[parts.length - 2];
+    for (const cmd of knownCommands) {
+      if (title.includes(`-${cmd}-`) || title.includes(`-gsd-${cmd}-`)) {
+        command = cmd;
+        break;
+      }
     }
 
     return { title, sessionId, type: 'execution' as const, command };
