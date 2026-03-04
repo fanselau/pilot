@@ -493,8 +493,8 @@ class Runner {
         completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         advanceStep(job.id);
 
-        // Step 3: For phase commands, spawn judge to evaluate results
-        if (step.command === 'phase') {
+        // Step 3: For execute-phase commands, spawn judge to evaluate results
+        if (step.command === 'execute-phase') {
           // No-activity check: did the execution session actually produce output?
           // If the session has 0 assistant messages, the process likely crashed or
           // exited immediately (missing commands, OOM, etc.). Mark as failed rather

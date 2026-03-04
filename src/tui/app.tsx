@@ -219,6 +219,30 @@ export function App(_props: { interval?: number }) {
       return;
     }
 
+    // K — force-quit running job (works from dashboard OR detail view, any panel focus)
+    if (key.sequence === 'K') {
+      const job = state.selectedJob();
+      if (job && job.status === 'running') {
+        state.setPendingConfirmAction(() => async () => {
+          // Kill process first, then update DB
+          await killJobSession(job);
+          forceQuitJob(job.id, 'tui');
+          // Force immediate queue refresh
+          try {
+            const { pending, running } = fetchQueueData();
+            batch(() => {
+              state.setQueue(pending);
+              state.setRunning(running);
+            });
+          } catch {
+            // Refresh on next poll cycle if immediate fails
+          }
+        });
+        state.setShowConfirm(true);
+      }
+      return;
+    }
+
     // Dashboard navigation
     if (state.view() === 'dashboard') {
       const len = focusedPanelLength();
@@ -252,30 +276,6 @@ export function App(_props: { interval?: number }) {
         const job = state.selectedJob();
         if (job) {
           state.navigateToDetail(job.id);
-        }
-        return;
-      }
-
-      // K — force-quit running job (only when running panel focused)
-      if (key.sequence === 'K' && state.panelFocus() === 'running') {
-        const job = state.selectedJob();
-        if (job && job.status === 'running') {
-          state.setPendingConfirmAction(() => async () => {
-            // Kill process first, then update DB
-            await killJobSession(job);
-            forceQuitJob(job.id, 'tui');
-            // Force immediate queue refresh
-            try {
-              const { pending, running } = fetchQueueData();
-              batch(() => {
-                state.setQueue(pending);
-                state.setRunning(running);
-              });
-            } catch {
-              // Refresh on next poll cycle if immediate fails
-            }
-          });
-          state.setShowConfirm(true);
         }
         return;
       }
