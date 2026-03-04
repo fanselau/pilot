@@ -14,6 +14,7 @@ import {
   getLastMessage,
   isSessionDone,
   getSessionTokens,
+  getAssistantMessageCount,
   _resetDbCache,
   _setTestDb,
 } from '../../src/core/opencode-db.js';
@@ -537,6 +538,50 @@ describe('getSessionTokens', () => {
   });
 });
 
+// ── getAssistantMessageCount ───────────────────────────────────────────────
+
+describe('getAssistantMessageCount', () => {
+  it('returns count of assistant messages only (ignores user messages)', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 5000);
+    // 2 user messages
+    insertMessage(db, 'umsg1', 'sess1', 1000, { role: 'user' });
+    insertMessage(db, 'umsg2', 'sess1', 2000, { role: 'user' });
+    // 3 assistant messages
+    insertMessage(db, 'amsg1', 'sess1', 3000, { role: 'assistant', tokens: { input: 10, output: 20 } });
+    insertMessage(db, 'amsg2', 'sess1', 4000, { role: 'assistant', tokens: { input: 15, output: 30 } });
+    insertMessage(db, 'amsg3', 'sess1', 5000, { role: 'assistant', tokens: { input: 5, output: 10 } });
+
+    expect(getAssistantMessageCount('sess1')).toBe(3);
+  });
+
+  it('returns 0 for session with no assistant messages', () => {
+    insertSession(db, 'sess1', 'test-session', 1000, 2000);
+    insertMessage(db, 'umsg1', 'sess1', 1000, { role: 'user' });
+    insertMessage(db, 'umsg2', 'sess1', 2000, { role: 'user' });
+
+    expect(getAssistantMessageCount('sess1')).toBe(0);
+  });
+
+  it('returns 0 for session with no messages at all', () => {
+    insertSession(db, 'sess1', 'empty-session', 1000, 1000);
+
+    expect(getAssistantMessageCount('sess1')).toBe(0);
+  });
+
+  it('returns 0 for nonexistent session', () => {
+    expect(getAssistantMessageCount('nonexistent-session-id')).toBe(0);
+  });
+
+  it('returns 0 when DB unavailable', () => {
+    _resetDbCache();
+    _setTestDb(null);
+    expect(getAssistantMessageCount('any')).toBe(0);
+    // Restore test DB for cleanup
+    _resetDbCache();
+    _setTestDb(db);
+  });
+});
+
 // ── Safe defaults when DB unavailable ──────────────────────────────────────
 
 describe('safe defaults when DB unavailable', () => {
@@ -565,5 +610,9 @@ describe('safe defaults when DB unavailable', () => {
     const tokens = getSessionTokens('any');
     expect(tokens.input).toBe(0);
     expect(tokens.output).toBe(0);
+  });
+
+  it('getAssistantMessageCount returns 0', () => {
+    expect(getAssistantMessageCount('any')).toBe(0);
   });
 });
