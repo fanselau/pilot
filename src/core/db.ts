@@ -231,6 +231,8 @@ function addJob(
   requirementPath?: string,
   modelProfile?: ModelProfile,
   providerMode?: ProviderMode,
+  dependsOn?: string,
+  parentJobId?: string,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -238,9 +240,9 @@ function addJob(
   const provider = providerMode ?? 'claude-only';
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null);
 
   return getJob(id)!;
 }
@@ -380,6 +382,7 @@ function claimNextLaunchable(): Job | null {
         AND project NOT IN (
           SELECT DISTINCT project FROM jobs WHERE status = 'running'
         )
+        AND (depends_on IS NULL OR depends_on IN (SELECT id FROM jobs WHERE status = 'completed'))
       ORDER BY priority DESC, created_at ASC
       LIMIT 1
     `).get() as JobRow | undefined;
@@ -822,6 +825,79 @@ function findDuplicateJob(
   return null;
 }
 
+// ── Milestone Query Helpers ───────────────────────────────────────────────
+
+/**
+ * Get all child jobs of a milestone job, ordered by created_at ASC.
+ * Used by milestone status/resume/skip to inspect child phase jobs.
+ */
+function getChildJobs(parentJobId: string): Job[] {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM jobs WHERE parent_job_id = ? ORDER BY created_at ASC',
+  ).all(parentJobId) as JobRow[];
+  return rows.map(rowToJob);
+}
+
+/**
+ * Set a milestone job's status to 'paused'. Sets completed_at.
+ * Used when a child phase job fails — milestone pauses until operator intervenes.
+ */
+function pauseJob(id: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs SET status = 'paused', completed_at = datetime('now')
+    WHERE id = ?
+  `).run(id);
+}
+
+/**
+ * Get counts of child job statuses for a milestone job.
+ * Returns { total, completed, failed, pending, running, paused }.
+ * Used by milestone status display and the completion check.
+ */
+function getMilestoneStatus(milestoneJobId: string): {
+  total: number;
+  completed: number;
+  failed: number;
+  pending: number;
+  running: number;
+  paused: number;
+} {
+  const children = getChildJobs(milestoneJobId);
+  const counts = { total: children.length, completed: 0, failed: 0, pending: 0, running: 0, paused: 0 };
+  for (const job of children) {
+    if (job.status === 'completed') counts.completed++;
+    else if (job.status === 'failed') counts.failed++;
+    else if (job.status === 'pending') counts.pending++;
+    else if (job.status === 'running') counts.running++;
+    else if (job.status === 'paused') counts.paused++;
+  }
+  return counts;
+}
+
+/**
+ * Unpause a milestone job: set status back to 'completed' and clear error.
+ * Used by milestone resume/skip to unblock a paused milestone after the
+ * failed child is retried or skipped.
+ */
+function unpauseMilestone(id: string): void {
+  const db = getDb();
+  db.prepare(
+    "UPDATE jobs SET status = 'completed', error = NULL WHERE id = ? AND status = 'paused'",
+  ).run(id);
+}
+
+/**
+ * Clear depends_on for a job (set to NULL).
+ * Used by milestone skip: when the failed dependency is cancelled,
+ * the next child job's depends_on is cleared so it can be claimed.
+ */
+function clearDependsOn(id: string): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET depends_on = NULL WHERE id = ?').run(id);
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -856,4 +932,9 @@ export {
   updateJudgeVerdict,
   updateActualModels,
   findDuplicateJob,
+  getChildJobs,
+  pauseJob,
+  getMilestoneStatus,
+  unpauseMilestone,
+  clearDependsOn,
 };
