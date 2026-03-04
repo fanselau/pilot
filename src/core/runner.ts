@@ -42,7 +42,7 @@ import {
   updateActualModels,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
-import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels } from './opencode-db.js';
+import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { dim } from '../util/colors.js';
@@ -379,6 +379,37 @@ class Runner {
 
         // Step 3: For phase commands, spawn judge to evaluate results
         if (step.command === 'phase') {
+          // No-activity check: did the execution session actually produce output?
+          // If the session has 0 assistant messages, the process likely crashed or
+          // exited immediately (missing commands, OOM, etc.). Mark as failed rather
+          // than letting the judge "benefit of doubt" mark it as completed.
+          const execSessionId = findSessionByTitle(title);
+          if (execSessionId) {
+            const assistantMsgCount = getAssistantMessageCount(execSessionId);
+            if (assistantMsgCount === 0) {
+              const freshJob = getJob(job.id);
+              if (freshJob && freshJob.attempts < freshJob.maxAttempts) {
+                resetToPending(job.id, 'No activity detected — session may have crashed or exited immediately');
+                process.stderr.write(
+                  `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
+                );
+                return;
+              }
+              throw new Error('No activity detected — session produced 0 assistant messages (crash or immediate exit)');
+            }
+          } else {
+            // No session found at all — definite failure
+            const freshJob = getJob(job.id);
+            if (freshJob && freshJob.attempts < freshJob.maxAttempts) {
+              resetToPending(job.id, 'No session created — opencode may have crashed before starting');
+              process.stderr.write(
+                `[runner] No session found for ${job.id}. Resetting to pending.\n`,
+              );
+              return;
+            }
+            throw new Error('No session created — opencode may have crashed before starting');
+          }
+
           // Guard: check shutdown before starting judge — phase session already completed,
           // so reset to pending to preserve that work rather than marking failed
           if (this.shuttingDown) {
@@ -439,7 +470,11 @@ class Runner {
 
             // verdict === 'pass' or accepted partial — fall through to markCompleted
           }
-          // If judge failed to produce verdict, fall through to markCompleted (benefit of doubt)
+          // Judge failed to produce verdict — benefit of doubt only because session had real activity
+          // (no-activity sessions are already caught above)
+          process.stderr.write(
+            `[runner] ⚠ Judge failed to produce verdict for ${job.id} — marking as completed (benefit of doubt)\n`,
+          );
         }
       }
 

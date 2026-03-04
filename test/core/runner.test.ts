@@ -63,11 +63,13 @@ vi.mock('../../src/core/models.js', () => ({
 const mockGetLastMessage = vi.fn();
 const mockFindSessionByTitle = vi.fn();
 const mockIsSessionDone = vi.fn();
+const mockGetAssistantMessageCount = vi.fn(() => 5); // Default: session has activity
 
 vi.mock('../../src/core/opencode-db.js', () => ({
   findSessionByTitle: (...args: unknown[]) => mockFindSessionByTitle(...args),
   isSessionDone: (...args: unknown[]) => mockIsSessionDone(...args),
   getLastMessage: (...args: unknown[]) => mockGetLastMessage(...args),
+  getAssistantMessageCount: (...args: unknown[]) => mockGetAssistantMessageCount(...args),
 }));
 
 vi.mock('execa', () => ({
