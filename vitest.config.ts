@@ -7,10 +7,9 @@ export default defineConfig({
     poolOptions: {
       forks: {
         minForks: 1,
-        maxForks: 1,
-        execArgv: ['--max-old-space-size=2048'],
+        maxForks: 4,
       },
     },
-    testTimeout: 30000,
+    testTimeout: 10000,
   },
 });
