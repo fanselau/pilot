@@ -16,6 +16,24 @@ import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
 import type { Job } from '../core/types.js';
 
+/**
+ * Determine if a completed phase job is "inconclusive" (judge failed or gave benefit of doubt).
+ * Quick jobs skip the judge entirely — they always show ✓.
+ * Phase jobs are inconclusive when:
+ * - judgeVerdict is null (no verdict recorded)
+ * - parsed verdict has confidence === 0 (benefit-of-doubt stored by runner)
+ */
+function isInconclusive(job: Job): boolean {
+  if (job.status !== 'completed' || job.scope !== 'phase') return false;
+  if (!job.judgeVerdict) return true; // No verdict at all for a phase job
+  try {
+    const v = JSON.parse(job.judgeVerdict) as { confidence?: number };
+    return typeof v.confidence === 'number' && v.confidence === 0;
+  } catch {
+    return true; // Unparseable verdict = inconclusive
+  }
+}
+
 interface StatusOptions {
   json?: boolean;
 }
@@ -179,7 +197,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     for (const job of recent) {
       const icon =
         job.status === 'completed'
-          ? green('✓')
+          ? isInconclusive(job) ? yellow('⚠') : green('✓')
           : job.status === 'failed'
             ? red('✗')
             : dim('◌');

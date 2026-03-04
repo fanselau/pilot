@@ -16,6 +16,7 @@ export const statusColors = {
   done: '#4ADE80',       // green
   failed: '#F87171',     // red
   cancelled: '#A1A1AA',  // zinc
+  warning: '#EAB308',    // yellow — for inconclusive/benefit-of-doubt completions
 } as const;
 
 // ── Global theme ──────────────────────────────────────────────────────────

@@ -69,30 +69,63 @@ describe('computeRowBg — overlay fix regression', () => {
 // ── statusIcon ────────────────────────────────────────────────────────────────
 
 describe('statusIcon', () => {
-  it('returns checkmark + done color for completed', () => {
-    const { icon, color } = statusIcon('completed');
+  it('returns checkmark + done color for completed phase job with real verdict', () => {
+    // Phase job with a high-confidence verdict (truly verified)
+    const job = { status: 'completed' as JobStatus, scope: 'phase', judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 85 }) };
+    const { icon, color } = statusIcon(job);
     expect(icon).toBe('✓');
     expect(color).toBe(statusColors.done);
   });
 
+  it('returns checkmark + done color for quick completed job (no judge)', () => {
+    // Quick jobs always show ✓ — they don't go through the judge
+    const job = { status: 'completed' as JobStatus, scope: 'quick' };
+    const { icon, color } = statusIcon(job);
+    expect(icon).toBe('✓');
+    expect(color).toBe(statusColors.done);
+  });
+
+  it('returns warning icon for completed phase job with no verdict', () => {
+    // Phase job with null verdict = inconclusive (benefit of doubt or judge never ran)
+    const job = { status: 'completed' as JobStatus, scope: 'phase', judgeVerdict: null };
+    const { icon, color } = statusIcon(job);
+    expect(icon).toBe('⚠');
+    expect(color).toBe(statusColors.warning);
+  });
+
+  it('returns warning icon for completed phase job with confidence=0 verdict', () => {
+    // confidence=0 = judge failed, benefit of doubt was stored
+    const job = { status: 'completed' as JobStatus, scope: 'phase', judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 0 }) };
+    const { icon, color } = statusIcon(job);
+    expect(icon).toBe('⚠');
+    expect(color).toBe(statusColors.warning);
+  });
+
+  it('returns warning icon for completed phase job with unparseable verdict', () => {
+    const job = { status: 'completed' as JobStatus, scope: 'phase', judgeVerdict: 'not-json' };
+    const { icon, color } = statusIcon(job);
+    expect(icon).toBe('⚠');
+    expect(color).toBe(statusColors.warning);
+  });
+
   it('returns x-mark + failed color for failed', () => {
-    const { icon, color } = statusIcon('failed');
+    const { icon, color } = statusIcon({ status: 'failed' as JobStatus });
     expect(icon).toBe('✗');
     expect(color).toBe(statusColors.failed);
   });
 
   it('returns dash + cancelled color for cancelled', () => {
-    const { icon, color } = statusIcon('cancelled');
+    const { icon, color } = statusIcon({ status: 'cancelled' as JobStatus });
     expect(icon).toBe('–');
     expect(color).toBe(statusColors.cancelled);
   });
 
   it('returns space + muted color for unknown/default statuses', () => {
-    const { icon, color } = statusIcon('pending');
+    const { icon, color } = statusIcon({ status: 'pending' as JobStatus });
     expect(icon).toBe(' ');
     expect(color).toBe(theme.muted);
 
-    const { icon: runIcon, color: runColor } = statusIcon('running');
+    const { icon: runIcon, color: runColor } = statusIcon({ status: 'running' as JobStatus });
     expect(runIcon).toBe(' ');
     expect(runColor).toBe(theme.muted);
   });

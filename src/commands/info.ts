@@ -142,6 +142,25 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   if (job.error) {
     outputHuman(`  ${dim(pad('Error:'))}    ${red(job.error)}`);
   }
+
+  // Show judge verdict for completed phase jobs
+  if (job.status === 'completed' && job.scope === 'phase') {
+    if (!job.judgeVerdict) {
+      outputHuman(`  ${dim(pad('Verdict:'))}  ${yellow('⚠ no judge verdict')}`);
+    } else {
+      try {
+        const v = JSON.parse(job.judgeVerdict) as { verdict?: string; confidence?: number; summary?: string };
+        const isInc = typeof v.confidence === 'number' && v.confidence === 0;
+        const verdictStr = isInc
+          ? yellow(`⚠ inconclusive — ${v.summary ?? 'benefit of doubt'}`)
+          : green(`✓ ${v.verdict} (${v.confidence}%) — ${v.summary ?? ''}`);
+        outputHuman(`  ${dim(pad('Verdict:'))}  ${verdictStr}`);
+      } catch {
+        outputHuman(`  ${dim(pad('Verdict:'))}  ${yellow('⚠ unparseable verdict')}`);
+      }
+    }
+  }
+
   outputHuman('');
 
   // Config / timing

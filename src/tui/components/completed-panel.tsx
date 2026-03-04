@@ -25,6 +25,21 @@ function truncate(str: string, maxLen: number): string {
   return str.slice(0, maxLen - 1) + '…';
 }
 
+/**
+ * Determine if a completed phase job is "inconclusive" (judge failed or gave benefit of doubt).
+ * Quick jobs skip the judge entirely — they always show ✓.
+ */
+function isInconclusive(job: { status: JobStatus; scope?: string; judgeVerdict?: string | null }): boolean {
+  if (job.status !== 'completed' || job.scope !== 'phase') return false;
+  if (!job.judgeVerdict) return true;
+  try {
+    const v = JSON.parse(job.judgeVerdict) as { confidence?: number };
+    return typeof v.confidence === 'number' && v.confidence === 0;
+  } catch {
+    return true;
+  }
+}
+
 export function formatDuration(startedAt: string | null, completedAt: string | null): string {
   if (!startedAt || !completedAt) return '—';
   const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
@@ -50,9 +65,15 @@ export function formatRelativeTime(isoDate: string | null): string {
   return `${days}d ago`;
 }
 
-export function statusIcon(status: JobStatus): { icon: string; color: string } {
-  switch (status) {
-    case 'completed': return { icon: '✓', color: statusColors.done };
+export function statusIcon(job: { status: JobStatus; scope?: string; judgeVerdict?: string | null }): { icon: string; color: string } {
+  switch (job.status) {
+    case 'completed': {
+      // Phase jobs with no/inconclusive verdict get warning icon
+      if (isInconclusive(job)) {
+        return { icon: '⚠', color: statusColors.warning };
+      }
+      return { icon: '✓', color: statusColors.done };
+    }
     case 'failed': return { icon: '✗', color: statusColors.failed };
     case 'cancelled': return { icon: '–', color: statusColors.cancelled };
     default: return { icon: ' ', color: theme.muted };
@@ -175,7 +196,7 @@ export function CompletedPanel(props: {
           {(job, i) => {
             const selected = () => props.focused && i() === props.selectedIndex;
             const flashing = () => flashingIds().has(job.id);
-            const { icon, color } = statusIcon(job.status);
+            const { icon, color } = statusIcon(job);
             const duration = () => formatDuration(job.startedAt, job.completedAt);
             const relative = () => formatRelativeTime(job.completedAt);
             const tokenCount = () => jobTokens().get(job.id) ?? 0;
