@@ -75,6 +75,68 @@ interface JudgeVerdict {
 let lastSpawnTime = 0;
 const MIN_SPAWN_INTERVAL_MS = 5_000;
 
+// ── systemd-run availability (cached) ─────────────────────────────────────
+
+let _systemdRunAvailable: boolean | null = null;
+let _systemdRunWarned = false;
+
+/**
+ * Check if systemd-run --user --scope is available on this system.
+ * Cached after first call — probes once per daemon lifecycle.
+ * Returns true on capable systems (Ubuntu 22.04+ with user lingering enabled).
+ */
+async function hasSystemdRunUser(): Promise<boolean> {
+  if (_systemdRunAvailable !== null) return _systemdRunAvailable;
+  try {
+    const { exitCode } = await execa('systemd-run', ['--user', '--scope', 'true'], {
+      timeout: 5000, reject: false,
+    });
+    _systemdRunAvailable = exitCode === 0;
+  } catch {
+    _systemdRunAvailable = false;
+  }
+  return _systemdRunAvailable;
+}
+
+/** Reset systemd-run cache — for tests only. @internal */
+function _resetSystemdRunCache(): void {
+  _systemdRunAvailable = null;
+  _systemdRunWarned = false;
+}
+
+// ── Dynamic maxParallel ───────────────────────────────────────────────────
+
+/**
+ * Calculate how many parallel sessions memory can support right now.
+ * Called before EACH spawn attempt in the drain loop, not just once at startup.
+ * Returns min(configuredMax, memorySlots) where memorySlots = (available - reservedMb) / sessionMemoryMb.
+ * Returns 0 when insufficient memory (caller should wait).
+ *
+ * Takes all three inputs as parameters for easy unit-testing without mocking getConfig().
+ */
+function getDynamicMaxParallel(configuredMax: number, sessionMemoryMb: number, reservedMb: number): number {
+  const availableMb = getAvailableMemoryMb();
+  if (availableMb === Infinity) return configuredMax; // Non-Linux: skip check
+  const usableMb = Math.max(0, availableMb - reservedMb);
+  const memorySlots = Math.floor(usableMb / sessionMemoryMb);
+  return Math.max(0, Math.min(configuredMax, memorySlots));
+}
+
+// ── OOM score adjustment ──────────────────────────────────────────────────
+
+/**
+ * Set oom_score_adj for the current process.
+ * -500 for the daemon (survive before expendable sessions).
+ * Best-effort — fails silently on non-Linux or permission errors.
+ */
+function setOomScore(score: number): void {
+  try {
+    writeFileSync('/proc/self/oom_score_adj', String(score));
+  } catch {
+    // Non-Linux or insufficient permissions — skip silently
+  }
+}
+
 // ── Stale-running reconciler ───────────────────────────────────────────────
 
 /**
@@ -1089,3 +1151,9 @@ function _resetSpawnRateLimit(): void {
 }
 
 export { _resetSpawnRateLimit };
+
+export {
+  hasSystemdRunUser,
+  getDynamicMaxParallel,
+  _resetSystemdRunCache,
+};
