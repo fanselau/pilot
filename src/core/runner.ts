@@ -47,6 +47,7 @@ import {
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { notifyMilestonePaused } from './notify.js';
+import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
@@ -168,7 +169,17 @@ function setOomScore(score: number): void {
  * @param parentJob   - The milestone coordinator job (for inheriting config fields)
  * @returns Array of created child Job objects (empty if no incomplete phases found)
  */
-function spawnChildJobs(parentJobId: string, projectDir: string, parentJob: { project: string; requirementPath: string | null; modelProfile: import('./types.js').ModelProfile; providerMode: import('./types.js').ProviderMode }): ReturnType<typeof addJob>[] {
+function spawnChildJobs(
+  parentJobId: string,
+  projectDir: string,
+  parentJob: {
+    project: string;
+    requirementPath: string | null;
+    modelProfile: import('./types.js').ModelProfile;
+    providerMode: import('./types.js').ProviderMode;
+    callbackSessionKey: string | null;
+  },
+): ReturnType<typeof addJob>[] {
   const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
 
   let roadmapContent: string;
@@ -243,6 +254,8 @@ function spawnChildJobs(parentJobId: string, projectDir: string, parentJob: { pr
       parentJob.providerMode,
       previousJobId ?? undefined,            // depends on previous child
       parentJobId,                           // parent milestone job
+      parentJob.callbackSessionKey ?? undefined, // propagate session key to children
+      undefined,                             // no custom callbackUrl for children
     );
     childJobs.push(childJob);
     previousJobId = childJob.id;
@@ -715,6 +728,11 @@ class Runner {
         }
 
         markCompleted(job.id);
+        // Fire-and-forget callback to wake originating session
+        const completedJob = getJob(job.id);
+        if (completedJob) {
+          notifyJobCompletion(completedJob).catch(() => {});
+        }
       } else {
         // Shutdown interrupted — reset to pending instead of cancel
         resetToPending(job.id, 'Interrupted by shutdown');
@@ -723,6 +741,11 @@ class Runner {
       const error = err instanceof Error ? err.message : String(err);
       this.collectActualModels(job.id);
       markFailed(job.id, error);
+      // Fire-and-forget callback to wake originating session
+      const failedJob = getJob(job.id);
+      if (failedJob) {
+        notifyJobCompletion(failedJob).catch(() => {});
+      }
     } finally {
       this.activeJobs.delete(job.id);
       // Clean up tracked PIDs for this job's sessions
