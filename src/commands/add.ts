@@ -12,7 +12,7 @@
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob } from '../core/db.js';
-import { getConfig } from '../core/config.js';
+import { resolveProjectDir } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
 import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
@@ -49,6 +49,8 @@ function isDirPath(str: string): boolean {
 /**
  * Validate that a project has been set up with `pilot setup` before queuing.
  *
+ * Accepts the resolved absolute project directory path (not the raw project name).
+ *
  * Checks:
  * - .opencode/command/ exists (symlink or directory)
  * - .opencode/agents/ exists (symlink or directory)
@@ -57,10 +59,8 @@ function isDirPath(str: string): boolean {
  *
  * Exits with code 1 if misconfigured (unless force=true).
  */
-function validateProjectSetup(project: string, force: boolean): void {
+function validateProjectSetup(projectDir: string, force: boolean): void {
   if (force) return;
-
-  const projectDir = path.join(getConfig().projectDir, project);
 
   // Check critical symlinks/dirs: command and agents
   const criticalDirs = ['command', 'agents'] as const;
@@ -76,7 +76,7 @@ function validateProjectSetup(project: string, force: boolean): void {
     } catch {
       // Path doesn't exist at all — not configured
       process.stderr.write(
-        `  ✗ Project "${project}" not configured. Run: pilot setup ${project}\n`,
+        `  ✗ Project "${projectDir}" not configured. Run: pilot setup <project>\n`,
       );
       process.exit(1);
     }
@@ -87,7 +87,7 @@ function validateProjectSetup(project: string, force: boolean): void {
         realpathSync(dirPath);
       } catch {
         process.stderr.write(
-          `  ✗ Project "${project}" has broken setup (symlink target missing). Run: pilot setup ${project}\n`,
+          `  ✗ Project "${projectDir}" has broken setup (symlink target missing). Run: pilot setup <project>\n`,
         );
         process.exit(1);
       }
@@ -100,7 +100,7 @@ function validateProjectSetup(project: string, force: boolean): void {
   const hasConfig = configFiles.some((f) => existsSync(path.join(projectDir, f)));
   if (!hasConfig) {
     process.stderr.write(
-      `  ⚠ Project "${project}" has no opencode.json. Run: pilot setup ${project}\n`,
+      `  ⚠ Project "${projectDir}" has no opencode.json. Run: pilot setup <project>\n`,
     );
   }
 }
@@ -132,8 +132,11 @@ async function addCommand(
   requirement: string,
   opts: AddOptions,
 ): Promise<void> {
+  // Resolve project to absolute path once — all downstream code uses resolvedProject
+  const resolvedProject = resolveProjectDir(project);
+
   // Validate project setup before doing anything else
-  validateProjectSetup(project, opts.force ?? false);
+  validateProjectSetup(resolvedProject, opts.force ?? false);
 
   // Validate --profile
   const modelProfile: ModelProfile | undefined = opts.profile
@@ -176,8 +179,7 @@ async function addCommand(
 
   // R5: Warn when phase scope auto-detected but no matching phase in ROADMAP
   if (scope === 'phase' && !opts.as && isFilePath(requirement)) {
-    const projectDir = path.join(getConfig().projectDir, project);
-    const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(resolvedProject, '.planning', 'ROADMAP.md');
 
     if (existsSync(roadmapPath)) {
       try {
@@ -199,7 +201,7 @@ async function addCommand(
     }
   }
 
-  const job = addJob(project, scope, description, requirementPath ?? undefined, modelProfile, providerMode);
+  const job = addJob(resolvedProject, scope, description, requirementPath ?? undefined, modelProfile, providerMode);
 
   if (isJsonMode()) {
     outputJson({ job });

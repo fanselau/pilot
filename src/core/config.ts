@@ -70,4 +70,33 @@ function getConfig(): PilotConfig {
   };
 }
 
-export { getConfig };
+/**
+ * Resolve a project argument to an absolute directory path.
+ *
+ * Resolution order (per requirements/robust-project-path-resolution.md):
+ *   1. Absolute path  → use as-is
+ *   2. Starts with ~  → expand tilde to home dir
+ *   3. `.`, `./`, `../` → resolve relative to process.cwd()
+ *   4. Otherwise     → shorthand name: path.join(config.projectDir, project)
+ */
+function resolveProjectDir(project: string): string {
+  // 1. Absolute path
+  if (path.isAbsolute(project)) {
+    return project;
+  }
+
+  // 2. Tilde expansion
+  if (project.startsWith('~')) {
+    return expandTilde(project);
+  }
+
+  // 3. Relative path: `.`, `./something`, `../something`
+  if (project === '.' || project.startsWith('./') || project.startsWith('../')) {
+    return path.resolve(project);
+  }
+
+  // 4. Shorthand name — join with configured project dir
+  return path.join(getConfig().projectDir, project);
+}
+
+export { getConfig, resolveProjectDir };

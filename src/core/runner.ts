@@ -18,7 +18,7 @@ import { execa } from 'execa';
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync, watch as fsWatch } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { getConfig } from './config.js';
+import { getConfig, resolveProjectDir } from './config.js';
 import {
   getNextPending,
   markRunning,
@@ -330,8 +330,7 @@ class Runner {
    * and overwrite started_at with a slightly later timestamp.
    */
   private async launch(job: Job): Promise<void> {
-    const config = getConfig();
-    const projectDir = path.isAbsolute(job.project) ? job.project : path.join(config.projectDir, job.project);
+    const projectDir = resolveProjectDir(job.project);
 
     try {
       this.patchModelsForJob(job, projectDir);
