@@ -102,10 +102,13 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
 
     let command: string | undefined;
     if (!isDelegation) {
-      // Extract command from execution title: "{project}-{command}-{jobId}"
-      const titleParts = title.split('-');
-      if (titleParts.length >= 3) {
-        command = titleParts[titleParts.length - 2];
+      // Extract command by matching known GSD commands in the title
+      const knownCommands = ['add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'phase', 'quick', 'new-project'];
+      for (const cmd of knownCommands) {
+        if (title.includes(`-${cmd}-`) || title.includes(`-gsd-${cmd}-`)) {
+          command = cmd;
+          break;
+        }
       }
     }
 
