@@ -357,14 +357,20 @@ async function logCommand(
   // Get step records for this job
   const steps = getJobSteps(jobId);
 
-  // Deduplicate: if steps exist, only show sessions referenced by current steps
-  // This prevents showing sessions from previous attempts that accumulated in session_titles
+  // Deduplicate: remove duplicate session titles (can accumulate across retries)
+  // and if steps exist, only show execution sessions referenced by current steps
+  const seenTitles = new Set<string>();
+  const uniqueSessions = allSessions.filter((s) => {
+    if (seenTitles.has(s.title)) return false;
+    seenTitles.add(s.title);
+    return true;
+  });
   const stepSessionTitles = new Set(
     steps.filter((s) => s.sessionTitle).map((s) => s.sessionTitle!),
   );
   const deduplicatedSessions = stepSessionTitles.size > 0
-    ? allSessions.filter((s) => stepSessionTitles.has(s.title))
-    : allSessions;
+    ? uniqueSessions.filter((s) => s.type === 'delegation' || stepSessionTitles.has(s.title))
+    : uniqueSessions;
 
   // Apply --delegation filter
   const sessions = opts.delegation

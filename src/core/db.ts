@@ -516,7 +516,14 @@ function updateSessionTitles(id: string, titles: string[]): void {
     }
   }
 
-  const merged = [...existing, ...titles];
+  const seen = new Set(existing);
+  const merged = [...existing];
+  for (const t of titles) {
+    if (!seen.has(t)) {
+      seen.add(t);
+      merged.push(t);
+    }
+  }
   db.prepare('UPDATE jobs SET session_titles = ? WHERE id = ?').run(
     JSON.stringify(merged),
     id,
