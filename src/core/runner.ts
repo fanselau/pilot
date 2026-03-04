@@ -15,6 +15,7 @@
  */
 
 import { execa } from 'execa';
+import lockfile from 'proper-lockfile';
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync, watch as fsWatch } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -147,6 +148,8 @@ class Runner {
   private shuttingDown = false;
   private reloading = false;
   // (reconciliation removed — opencode DB is ground truth, no per-cycle checks needed)
+  private lockRelease: (() => Promise<void>) | null = null;
+  private lockPath: string | null = null;
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -155,6 +158,59 @@ class Runner {
       once: options.once ?? false,
       pollInterval: options.pollInterval ?? config.pollInterval,
     };
+  }
+
+  /**
+   * Acquire a singleton lock at ~/.pilot/runner.lock via proper-lockfile.
+   * Exits immediately with code 1 if another runner is already active.
+   * The lock refreshes itself every 5s; stale detection fires after 10s (crash recovery).
+   */
+  private async acquireRunnerLock(): Promise<void> {
+    const config = getConfig();
+    const lp = path.join(config.pilotDir, 'runner.lock');
+    mkdirSync(path.dirname(lp), { recursive: true });
+    // Ensure lock target file exists (proper-lockfile requires it)
+    writeFileSync(lp, '', { flag: 'a' });
+
+    try {
+      this.lockRelease = await lockfile.lock(lp, {
+        stale: 10000,    // 10s stale detection for crash recovery
+        update: 5000,    // Refresh lock every 5s to prove liveness
+        realpath: false,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('already being held')) {
+        let extra = '';
+        try {
+          const content = readFileSync(lp, 'utf8').trim();
+          if (content) extra = ` (PID: ${content})`;
+        } catch { /* ignore */ }
+        process.stderr.write(
+          `Error: Another runner is already active${extra}. Use 'pilot service status' to check.\n`,
+        );
+        process.exit(1);
+      }
+      throw err;
+    }
+
+    // Write PID for debugging visibility
+    writeFileSync(lp, String(process.pid));
+    this.lockPath = lp;
+  }
+
+  /**
+   * Release the singleton lock. Called on clean shutdown.
+   * Crash recovery is handled automatically by proper-lockfile stale detection (10s).
+   */
+  private async releaseRunnerLock(): Promise<void> {
+    if (this.lockRelease) {
+      try {
+        await this.lockRelease();
+      } catch {
+        // Ignore release errors — process is exiting anyway
+      }
+      this.lockRelease = null;
+    }
   }
 
   /**
@@ -167,6 +223,10 @@ class Runner {
    * (running in DB but no live process) are force-quit so they can be retried.
    */
   async run(): Promise<void> {
+    // Acquire singleton lock FIRST — before any other setup.
+    // Prevents cascading fan-out from duplicate runners.
+    await this.acquireRunnerLock();
+
     this.running = true;
     // Set OOM score for the daemon process — survive before expendable sessions
     setOomScore(-500);
@@ -328,10 +388,11 @@ class Runner {
     }
 
     } finally {
-      // Clean up watchdog, DB watcher, and PID file on exit
+      // Clean up watchdog, DB watcher, PID file, and singleton lock on exit
       clearInterval(watchdogInterval);
       dbWatcher?.close();
       this.removePidFile(pidFilePath);
+      await this.releaseRunnerLock();
     }
 
     // If SIGHUP triggered reload, re-exec with new code

@@ -36,11 +36,13 @@
   "dependencies": {
     "@opentui/core": "^0.1.79",
     "@opentui/solid": "^0.1.79",
+    "@types/proper-lockfile": "^4.1.4",
     "better-sqlite3": "^12.6.2",
     "commander": "^13.0.0",
     "date-fns": "^4.1.0",
     "execa": "^9.5.0",
     "picocolors": "^1.1.0",
+    "proper-lockfile": "^4.1.2",
     "solid-js": "^1.9.0"
   },
   "devDependencies": {
