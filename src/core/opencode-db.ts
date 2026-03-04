@@ -420,6 +420,31 @@ function getSessionParts(sessionId: string, since?: number): SessionPart[] {
 }
 
 /**
+ * Count assistant messages in a session.
+ * Returns 0 if the DB is unavailable, the session doesn't exist, or on error.
+ *
+ * Lightweight count query — much cheaper than getSessionMessages which joins
+ * with the parts table and parses content. Used as a pre-judge activity check:
+ * if the count is 0, the session likely crashed or exited immediately.
+ */
+function getAssistantMessageCount(sessionId: string): number {
+  const db = openDb();
+  if (db === null) {
+    return 0;
+  }
+
+  try {
+    const row = db.prepare(
+      `SELECT COUNT(*) as cnt FROM message WHERE session_id = ? AND json_extract(data, '$.role') = 'assistant'`,
+    ).get(sessionId) as { cnt: number } | undefined;
+
+    return row?.cnt ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Get the most recent message for a session.
  * Returns null if session has no messages or doesn't exist.
  */
@@ -600,6 +625,7 @@ export {
   getSessionMessages,
   getSessionParts,
   getLastMessage,
+  getAssistantMessageCount,
   isSessionDone,
   getSessionTokens,
   getSessionModels,
