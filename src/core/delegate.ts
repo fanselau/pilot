@@ -142,11 +142,9 @@ function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: nu
  * Tries delegation AI once, then falls back to deterministic scope-based mapping.
  */
 async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
-  // Phase scope: skip delegation AI entirely, use deterministic multi-step plan.
-  // The fallback inspects .planning/phases/ state and produces [add-phase, plan-phase, execute-phase]
-  // with state-aware step selection (skips completed steps).
-  // This avoids the broken single-session gsd-phase orchestrator that AI tends to output.
-  if (job.scope === 'phase') {
+  // Bare-number descriptions (e.g. "25") are explicit phase identifiers —
+  // skip delegation AI entirely, go straight to deterministic fallback.
+  if (job.scope === 'phase' && /^\d+$/.test(job.description.trim())) {
     return fallbackPlan(job, projectDir);
   }
 
@@ -631,11 +629,38 @@ function parseDelegationOutput(content: string): DelegationPlan {
     }
   }
 
+  const steps = (parsed.steps as Array<{ command: string; args: string }>).map(s => ({
+    command: s.command,
+    args: s.args,
+  }));
+
+  // Safety net: convert deprecated single-step { command: 'phase' } to multi-step.
+  // The AI prompt now tells it to output add-phase/plan-phase/execute-phase directly,
+  // but older cached prompts or model drift might still produce the old format.
+  const convertedSteps = steps.flatMap(step => {
+    if (step.command === 'phase') {
+      // Extract phase info from args (e.g. "Feature Name --auto" or "@path/to/req.md --resume")
+      const args = step.args.replace(/--auto|--resume/g, '').trim();
+      // Default to phase 1 — runner will patch with actual next phase number
+      return [
+        { command: 'add-phase', args },
+        { command: 'plan-phase', args: `1 ${args.startsWith('@') ? args : ''}`.trim() },
+        { command: 'execute-phase', args: '1' },
+      ];
+    }
+    // Strip --auto from plan-phase args (triggers broken Task() auto-advance)
+    if (step.command === 'plan-phase' && step.args.includes('--auto')) {
+      return [{ command: step.command, args: step.args.replace(/--auto/g, '').trim() }];
+    }
+    // Skip verify-phase (runner handles verification separately)
+    if (step.command === 'verify-phase') {
+      return [];
+    }
+    return [step];
+  });
+
   return {
-    steps: (parsed.steps as Array<{ command: string; args: string }>).map(s => ({
-      command: s.command,
-      args: s.args,
-    })),
+    steps: convertedSteps,
     reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
   };
 }

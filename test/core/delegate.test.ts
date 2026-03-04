@@ -153,17 +153,19 @@ describe('parseDelegationOutput', () => {
     expect(plan.reasoning).toBe('Phase 17');
   });
 
-  it('parses multi-step phase plan', () => {
+  it('parses multi-step phase plan and strips verify-phase and --auto', () => {
+    // AI might output verify-phase and --auto, but parser strips them:
+    // - verify-phase: runner handles verification separately
+    // - --auto: triggers broken Task() auto-advance in plan-phase
     const content = '```json\n{"steps":[{"command":"add-phase","args":"Add OAuth"},{"command":"plan-phase","args":"17 --auto"},{"command":"execute-phase","args":"17"},{"command":"verify-phase","args":"17"}],"reasoning":"Adding as phase 17"}\n```';
     const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(4);
+    expect(plan.steps).toHaveLength(3);  // verify-phase stripped
     expect(plan.steps.map(s => s.command)).toEqual([
       'add-phase',
       'plan-phase',
       'execute-phase',
-      'verify-phase',
     ]);
-    expect(plan.steps[1].args).toBe('17 --auto');
+    expect(plan.steps[1].args).toBe('17');  // --auto stripped
     expect(plan.reasoning).toBe('Adding as phase 17');
   });
 
@@ -185,6 +187,27 @@ describe('parseDelegationOutput', () => {
   it('throws on malformed step (missing args)', () => {
     const content = '{"steps":[{"command":"quick"}],"reasoning":"Bad"}';
     expect(() => parseDelegationOutput(content)).toThrow('missing command or args');
+  });
+
+  it('converts deprecated { command: "phase" } to multi-step', () => {
+    // Safety net: if AI outputs old single-step format, convert to multi-step
+    const content = '{"steps":[{"command":"phase","args":"Document Management UI --auto"}],"reasoning":"Old format"}';
+    const plan = parseDelegationOutput(content);
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps.map(s => s.command)).toEqual([
+      'add-phase',
+      'plan-phase',
+      'execute-phase',
+    ]);
+    expect(plan.steps[0].args).toBe('Document Management UI');  // --auto stripped
+  });
+
+  it('converts { command: "phase" } with requirement path', () => {
+    const content = '{"steps":[{"command":"phase","args":"@requirements/foo.md --resume"}],"reasoning":"With path"}';
+    const plan = parseDelegationOutput(content);
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.steps[0].args).toBe('@requirements/foo.md');
+    expect(plan.steps[1].args).toBe('1 @requirements/foo.md');  // path passed to plan-phase
   });
 
   it('handles missing reasoning gracefully', () => {
