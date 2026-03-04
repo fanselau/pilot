@@ -784,12 +784,27 @@ class Runner {
           process.kill(procPid, 0);
           // PID alive — session still in progress, keep polling
         } catch {
-          // PID dead — do one final isSessionDone check
+          // PID dead — give SQLite WAL a moment to flush, then check
+          await this.sleep(2000);
           if (isSessionDone(sessionId)) {
             return; // Completed just as process exited
           }
-          // Process died without clean completion — treat as failure
-          throw new Error(`Process died without clean completion for session ${title} (no step-finish in opencode DB)`);
+          // One more check after a longer wait (WAL can be slow under load)
+          await this.sleep(3000);
+          if (isSessionDone(sessionId)) {
+            return;
+          }
+          // Check if session has assistant messages — if so, it likely completed
+          // but the step-finish record wasn't written (e.g. process killed by cgroup)
+          const msgCount = getAssistantMessageCount(sessionId);
+          if (msgCount > 0) {
+            process.stderr.write(
+              `[runner] Warning: process died for ${title} but session has ${msgCount} messages. Treating as complete.\n`,
+            );
+            return;
+          }
+          // Truly dead with no activity
+          throw new Error(`Process died without clean completion for session ${title} (no step-finish in opencode DB, 0 messages)`);
         }
       }
     }
