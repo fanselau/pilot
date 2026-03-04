@@ -9,7 +9,7 @@
  * For quick scope with file requirement, passes FULL file content as description.
  */
 
-import { accessSync, existsSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob } from '../core/db.js';
 import { getConfig } from '../core/config.js';
@@ -26,6 +26,7 @@ interface AddOptions {
   json?: boolean;
   profile?: string;
   provider?: string;
+  force?: boolean;
 }
 
 function isFilePath(str: string): boolean {
@@ -42,6 +43,66 @@ function isDirPath(str: string): boolean {
     return statSync(str).isDirectory();
   } catch {
     return false;
+  }
+}
+
+/**
+ * Validate that a project has been set up with `pilot setup` before queuing.
+ *
+ * Checks:
+ * - .opencode/command/ exists (symlink or directory)
+ * - .opencode/agents/ exists (symlink or directory)
+ * - If symlink: target actually resolves (not broken)
+ * - opencode.json (or claude.json) exists — warn-only, does NOT block
+ *
+ * Exits with code 1 if misconfigured (unless force=true).
+ */
+function validateProjectSetup(project: string, force: boolean): void {
+  if (force) return;
+
+  const projectDir = path.join(getConfig().projectDir, project);
+
+  // Check critical symlinks/dirs: command and agents
+  const criticalDirs = ['command', 'agents'] as const;
+  for (const dirName of criticalDirs) {
+    const dirPath = path.join(projectDir, '.opencode', dirName);
+
+    if (!existsSync(dirPath)) {
+      process.stderr.write(
+        `  ✗ Project "${project}" not configured. Run: pilot setup ${project}\n`,
+      );
+      process.exit(1);
+    }
+
+    // If it IS a symlink, verify the target exists (not broken)
+    try {
+      const linkStats = lstatSync(dirPath);
+      if (linkStats.isSymbolicLink()) {
+        try {
+          realpathSync(dirPath);
+        } catch {
+          process.stderr.write(
+            `  ✗ Project "${project}" has broken setup (symlink target missing). Run: pilot setup ${project}\n`,
+          );
+          process.exit(1);
+        }
+      }
+    } catch {
+      // lstatSync failed — treat as missing
+      process.stderr.write(
+        `  ✗ Project "${project}" not configured. Run: pilot setup ${project}\n`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // Warn-only: check for opencode.json / claude.json
+  const configFiles = ['opencode.json', 'claude.json'];
+  const hasConfig = configFiles.some((f) => existsSync(path.join(projectDir, f)));
+  if (!hasConfig) {
+    process.stderr.write(
+      `  ⚠ Project "${project}" has no opencode.json. Run: pilot setup ${project}\n`,
+    );
   }
 }
 
@@ -72,6 +133,9 @@ async function addCommand(
   requirement: string,
   opts: AddOptions,
 ): Promise<void> {
+  // Validate project setup before doing anything else
+  validateProjectSetup(project, opts.force ?? false);
+
   // Validate --profile
   const modelProfile: ModelProfile | undefined = opts.profile
     ? validateProfile(opts.profile)
