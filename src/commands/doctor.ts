@@ -9,6 +9,7 @@
  */
 
 import { accessSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { getConfig } from '../core/config.js';
@@ -59,6 +60,53 @@ async function doctorCommand(): Promise<void> {
   } else {
     checks.push({ name: 'memory', status: 'fail', detail: `${freeMb}MB free (critical)` });
   }
+
+  // Check cgroups v2 availability (required for systemd-run memory limits)
+  try {
+    execSync('mount | grep cgroup2', { stdio: 'pipe' });
+    checks.push({ name: 'cgroups v2', status: 'pass', detail: 'cgroup2 mounted' });
+  } catch {
+    checks.push({
+      name: 'cgroups v2',
+      status: 'warn',
+      detail: 'cgroup2 not mounted — systemd-run memory limits will not work (Ubuntu 20.04 or older)',
+    });
+  }
+
+  // Check user lingering (required for systemd-run --user without active login session)
+  // Use os.userInfo().username — reliable in all execution contexts including systemd services
+  // (process.env.USER can be empty in systemd service contexts)
+  try {
+    const username = os.userInfo().username;
+    const lingerOutput = execSync(`/bin/sh -c "loginctl show-user ${username} --property=Linger 2>/dev/null || echo Linger=unknown"`, {
+      encoding: 'utf8',
+    }).trim();
+    if (lingerOutput.includes('Linger=yes')) {
+      checks.push({ name: 'user lingering', status: 'pass', detail: 'Enabled via loginctl' });
+    } else {
+      checks.push({
+        name: 'user lingering',
+        status: 'warn',
+        detail: `Not enabled (${lingerOutput}) — run: loginctl enable-linger ${username}`,
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'user lingering',
+      status: 'warn',
+      detail: 'Could not check — run: loginctl enable-linger $USER',
+    });
+  }
+
+  // Show resource management configuration
+  const sessionMb = config.sessionMemoryMaxMb;
+  const reservedMb = config.reservedMemoryMb;
+  const killMb = config.memoryKillThresholdMb;
+  checks.push({
+    name: 'resource limits',
+    status: 'pass',
+    detail: `session cap: ${sessionMb}MB | reserved: ${reservedMb}MB | kill threshold: ${killMb}MB`,
+  });
 
   if (isJsonMode()) {
     outputJson({ checks });
