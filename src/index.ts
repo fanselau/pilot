@@ -131,6 +131,14 @@ program
     await bumpCommand(id);
   });
 
+program
+  .command('milestone <action> <id>')
+  .description('Milestone management: status, resume, skip')
+  .action(async (action: string, id: string) => {
+    const { milestoneCommand } = await import('./commands/milestone.js');
+    await milestoneCommand(action, id);
+  });
+
 // ── Infrastructure ────────────────────────────────────────────────────────
 
 program
