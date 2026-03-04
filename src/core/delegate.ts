@@ -12,7 +12,7 @@
 import { execa } from 'execa';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { findSessionByTitle, exportSessionFromDb } from './opencode-db.js';
+import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
@@ -350,6 +350,9 @@ async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
 
     const sessionId = findSessionByTitle(title);
     if (!sessionId) continue;
+
+    // Wait for session to actually complete before extracting result
+    if (!isSessionDone(sessionId)) continue;
 
     try {
       const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };

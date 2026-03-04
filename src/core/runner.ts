@@ -33,8 +33,6 @@ import {
   completeStep,
   skipRemainingSteps,
   claimNextLaunchable,
-  forceQuitJob,
-  getAllRunningJobs,
   getRunningJobsForProject,
   reconcileStaleJobs,
   resetToPending,
@@ -137,81 +135,17 @@ function setOomScore(score: number): void {
   }
 }
 
-// ── Stale-running reconciler ───────────────────────────────────────────────
-
-/**
- * Reconcile stale-running jobs: query all jobs with status='running' and for each,
- * check if a corresponding opencode process is still alive via pgrep.
- * Jobs whose process is no longer alive are force-quit so the runner can retry them.
- *
- * Called on startup (to clean up jobs from a previous crashed runner instance)
- * and at the start of each poll cycle (ongoing reconciliation).
- *
- * @param activeJobs - The runner's current in-memory active job map (to skip jobs
- *   that are actively being managed by this runner instance)
- */
-async function reconcileStaleRunning(
-  activeJobs: Map<string, { job: Job; title: string }>,
-): Promise<void> {
-  let runningJobs: Job[];
-  try {
-    runningJobs = getAllRunningJobs();
-  } catch {
-    // DB may not be accessible yet — skip reconciliation
-    return;
-  }
-
-  for (const job of runningJobs) {
-    // Skip jobs actively managed by this runner instance
-    if (activeJobs.has(job.id)) continue;
-
-    // Use opencode DB as ground truth — not pgrep (which has race conditions)
-    const sessionTitles: string[] = [];
-    try {
-      const parsed = JSON.parse(job.sessionTitles ?? '[]') as string[];
-      sessionTitles.push(...parsed);
-    } catch {
-      // Ignore malformed session_titles
-    }
-
-    // Check if the latest session is still active in the opencode DB
-    // Work backwards through titles — the last one is the most recent step
-    let sessionActive = false;
-    for (let i = sessionTitles.length - 1; i >= 0; i--) {
-      const title = sessionTitles[i];
-      const sessionId = findSessionByTitle(title);
-      if (sessionId) {
-        if (!isSessionDone(sessionId)) {
-          sessionActive = true; // Still running in opencode
-        }
-        break; // Only check the latest session that exists in DB
-      }
-    }
-
-    if (!sessionActive && sessionTitles.length > 0) {
-      // No active session found — safe to reset
-      try {
-        forceQuitJob(job.id, 'cli', 'Startup reconciler: no active opencode session found');
-        process.stderr.write(
-          `[runner] Reconciler: force-quit orphaned job ${job.id} (${job.project}) — no active session in opencode DB\n`,
-        );
-      } catch {
-        // Best effort — don't crash the reconciler
-      }
-    }
-  }
-}
-
 // ── Runner Class ───────────────────────────────────────────────────────────
 
 class Runner {
   private options: RunnerOptions;
   private running = false;
   private activeJobs: Map<string, { job: Job; title: string }> = new Map();
+  // Track spawned PIDs by session title for reliable kill (no pgrep needed)
+  private sessionPids: Map<string, number> = new Map();
   private shuttingDown = false;
   private reloading = false;
-  private pollCycle = 0;
-  private static readonly RECONCILE_EVERY_N_CYCLES = 10;
+  // (reconciliation removed — opencode DB is ground truth, no per-cycle checks needed)
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -282,40 +216,37 @@ class Runner {
       if (availableMb === Infinity || availableMb >= config.memoryKillThresholdMb) return;
       if (this.activeJobs.size === 0) return;
 
-      // Find longest-running active job (earliest started_at)
-      let oldestEntry: { job: Job; title: string } | null = null;
-      let oldestStarted = Infinity;
+      // Find newest active job (most recent started_at = least work done)
+      let newestEntry: { job: Job; title: string } | null = null;
+      let newestStarted = 0;
       for (const entry of this.activeJobs.values()) {
-        const started = entry.job.startedAt ? new Date(entry.job.startedAt).getTime() : Infinity;
-        if (started < oldestStarted) {
-          oldestStarted = started;
-          oldestEntry = entry;
+        const started = entry.job.startedAt ? new Date(entry.job.startedAt).getTime() : 0;
+        if (started > newestStarted) {
+          newestStarted = started;
+          newestEntry = entry;
         }
       }
 
-      if (!oldestEntry) return;
+      if (!newestEntry) return;
 
       process.stderr.write(
-        `[runner] Memory pressure watchdog: ${availableMb}MB available (threshold: ${config.memoryKillThresholdMb}MB). Killing longest-running job ${oldestEntry.job.id} (${oldestEntry.job.project})\n`,
+        `[runner] Memory pressure watchdog: ${availableMb}MB available (threshold: ${config.memoryKillThresholdMb}MB). Killing newest job ${newestEntry.job.id} (${newestEntry.job.project}) to preserve progress on older jobs\n`,
       );
 
       try {
-        await killJobSession(oldestEntry.job);
+        await killJobSession(newestEntry.job, this.sessionPids);
       } catch {
         // Best effort kill
       }
       try {
-        resetToPending(oldestEntry.job.id, 'Killed by memory pressure watchdog');
-        this.activeJobs.delete(oldestEntry.job.id);
+        resetToPending(newestEntry.job.id, 'Killed by memory pressure watchdog');
+        this.activeJobs.delete(newestEntry.job.id);
       } catch {
         // Best effort DB update
       }
     }, watchdogIntervalMs);
 
-    // ── Startup reconciliation: clean up jobs left running from a crashed runner ──
-    await reconcileStaleRunning(this.activeJobs);
-
-    // Startup reconciliation (DB-based): reset any ghost-running jobs from a previous
+    // ── Startup reconciliation: reset any ghost-running jobs from a previous
     // runner crash. On a fresh start, activeJobs is empty — so ALL running jobs in DB
     // are stale and should be reset to pending so they can be retried.
     const startupStale = reconcileStaleJobs(new Set(this.activeJobs.keys()));
@@ -328,11 +259,6 @@ class Runner {
     try {
     while (this.running) {
       if (this.shuttingDown) break;
-
-      // NOTE: Per-cycle reconciliation removed — it was causing cascading fan-out.
-      // When pgrep missed a process (race/timing), it reset running jobs mid-execution,
-      // causing duplicate launches. Startup reconciliation (above) handles crash recovery.
-      // Active job health is tracked via spawnAndWait's opencode DB polling.
 
       // ── Immediate multi-slot drain loop ────────────────────────────────
       // Fill ALL available slots before sleeping — not just one per iteration.
@@ -354,8 +280,11 @@ class Runner {
           ({ job: activeJob }) => activeJob.project === job.project,
         );
         if (projectAlreadyActive) {
+          // Undo the claim — job was atomically set to 'running' by claimNextLaunchable
+          // but we can't launch it. Reset to pending so it's not orphaned.
+          resetToPending(job.id);
           process.stderr.write(
-            `[runner] Skipping ${job.id} (${job.project}): same-project job already active\n`,
+            `[runner] Skipping ${job.id} (${job.project}): same-project job already active (reset to pending)\n`,
           );
           break; // Don't try more jobs this cycle — wait for the active one to finish
         }
@@ -774,6 +703,11 @@ class Runner {
     proc.catch(() => {});
     proc.unref();
 
+    // Track PID for reliable kill operations (replaces pgrep)
+    if (proc.pid !== undefined) {
+      this.sessionPids.set(title, proc.pid);
+    }
+
     // Poll opencode DB for session completion using isSessionDone() + PID liveness.
     // isSessionDone() uses step-finish reason as ground truth — eliminated the broken
     // premature completion heuristic that fired when sessions had long-running tool calls.
@@ -821,11 +755,8 @@ class Runner {
           if (isSessionDone(sessionId)) {
             return; // Completed just as process exited
           }
-          // Process died without stop signal — log and return
-          process.stderr.write(
-            `[runner] Warning: process died without stop signal for session ${title}. Treating as complete.\n`,
-          );
-          return;
+          // Process died without clean completion — treat as failure
+          throw new Error(`Process died without clean completion for session ${title} (no step-finish in opencode DB)`);
         }
       }
     }
@@ -1108,14 +1039,14 @@ interface KillJobSessionResult {
 /**
  * Find and terminate the opencode process for a running job.
  *
- * Parses job.sessionTitles JSON to get the list of session title strings.
- * Uses pgrep -f to find PIDs running that title as part of their command line.
+ * Uses tracked PIDs (from sessionPids map) when available.
+ * Falls back to pgrep -f as a last resort (e.g. for jobs started by a previous runner).
  * Sends SIGTERM, waits up to 5s, then SIGKILL if still alive.
- *
- * Returns { killed: true } even if the process died on SIGTERM before SIGKILL.
- * Returns { killed: false, reason } if no process was found or an error occurred.
  */
-async function killJobSession(job: Job): Promise<KillJobSessionResult> {
+async function killJobSession(
+  job: Job,
+  sessionPids?: Map<string, number>,
+): Promise<KillJobSessionResult> {
   // Parse session titles — most recent (last) is tried first
   let sessionTitles: string[] = [];
   try {
@@ -1128,22 +1059,40 @@ async function killJobSession(job: Job): Promise<KillJobSessionResult> {
     return { killed: false, reason: 'No session titles recorded for this job' };
   }
 
-  // Try titles in reverse order (most recent first)
+  // Try tracked PIDs first (reliable), then pgrep fallback
   let foundPid: number | null = null;
   for (let i = sessionTitles.length - 1; i >= 0; i--) {
     const title = sessionTitles[i];
-    try {
-      const { stdout } = await execa('pgrep', ['-f', title], { reject: false });
-      const pidStr = stdout.trim().split('\n')[0];
-      if (pidStr) {
-        const pid = parseInt(pidStr, 10);
-        if (!isNaN(pid)) {
-          foundPid = pid;
-          break;
-        }
+    // Check tracked PIDs
+    if (sessionPids?.has(title)) {
+      const pid = sessionPids.get(title)!;
+      try {
+        process.kill(pid, 0); // Check if alive
+        foundPid = pid;
+        break;
+      } catch {
+        sessionPids.delete(title); // Stale PID, remove
       }
-    } catch {
-      // pgrep error = not found
+    }
+  }
+
+  // Fallback: pgrep for jobs from previous runner instances
+  if (foundPid === null) {
+    for (let i = sessionTitles.length - 1; i >= 0; i--) {
+      const title = sessionTitles[i];
+      try {
+        const { stdout } = await execa('pgrep', ['-f', title], { reject: false });
+        const pidStr = stdout.trim().split('\n')[0];
+        if (pidStr) {
+          const pid = parseInt(pidStr, 10);
+          if (!isNaN(pid)) {
+            foundPid = pid;
+            break;
+          }
+        }
+      } catch {
+        // pgrep error = not found
+      }
     }
   }
 

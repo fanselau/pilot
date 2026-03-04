@@ -569,6 +569,12 @@ async function logCommand(
       // Re-read session titles (new sessions may appear)
       let currentTitles: string[] = [];
       const updatedJob = getJob(jobId);
+
+      // Stop following when job reaches terminal state
+      if (updatedJob && ['completed', 'failed', 'cancelled'].includes(updatedJob.status)) {
+        outputHuman(dim(`  Job ${jobId} ${updatedJob.status}. Done.`));
+        break;
+      }
       if (updatedJob?.sessionTitles) {
         try {
           currentTitles = JSON.parse(updatedJob.sessionTitles) as string[];
