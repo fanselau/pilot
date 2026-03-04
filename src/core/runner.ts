@@ -24,6 +24,7 @@ import {
   markRunning,
   markCompleted,
   markFailed,
+  markStale,
   cancel,
   updateDelegationPlan,
   advanceStep,
@@ -33,8 +34,8 @@ import {
   completeStep,
   skipRemainingSteps,
   claimNextLaunchable,
+  getAllRunningJobs,
   getRunningJobsForProject,
-  reconcileStaleJobs,
   resetToPending,
   updateJudgeVerdict,
   updateActualModels,
@@ -246,14 +247,27 @@ class Runner {
       }
     }, watchdogIntervalMs);
 
-    // ── Startup reconciliation: reset any ghost-running jobs from a previous
-    // runner crash. On a fresh start, activeJobs is empty — so ALL running jobs in DB
-    // are stale and should be reset to pending so they can be retried.
-    const startupStale = reconcileStaleJobs(new Set(this.activeJobs.keys()));
-    if (startupStale.length > 0) {
-      process.stderr.write(
-        `[runner] Startup reconciliation: reset ${startupStale.length} stale-running job(s): ${startupStale.join(', ')}\n`,
-      );
+    // ── Startup reconciliation: kill orphaned processes and reset stale jobs ──
+    // On a fresh start, activeJobs is empty — so ALL running jobs in DB are from
+    // a previous runner. Kill their processes BEFORE resetting to prevent fan-out.
+    {
+      const running = getAllRunningJobs();
+      const staleIds: string[] = [];
+      for (const job of running) {
+        if (!this.activeJobs.has(job.id)) {
+          // Kill orphaned processes before resetting
+          try {
+            await killJobSession(job);
+          } catch { /* best effort */ }
+          markStale(job.id);
+          staleIds.push(job.id);
+        }
+      }
+      if (staleIds.length > 0) {
+        process.stderr.write(
+          `[runner] Startup reconciliation: killed processes + reset ${staleIds.length} stale job(s): ${staleIds.join(', ')}\n`,
+        );
+      }
     }
 
     try {
