@@ -50,6 +50,8 @@ program
   .option('--profile <profile>', 'Model profile: quality, balanced, or budget')
   .option('--provider <provider>', 'Provider mode: hybrid, claude-only, or openai-only')
   .option('--force', 'Bypass project setup check')
+  .option('--notify <sessionKey>', 'OpenClaw session key to wake on completion')
+  .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .action(async (project: string, requirement: string, opts: Record<string, unknown>) => {
     const { addCommand } = await import('./commands/add.js');
     await addCommand(project, requirement, { ...program.opts(), ...opts } as Parameters<typeof addCommand>[2]);

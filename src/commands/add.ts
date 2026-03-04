@@ -27,6 +27,8 @@ interface AddOptions {
   profile?: string;
   provider?: string;
   force?: boolean;
+  notify?: string;    // OpenClaw session key to wake on completion
+  notifyUrl?: string; // Custom webhook URL for completion callback
 }
 
 function isFilePath(str: string): boolean {
@@ -216,7 +218,15 @@ async function addCommand(
     }
   }
 
-  const job = addJob(resolvedProject, scope, description, requirementPath ?? undefined, modelProfile, providerMode);
+  const job = addJob(
+    resolvedProject, scope, description,
+    requirementPath ?? undefined,
+    modelProfile, providerMode,
+    undefined,          // dependsOn (not used in add command)
+    undefined,          // parentJobId (not used in add command)
+    opts.notify,        // callbackSessionKey
+    opts.notifyUrl,     // callbackUrl
+  );
 
   if (isJsonMode()) {
     outputJson({ job });
