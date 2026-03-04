@@ -29,6 +29,9 @@ import {
   getJobSteps,
   recordStep,
   resetToPending,
+  getChildJobs,
+  pauseJob,
+  getMilestoneStatus,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -582,4 +585,253 @@ describe('pilot.db', () => {
       expect(getJob(job.id)!.resumeHint).toBeNull();
     });
   });
+
+  // ── milestone orchestration ───────────────────────────────────────────
+
+  describe('milestone orchestration', () => {
+
+    // ── depends_on enforcement in claimNextLaunchable ──────────────────
+
+    describe('depends_on enforcement in claimNextLaunchable', () => {
+      it('claims job A but not job B whose dependency is job A (pending)', () => {
+        const jobA = addJob('proj', 'phase', 'phase 1');
+        const jobB = addJob('proj-b', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+
+        // Should claim A first (no depends_on)
+        const first = claimNextLaunchable();
+        expect(first).not.toBeNull();
+        expect(first!.id).toBe(jobA.id);
+
+        // B has depends_on=A, A is running (not completed) → B should NOT be claimed
+        const second = claimNextLaunchable();
+        expect(second).toBeNull();
+
+        // B remains pending
+        expect(getJob(jobB.id)!.status).toBe('pending');
+      });
+
+      it('claims job B after dependency job A is completed', () => {
+        const jobA = addJob('proj', 'phase', 'phase 1');
+        const jobB = addJob('proj-b', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+
+        // Claim and complete A
+        claimNextLaunchable(); // claims A
+        markCompleted(jobA.id);
+
+        // Now B's dependency is completed — should be claimable
+        const claimed = claimNextLaunchable();
+        expect(claimed).not.toBeNull();
+        expect(claimed!.id).toBe(jobB.id);
+        expect(claimed!.status).toBe('running');
+      });
+
+      it('does not claim job B when dependency is running', () => {
+        const jobA = addJob('proj', 'phase', 'phase 1');
+        const jobB = addJob('proj-b', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+
+        // Claim A (now running)
+        claimNextLaunchable();
+        expect(getJob(jobA.id)!.status).toBe('running');
+
+        // B's dependency is running, not completed → B blocked
+        const result = claimNextLaunchable();
+        expect(result).toBeNull();
+        expect(getJob(jobB.id)!.status).toBe('pending');
+      });
+
+      it('does not claim job B when dependency is failed', () => {
+        const jobA = addJob('proj', 'phase', 'phase 1');
+        const jobB = addJob('proj-b', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+
+        // Claim A, then fail it
+        claimNextLaunchable();
+        markFailed(jobA.id, 'phase 1 failed');
+
+        // B's dependency is failed (not completed) → B should NOT be claimed
+        const result = claimNextLaunchable();
+        expect(result).toBeNull();
+        expect(getJob(jobB.id)!.status).toBe('pending');
+      });
+
+      it('claims job with no depends_on while blocked job exists', () => {
+        const jobA = addJob('proj-a', 'phase', 'phase 1');
+        const jobB = addJob('proj-b', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+        const jobC = addJob('proj-c', 'phase', 'independent job');
+
+        // Claim A (running)
+        claimNextLaunchable();
+
+        // Claim C (no depends_on, different project from A)
+        const claimed = claimNextLaunchable();
+        expect(claimed).not.toBeNull();
+        expect(claimed!.id).toBe(jobC.id);
+
+        // B is still blocked
+        expect(getJob(jobB.id)!.status).toBe('pending');
+      });
+    });
+
+    // ── addJob with dependsOn and parentJobId ──────────────────────────
+
+    describe('addJob with dependsOn and parentJobId', () => {
+      it('stores dependsOn and parentJobId when provided', () => {
+        const parent = addJob('proj', 'milestone', 'big milestone');
+        const child = addJob('proj', 'phase', 'phase 1', undefined, 'balanced', 'claude-only', undefined, parent.id);
+
+        const fetched = getJob(child.id);
+        expect(fetched).not.toBeNull();
+        expect(fetched!.parentJobId).toBe(parent.id);
+        expect(fetched!.dependsOn).toBeNull();
+      });
+
+      it('stores dependsOn when provided', () => {
+        const jobA = addJob('proj', 'phase', 'phase 1');
+        const jobB = addJob('proj', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', jobA.id);
+
+        const fetched = getJob(jobB.id);
+        expect(fetched!.dependsOn).toBe(jobA.id);
+        expect(fetched!.parentJobId).toBeNull();
+      });
+
+      it('stores both dependsOn and parentJobId together', () => {
+        const parent = addJob('proj', 'milestone', 'milestone');
+        const child1 = addJob('proj', 'phase', 'phase 1', undefined, 'balanced', 'claude-only', undefined, parent.id);
+        const child2 = addJob('proj', 'phase', 'phase 2', undefined, 'balanced', 'claude-only', child1.id, parent.id);
+
+        const fetched2 = getJob(child2.id);
+        expect(fetched2!.dependsOn).toBe(child1.id);
+        expect(fetched2!.parentJobId).toBe(parent.id);
+      });
+
+      it('defaults dependsOn and parentJobId to null when not provided', () => {
+        const job = addJob('proj', 'phase', 'standalone phase');
+        expect(job.dependsOn).toBeNull();
+        expect(job.parentJobId).toBeNull();
+      });
+    });
+
+    // ── getChildJobs ───────────────────────────────────────────────────
+
+    describe('getChildJobs', () => {
+      it('returns all children of a parent job, ordered by created_at ASC', () => {
+        const parent = addJob('proj', 'milestone', 'milestone coordinator');
+        const child1 = addJob('proj', 'phase', '1', undefined, 'balanced', 'claude-only', undefined, parent.id);
+        const child2 = addJob('proj', 'phase', '2', undefined, 'balanced', 'claude-only', child1.id, parent.id);
+        const child3 = addJob('proj', 'phase', '3', undefined, 'balanced', 'claude-only', child2.id, parent.id);
+
+        const children = getChildJobs(parent.id);
+        expect(children).toHaveLength(3);
+        // Order by created_at ASC (insertion order)
+        expect(children[0].id).toBe(child1.id);
+        expect(children[1].id).toBe(child2.id);
+        expect(children[2].id).toBe(child3.id);
+      });
+
+      it('returns empty array for a job with no children', () => {
+        const job = addJob('proj', 'milestone', 'empty milestone');
+        const children = getChildJobs(job.id);
+        expect(children).toHaveLength(0);
+        expect(children).toEqual([]);
+      });
+
+      it('returns empty array for nonexistent parent ID', () => {
+        const children = getChildJobs('zzzz');
+        expect(children).toHaveLength(0);
+      });
+
+      it('does not include jobs from other parents', () => {
+        const parent1 = addJob('proj', 'milestone', 'milestone 1');
+        const parent2 = addJob('proj', 'milestone', 'milestone 2');
+        const child1 = addJob('proj', 'phase', '1', undefined, 'balanced', 'claude-only', undefined, parent1.id);
+        addJob('proj', 'phase', '2', undefined, 'balanced', 'claude-only', undefined, parent2.id);
+
+        const children1 = getChildJobs(parent1.id);
+        expect(children1).toHaveLength(1);
+        expect(children1[0].id).toBe(child1.id);
+      });
+    });
+
+    // ── pauseJob ───────────────────────────────────────────────────────
+
+    describe('pauseJob', () => {
+      it('sets status to paused and sets completed_at', () => {
+        const job = addJob('proj', 'milestone', 'big milestone');
+        markRunning(job.id);
+
+        pauseJob(job.id);
+
+        const updated = getJob(job.id)!;
+        expect(updated.status).toBe('paused');
+        expect(updated.completedAt).not.toBeNull();
+      });
+
+      it('can pause a completed milestone coordinator', () => {
+        const job = addJob('proj', 'milestone', 'coordinator');
+        markRunning(job.id);
+        markCompleted(job.id);
+
+        pauseJob(job.id);
+
+        const updated = getJob(job.id)!;
+        expect(updated.status).toBe('paused');
+      });
+    });
+
+    // ── getMilestoneStatus ─────────────────────────────────────────────
+
+    describe('getMilestoneStatus', () => {
+      it('returns correct counts for mixed child statuses', () => {
+        const parent = addJob('proj', 'milestone', 'coordinator');
+
+        // Create 4 children with different statuses
+        const c1 = addJob('proj', 'phase', '1', undefined, 'balanced', 'claude-only', undefined, parent.id);
+        const c2 = addJob('proj', 'phase', '2', undefined, 'balanced', 'claude-only', c1.id, parent.id);
+        const c3 = addJob('proj', 'phase', '3', undefined, 'balanced', 'claude-only', c2.id, parent.id);
+        const c4 = addJob('proj', 'phase', '4', undefined, 'balanced', 'claude-only', c3.id, parent.id);
+
+        markRunning(c1.id);
+        markCompleted(c1.id);        // completed
+
+        markRunning(c2.id);
+        markFailed(c2.id, 'error');  // failed
+
+        markRunning(c3.id);          // running (stays running)
+
+        // c4 stays pending
+
+        const counts = getMilestoneStatus(parent.id);
+        expect(counts.total).toBe(4);
+        expect(counts.completed).toBe(1);
+        expect(counts.failed).toBe(1);
+        expect(counts.running).toBe(1);
+        expect(counts.pending).toBe(1);
+        expect(counts.paused).toBe(0);
+      });
+
+      it('returns all zeros for milestone with no children', () => {
+        const parent = addJob('proj', 'milestone', 'empty milestone');
+        const counts = getMilestoneStatus(parent.id);
+        expect(counts.total).toBe(0);
+        expect(counts.completed).toBe(0);
+        expect(counts.failed).toBe(0);
+        expect(counts.running).toBe(0);
+        expect(counts.pending).toBe(0);
+        expect(counts.paused).toBe(0);
+      });
+
+      it('counts paused children correctly', () => {
+        const parent = addJob('proj', 'milestone', 'coordinator');
+        const child = addJob('proj', 'phase', '1', undefined, 'balanced', 'claude-only', undefined, parent.id);
+
+        pauseJob(child.id);
+
+        const counts = getMilestoneStatus(parent.id);
+        expect(counts.total).toBe(1);
+        expect(counts.paused).toBe(1);
+        expect(counts.pending).toBe(0);
+      });
+    });
+
+  }); // end 'milestone orchestration'
+
 });
