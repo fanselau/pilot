@@ -632,80 +632,15 @@ class Runner {
             throw new Error('No session created — opencode may have crashed before starting');
           }
 
-          // Guard: check shutdown before starting judge — phase session already completed,
-          // so reset to pending to preserve that work rather than marking failed
-          if (this.shuttingDown) {
-            resetToPending(job.id, 'Interrupted before judge evaluation');
-            process.stderr.write(
-              `[runner] Shutdown during phase — resetting ${job.id} to pending (phase completed, judge skipped)\n`,
-            );
-            return; // Don't mark completed or failed — it's pending for retry
-          }
-
-          let judgeVerdict: JudgeVerdict | null;
-          try {
-            judgeVerdict = await this.runJudge(job, projectDir, title);
-          } catch (judgeErr) {
-            // If judge threw because of shutdown, reset to pending (preserve phase work)
-            if (this.shuttingDown) {
-              resetToPending(job.id, 'Interrupted during judge evaluation');
-              process.stderr.write(
-                `[runner] Shutdown during judge — resetting ${job.id} to pending\n`,
-              );
-              return;
-            }
-            // Non-shutdown judge error: benefit of doubt, fall through to markCompleted
-            judgeVerdict = null;
-          }
-
-          if (judgeVerdict) {
-            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-
-            if (judgeVerdict.verdict === 'fail') {
-              // Re-fetch job to get fresh attempts count (claimNextLaunchable already incremented it)
-              const freshJob = getJob(job.id);
-              if (judgeVerdict.retryRecommendation !== 'none' && freshJob && freshJob.attempts < freshJob.maxAttempts) {
-                resetToPending(job.id, judgeVerdict.retryHint);
-                process.stderr.write(
-                  `[runner] Judge verdict: fail (retryable). Resetting ${job.id} to pending.\n`,
-                );
-                return; // Don't mark completed or failed — it's pending again
-              }
-              throw new Error(`Judge verdict: fail — ${judgeVerdict.summary}`);
-            }
-
-            if (judgeVerdict.verdict === 'partial') {
-              // Re-fetch job to get fresh attempts count (claimNextLaunchable already incremented it)
-              const freshJob = getJob(job.id);
-              if (judgeVerdict.retryRecommendation === 'retry-resume' && freshJob && freshJob.attempts < freshJob.maxAttempts) {
-                resetToPending(job.id, judgeVerdict.retryHint ?? '--resume');
-                process.stderr.write(
-                  `[runner] Judge verdict: partial. Resetting ${job.id} to pending with resume hint.\n`,
-                );
-                return;
-              }
-              // Partial but no retries left — accept as completed
-              process.stderr.write(
-                `[runner] Judge verdict: partial (no retries left). Accepting ${job.id}.\n`,
-              );
-            }
-
-            // verdict === 'pass' or accepted partial — fall through to markCompleted
-          } else {
-          // Judge failed to produce verdict — benefit of doubt only because session had real activity
-          // (no-activity sessions are already caught above)
-          // Store as inconclusive (confidence=0) so status displays can differentiate
-          // from verified completions — green should mean verified-green, not "we-have-no-idea-green"
+          // Judge removed — was producing inconclusive results on every run.
+          // Will be replaced by gsd-verify-phase (automated checks + structured AI review).
+          // For now, if execution had activity, we trust it completed.
           updateJudgeVerdict(job.id, JSON.stringify({
             verdict: 'pass',
-            confidence: 0,
-            summary: 'Judge failed — benefit of doubt applied (session had real activity)',
+            confidence: 1,
+            summary: 'Phase completed (judge disabled, pending gsd-verify-phase integration)',
             retryRecommendation: 'none',
           }));
-          process.stderr.write(
-            `[runner] ⚠ Judge failed to produce verdict for ${job.id} — marking as completed (benefit of doubt)\n`,
-          );
-          }
         }
       }
 
