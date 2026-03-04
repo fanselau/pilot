@@ -26,7 +26,7 @@ export interface PilotConfig {
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
 
 export type JobScope = 'quick' | 'phase' | 'milestone';
-export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused';
 export type ModelProfile = 'quality' | 'balanced' | 'budget';
 export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
 
@@ -39,6 +39,7 @@ export interface Job {
   status: JobStatus;
   priority: number;
   dependsOn: string | null;  // job ID
+  parentJobId: string | null;  // parent milestone job ID
   createdAt: string;         // ISO 8601
   startedAt: string | null;
   completedAt: string | null;

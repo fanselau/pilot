@@ -27,9 +27,10 @@ CREATE TABLE IF NOT EXISTS jobs (
   scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone')),
   description TEXT NOT NULL,
   requirement_path TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused')),
   priority INTEGER DEFAULT 0,
   depends_on TEXT REFERENCES jobs(id),
+  parent_job_id TEXT REFERENCES jobs(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   started_at TEXT,
   completed_at TEXT,
@@ -102,6 +103,7 @@ interface JobRow {
   status: string;
   priority: number;
   depends_on: string | null;
+  parent_job_id: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -128,6 +130,7 @@ function rowToJob(row: JobRow): Job {
     status: row.status as Job['status'],
     priority: row.priority,
     dependsOn: row.depends_on,
+    parentJobId: row.parent_job_id ?? null,
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -165,6 +168,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN judge_verdict TEXT",
     "ALTER TABLE jobs ADD COLUMN resume_hint TEXT",
     "ALTER TABLE jobs ADD COLUMN actual_models TEXT",
+    "ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)",
   ];
   for (const sql of migrations) {
     try {
