@@ -61,6 +61,10 @@ function getConfig(): PilotConfig {
 
   const noColor = process.env.NO_COLOR !== undefined;
 
+  // Optional Telegram notification fields
+  const telegramBotToken = process.env.PILOT_TELEGRAM_BOT_TOKEN ?? null;
+  const telegramChatId = process.env.PILOT_TELEGRAM_CHAT_ID ?? null;
+
   // Derived paths (not from env vars)
   const pilotDir = path.join(home, '.pilot');
   const pilotDbPath = path.join(pilotDir, 'pilot.db');
@@ -79,6 +83,8 @@ function getConfig(): PilotConfig {
     memoryKillThresholdMb,
     logLevel,
     noColor,
+    telegramBotToken,
+    telegramChatId,
   };
 }
 

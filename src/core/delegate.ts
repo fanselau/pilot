@@ -10,7 +10,7 @@
  */
 
 import { execa } from 'execa';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
@@ -211,24 +211,13 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
 
     case 'milestone':
       if (!hasPlanning) {
-        // Milestone on uninitialized project — init then multi-step phase lifecycle
-        const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
-          ?? job.description;
-        const addPhaseArgs = title;
-        const planPhaseArgs = job.requirementPath ? `1 @${job.requirementPath}` : '1';
-        const executePhaseArgs = '1';
+        // Milestone on uninitialized project — init first, then spawn child jobs
         return {
-          steps: [
-            { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'add-phase', args: addPhaseArgs },
-            { command: 'plan-phase', args: planPhaseArgs },
-            { command: 'execute-phase', args: executePhaseArgs },
-          ],
-          reasoning: 'Fallback: project not initialized, running new-project then multi-step phase lifecycle (add→plan→execute)',
+          steps: [{ command: 'new-project', args: buildNewProjectArgs(job) }],
+          reasoning: 'Milestone on uninitialized project — init first, then spawn child jobs',
         };
       }
-      // Milestone on initialized project: if requirementPath is a directory,
-      // iterate files and create one multi-step phase lifecycle per file
+      // Milestone coordinator — single new-milestone step, runner spawns child phase jobs
       return buildMilestonePlan(job, projectDir);
   }
 }
@@ -379,118 +368,29 @@ function getNextPhaseNumber(phasesDir: string): number {
 }
 
 /**
- * Build a milestone plan for an initialized project.
- * If requirementPath is a directory, create multi-step add→plan→execute per .md file.
- * Otherwise, fall back to single multi-step phase lifecycle.
+ * Build a milestone coordinator plan for an initialized project.
+ *
+ * The coordinator runs a single `new-milestone` step. After it completes,
+ * the runner reads ROADMAP.md and spawns child phase jobs with depends_on chaining.
+ * This replaces the old flat per-requirement step list (add-phase × N).
  */
-function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
-  const phasesDir = path.join(projectDir, '.planning', 'phases');
-
-  if (job.requirementPath) {
-    try {
-      const stat = statSync(job.requirementPath);
-      if (stat.isDirectory()) {
-        const files = readdirSync(job.requirementPath)
-          .filter(f => f.endsWith('.md'))
-          .sort();
-
-        if (files.length > 0) {
-          const steps: DelegationStep[] = [];
-
-          for (const file of files) {
-            const filePath = path.join(job.requirementPath, file);
-            const title = extractRequirementTitle(filePath) ?? file.replace(/\.md$/, '');
-
-            // Check if this requirement already has a phase
-            const existing = findExistingPhaseDir(phasesDir, title);
-            if (existing) {
-              const state = getPhaseState(phasesDir, existing.dirName);
-              if (state.isComplete) {
-                // Skip entirely — already complete
-                continue;
-              }
-              if (state.planCount > 0) {
-                // Plans exist — only execute-phase
-                steps.push({ command: 'execute-phase', args: String(existing.phaseNumber) });
-                continue;
-              }
-              // Phase dir exists but no plans
-              steps.push({ command: 'plan-phase', args: `${existing.phaseNumber} @${filePath}` });
-              steps.push({ command: 'execute-phase', args: String(existing.phaseNumber) });
-            } else {
-              // New requirement — full lifecycle
-              // Phase number will be determined at runtime by runner arg patching
-              const nextNum = getNextPhaseNumber(phasesDir) + steps.filter(s => s.command === 'add-phase').length;
-              steps.push({ command: 'add-phase', args: title });
-              steps.push({ command: 'plan-phase', args: `${nextNum} @${filePath}` });
-              steps.push({ command: 'execute-phase', args: String(nextNum) });
-            }
-          }
-
-          if (steps.length === 0) {
-            return {
-              steps: [],
-              reasoning: `Milestone: all ${files.length} requirement phases already complete`,
-            };
-          }
-
-          return {
-            steps,
-            reasoning: `Fallback: milestone with ${files.length} requirement files, multi-step phase lifecycle per file`,
-          };
-        }
-      }
-    } catch {
-      // Fall through to single multi-step plan
-    }
-  }
-
-  // Default: full multi-step phase lifecycle (add + plan + execute)
-  const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
-    ?? job.description;
-
-  const existing = findExistingPhaseDir(phasesDir, title);
-  if (existing) {
-    const state = getPhaseState(phasesDir, existing.dirName);
-    if (state.isComplete) {
-      return {
-        steps: [],
-        reasoning: `Phase "${title}" already complete`,
-      };
-    }
-    if (state.planCount > 0) {
-      return {
-        steps: [{ command: 'execute-phase', args: String(existing.phaseNumber) }],
-        reasoning: `Phase "${title}" has plans, running execute-phase only`,
-      };
-    }
-    const planPhaseArgs = job.requirementPath
-      ? `${existing.phaseNumber} @${job.requirementPath}`
-      : String(existing.phaseNumber);
-    return {
-      steps: [
-        { command: 'plan-phase', args: planPhaseArgs },
-        { command: 'execute-phase', args: String(existing.phaseNumber) },
-      ],
-      reasoning: `Phase "${title}" directory exists but no plans — running plan-phase + execute-phase`,
-    };
-  }
-
-  const nextPhaseNumber = getNextPhaseNumber(phasesDir);
-  const addPhaseArgs = title;
-  const planPhaseArgs = job.requirementPath
-    ? `${nextPhaseNumber} @${job.requirementPath}`
-    : String(nextPhaseNumber);
-  const executePhaseArgs = String(nextPhaseNumber);
-
+function buildMilestonePlan(job: Job, _projectDir: string): DelegationPlan {
   return {
-    steps: [
-      { command: 'add-phase', args: addPhaseArgs },
-      { command: 'plan-phase', args: planPhaseArgs },
-      { command: 'execute-phase', args: executePhaseArgs },
-    ],
-    reasoning: 'Fallback: project already initialized, running full phase lifecycle (add→plan→execute)',
+    steps: [{ command: 'new-milestone', args: buildNewMilestoneArgs(job) }],
+    reasoning: 'Milestone coordinator — will spawn child phase jobs after new-milestone completes',
   };
+}
+
+/**
+ * Build args for gsd-new-milestone.
+ * Same convention as buildNewProjectArgs: file reference first, then flags.
+ * GSD checks for --auto presence anywhere in $ARGUMENTS.
+ */
+function buildNewMilestoneArgs(job: Job): string {
+  if (job.requirementPath) {
+    return `@${job.requirementPath} --auto`;
+  }
+  return `${job.description} --auto`;
 }
 
 /**
@@ -673,6 +573,7 @@ export {
   resolvePhaseForFallback,
   fallbackPlan,
   buildNewProjectArgs,
+  buildNewMilestoneArgs,
   buildQuickArgs,
   getNextPhaseNumber,
   buildMilestonePlan,

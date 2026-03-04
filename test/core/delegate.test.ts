@@ -114,6 +114,7 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     status: 'pending',
     priority: 0,
     dependsOn: null,
+    parentJobId: null,
     createdAt: '2026-02-22T00:00:00Z',
     startedAt: null,
     completedAt: null,
@@ -669,18 +670,15 @@ describe('fallbackPlan', () => {
     expect(phaseStep).toBeUndefined();
   });
 
-  it('returns new-project + add-phase + plan-phase + execute-phase for uninitialized milestone', () => {
+  it('returns new-project (single step) for uninitialized milestone', () => {
     mockRoadmapExists = false;
     const job = makeTestJob({ scope: 'milestone', description: 'Build CRM' });
     const plan = fallbackPlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(4);
+    expect(plan.steps).toHaveLength(1);
     expect(plan.steps[0].command).toBe('new-project');
-    expect(plan.steps[1].command).toBe('add-phase');
-    expect(plan.steps[2].command).toBe('plan-phase');
-    expect(plan.steps[3].command).toBe('execute-phase');
   });
 
-  it('delegates to buildMilestonePlan for initialized milestone', () => {
+  it('delegates to buildMilestonePlan (new-milestone coordinator) for initialized milestone', () => {
     mockRoadmapExists = true;
     const job = makeTestJob({
       scope: 'milestone',
@@ -688,12 +686,10 @@ describe('fallbackPlan', () => {
       requirementPath: null,
     });
     const plan = fallbackPlan(job, '/tmp/project');
-    // Without requirementPath, buildMilestonePlan falls back to multi-step add+plan+execute
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
-    expect(plan.reasoning).toContain('add');
+    // Milestone coordinator: single new-milestone step
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('new-milestone');
+    expect(plan.reasoning).toContain('coordinator');
   });
 
   it('never produces { command: "phase" } steps in any scenario', () => {
@@ -763,6 +759,8 @@ describe('buildQuickArgs', () => {
 });
 
 // ── buildMilestonePlan ────────────────────────────────────────────────────
+// buildMilestonePlan now produces a simple coordinator plan (new-milestone step).
+// Child phase jobs are spawned by the runner after the coordinator completes.
 
 describe('buildMilestonePlan', () => {
   beforeEach(() => {
@@ -773,148 +771,32 @@ describe('buildMilestonePlan', () => {
     mockRequirementFileContent = {};
   });
 
-  it('creates multi-step plan per .md file in requirement directory', () => {
-    mockRequirementIsDir = true;
-    mockRequirementDirFiles = ['01-auth.md', '02-payments.md', '03-ui.md'];
-    mockPhaseDirs = ['01-setup', '02-core'];
-    mockPhaseSubdirFiles = {};
-    // Mock requirement file contents with titles
-    mockRequirementFileContent['/tmp/requirements/milestone-v2/01-auth.md'] = '# Authentication\n\nAuth requirements.';
-    mockRequirementFileContent['/tmp/requirements/milestone-v2/02-payments.md'] = '# Payment Integration\n\nPayment requirements.';
-    mockRequirementFileContent['/tmp/requirements/milestone-v2/03-ui.md'] = '# UI Components\n\nUI requirements.';
-
+  it('returns single new-milestone step for initialized project with requirementPath', () => {
     const job = makeTestJob({
       scope: 'milestone',
       requirementPath: '/tmp/requirements/milestone-v2',
+      description: 'Milestone V2',
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
-
-    // 3 files × 3 steps each (add-phase, plan-phase, execute-phase) = 9 steps
-    // (no existing phases for these titles)
-    expect(plan.steps.length).toBeGreaterThan(0);
-    // No 'phase' command anywhere
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
-    // First step should be add-phase
-    expect(plan.steps[0].command).toBe('add-phase');
-    // add-phase gets the title
-    expect(plan.steps[0].args).toBe('Authentication');
-    // plan-phase gets the file path
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toContain('@/tmp/requirements/milestone-v2/01-auth.md');
-    // execute-phase
-    expect(plan.steps[2].command).toBe('execute-phase');
-    expect(plan.reasoning).toContain('3 requirement files');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('new-milestone');
+    expect(plan.steps[0].args).toBe('@/tmp/requirements/milestone-v2 --auto');
+    expect(plan.reasoning).toContain('coordinator');
   });
 
-  it('no --auto in any step args for milestone plan', () => {
-    mockRequirementIsDir = true;
-    mockRequirementDirFiles = ['01-auth.md'];
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
-    mockRequirementFileContent['/tmp/requirements/milestone-v2/01-auth.md'] = '# Auth\n\nContent.';
-    const job = makeTestJob({
-      scope: 'milestone',
-      requirementPath: '/tmp/requirements/milestone-v2',
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    for (const step of plan.steps) {
-      expect(step.args).not.toContain('--auto');
-    }
-  });
-
-  it('uses @path for plan-phase even when no heading in file', () => {
-    mockRequirementIsDir = true;
-    mockRequirementDirFiles = ['01-auth.md'];
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
-    // No heading in file content — falls back to filename-derived title
-    mockRequirementFileContent['/tmp/requirements/milestone-v2/01-auth.md'] = 'No heading here, just content.';
-
-    const job = makeTestJob({
-      scope: 'milestone',
-      requirementPath: '/tmp/requirements/milestone-v2',
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-
-    expect(plan.steps.length).toBeGreaterThan(0);
-    // plan-phase step should contain the @file path
-    const planPhaseStep = plan.steps.find(s => s.command === 'plan-phase');
-    expect(planPhaseStep).not.toBeUndefined();
-    expect(planPhaseStep!.args).toContain('@/tmp/requirements/milestone-v2/01-auth.md');
-  });
-
-  it('falls back to add+plan+execute when requirementPath is a single file', () => {
-    mockRequirementIsDir = false;
-    mockRequirementFileContent['/tmp/requirements/single-req.md'] = '# Single Requirement\n\nDetails here.';
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
-    const job = makeTestJob({
-      scope: 'milestone',
-      requirementPath: '/tmp/requirements/single-req.md',
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    // "Single Requirement" not found in phases → 3-step plan
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Single Requirement');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[1].args).toContain('@/tmp/requirements/single-req.md');
-    expect(plan.steps[2].command).toBe('execute-phase');
-  });
-
-  it('falls back to multi-step when no .md files in dir', () => {
-    mockRequirementIsDir = true;
-    mockRequirementDirFiles = ['README.txt', 'notes.json'];
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
-
-    const job = makeTestJob({
-      scope: 'milestone',
-      requirementPath: '/tmp/requirements/empty-dir',
-      description: 'Big milestone',
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    // Falls through to single add+plan+execute for the job description
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
-  });
-
-  it('falls back to multi-step add+plan+execute when no requirementPath', () => {
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
+  it('returns single new-milestone step with description when no requirementPath', () => {
     const job = makeTestJob({
       scope: 'milestone',
       description: 'Build everything',
       requirementPath: null,
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Build everything');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
-  });
-
-  it('uses description when no requirementPath for add-phase args', () => {
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
-    const job = makeTestJob({
-      scope: 'milestone',
-      description: 'Custom milestone description',
-      requirementPath: null,
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Custom milestone description');
-    expect(plan.reasoning).toContain('add');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('new-milestone');
+    expect(plan.steps[0].args).toBe('Build everything --auto');
   });
 
   it('never produces { command: "phase" } steps', () => {
-    mockPhaseDirs = ['01-setup'];
-    mockPhaseSubdirFiles = {};
     const job = makeTestJob({
       scope: 'milestone',
       description: 'Test milestone',
@@ -925,28 +807,14 @@ describe('buildMilestonePlan', () => {
     expect(phaseStep).toBeUndefined();
   });
 
-  it('skips completed phases in milestone directory', () => {
-    mockRequirementIsDir = true;
-    mockRequirementDirFiles = ['01-auth.md', '02-payments.md'];
-    // "01-auth-system" already exists and is complete
-    mockPhaseDirs = ['01-setup', '03-auth'];
-    // auth is complete
-    mockPhaseSubdirFiles['03-auth'] = [
-      '03-01-PLAN.md',
-      '03-01-SUMMARY.md',
-    ];
-    mockRequirementFileContent['/tmp/requirements/mv2/01-auth.md'] = '# Auth\n\nContent.';
-    mockRequirementFileContent['/tmp/requirements/mv2/02-payments.md'] = '# Payments New Feature\n\nContent.';
-
+  it('args include --auto flag', () => {
     const job = makeTestJob({
       scope: 'milestone',
-      requirementPath: '/tmp/requirements/mv2',
+      description: 'Launch v2',
+      requirementPath: null,
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
-    // auth is complete (skipped), payments is new → 3 steps for payments only
-    // (Auth matches "03-auth" via "auth" word overlap? Let's just check no 'phase' command)
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
+    expect(plan.steps[0].args).toContain('--auto');
   });
 });
 

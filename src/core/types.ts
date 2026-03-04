@@ -21,6 +21,8 @@ export interface PilotConfig {
   memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048
   logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   noColor: boolean;
+  telegramBotToken: string | null;   // PILOT_TELEGRAM_BOT_TOKEN — optional Telegram notifications
+  telegramChatId: string | null;     // PILOT_TELEGRAM_CHAT_ID — optional Telegram chat ID
 }
 
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
