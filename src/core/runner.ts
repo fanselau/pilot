@@ -75,6 +75,14 @@ interface JudgeVerdict {
   retryHint?: string;
 }
 
+interface VerificationResult {
+  status: 'passed' | 'gaps_found' | 'failed' | 'human_needed';
+  verdict: 'PASS' | 'FAIL' | 'WARN';
+  score: string;  // e.g., "5/7"
+  automatedChecks: Record<string, { pass: boolean; duration_ms?: number; error_summary?: string; summary?: string }>;
+  blockingIssues: string[];
+}
+
 // ── Spawn rate limiter (module-level) ──────────────────────────────────────
 
 let lastSpawnTime = 0;
@@ -1043,6 +1051,118 @@ class Runner {
   }
 }
 
+// ── Verification result parsing ───────────────────────────────────────────
+
+/**
+ * Parse VERIFICATION.md frontmatter into a structured VerificationResult.
+ *
+ * Handles nested `automated_checks:` block with inline YAML objects like:
+ *   automated_checks:
+ *     typescript: { pass: true, duration_ms: 8200 }
+ *     tests: { pass: false, summary: "3 failed", error_summary: "3 type errors" }
+ *
+ * Returns null if:
+ * - No valid frontmatter delimiters (--- / ---)
+ * - Required fields (status, verdict) are missing or invalid
+ *
+ * Exported for direct unit testing.
+ */
+export function parseVerificationResult(content: string): VerificationResult | null {
+  // Extract frontmatter: content between first --- and second ---
+  const firstDelim = content.indexOf('---');
+  if (firstDelim === -1) return null;
+
+  const afterFirst = content.indexOf('\n', firstDelim) + 1;
+  const secondDelim = content.indexOf('\n---', afterFirst);
+  if (secondDelim === -1) return null;
+
+  const frontmatter = content.slice(afterFirst, secondDelim);
+
+  // Parse top-level fields
+  const statusMatch = frontmatter.match(/^status:\s*(passed|gaps_found|failed|human_needed)\s*$/m);
+  const verdictMatch = frontmatter.match(/^verdict:\s*(PASS|FAIL|WARN)\s*$/m);
+  const scoreMatch = frontmatter.match(/^score:\s*(.+?)\s*$/m);
+
+  // Validate required fields
+  if (!statusMatch || !verdictMatch) return null;
+
+  const status = statusMatch[1] as VerificationResult['status'];
+  const verdict = verdictMatch[1] as VerificationResult['verdict'];
+  const score = scoreMatch ? scoreMatch[1].trim() : '';
+
+  // Parse automated_checks: block
+  const automatedChecks: VerificationResult['automatedChecks'] = {};
+
+  const lines = frontmatter.split('\n');
+  let inAutomatedChecks = false;
+
+  for (const line of lines) {
+    if (line.match(/^automated_checks:\s*$/)) {
+      inAutomatedChecks = true;
+      continue;
+    }
+
+    if (inAutomatedChecks) {
+      // Non-indented line ends the block
+      if (line.length > 0 && !line.match(/^\s/)) {
+        inAutomatedChecks = false;
+        continue;
+      }
+
+      // Parse indented check line: "  checkname: { ... }"
+      const checkMatch = line.match(/^\s+(\w+):\s*\{(.+)\}\s*$/);
+      if (checkMatch) {
+        const checkName = checkMatch[1];
+        const inlineObj = checkMatch[2];
+
+        const passMatch = inlineObj.match(/pass:\s*(true|false)/);
+        const durationMatch = inlineObj.match(/duration_ms:\s*(\d+)/);
+        const errorSummaryMatch = inlineObj.match(/error_summary:\s*"([^"]*)"/);
+        const summaryMatch = inlineObj.match(/summary:\s*"([^"]*)"/);
+
+        if (passMatch) {
+          const checkEntry: { pass: boolean; duration_ms?: number; error_summary?: string; summary?: string } = {
+            pass: passMatch[1] === 'true',
+          };
+          if (durationMatch) checkEntry.duration_ms = parseInt(durationMatch[1], 10);
+          if (errorSummaryMatch) checkEntry.error_summary = errorSummaryMatch[1];
+          if (summaryMatch) checkEntry.summary = summaryMatch[1];
+          automatedChecks[checkName] = checkEntry;
+        }
+      }
+    }
+  }
+
+  // Parse blocking_issues: list
+  const blockingIssues: string[] = [];
+
+  // Handle empty array inline: blocking_issues: []
+  const emptyBlockingMatch = frontmatter.match(/^blocking_issues:\s*\[\]\s*$/m);
+  if (!emptyBlockingMatch) {
+    // Find blocking_issues: line and collect following list items
+    const blockingIdx = lines.findIndex(l => l.match(/^blocking_issues:\s*$/));
+    if (blockingIdx !== -1) {
+      for (let i = blockingIdx + 1; i < lines.length; i++) {
+        const itemMatch = lines[i].match(/^\s*-\s*"?(.+?)"?\s*$/);
+        if (itemMatch) {
+          blockingIssues.push(itemMatch[1]);
+        } else if (lines[i].length > 0 && !lines[i].match(/^\s/)) {
+          // Non-indented non-empty line ends the list
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    status,
+    verdict,
+    score,
+    automatedChecks,
+    blockingIssues,
+  };
+}
+
 // ── Judge verdict parsing ──────────────────────────────────────────────────
 
 /**
@@ -1358,7 +1478,7 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 // ── Exports ────────────────────────────────────────────────────────────────
 
 export { Runner, createRunner, killJobSession, parseJudgeVerdict, spawnChildJobs };
-export type { RunnerOptions, RunnerState, JudgeVerdict, KillJobSessionResult };
+export type { RunnerOptions, RunnerState, JudgeVerdict, VerificationResult, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing
 export {
