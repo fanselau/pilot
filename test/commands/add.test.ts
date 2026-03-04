@@ -35,6 +35,7 @@ vi.mock('../../src/core/db.js', () => ({
     modelProfile: _profile ?? 'balanced',
     providerMode: _provider ?? 'claude-only',
   })),
+  findDuplicateJob: vi.fn(() => null),
 }));
 
 // Mock output utilities
@@ -81,7 +82,7 @@ vi.mock('../../src/core/config.js', async (importOriginal) => {
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
-import { addJob } from '../../src/core/db.js';
+import { addJob, findDuplicateJob } from '../../src/core/db.js';
 import type { JobScope } from '../../src/core/types.js';
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────
@@ -89,6 +90,8 @@ import type { JobScope } from '../../src/core/types.js';
 beforeEach(() => {
   vi.clearAllMocks();
   mockJsonMode = false;
+  // Reset findDuplicateJob to return null (no duplicate) so existing tests are unaffected
+  vi.mocked(findDuplicateJob).mockReturnValue(null);
   // Sync the env var so resolveProjectDir uses the current mockedProjectDir
   syncProjectDirEnv();
 });
@@ -383,5 +386,113 @@ describe('project setup validation', () => {
     expect(addJob).toHaveBeenCalledWith(
       absPath, 'quick', 'fix stuff', undefined, undefined, undefined,
     );
+  });
+});
+
+// ── duplicate detection ────────────────────────────────────────────────────
+
+describe('duplicate detection', () => {
+  // Shared fake Job returned by findDuplicateJob mock
+  const fakeJob = {
+    id: 'dup1',
+    project: '/some/project',
+    scope: 'quick' as JobScope,
+    description: 'fix stuff',
+    requirementPath: null,
+    status: 'pending' as const,
+    priority: 0,
+    dependsOn: null,
+    createdAt: '2026-03-02T10:00:00',
+    startedAt: null,
+    completedAt: null,
+    error: null,
+    resumeHint: null,
+    attempts: 0,
+    maxAttempts: 3,
+    delegationPlan: null,
+    currentStep: 0,
+    sessionTitles: null,
+    modelProfile: 'balanced' as const,
+    providerMode: 'claude-only' as const,
+    judgeVerdict: null,
+    actualModels: null,
+  };
+
+  // Use the existingTestsDir-level setup but create a fresh configured project
+  let dupTestsDir: string;
+
+  beforeAll(() => {
+    dupTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-dup-'));
+    mockedProjectDir = dupTestsDir;
+    syncProjectDirEnv();
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(dupTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(dupTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = dupTestsDir;
+    syncProjectDirEnv();
+    // Reset to no-duplicate state before each test
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+  });
+
+  it('skips addJob when duplicate pending job found', async () => {
+    vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'pending' });
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).not.toHaveBeenCalled();
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('⚠');
+    expect(output).toContain('queued');
+  });
+
+  it('skips addJob when duplicate running job found', async () => {
+    vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'running' });
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).not.toHaveBeenCalled();
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('running');
+  });
+
+  it('--force bypasses duplicate check', async () => {
+    vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
+
+    await addCommand('my-project', 'fix stuff', { force: true });
+
+    expect(findDuplicateJob).not.toHaveBeenCalled();
+    expect(addJob).toHaveBeenCalled();
+  });
+
+  it('proceeds when no duplicate found', async () => {
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalled();
+  });
+
+  it('outputs JSON for duplicate in json mode', async () => {
+    mockJsonMode = true;
+    vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(mockOutputJson).toHaveBeenCalledWith({
+      duplicate: true,
+      existingJob: expect.objectContaining({ id: 'dup1' }),
+    });
+    expect(addJob).not.toHaveBeenCalled();
   });
 });

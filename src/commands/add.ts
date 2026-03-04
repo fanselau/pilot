@@ -11,7 +11,7 @@
 
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { addJob } from '../core/db.js';
+import { addJob, findDuplicateJob } from '../core/db.js';
 import { resolveProjectDir } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
@@ -175,6 +175,20 @@ async function addCommand(
   // For quick scope with file requirement, pass FULL content as description
   if (scope === 'quick' && requirementPath !== null) {
     description = readFileSync(requirementPath, 'utf8');
+  }
+
+  // Duplicate check: skip if --force is set
+  if (!opts.force) {
+    const existing = findDuplicateJob(resolvedProject, description, requirementPath ?? undefined);
+    if (existing) {
+      if (isJsonMode()) {
+        outputJson({ duplicate: true, existingJob: existing });
+        return;
+      }
+      const statusLabel = existing.status === 'running' ? 'running' : 'queued';
+      outputHuman(`  ${yellow('⚠')} Job already ${statusLabel}: ${dim(existing.id)} — "${existing.description.length > 50 ? existing.description.slice(0, 50) + '…' : existing.description}"`);
+      return;  // exit cleanly — not an error
+    }
   }
 
   // R5: Warn when phase scope auto-detected but no matching phase in ROADMAP
