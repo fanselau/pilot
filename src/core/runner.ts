@@ -377,10 +377,14 @@ class Runner {
       this.patchModelsForJob(job, projectDir);
 
       // Step 1: Delegation — get execution plan (typically single step for phase jobs)
-      updateSessionTitles(job.id, [`pilot-delegate-${job.id}-1`]);
       let plan: DelegationPlan;
       try {
-        plan = await delegate(job, projectDir);
+        const result = await delegate(job, projectDir);
+        const { _sessionTitle, ...planData } = result as DelegationPlan & { _sessionTitle?: string };
+        plan = planData;
+        if (_sessionTitle) {
+          updateSessionTitles(job.id, [_sessionTitle]);
+        }
       } catch (err) {
         throw new Error(`Delegation failed: ${err instanceof Error ? err.message : String(err)}`);
       }

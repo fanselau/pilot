@@ -286,7 +286,7 @@ function buildQuickArgs(job: Job): string {
 /**
  * Single delegation attempt: spawn opencode, wait for result, parse output.
  */
-async function attemptDelegation(job: Job, projectDir: string, attempt: number): Promise<DelegationPlan> {
+async function attemptDelegation(job: Job, projectDir: string, attempt: number): Promise<DelegationPlan & { _sessionTitle: string }> {
   const ts = Date.now().toString(36).slice(-4);
   const title = `pilot-delegate-${job.id}-${attempt}-${ts}`;
 
@@ -317,7 +317,7 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
   proc.unref();
 
   const plan = await waitForDelegationResult(title);
-  return plan;
+  return { ...plan, _sessionTitle: title };
 }
 
 /**
