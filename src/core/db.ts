@@ -755,6 +755,47 @@ function updateActualModels(id: string, models: string[]): void {
   db.prepare('UPDATE jobs SET actual_models = ? WHERE id = ?').run(JSON.stringify(models), id);
 }
 
+/**
+ * Find an existing pending or running job for the same project+requirement.
+ *
+ * Matches on:
+ *   - project (resolved absolute path) AND description  — always checked
+ *   - project AND requirement_path                       — checked when requirementPath is provided
+ *
+ * Returns the first matching job (ordered oldest-first), or null if no duplicate.
+ * Used by `pilot add` to prevent queuing the same work twice.
+ */
+function findDuplicateJob(
+  project: string,
+  description: string,
+  requirementPath?: string,
+): Job | null {
+  const db = getDb();
+  let row: JobRow | undefined;
+
+  if (requirementPath) {
+    row = db.prepare(`
+      SELECT * FROM jobs
+      WHERE project = ?
+        AND status IN ('pending', 'running')
+        AND (description = ? OR (requirement_path IS NOT NULL AND requirement_path = ?))
+      ORDER BY created_at ASC
+      LIMIT 1
+    `).get(project, description, requirementPath) as JobRow | undefined;
+  } else {
+    row = db.prepare(`
+      SELECT * FROM jobs
+      WHERE project = ?
+        AND status IN ('pending', 'running')
+        AND description = ?
+      ORDER BY created_at ASC
+      LIMIT 1
+    `).get(project, description) as JobRow | undefined;
+  }
+
+  return row ? rowToJob(row) : null;
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -788,4 +829,5 @@ export {
   resetToPending,
   updateJudgeVerdict,
   updateActualModels,
+  findDuplicateJob,
 };
