@@ -446,9 +446,14 @@ function markStale(id: string): void {
     UPDATE jobs
     SET status = 'pending',
         started_at = NULL,
+        session_titles = NULL,
+        delegation_plan = NULL,
+        current_step = 0,
         error = 'Reset from stale-running state by reconciliation (backing session/process gone)'
     WHERE id = ? AND status = 'running'
   `).run(id);
+  // Clean up step records from previous attempt
+  db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
 }
 
 /**

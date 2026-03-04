@@ -354,13 +354,22 @@ async function logCommand(
   // Categorize sessions
   const allSessions = categorizeSessions(sessionTitles);
 
-  // Apply --delegation filter
-  const sessions = opts.delegation
-    ? allSessions.filter((s) => s.type === 'delegation')
-    : allSessions;
-
   // Get step records for this job
   const steps = getJobSteps(jobId);
+
+  // Deduplicate: if steps exist, only show sessions referenced by current steps
+  // This prevents showing sessions from previous attempts that accumulated in session_titles
+  const stepSessionTitles = new Set(
+    steps.filter((s) => s.sessionTitle).map((s) => s.sessionTitle!),
+  );
+  const deduplicatedSessions = stepSessionTitles.size > 0
+    ? allSessions.filter((s) => stepSessionTitles.has(s.title))
+    : allSessions;
+
+  // Apply --delegation filter
+  const sessions = opts.delegation
+    ? deduplicatedSessions.filter((s) => s.type === 'delegation')
+    : deduplicatedSessions;
 
   // JSON mode
   if (isJsonMode()) {
