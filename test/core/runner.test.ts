@@ -242,6 +242,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     // Phase 1 is all [x] so complete → skipped. Phase 2 and 3 are incomplete.
@@ -257,6 +258,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     for (const child of children) {
@@ -273,6 +275,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     expect(children).toHaveLength(2);
@@ -291,6 +294,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'quality',
       providerMode: 'hybrid',
+      callbackSessionKey: null,
     });
 
     for (const child of children) {
@@ -310,6 +314,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     expect(children).toHaveLength(0);
@@ -323,6 +328,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     expect(children).toHaveLength(0);
@@ -337,6 +343,7 @@ No phases defined yet.
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     expect(children).toHaveLength(0);
@@ -359,6 +366,7 @@ Plans:
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     // Both phases are incomplete (phase 1 has no plans, phase 2 has unchecked plan)
@@ -376,11 +384,57 @@ Plans:
       requirementPath: null,
       modelProfile: 'balanced',
       providerMode: 'claude-only',
+      callbackSessionKey: null,
     });
 
     const fromDb = getChildJobs(parent.id);
     expect(fromDb).toHaveLength(spawned.length);
     expect(fromDb.map(j => j.id)).toEqual(spawned.map(j => j.id));
+  });
+
+  it('propagates callbackSessionKey from parent to children', () => {
+    writeFileSync(path.join(tempDir, '.planning', 'ROADMAP.md'), ROADMAP_WITH_3_PHASES);
+
+    const parent = addJob('my-project', 'milestone', 'big milestone');
+    const children = spawnChildJobs(parent.id, tempDir, {
+      project: 'my-project',
+      requirementPath: null,
+      modelProfile: 'balanced',
+      providerMode: 'claude-only',
+      callbackSessionKey: 'agent:main:subagent:abc123',
+    });
+
+    expect(children.length).toBeGreaterThan(0);
+    for (const child of children) {
+      expect(child.callbackSessionKey).toBe('agent:main:subagent:abc123');
+    }
+  });
+
+  it('does not propagate callbackUrl to children', () => {
+    writeFileSync(path.join(tempDir, '.planning', 'ROADMAP.md'), ROADMAP_WITH_3_PHASES);
+
+    // Create parent with a callbackUrl — children should NOT inherit it
+    const parent = addJob(
+      'my-project', 'milestone', 'big milestone',
+      undefined, 'balanced', 'claude-only', undefined, undefined,
+      'agent:main:subagent:abc123', 'http://custom-url/hooks/agent',
+    );
+
+    const children = spawnChildJobs(parent.id, tempDir, {
+      project: 'my-project',
+      requirementPath: null,
+      modelProfile: 'balanced',
+      providerMode: 'claude-only',
+      callbackSessionKey: parent.callbackSessionKey,
+    });
+
+    expect(children.length).toBeGreaterThan(0);
+    for (const child of children) {
+      // callbackSessionKey propagated
+      expect(child.callbackSessionKey).toBe('agent:main:subagent:abc123');
+      // callbackUrl NOT propagated — children use global config URL
+      expect(child.callbackUrl).toBeNull();
+    }
   });
 });
 

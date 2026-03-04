@@ -89,6 +89,22 @@ describe('pilot.db', () => {
       expect(job.modelProfile).toBe('balanced');
       expect(job.providerMode).toBe('claude-only');
     });
+
+    it('stores callbackSessionKey and callbackUrl when provided', () => {
+      const job = addJob(
+        'proj', 'quick', 'notify task',
+        undefined, 'balanced', 'claude-only', undefined, undefined,
+        'agent:main:subagent:abc123', 'http://custom-url/hooks/agent',
+      );
+      expect(job.callbackSessionKey).toBe('agent:main:subagent:abc123');
+      expect(job.callbackUrl).toBe('http://custom-url/hooks/agent');
+    });
+
+    it('defaults callbackSessionKey and callbackUrl to null when not provided', () => {
+      const job = addJob('proj', 'quick', 'plain task');
+      expect(job.callbackSessionKey).toBeNull();
+      expect(job.callbackUrl).toBeNull();
+    });
   });
 
   // ── getJob ────────────────────────────────────────────────────────────

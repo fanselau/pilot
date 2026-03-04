@@ -14,7 +14,7 @@ import path from 'node:path';
 
 // Mock the db module
 vi.mock('../../src/core/db.js', () => ({
-  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string) => ({
+  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string) => ({
     id: 'ab12',
     project: _proj,
     scope: _scope,
@@ -23,10 +23,12 @@ vi.mock('../../src/core/db.js', () => ({
     status: 'pending',
     priority: 0,
     dependsOn: null,
+    parentJobId: null,
     createdAt: '2026-03-02T10:00:00',
     startedAt: null,
     completedAt: null,
     error: null,
+    resumeHint: null,
     attempts: 0,
     maxAttempts: 3,
     delegationPlan: null,
@@ -34,6 +36,10 @@ vi.mock('../../src/core/db.js', () => ({
     sessionTitles: null,
     modelProfile: _profile ?? 'balanced',
     providerMode: _provider ?? 'claude-only',
+    judgeVerdict: null,
+    actualModels: null,
+    callbackUrl: _callbackUrl ?? null,
+    callbackSessionKey: _callbackSessionKey ?? null,
   })),
   findDuplicateJob: vi.fn(() => null),
 }));
@@ -147,7 +153,7 @@ describe('addCommand', () => {
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -159,7 +165,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -173,6 +179,10 @@ describe('addCommand', () => {
       'phase',
       expect.any(String),
       expect.stringContaining('package.json'),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined,
       undefined,
     );
@@ -211,7 +221,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid',
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -219,7 +229,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', {});
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -329,7 +339,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', {});
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -344,7 +354,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { force: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -361,7 +371,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', {});
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('opencode.json');
@@ -374,7 +384,7 @@ describe('project setup validation', () => {
     await addCommand('.', 'fix stuff', { force: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      process.cwd(), 'quick', 'fix stuff', undefined, undefined, undefined,
+      process.cwd(), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -384,7 +394,7 @@ describe('project setup validation', () => {
     await addCommand(absPath, 'fix stuff', { force: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      absPath, 'quick', 'fix stuff', undefined, undefined, undefined,
+      absPath, 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
     );
   });
 });
@@ -402,6 +412,7 @@ describe('duplicate detection', () => {
     status: 'pending' as const,
     priority: 0,
     dependsOn: null,
+    parentJobId: null,
     createdAt: '2026-03-02T10:00:00',
     startedAt: null,
     completedAt: null,
@@ -416,6 +427,8 @@ describe('duplicate detection', () => {
     providerMode: 'claude-only' as const,
     judgeVerdict: null,
     actualModels: null,
+    callbackUrl: null,
+    callbackSessionKey: null,
   };
 
   // Use the existingTestsDir-level setup but create a fresh configured project
