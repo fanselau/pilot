@@ -30,9 +30,9 @@ function getConfig(): PilotConfig {
   const stuckThresholdRaw = parseInt(process.env.PILOT_STUCK_THRESHOLD ?? '90', 10);
   const stuckThreshold = Number.isNaN(stuckThresholdRaw) ? 90 : stuckThresholdRaw;
 
-  // Auto-detect maxParallel from system RAM: <12GB → 1, <32GB → 2, ≥32GB → 5
+  // Auto-detect maxParallel from system RAM: <12GB → 1, <32GB → 2, <48GB → 3, ≥48GB → 4
   const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
-  const defaultMaxParallel = totalMemMb < 12288 ? 1 : totalMemMb < 32768 ? 2 : 5;
+  const defaultMaxParallel = totalMemMb < 12288 ? 1 : totalMemMb < 32768 ? 2 : totalMemMb < 49152 ? 3 : 4;
   const maxParallelRaw = parseInt(process.env.PILOT_MAX_PARALLEL ?? '', 10);
   const maxParallel = Number.isNaN(maxParallelRaw) ? defaultMaxParallel : maxParallelRaw;
 
