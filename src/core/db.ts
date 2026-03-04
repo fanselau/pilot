@@ -756,13 +756,18 @@ function updateActualModels(id: string, models: string[]): void {
 }
 
 /**
- * Find an existing pending or running job for the same project+requirement.
+ * Find an existing duplicate job for the given project + description/requirementPath.
  *
- * Matches on:
- *   - project (resolved absolute path) AND description  — always checked
- *   - project AND requirement_path                       — checked when requirementPath is provided
+ * Checks in order:
+ *   1. Pending or running jobs with same project AND (same description OR same requirement_path)
+ *   2. Recently completed jobs (same criteria, completed within last 10 minutes)
  *
- * Returns the first matching job (ordered oldest-first), or null if no duplicate.
+ * The requirement_path check uses `IS NOT NULL AND` to avoid matching when both
+ * the existing job and new job have null requirement_path — null means "no file",
+ * not a matchable value.
+ *
+ * Returns the first match found (prefers pending/running over recently completed),
+ * or null if no duplicate exists.
  * Used by `pilot add` to prevent queuing the same work twice.
  */
 function findDuplicateJob(
@@ -771,29 +776,34 @@ function findDuplicateJob(
   requirementPath?: string,
 ): Job | null {
   const db = getDb();
-  let row: JobRow | undefined;
+  const reqPath = requirementPath ?? null;
 
-  if (requirementPath) {
-    row = db.prepare(`
-      SELECT * FROM jobs
-      WHERE project = ?
-        AND status IN ('pending', 'running')
-        AND (description = ? OR (requirement_path IS NOT NULL AND requirement_path = ?))
-      ORDER BY created_at ASC
-      LIMIT 1
-    `).get(project, description, requirementPath) as JobRow | undefined;
-  } else {
-    row = db.prepare(`
-      SELECT * FROM jobs
-      WHERE project = ?
-        AND status IN ('pending', 'running')
-        AND description = ?
-      ORDER BY created_at ASC
-      LIMIT 1
-    `).get(project, description) as JobRow | undefined;
-  }
+  // 1. Check pending/running first (highest priority)
+  const activeRow = db.prepare(`
+    SELECT * FROM jobs
+    WHERE project = ?
+      AND status IN ('pending', 'running')
+      AND (description = ? OR (requirement_path IS NOT NULL AND requirement_path = ?))
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(project, description, reqPath) as JobRow | undefined;
 
-  return row ? rowToJob(row) : null;
+  if (activeRow) return rowToJob(activeRow);
+
+  // 2. Also check recently completed jobs (last 10 minutes) to prevent rapid re-queues
+  const recentRow = db.prepare(`
+    SELECT * FROM jobs
+    WHERE project = ?
+      AND status = 'completed'
+      AND completed_at > datetime('now', '-10 minutes')
+      AND (description = ? OR (requirement_path IS NOT NULL AND requirement_path = ?))
+    ORDER BY completed_at DESC
+    LIMIT 1
+  `).get(project, description, reqPath) as JobRow | undefined;
+
+  if (recentRow) return rowToJob(recentRow);
+
+  return null;
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────
