@@ -684,7 +684,8 @@ class Runner {
         '--scope', '--user',
         '-p', `MemoryMax=${sessionMemoryMb}M`,
         '-p', 'MemorySwapMax=0',
-        '-p', 'OOMScoreAdjust=300',
+        // NOTE: OOMScoreAdjust not supported on all systemd versions (requires 256+)
+        // OOMPolicy=kill ensures the scope is cleaned up if it hits MemoryMax
         '-p', 'OOMPolicy=kill',
         '--unit', safeUnit,
         '--',
