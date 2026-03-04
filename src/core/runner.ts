@@ -712,12 +712,12 @@ class Runner {
     const topLevelModel = resolveTopLevelModel(scope, profile, providerMode);
     process.stderr.write(dim(`Top-level model: ${topLevelModel}`) + '\n');
 
-    // Spawn detached opencode session (setsid via detached:true, NEVER nohup)
     const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
-    const proc = execa(opencodeBin, [
+
+    const opencodeCmdArgs: string[] = [
       'run',
       '--format', 'default',
-      '--model', topLevelModel,      // enforce model at session level
+      '--model', topLevelModel,
       '--title', title,
       '--command', gsdCommand,
       // Pass args as a single positional string. NEVER use -- separator
@@ -725,14 +725,47 @@ class Runner {
       // To avoid opencode's yargs swallowing --flags, the delegate module
       // ensures args never START with -- (puts content before flags).
       ...(args ? [args] : []),
-    ], {
-      cwd,
-      stdin: 'ignore',
-      stdout: 'ignore',
-      stderr: 'ignore',
-      detached: true,
-      cleanup: false,
-    });
+    ];
+
+    const useSystemdRun = await hasSystemdRunUser();
+    let proc;
+
+    if (useSystemdRun) {
+      const sessionMemoryMb = config.sessionMemoryMaxMb;
+      // Unit name: safe chars only (no slashes/spaces), unique via base36 timestamp
+      const safeUnit = `pilot-${title.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60)}-${Date.now().toString(36)}`;
+      proc = execa('systemd-run', [
+        '--scope', '--user',
+        '-p', `MemoryMax=${sessionMemoryMb}M`,
+        '-p', 'MemorySwapMax=0',
+        '-p', 'OOMScoreAdjust=300',
+        '-p', 'OOMPolicy=kill',
+        '--unit', safeUnit,
+        '--',
+        opencodeBin,
+        ...opencodeCmdArgs,
+      ], {
+        cwd,
+        stdin: 'ignore',
+        stdout: 'ignore',
+        stderr: 'ignore',
+        detached: true,
+        cleanup: false,
+      });
+    } else {
+      if (!_systemdRunWarned) {
+        process.stderr.write('[runner] systemd-run --user unavailable — spawning without cgroup memory limits\n');
+        _systemdRunWarned = true;
+      }
+      proc = execa(opencodeBin, opencodeCmdArgs, {
+        cwd,
+        stdin: 'ignore',
+        stdout: 'ignore',
+        stderr: 'ignore',
+        detached: true,
+        cleanup: false,
+      });
+    }
     // Ignore the execa promise — we poll opencode DB for completion instead.
     // Without this catch, a non-zero exit code becomes an unhandled rejection.
     proc.catch(() => {});
