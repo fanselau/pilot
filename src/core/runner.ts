@@ -231,6 +231,8 @@ class Runner {
    */
   async run(): Promise<void> {
     this.running = true;
+    // Set OOM score for the daemon process — survive before expendable sessions
+    setOomScore(-500);
     this.setupShutdownHandlers();
 
     // Write PID file so postbuild and `pilot reload` can signal us
@@ -270,6 +272,44 @@ class Runner {
       // fs.watch may fail if DB doesn't exist yet — fallback to pure polling
     }
 
+    // ── Memory pressure watchdog ─────────────────────────────────────────
+    const watchdogIntervalMs = 10_000;
+    const watchdogInterval = setInterval(async () => {
+      const config = getConfig();
+      const availableMb = getAvailableMemoryMb();
+      if (availableMb === Infinity || availableMb >= config.memoryKillThresholdMb) return;
+      if (this.activeJobs.size === 0) return;
+
+      // Find longest-running active job (earliest started_at)
+      let oldestEntry: { job: Job; title: string } | null = null;
+      let oldestStarted = Infinity;
+      for (const entry of this.activeJobs.values()) {
+        const started = entry.job.startedAt ? new Date(entry.job.startedAt).getTime() : Infinity;
+        if (started < oldestStarted) {
+          oldestStarted = started;
+          oldestEntry = entry;
+        }
+      }
+
+      if (!oldestEntry) return;
+
+      process.stderr.write(
+        `[runner] Memory pressure watchdog: ${availableMb}MB available (threshold: ${config.memoryKillThresholdMb}MB). Killing longest-running job ${oldestEntry.job.id} (${oldestEntry.job.project})\n`,
+      );
+
+      try {
+        await killJobSession(oldestEntry.job);
+      } catch {
+        // Best effort kill
+      }
+      try {
+        resetToPending(oldestEntry.job.id, 'Killed by memory pressure watchdog');
+        this.activeJobs.delete(oldestEntry.job.id);
+      } catch {
+        // Best effort DB update
+      }
+    }, watchdogIntervalMs);
+
     // ── Startup reconciliation: clean up jobs left running from a crashed runner ──
     await reconcileStaleRunning(this.activeJobs);
 
@@ -306,7 +346,9 @@ class Runner {
       // claimNextLaunchable() atomically selects + marks-running the next eligible
       // job, enforcing project-level serialization within the transaction.
       let launched = false;
-      while (this.activeJobs.size < this.options.maxParallel && !this.shuttingDown) {
+      const config = getConfig();
+      const effectiveMaxParallel = getDynamicMaxParallel(this.options.maxParallel, config.sessionMemoryMaxMb, config.reservedMemoryMb);
+      while (this.activeJobs.size < effectiveMaxParallel && !this.shuttingDown) {
         const job = claimNextLaunchable();
         if (!job) break; // No more eligible jobs
 
@@ -350,7 +392,8 @@ class Runner {
     }
 
     } finally {
-      // Clean up DB watcher and PID file on exit
+      // Clean up watchdog, DB watcher, and PID file on exit
+      clearInterval(watchdogInterval);
       dbWatcher?.close();
       this.removePidFile(pidFilePath);
     }
@@ -655,7 +698,7 @@ class Runner {
 
     // CRITICAL: Pre-spawn safety checks from SPAWN-LESSONS.md
     await disableSnapshotGc();
-    await checkMemory(2048);
+    await checkMemory(config.sessionMemoryMaxMb + 1024);
     await enforceSpawnRateLimit();
     await validateProjectConfig(cwd);
 
