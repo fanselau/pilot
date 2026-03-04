@@ -28,7 +28,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, spawnChildJobs } from '../../src/core/runner.js';
+import { parseJudgeVerdict, parseVerificationResult, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, spawnChildJobs } from '../../src/core/runner.js';
 import { _getTestDb, addJob, markCompleted, getJob, getChildJobs } from '../../src/core/db.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
@@ -381,5 +381,118 @@ Plans:
     const fromDb = getChildJobs(parent.id);
     expect(fromDb).toHaveLength(spawned.length);
     expect(fromDb.map(j => j.id)).toEqual(spawned.map(j => j.id));
+  });
+});
+
+// ── parseVerificationResult ───────────────────────────────────────────────
+
+describe('parseVerificationResult', () => {
+  it('parses fully populated VERIFICATION.md with all checks passing', () => {
+    const content = [
+      '---',
+      'phase: 31-automated-phase-verification',
+      'status: passed',
+      'verdict: PASS',
+      'score: 5/5',
+      'automated_checks:',
+      '  typescript: { pass: true, duration_ms: 8200 }',
+      '  tests: { pass: true, duration_ms: 12400 }',
+      '  build: { pass: true, duration_ms: 18600 }',
+      'blocking_issues: []',
+      '---',
+      '',
+      '# Verification Report',
+    ].join('\n');
+
+    const result = parseVerificationResult(content);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe('passed');
+    expect(result!.verdict).toBe('PASS');
+    expect(result!.score).toBe('5/5');
+    expect(result!.automatedChecks['typescript']).toEqual({ pass: true, duration_ms: 8200 });
+    expect(result!.automatedChecks['tests']).toEqual({ pass: true, duration_ms: 12400 });
+    expect(result!.automatedChecks['build']).toEqual({ pass: true, duration_ms: 18600 });
+    expect(result!.blockingIssues).toEqual([]);
+    expect(Object.keys(result!.automatedChecks)).toHaveLength(3);
+  });
+
+  it('parses VERIFICATION.md with failed automated checks', () => {
+    const content = [
+      '---',
+      'phase: 31-automated-phase-verification',
+      'status: failed',
+      'verdict: FAIL',
+      'score: 1/2',
+      'automated_checks:',
+      '  typescript: { pass: false, duration_ms: 9100, error_summary: "3 type errors" }',
+      '  tests: { pass: true, duration_ms: 11000 }',
+      'blocking_issues:',
+      '  - "TypeScript compilation failed: 3 type errors"',
+      '---',
+    ].join('\n');
+
+    const result = parseVerificationResult(content);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe('failed');
+    expect(result!.verdict).toBe('FAIL');
+    expect(result!.automatedChecks['typescript'].pass).toBe(false);
+    expect(result!.automatedChecks['typescript'].error_summary).toBe('3 type errors');
+    expect(result!.automatedChecks['tests'].pass).toBe(true);
+    expect(result!.blockingIssues).toHaveLength(1);
+    expect(result!.blockingIssues[0]).toBe('TypeScript compilation failed: 3 type errors');
+  });
+
+  it('parses VERIFICATION.md with gaps_found status', () => {
+    const content = [
+      '---',
+      'status: gaps_found',
+      'verdict: FAIL',
+      'score: 3/5',
+      'automated_checks:',
+      '  typescript: { pass: true, duration_ms: 7800 }',
+      'blocking_issues:',
+      '  - "Missing error handling in task 3"',
+      '---',
+    ].join('\n');
+
+    const result = parseVerificationResult(content);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe('gaps_found');
+    expect(result!.verdict).toBe('FAIL');
+    expect(result!.score).toBe('3/5');
+  });
+
+  it('parses VERIFICATION.md with human_needed status and WARN verdict', () => {
+    const content = [
+      '---',
+      'status: human_needed',
+      'verdict: WARN',
+      'score: 5/5',
+      'automated_checks:',
+      '  typescript: { pass: true, duration_ms: 8200 }',
+      '  tests: { pass: true, duration_ms: 12400 }',
+      'blocking_issues: []',
+      '---',
+    ].join('\n');
+
+    const result = parseVerificationResult(content);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe('human_needed');
+    expect(result!.verdict).toBe('WARN');
+    expect(result!.blockingIssues).toEqual([]);
+  });
+
+  it('returns null for content without frontmatter delimiters', () => {
+    const content = 'Just some markdown content without --- delimiters';
+    expect(parseVerificationResult(content)).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(parseVerificationResult('')).toBeNull();
+  });
+
+  it('returns null for content with only opening --- but no closing', () => {
+    const content = '---\nstatus: passed\nverdict: PASS\nSome body content';
+    expect(parseVerificationResult(content)).toBeNull();
   });
 });
