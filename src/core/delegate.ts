@@ -142,9 +142,11 @@ function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: nu
  * Tries delegation AI once, then falls back to deterministic scope-based mapping.
  */
 async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
-  // Bare-number descriptions (e.g. "25") are explicit phase identifiers —
-  // skip delegation AI entirely, go straight to deterministic execute-phase.
-  if (job.scope === 'phase' && /^\d+$/.test(job.description.trim())) {
+  // Phase scope: skip delegation AI entirely, use deterministic multi-step plan.
+  // The fallback inspects .planning/phases/ state and produces [add-phase, plan-phase, execute-phase]
+  // with state-aware step selection (skips completed steps).
+  // This avoids the broken single-session gsd-phase orchestrator that AI tends to output.
+  if (job.scope === 'phase') {
     return fallbackPlan(job, projectDir);
   }
 
