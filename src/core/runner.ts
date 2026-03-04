@@ -640,15 +640,62 @@ class Runner {
             throw new Error('No session created — opencode may have crashed before starting');
           }
 
-          // Judge removed — was producing inconclusive results on every run.
-          // Will be replaced by gsd-verify-phase (automated checks + structured AI review).
-          // For now, if execution had activity, we trust it completed.
-          updateJudgeVerdict(job.id, JSON.stringify({
-            verdict: 'pass',
-            confidence: 1,
-            summary: 'Phase completed (judge disabled, pending gsd-verify-phase integration)',
-            retryRecommendation: 'none',
-          }));
+          // Verification shutdown guard
+          if (this.shuttingDown) {
+            resetToPending(job.id, 'Interrupted before verification');
+            process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
+            return;
+          }
+
+          // Run gsd-verify-phase to get structured verdict from VERIFICATION.md
+          const verificationResult = await this.runVerification(job, projectDir, step);
+
+          if (verificationResult === null) {
+            // Benefit of doubt — VERIFICATION.md missing or unparseable
+            updateJudgeVerdict(job.id, JSON.stringify({
+              verdict: 'pass',
+              confidence: 0,
+              summary: 'Verification failed — benefit of doubt (VERIFICATION.md missing or unparseable)',
+              retryRecommendation: 'none',
+            }));
+          } else if (verificationResult.verdict === 'PASS') {
+            updateJudgeVerdict(job.id, JSON.stringify({
+              verdict: 'pass',
+              confidence: 90,
+              summary: `${verificationResult.score} checks passed`,
+              retryRecommendation: 'none',
+            }));
+          } else if (verificationResult.verdict === 'WARN') {
+            // Human verification needed — runner can't do it, treat as pass
+            updateJudgeVerdict(job.id, JSON.stringify({
+              verdict: 'pass',
+              confidence: 70,
+              summary: 'human verification needed',
+              retryRecommendation: 'none',
+            }));
+          } else {
+            // FAIL — build error summary and decide retry vs hard fail
+            const errorSummary = verificationResult.blockingIssues.length > 0
+              ? verificationResult.blockingIssues.join('; ')
+              : 'Automated checks failed';
+            updateJudgeVerdict(job.id, JSON.stringify({
+              verdict: 'fail',
+              confidence: 95,
+              summary: errorSummary,
+              retryRecommendation: 'retry-resume',
+              retryHint: errorSummary,
+            }));
+
+            const freshJobForRetry = getJob(job.id);
+            if (freshJobForRetry && freshJobForRetry.attempts < freshJobForRetry.maxAttempts) {
+              resetToPending(job.id, errorSummary);
+              process.stderr.write(
+                `[runner] Verification failed for ${job.id}: ${errorSummary}. Resetting to pending.\n`,
+              );
+              return;
+            }
+            throw new Error(errorSummary);
+          }
         }
       }
 
@@ -773,35 +820,84 @@ class Runner {
   }
 
   /**
-   * Spawn a pilot-judge session to evaluate whether a phase job succeeded.
-   * Reads the opencode DB transcript and outputs a structured JSON verdict.
+   * Spawn gsd-verify-phase to verify a completed execute-phase step.
    * Returns null on any failure (benefit of doubt — mark as completed).
+   *
+   * Reads VERIFICATION.md from the phase directory after the verify session completes.
+   * Parses structured frontmatter verdict (PASS/FAIL/WARN) + automated_checks.
    */
-  private async runJudge(job: Job, projectDir: string, phaseSessionTitle: string): Promise<JudgeVerdict | null> {
-    const ts = Date.now().toString(36).slice(-4);
-    const judgeTitle = truncateTitle(`pilot-judge-${job.id}-${ts}`, 80);
-
-    // Build judge args: requirement source + session title
-    const requirementArg = job.requirementPath ?? job.description;
-    const judgeArgs = `${requirementArg} ${phaseSessionTitle}`;
-
-    try {
-      await this.spawnAndWait(projectDir, 'pilot-judge', judgeArgs, judgeTitle);
-    } catch (err) {
-      process.stderr.write(
-        `[runner] Judge session failed: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
-      return null; // Judge failure = benefit of doubt
+  private async runVerification(job: Job, projectDir: string, step: DelegationStep): Promise<VerificationResult | null> {
+    const phaseNum = step.args.match(/(\d+)/)?.[1];
+    if (!phaseNum) {
+      process.stderr.write(`[runner] runVerification: no phase number found in step args "${step.args}"\n`);
+      return null;
     }
 
-    // Parse judge output from opencode DB
-    const sessionId = findSessionByTitle(judgeTitle);
-    if (!sessionId) return null;
+    const ts = Date.now().toString(36).slice(-4);
+    const verifyTitle = truncateTitle(`pilot-verify-${job.id}-${ts}`, 80);
 
-    const lastMsg = getLastMessage(sessionId);
-    if (!lastMsg) return null;
+    try {
+      await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle);
+    } catch (err) {
+      process.stderr.write(
+        `[runner] Verification session failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return null; // Benefit of doubt on spawn failure
+    }
 
-    return parseJudgeVerdict(lastMsg.content, judgeTitle);
+    // Find VERIFICATION.md in the phase directory
+    try {
+      const phasesDir = path.join(projectDir, '.planning', 'phases');
+      let entries: string[];
+      try {
+        entries = readdirSync(phasesDir);
+      } catch {
+        process.stderr.write(`[runner] runVerification: .planning/phases not found at ${phasesDir}\n`);
+        return null;
+      }
+
+      // Find directory matching phase number (padded XX-* or unpadded N-*)
+      const paddedNum = phaseNum.padStart(2, '0');
+      const phaseDir = entries.find(e => {
+        return e.startsWith(`${paddedNum}-`) || e.startsWith(`${phaseNum}-`);
+      });
+
+      if (!phaseDir) {
+        process.stderr.write(`[runner] runVerification: no phase dir found for phase ${phaseNum}\n`);
+        return null;
+      }
+
+      const phaseDirPath = path.join(phasesDir, phaseDir);
+      let phaseFiles: string[];
+      try {
+        phaseFiles = readdirSync(phaseDirPath);
+      } catch {
+        process.stderr.write(`[runner] runVerification: cannot read phase dir ${phaseDirPath}\n`);
+        return null;
+      }
+
+      const verificationFile = phaseFiles.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
+      if (!verificationFile) {
+        process.stderr.write(`[runner] runVerification: no VERIFICATION.md found in ${phaseDirPath}\n`);
+        return null;
+      }
+
+      const verificationPath = path.join(phaseDirPath, verificationFile);
+      let content: string;
+      try {
+        content = readFileSync(verificationPath, 'utf8');
+      } catch {
+        process.stderr.write(`[runner] runVerification: cannot read ${verificationPath}\n`);
+        return null;
+      }
+
+      return parseVerificationResult(content);
+    } catch (err) {
+      process.stderr.write(
+        `[runner] runVerification: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -826,8 +922,8 @@ class Runner {
     await validateProjectConfig(cwd);
 
     // Resolve top-level model for --model flag
-    // Judge sessions use 'judge' scope; all others use job scope from activeJobs
-    const isJudge = command === 'pilot-judge';
+    // Judge/verify sessions use 'judge' scope (cheap tier); all others use job scope from activeJobs
+    const isJudge = command === 'pilot-judge' || command === 'gsd-verify-phase';
     const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
     const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
