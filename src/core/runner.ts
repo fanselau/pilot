@@ -165,6 +165,7 @@ async function reconcileStaleRunning(
     // Skip jobs actively managed by this runner instance
     if (activeJobs.has(job.id)) continue;
 
+    // Use opencode DB as ground truth — not pgrep (which has race conditions)
     const sessionTitles: string[] = [];
     try {
       const parsed = JSON.parse(job.sessionTitles ?? '[]') as string[];
@@ -173,25 +174,26 @@ async function reconcileStaleRunning(
       // Ignore malformed session_titles
     }
 
-    let processAlive = false;
-    for (const title of sessionTitles) {
-      try {
-        const { stdout } = await execa('pgrep', ['-f', title], { reject: false });
-        if (stdout.trim()) {
-          processAlive = true;
-          break;
+    // Check if the latest session is still active in the opencode DB
+    // Work backwards through titles — the last one is the most recent step
+    let sessionActive = false;
+    for (let i = sessionTitles.length - 1; i >= 0; i--) {
+      const title = sessionTitles[i];
+      const sessionId = findSessionByTitle(title);
+      if (sessionId) {
+        if (!isSessionDone(sessionId)) {
+          sessionActive = true; // Still running in opencode
         }
-      } catch {
-        // pgrep error = not found
+        break; // Only check the latest session that exists in DB
       }
     }
 
-    if (!processAlive) {
-      // Orphan: force-quit so the runner can re-queue or report
+    if (!sessionActive && sessionTitles.length > 0) {
+      // No active session found — safe to reset
       try {
-        forceQuitJob(job.id, 'cli', 'Stale-running reconciler: process not found');
+        forceQuitJob(job.id, 'cli', 'Startup reconciler: no active opencode session found');
         process.stderr.write(
-          `[runner] Reconciler: force-quit orphaned job ${job.id} (${job.project}) — no live process found\n`,
+          `[runner] Reconciler: force-quit orphaned job ${job.id} (${job.project}) — no active session in opencode DB\n`,
         );
       } catch {
         // Best effort — don't crash the reconciler
@@ -327,19 +329,10 @@ class Runner {
     while (this.running) {
       if (this.shuttingDown) break;
 
-      // Periodic reconciliation: reset ghost-running jobs every N cycles
-      this.pollCycle++;
-      if (this.pollCycle % Runner.RECONCILE_EVERY_N_CYCLES === 0) {
-        const staleIds = reconcileStaleJobs(new Set(this.activeJobs.keys()));
-        if (staleIds.length > 0) {
-          process.stderr.write(
-            `[runner] Periodic reconciliation: reset ${staleIds.length} stale-running job(s): ${staleIds.join(', ')}\n`,
-          );
-        }
-      }
-
-      // Per-cycle reconciliation: kill orphaned running jobs
-      await reconcileStaleRunning(this.activeJobs);
+      // NOTE: Per-cycle reconciliation removed — it was causing cascading fan-out.
+      // When pgrep missed a process (race/timing), it reset running jobs mid-execution,
+      // causing duplicate launches. Startup reconciliation (above) handles crash recovery.
+      // Active job health is tracked via spawnAndWait's opencode DB polling.
 
       // ── Immediate multi-slot drain loop ────────────────────────────────
       // Fill ALL available slots before sleeping — not just one per iteration.
@@ -456,6 +449,16 @@ class Runner {
         if (this.shuttingDown) {
           allStepsCompleted = false;
           skipRemainingSteps(job.id, i, 'Runner shutdown');
+          break;
+        }
+
+        // Verify we still own this job (guards against stale resets or external cancellation)
+        const freshJob = getJob(job.id);
+        if (!freshJob || freshJob.status !== 'running') {
+          process.stderr.write(
+            `[runner] Job ${job.id} no longer running (status=${freshJob?.status ?? 'gone'}). Aborting step ${i}.\n`,
+          );
+          allStepsCompleted = false;
           break;
         }
 
