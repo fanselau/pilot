@@ -20,7 +20,7 @@ import type { SessionInfo, SessionMessage, SessionPart } from './types.js';
 // ── Module-level cached DB connection ──────────────────────────────────────
 
 let cachedDb: DatabaseType | null = null;
-let dbOpenAttempted = false;
+let testDbInjected = false;  // Set by _setTestDb to prevent re-open in tests
 
 /**
  * Resolve the opencode DB path.
@@ -41,18 +41,18 @@ function openDb(): DatabaseType | null {
     return cachedDb;
   }
 
-  if (dbOpenAttempted) {
+  // Skip re-open if test DB was injected
+  if (testDbInjected) {
     return null;
   }
-
-  dbOpenAttempted = true;
 
   const dbPath = resolveDbPath();
 
   try {
     accessSync(dbPath, constants.R_OK);
   } catch {
-    process.stderr.write(`Warning: opencode DB not found at ${dbPath}\n`);
+    // DB doesn't exist yet — don't cache failure, it may appear later
+    // (e.g., daemon starts before first opencode session)
     return null;
   }
 
@@ -603,7 +603,7 @@ function _resetDbCache(): void {
     try { cachedDb.close(); } catch { /* ignore */ }
   }
   cachedDb = null;
-  dbOpenAttempted = false;
+  testDbInjected = false;
 }
 
 /**
@@ -612,7 +612,7 @@ function _resetDbCache(): void {
  */
 function _setTestDb(db: DatabaseType | null): void {
   cachedDb = db;
-  dbOpenAttempted = true;
+  testDbInjected = true;
 }
 
 // ── Exports ────────────────────────────────────────────────────────────────

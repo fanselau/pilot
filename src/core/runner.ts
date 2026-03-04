@@ -506,7 +506,7 @@ class Runner {
             }
 
             // verdict === 'pass' or accepted partial — fall through to markCompleted
-          }
+          } else {
           // Judge failed to produce verdict — benefit of doubt only because session had real activity
           // (no-activity sessions are already caught above)
           // Store as inconclusive (confidence=0) so status displays can differentiate
@@ -520,6 +520,7 @@ class Runner {
           process.stderr.write(
             `[runner] ⚠ Judge failed to produce verdict for ${job.id} — marking as completed (benefit of doubt)\n`,
           );
+          }
         }
       }
 
@@ -536,6 +537,19 @@ class Runner {
       markFailed(job.id, error);
     } finally {
       this.activeJobs.delete(job.id);
+      // Clean up tracked PIDs for this job's sessions
+      try {
+        const titles = JSON.parse(job.sessionTitles ?? '[]') as string[];
+        for (const t of titles) this.sessionPids.delete(t);
+      } catch { /* ignore */ }
+      // Also clean the latest title set during launch
+      const freshJob = getJob(job.id);
+      if (freshJob?.sessionTitles) {
+        try {
+          const titles = JSON.parse(freshJob.sessionTitles) as string[];
+          for (const t of titles) this.sessionPids.delete(t);
+        } catch { /* ignore */ }
+      }
     }
   }
 

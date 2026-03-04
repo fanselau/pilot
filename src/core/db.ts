@@ -315,7 +315,7 @@ function retry(id: string): void {
   db.prepare(`
     UPDATE jobs
     SET status = 'pending', started_at = NULL, completed_at = NULL, error = NULL,
-        session_titles = NULL, delegation_plan = NULL, current_step = 0
+        session_titles = NULL, delegation_plan = NULL, current_step = 0, attempts = 0
     WHERE id = ?
   `).run(id);
   // Clean up step records from previous attempt

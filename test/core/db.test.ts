@@ -159,12 +159,12 @@ describe('pilot.db', () => {
     it('increments attempts on each call', () => {
       const job = addJob('proj', 'quick', 'task');
       markRunning(job.id);
-      // Reset to pending for another run
+      // retry() resets attempts to 0, so after markRunning it's 1 again
       retry(job.id);
       markRunning(job.id);
 
       const updated = getJob(job.id);
-      expect(updated!.attempts).toBe(2);
+      expect(updated!.attempts).toBe(1);
     });
   });
 

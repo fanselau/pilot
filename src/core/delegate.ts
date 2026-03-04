@@ -248,19 +248,15 @@ function buildMilestonePlan(job: Job, projectDir: string): DelegationPlan {
     }
   }
 
-  // Default: single add-phase with human-readable title
-  let addArgs: string;
-  if (job.requirementPath) {
-    const title = extractRequirementTitle(job.requirementPath);
-    addArgs = title ?? job.description;
-  } else {
-    addArgs = job.description;
-  }
+  // Default: full phase lifecycle (add + plan + execute)
+  const phaseArgs = job.requirementPath
+    ? `@${job.requirementPath} --auto`
+    : `${job.description} --auto`;
   return {
     steps: [
-      { command: 'add-phase', args: addArgs },
+      { command: 'phase', args: phaseArgs },
     ],
-    reasoning: 'Fallback: project already initialized, adding as new phase',
+    reasoning: 'Fallback: project already initialized, running full phase lifecycle',
   };
 }
 

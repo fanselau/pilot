@@ -421,10 +421,10 @@ describe('fallbackPlan', () => {
       requirementPath: null,
     });
     const plan = fallbackPlan(job, '/tmp/project');
-    // Without requirementPath, falls back to single add-phase
+    // Without requirementPath, falls back to single phase command
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.reasoning).toContain('adding as new phase');
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.reasoning).toContain('full phase lifecycle');
   });
 });
 
@@ -589,9 +589,9 @@ describe('buildMilestonePlan', () => {
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('add-phase');
-    // Uses extracted title, not file path
-    expect(plan.steps[0].args).toBe('Single Requirement');
+    expect(plan.steps[0].command).toBe('phase');
+    // Uses file path with @ prefix and --auto
+    expect(plan.steps[0].args).toBe('@/tmp/requirements/single-req.md --auto');
   });
 
   it('falls back to single add-phase when no .md files in dir', () => {
@@ -604,7 +604,7 @@ describe('buildMilestonePlan', () => {
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('add-phase');
+    expect(plan.steps[0].command).toBe('phase');
   });
 
   it('falls back to single add-phase when no requirementPath', () => {
@@ -615,8 +615,8 @@ describe('buildMilestonePlan', () => {
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
     expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Build everything');
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Build everything --auto');
   });
 
   it('uses description when no requirementPath in single add-phase fallback', () => {
@@ -626,8 +626,8 @@ describe('buildMilestonePlan', () => {
       requirementPath: null,
     });
     const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps[0].args).toBe('Custom milestone description');
-    expect(plan.reasoning).toContain('adding as new phase');
+    expect(plan.steps[0].args).toBe('Custom milestone description --auto');
+    expect(plan.reasoning).toContain('full phase lifecycle');
   });
 });
 
