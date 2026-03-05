@@ -1,0 +1,20 @@
+<svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon centered at top -->
+  <g transform="translate(400, 60)">
+    <circle cx="0" cy="0" r="30" fill="none" stroke="#3B82F6" stroke-width="4"/>
+    <polygon points="0,-25 -10,2 0,-5 10,2" fill="#3B82F6"/>
+    <line x1="0" y1="-30" x2="0" y2="-26" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="30" y1="0" x2="26" y2="0" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="0" y1="30" x2="0" y2="26" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="-30" y1="0" x2="-26" y2="0" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark centered below icon -->
+  <text x="400" y="150" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="56" font-weight="800" fill="#1A1A2E" letter-spacing="-2">pilot</text>
+
+  <!-- Tagline centered below wordmark -->
+  <text x="400" y="190" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="18" font-weight="400" fill="#94A3B8" letter-spacing="0.5">Autopilot for your projects</text>
+
+  <!-- Subtle divider line at bottom -->
+  <line x1="300" y1="240" x2="500" y2="240" stroke="#E2E8F0" stroke-width="1" stroke-linecap="round"/>
+</svg>

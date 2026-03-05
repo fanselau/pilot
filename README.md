@@ -1,8 +1,8 @@
-# Pilot
-
 <div align="center">
 
-**Autonomous AI development pipeline CLI**
+<img src="assets/logo/final-readme-header.svg" alt="Pilot — Autopilot for your projects" width="600">
+
+<br><br>
 
 [![npm](https://img.shields.io/npm/v/pilot-cli?style=flat-square)](https://www.npmjs.com/package/pilot-cli)
 [![Node.js](https://img.shields.io/badge/runtime-bun-black?style=flat-square)](https://bun.sh)

@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="#0F172A"/>
+  <!-- Grid overlay -->
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.6"/>
+
+  <!-- Logo icon centered upper area -->
+  <g transform="translate(640, 200)">
+    <circle cx="0" cy="0" r="40" fill="none" stroke="#3B82F6" stroke-width="5"/>
+    <polygon points="0,-33 -13,3 0,-7 13,3" fill="#3B82F6"/>
+    <line x1="0" y1="-40" x2="0" y2="-35" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="40" y1="0" x2="35" y2="0" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="0" y1="40" x2="0" y2="35" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="-40" y1="0" x2="-35" y2="0" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="640" y="300" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="72" font-weight="800" fill="#FFFFFF" letter-spacing="-2">pilot</text>
+
+  <!-- Tagline -->
+  <text x="640" y="340" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="400" fill="#94A3B8" letter-spacing="0.5">Autopilot for your projects</text>
+
+  <!-- Terminal card -->
+  <rect x="390" y="400" width="500" height="120" rx="12" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+  <!-- Traffic light dots -->
+  <circle cx="418" cy="422" r="6" fill="#EF4444"/>
+  <circle cx="438" cy="422" r="6" fill="#F59E0B"/>
+  <circle cx="458" cy="422" r="6" fill="#22C55E"/>
+  <!-- Terminal text -->
+  <text x="418" y="465" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="16" fill="#94A3B8">$ </text>
+  <text x="436" y="465" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="16" fill="#E2E8F0">pilot add "Build auth system"</text>
+  <text x="418" y="495" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="16" fill="#22C55E">✓ </text>
+  <text x="436" y="495" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="16" fill="#94A3B8">Queued · Building on dev · ETA 4m</text>
+</svg>

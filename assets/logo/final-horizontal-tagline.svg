@@ -1,0 +1,15 @@
+<svg viewBox="0 0 300 110" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon -->
+  <g transform="translate(40, 40)">
+    <circle cx="0" cy="0" r="24" fill="none" stroke="#3B82F6" stroke-width="3.5"/>
+    <polygon points="0,-20 -8,2 0,-4 8,2" fill="#3B82F6"/>
+    <line x1="0" y1="-24" x2="0" y2="-21" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="24" y1="0" x2="21" y2="0" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="0" y1="24" x2="0" y2="21" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-24" y1="0" x2="-21" y2="0" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="90" y="52" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="44" font-weight="800" fill="#1A1A2E" letter-spacing="-1.5">pilot</text>
+  <!-- Tagline -->
+  <text x="90" y="90" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="400" fill="#94A3B8" letter-spacing="0.5">Autopilot for your projects</text>
+</svg>
