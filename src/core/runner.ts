@@ -920,8 +920,12 @@ class Runner {
 
       if (process.env['PILOT_DEBUG']) {
         const pollElapsedS = Math.round((Date.now() - start) / 1000);
+        let pidAlive = 'n/a';
+        if (procPid !== undefined) {
+          try { process.kill(procPid, 0); pidAlive = 'true'; } catch { pidAlive = 'false'; }
+        }
         process.stderr.write(
-          `[runner] poll ${title}: elapsed=${pollElapsedS}s sessionFound=${sessionFound} isSessionDone=${sessionId ? isSessionDone(sessionId) : 'n/a'}\n`,
+          `[runner] poll ${title}: elapsed=${pollElapsedS}s sessionFound=${sessionFound} isSessionDone=${sessionId ? isSessionDone(sessionId) : 'n/a'} pid=${procPid ?? 'n/a'} pidAlive=${pidAlive}\n`,
         );
       }
       if (!sessionId) {

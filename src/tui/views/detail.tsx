@@ -541,6 +541,8 @@ export function DetailView(props: { state: PilotStateStore }) {
                       <text
                         content={section.type === 'delegation'
                           ? `  ── Delegation ──`
+                          : section.type === 'verify'
+                          ? `  ── Verification ──`
                           : `  ── Execution: ${section.command ?? 'unknown'} ──`}
                         fg={theme.muted}
                       />
