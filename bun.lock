@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@punchlab/pilot",
+      "name": "pilot-cli",
       "dependencies": {
         "@opentui/core": "^0.1.79",
         "@opentui/solid": "^0.1.79",
