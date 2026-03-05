@@ -114,7 +114,12 @@ vi.mock('../../src/core/config.js', () => {
     return require('node:path').join(projectDir, project);
   });
 
-  return { getConfig, resolveProjectDir };
+  const getConfigFileDefaults = vi.fn(() => ({
+    modelProfile: 'balanced' as const,
+    providerMode: 'claude-only' as const,
+  }));
+
+  return { getConfig, resolveProjectDir, getConfigFileDefaults };
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
@@ -183,7 +188,7 @@ describe('addCommand', () => {
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -195,7 +200,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -209,8 +214,8 @@ describe('addCommand', () => {
       'phase',
       expect.any(String),
       expect.stringContaining('package.json'),
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       undefined,
@@ -259,7 +264,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -369,7 +374,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -384,7 +389,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -401,7 +406,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('opencode.json');
@@ -414,7 +419,7 @@ describe('project setup validation', () => {
     await addCommand('.', 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      process.cwd(), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 
@@ -424,7 +429,7 @@ describe('project setup validation', () => {
     await addCommand(absPath, 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      absPath, 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined,
     );
   });
 });
@@ -606,8 +611,8 @@ describe('notify flag validation', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       'main',       // callbackSessionKey (plain agent ID)
@@ -623,8 +628,8 @@ describe('notify flag validation', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       undefined,    // callbackSessionKey = undefined (no notification)
@@ -643,8 +648,8 @@ describe('notify flag validation', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       'main',  // callbackSessionKey from env var (plain agent ID)
@@ -662,8 +667,8 @@ describe('notify flag validation', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       'override',   // explicit --notify wins over env var
@@ -681,8 +686,8 @@ describe('notify flag validation', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       undefined,    // --no-notify wins over env var
@@ -764,8 +769,8 @@ describe('project owner as fallback notify', () => {
       'quick',
       'fix stuff',
       undefined,
-      undefined,
-      undefined,
+      'balanced',
+      'claude-only',
       undefined,
       undefined,
       'main',  // project owner as callbackSessionKey (plain agent ID)

@@ -603,8 +603,8 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 36-01-PLAN.md — Config file loading with layered resolution (TDD: types, loadConfigFile, getConfig update, tests)
-- [ ] 36-02-PLAN.md — CLI config subcommands (init, set, get, edit, path, enhanced show)
+- [x] 36-01-PLAN.md — Config file loading with layered resolution (TDD: types, loadConfigFile, getConfig update, tests)
+- [x] 36-02-PLAN.md — CLI config subcommands (init, set, get, edit, path, enhanced show)
 - [ ] 36-03-PLAN.md — Consumer wiring (add.ts/db.ts defaults, doctor check, comprehensive tests)
 
 Wave structure:

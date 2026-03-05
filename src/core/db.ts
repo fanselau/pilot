@@ -12,7 +12,7 @@ import Database from './sqlite.js';
 import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { getConfig } from './config.js';
+import { getConfig, getConfigFileDefaults } from './config.js';
 import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus } from './types.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -277,8 +277,9 @@ function addJob(
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
-  const profile = modelProfile ?? 'balanced';
-  const provider = providerMode ?? 'claude-only';
+  const defaults = getConfigFileDefaults();
+  const profile = modelProfile ?? defaults.modelProfile;
+  const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
     INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url)

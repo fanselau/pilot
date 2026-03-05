@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 34
+## Current Phase: 36
 
 ## Current Position
 
-Phase: 34 of 34 (TUI & Observability Overhaul)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-05 - Completed quick task 064: Asciinema demo recording embedded in README (demo/demo.svg)
+Phase: 36 of 36 (Config File Support for Pilot CLI)
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-05 - Completed 36-02-PLAN.md (CLI config subcommands: init, set, get, edit, path, enhanced show)
 
-Progress: ████████████████████████████████████ 98/98 plans
+Progress: █████████████████████████████████████ 100/101 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 34 complete — TUI & Observability Overhaul. All 3 plans done: recursive token counting with reasoning/cache, extractToolInput full coverage, ConfirmOverlay height fix, spawnAndWait debug logging + verify timeout, verify session visibility, hard truncation removal (441 tests passing).
+**Current focus:** Phase 36 in progress — Config File Support. Plans 01-02 done: ConfigFileSchema type, loadConfigFile with validation/caching, getConfig layered resolution, getConfigSource, full config CLI subcommands (init/set/get/edit/path/show with source annotations, 462 tests passing).
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -81,6 +81,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 34: TUI & Observability Overhaul
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 36: Config File Support for Pilot CLI
+- **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
 

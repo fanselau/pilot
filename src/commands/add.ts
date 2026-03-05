@@ -12,7 +12,7 @@
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob, findDuplicateJob } from '../core/db.js';
-import { resolveProjectDir, getConfig } from '../core/config.js';
+import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
 import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
@@ -142,15 +142,16 @@ async function addCommand(
   // Validate project setup before doing anything else
   validateProjectSetup(resolvedProject, opts.force ?? false);
 
-  // Validate --profile
-  const modelProfile: ModelProfile | undefined = opts.profile
+  // Resolve model profile: flag > config file default
+  const configDefaults = getConfigFileDefaults();
+  const modelProfile: ModelProfile = opts.profile
     ? validateProfile(opts.profile)
-    : undefined;
+    : configDefaults.modelProfile;
 
-  // Validate --provider
-  const providerMode: ProviderMode | undefined = opts.provider
+  // Resolve provider mode: flag > config file default
+  const providerMode: ProviderMode = opts.provider
     ? validateProvider(opts.provider)
-    : undefined;
+    : configDefaults.providerMode;
 
   const scope = opts.as ?? detectScope(requirement);
 
