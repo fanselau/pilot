@@ -5,9 +5,9 @@
  * Resets the job to pending with cleared error/timestamps.
  */
 
-import { retry, getJob } from '../core/db.js';
+import { retry, getJob, unblockProject } from '../core/db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
-import { green } from '../util/colors.js';
+import { green, dim } from '../util/colors.js';
 
 async function retryCommand(id: string): Promise<void> {
   const job = getJob(id);
@@ -22,12 +22,15 @@ async function retryCommand(id: string): Promise<void> {
     process.exit(1);
   }
   retry(id);
+  // Unblock the project so queued jobs can run again
+  unblockProject(job.project);
 
   if (isJsonMode()) {
-    outputJson({ retried: id });
+    outputJson({ retried: id, unblocked: job.project });
     return;
   }
   outputHuman(`  ${green('✓')} Retried: ${id} — now pending`);
+  outputHuman(`  ${dim('⊙')} Unblocked project: ${job.project}`);
 }
 
 export { retryCommand };

@@ -238,14 +238,21 @@ async function addCommand(
     const defaultKey = getConfig().defaultNotifySessionKey;
     if (defaultKey) {
       resolvedNotifyKey = defaultKey;
-    } else if (!opts.dryRun) {
-      // No notify intent and not a dry run — require explicit declaration
-      process.stderr.write(
-        'Missing --notify <sessionKey>. Use --no-notify to explicitly skip notification.\n',
-      );
-      process.exit(2);
+    } else {
+      // Check project owner as fallback
+      const { getProject } = await import('../core/db.js');
+      const projectRecord = getProject(resolvedProject);
+      if (projectRecord?.owner) {
+        resolvedNotifyKey = projectRecord.owner;
+      } else if (!opts.dryRun) {
+        // No notify intent and not a dry run — require explicit declaration
+        process.stderr.write(
+          'Missing --notify <sessionKey>. Use --no-notify to explicitly skip notification,\nor register a project owner: pilot setup <dir> --owner <key>\n',
+        );
+        process.exit(2);
+      }
+      // dry-run case: resolvedNotifyKey stays undefined — no error
     }
-    // dry-run case: resolvedNotifyKey stays undefined — no error
   }
 
   const job = addJob(

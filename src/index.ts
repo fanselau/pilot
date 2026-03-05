@@ -148,9 +148,27 @@ program
   .command('setup <dir>')
   .description('Set up project for Pilot (links pilot-gsd)')
   .option('--verify', 'Verify existing setup')
+  .option('--owner <sessionKey>', 'Register project owner (session key for notifications)')
+  .option('--update', 'Update owner of existing registered project')
   .action(async (dir: string, opts: Record<string, unknown>) => {
     const { setupCommand } = await import('./commands/setup.js');
-    await setupCommand(dir, opts as { verify?: boolean });
+    await setupCommand(dir, opts as { verify?: boolean; owner?: string; update?: boolean });
+  });
+
+program
+  .command('projects')
+  .description('List all registered managed projects')
+  .action(async () => {
+    const { projectsCommand } = await import('./commands/projects.js');
+    await projectsCommand();
+  });
+
+program
+  .command('unblock <project>')
+  .description('Unblock a blocked project (allow queued jobs to run)')
+  .action(async (project: string) => {
+    const { unblockCommand } = await import('./commands/unblock.js');
+    await unblockCommand(project);
   });
 
 program
