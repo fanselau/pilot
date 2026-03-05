@@ -78,6 +78,17 @@ function categorizeSessions(sessionTitles: string[]): CategorizedSession[] {
 
 // ── Part formatting ───────────────────────────────────────────────────────
 
+/** Return current terminal width, defaulting to 120 if stdout is not a TTY. */
+const termWidth = (): number => process.stdout.columns ?? 120;
+
+/**
+ * Soft-truncate a string to maxLen characters, appending '…' if truncated.
+ */
+function truncateForTerminal(s: string, maxLen: number): string {
+  const limit = Math.max(20, maxLen);
+  return s.length <= limit ? s : s.slice(0, limit) + '…';
+}
+
 /**
  * Format a timestamp as HH:MM:SS.
  */
@@ -101,13 +112,16 @@ function formatPart(part: SessionPart, verbose: boolean): string[] {
     const tool = part.tool ?? 'unknown';
 
     if (tool === 'bash') {
+      const rawCmd = part.toolInput ?? '';
       const cmd = verbose
-        ? (part.toolInput ?? '')
-        : (part.toolInput ?? '').slice(0, 100);
+        ? rawCmd
+        : truncateForTerminal(rawCmd, Math.max(40, termWidth() - 30));
       lines.push(`  ${time}  ${yellow(`[assistant] bash $ ${cmd}`)}`);
-      // Show first 2 lines of output (dim, indented)
+      // Show output (dim, indented)
       if (part.toolOutput) {
-        const output = verbose ? part.toolOutput : part.toolOutput.slice(0, 200);
+        const output = verbose
+          ? part.toolOutput
+          : truncateForTerminal(part.toolOutput, Math.max(40, termWidth() - 20));
         if (output.trim()) {
           lines.push(`  ${dim('             → ' + output.replace(/\n/g, '\n               '))}`);
         }
@@ -115,14 +129,16 @@ function formatPart(part: SessionPart, verbose: boolean): string[] {
     } else if (tool === 'read' || tool === 'write' || tool === 'edit') {
       lines.push(`  ${time}  ${yellow(`[assistant] ${tool} ${part.toolInput ?? ''}`)}`);
     } else if (tool === 'glob' || tool === 'grep') {
+      const rawInput = part.toolInput ?? '';
       const input = verbose
-        ? (part.toolInput ?? '')
-        : (part.toolInput ?? '').slice(0, 80);
+        ? rawInput
+        : truncateForTerminal(rawInput, Math.max(40, termWidth() - 40));
       lines.push(`  ${time}  ${yellow(`[assistant] ${tool} ${input}`)}`);
     } else {
+      const rawInput = part.toolInput ?? '';
       const input = verbose
-        ? (part.toolInput ?? '')
-        : (part.toolInput ?? '').slice(0, 80);
+        ? rawInput
+        : truncateForTerminal(rawInput, Math.max(40, termWidth() - 40));
       lines.push(`  ${time}  ${yellow(`[assistant] ${tool} ${input}`)}`);
     }
     return lines;
@@ -137,7 +153,7 @@ function formatPart(part: SessionPart, verbose: boolean): string[] {
       : cyan('[assistant]');
     const content = verbose
       ? text.replace(/\n/g, '\n               ')
-      : text.slice(0, 200).replace(/\n/g, ' ');
+      : truncateForTerminal(text.split('\n')[0] ?? '', Math.max(40, termWidth() - 25)).replace(/\n/g, ' ');
     lines.push(`  ${time}  ${roleStr} ${content}`);
     return lines;
   }
