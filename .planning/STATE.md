@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 36 of 36 (Config File Support for Pilot CLI)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-05 - Completed 36-02-PLAN.md (CLI config subcommands: init, set, get, edit, path, enhanced show)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-05 - Completed 36-03-PLAN.md (Consumer wiring: add.ts/db.ts defaults, doctor check, comprehensive tests)
 
-Progress: █████████████████████████████████████ 100/101 plans
+Progress: ██████████████████████████████████████ 101/101 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 36 in progress — Config File Support. Plans 01-02 done: ConfigFileSchema type, loadConfigFile with validation/caching, getConfig layered resolution, getConfigSource, full config CLI subcommands (init/set/get/edit/path/show with source annotations, 462 tests passing).
+**Current focus:** Phase 36 complete — Config File Support. All 3 plans done: ConfigFileSchema type, loadConfigFile with validation/caching, getConfig layered resolution, getConfigSource, config CLI subcommands (init/set/get/edit/path/show), consumer wiring (add.ts/db.ts defaults), doctor config check, 476 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -83,7 +83,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 36: Config File Support for Pilot CLI
-- **Status:** in progress (2/3 plans complete)
+- **Status:** complete (3/3 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -173,6 +173,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 34 added: TUI & Observability Overhaul
 - Phase 35 added: Refactor Error Handling in API Layer
 - Phase 36 added: Config File Support for Pilot CLI
+- Phase 37 added: Skills System for Pilot
 
 ## Decisions
 
@@ -478,9 +479,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 34-03 | CLI text part non-verbose: first line only then truncate | Avoids collapsing multi-paragraph responses to one unreadable blob |
 | 34-03 | termWidth() = process.stdout.columns ?? 120 | Terminal-adaptive soft-wrap; defaults to 120 when stdout is not a TTY |
 | quick-045 | Delegation always uses 'phase' scope for resolveTopLevelModel — delegation is orchestration regardless of job scope | Ensures --model flag always resolves to planner tier; matches spawnAndWait pattern |
+| 36-03 | add.ts resolves profile/provider to concrete value (never undefined) via getConfigFileDefaults() | db.ts fallback is safety net, not primary path; type narrows from `T | undefined` to `T` |
+| 36-03 | Doctor warns (not fails) on missing config file | Using defaults is valid; warn guides users to `pilot config init` |
+| 36-03 | Doctor warns on world/group-readable config file permissions | Config may contain tokens (telegram, openclaw); chmod 600 recommended |
 
 ## Session Continuity
 
-Last session: 2026-03-05T16:20:55Z
-Stopped at: Completed quick-045 (Delegation model enforcement — --model flag via resolveTopLevelModel('phase',...) in attemptDelegation)
+Last session: 2026-03-05T22:40:17Z
+Stopped at: Completed 36-03-PLAN.md (Consumer wiring: add.ts/db.ts defaults, doctor check, comprehensive tests)
 Resume file: None
