@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 37 of 37 (Skills System for Pilot)
-Plan: 1 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-05 - Completed 37-01-PLAN.md (Foundation: types, DB migration, skills.ts library module)
+Last activity: 2026-03-05 - Completed 37-02-PLAN.md (Categories flag + skills hint)
 
-Progress: ██████████████████████████████████████░ 102/105 plans
+Progress: ██████████████████████████████████████░ 104/105 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 37 in progress — Skills System. Plan 01 done: SkillEntry/SkillManifest types, Job.categories DB migration, full src/core/skills.ts library module with 8 exported functions, 476 tests passing.
+**Current focus:** Phase 37 in progress — Skills System. Plans 01-03 done: types, DB migration, skills.ts library, --categories flag on pilot add, skills hint in delegation prompt, runner skill injection + cleanup. 476 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -494,6 +494,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-05T23:07:35Z
-Stopped at: Completed 37-01-PLAN.md (Foundation: types, DB migration, skills.ts library module)
+Last session: 2026-03-05T23:13:57Z
+Stopped at: Completed 37-02-PLAN.md (Categories flag + skills hint in delegation)
 Resume file: None

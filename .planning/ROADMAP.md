@@ -622,8 +622,8 @@ Read requirements/config-file.md for full spec.
 
 Plans:
 - [x] 37-01-PLAN.md — Foundation: types (SkillEntry, SkillManifest, Job.categories), DB migration, src/core/skills.ts library module
-- [ ] 37-02-PLAN.md — Consumer wiring: pilot add --categories flag, delegate.ts skills hint in prompt
-- [ ] 37-03-PLAN.md — Runner injection: injectSkills before spawn, cleanupInjectedSkills in finally block
+- [x] 37-02-PLAN.md — Consumer wiring: pilot add --categories flag, delegate.ts skills hint in prompt
+- [x] 37-03-PLAN.md — Runner injection: injectSkills before spawn, cleanupInjectedSkills in finally block
 - [ ] 37-04-PLAN.md — pilot skills CLI subcommands (list, add, remove, categories, tag, sync), index.ts wiring, tests
 
 **Details:**
