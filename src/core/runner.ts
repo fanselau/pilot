@@ -796,6 +796,7 @@ class Runner {
         }
       } else {
         // Shutdown interrupted — reset to pending instead of cancel
+        // resetToPending is guarded by AND status='running' — no-op if job was force-quit
         resetToPending(job.id, 'Interrupted by shutdown');
       }
     } catch (err) {

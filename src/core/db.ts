@@ -747,10 +747,15 @@ function skipRemainingSteps(
  * Clears session_titles to prevent stale titles matching in reconciler pgrep.
  * Stores resumeHint in the dedicated resume_hint column (NOT in error field).
  * Deletes all job_steps for the job to prevent stale steps appearing in TUI.
+ *
+ * Only affects jobs with status='running'. No-op for jobs already in a terminal
+ * state (failed, completed, cancelled) — prevents force-quit jobs from being resurrected.
+ *
+ * @returns true when the reset actually happened, false when the job was not running (no-op).
  */
-function resetToPending(id: string, resumeHint?: string): void {
+function resetToPending(id: string, resumeHint?: string): boolean {
   const db = getDb();
-  db.prepare(`
+  const result = db.prepare(`
     UPDATE jobs
     SET status = 'pending',
         started_at = NULL,
@@ -758,10 +763,12 @@ function resetToPending(id: string, resumeHint?: string): void {
         current_step = 0,
         session_titles = NULL,
         resume_hint = ?
-    WHERE id = ?
+    WHERE id = ? AND status = 'running'
   `).run(resumeHint ?? null, id);
-  // Clean up step records from previous attempt
+  if (result.changes === 0) return false;
+  // Clean up step records only if we actually reset
   db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
+  return true;
 }
 
 /**
