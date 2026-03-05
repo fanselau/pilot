@@ -76,15 +76,44 @@ function syncProjectDirEnv(): void {
   process.env.PILOT_PROJECT_DIR = mockedProjectDir;
 }
 
-vi.mock('../../src/core/config.js', async (importOriginal) => {
-  // Keep the real resolveProjectDir (it reads PILOT_PROJECT_DIR via getConfig).
-  // Only provide the mock getConfig for callers in add.ts that use getConfig()
-  // directly — after the refactor there are none, but keep for safety.
-  const original = await importOriginal<typeof import('../../src/core/config.js')>();
-  return {
-    ...original,
-    // resolveProjectDir is the real implementation from original (spread above)
-  };
+vi.mock('../../src/core/config.js', () => {
+  // getConfig and resolveProjectDir are mocked to read from env vars dynamically,
+  // so tests can control behavior via PILOT_PROJECT_DIR and PILOT_DEFAULT_NOTIFY.
+  const getConfig = vi.fn(() => ({
+    pilotDir: '/tmp/.pilot',
+    pilotDbPath: '/tmp/.pilot/pilot.db',
+    projectDir: process.env.PILOT_PROJECT_DIR ?? '/tmp/pilot-test-projects',
+    gsdDir: '/tmp/pilot-gsd',
+    stuckThreshold: 90,
+    maxParallel: 1,
+    pollInterval: 5,
+    defaultTimeout: 60,
+    sessionMemoryMaxMb: 8192,
+    reservedMemoryMb: 4096,
+    memoryKillThresholdMb: 2048,
+    logLevel: 'INFO' as const,
+    noColor: false,
+    telegramBotToken: null,
+    telegramChatId: null,
+    openclawHooksUrl: null,
+    openclawHooksToken: null,
+    defaultNotifySessionKey: process.env.PILOT_DEFAULT_NOTIFY ?? null,
+  }));
+
+  const resolveProjectDir = vi.fn((project: string): string => {
+    if (!project) return project;
+    if (project.startsWith('/')) return project;
+    if (project === '.' || project.startsWith('./') || project.startsWith('../')) {
+      // Use require for path.resolve in the mock — bun supports this in factories
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('node:path').resolve(project);
+    }
+    const projectDir = process.env.PILOT_PROJECT_DIR ?? '/tmp/pilot-test-projects';
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('node:path').join(projectDir, project);
+  });
+
+  return { getConfig, resolveProjectDir };
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
@@ -149,7 +178,7 @@ describe('addCommand', () => {
   });
 
   it('queues a string requirement as quick scope', async () => {
-    await addCommand('my-project', 'fix the navbar', {});
+    await addCommand('my-project', 'fix the navbar', { noNotify: true });
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
@@ -162,7 +191,7 @@ describe('addCommand', () => {
   });
 
   it('--as overrides auto-detected scope', async () => {
-    await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope });
+    await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -172,7 +201,7 @@ describe('addCommand', () => {
   it('detects file path and uses phase scope with title extraction', async () => {
     // package.json exists and is a file; title won't be found via markdown heading
     // so it falls back to basename
-    await addCommand('my-project', 'package.json', {});
+    await addCommand('my-project', 'package.json', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -190,7 +219,7 @@ describe('addCommand', () => {
 
   it('quick scope with file passes full content as description', async () => {
     // Force quick scope via --as, but provide a file that exists
-    await addCommand('my-project', 'package.json', { as: 'quick' as JobScope });
+    await addCommand('my-project', 'package.json', { as: 'quick' as JobScope, noNotify: true });
 
     // When scope=quick and file exists, the full content is passed as description
     const callArgs = vi.mocked(addJob).mock.calls[0];
@@ -203,7 +232,7 @@ describe('addCommand', () => {
   it('outputs JSON when json mode is active', async () => {
     mockJsonMode = true;
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(mockOutputJson).toHaveBeenCalledWith({ job: expect.objectContaining({ id: 'ab12' }) });
     expect(mockOutputHuman).not.toHaveBeenCalled();
@@ -211,14 +240,14 @@ describe('addCommand', () => {
 
   it('truncates long descriptions in human output', async () => {
     const longDesc = 'a'.repeat(100);
-    await addCommand('my-project', longDesc, {});
+    await addCommand('my-project', longDesc, { noNotify: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('…');
   });
 
   it('passes profile and provider to addJob', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined,
@@ -226,7 +255,7 @@ describe('addCommand', () => {
   });
 
   it('defaults work without --profile and --provider flags', async () => {
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -237,7 +266,7 @@ describe('addCommand', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { profile: 'garbage' })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { profile: 'garbage', noNotify: true })).rejects.toThrow('exit');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid profile'));
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -250,7 +279,7 @@ describe('addCommand', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus' })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus', noNotify: true })).rejects.toThrow('exit');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid provider'));
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -260,14 +289,14 @@ describe('addCommand', () => {
   });
 
   it('shows non-default profile/provider tag in human output', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid' });
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('[budget/hybrid]');
   });
 
   it('does not show tag when profile/provider are defaults', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'balanced', provider: 'claude-only' });
+    await addCommand('my-project', 'fix stuff', { profile: 'balanced', provider: 'claude-only', noNotify: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).not.toContain('[');
@@ -298,7 +327,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('test-proj', 'fix stuff', {})).rejects.toThrow('exit');
+    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
@@ -318,7 +347,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('test-proj', 'fix stuff', {})).rejects.toThrow('exit');
+    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
@@ -336,7 +365,7 @@ describe('project setup validation', () => {
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
     // Should not exit — addJob should be called with the resolved absolute path
-    await addCommand('test-proj', 'fix stuff', {});
+    await addCommand('test-proj', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -351,7 +380,7 @@ describe('project setup validation', () => {
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
     // With --force, should bypass validation and call addJob with resolved path
-    await addCommand('test-proj', 'fix stuff', { force: true });
+    await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -368,7 +397,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     // Should NOT exit — addJob should be called despite warning
-    await addCommand('test-proj', 'fix stuff', {});
+    await addCommand('test-proj', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -381,7 +410,7 @@ describe('project setup validation', () => {
 
   it('resolves "." to cwd when --force is set', async () => {
     // "." resolves to process.cwd() — no project dir creation needed with --force
-    await addCommand('.', 'fix stuff', { force: true });
+    await addCommand('.', 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       process.cwd(), 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -391,7 +420,7 @@ describe('project setup validation', () => {
   it('uses absolute path as-is when --force is set', async () => {
     const absPath = '/tmp/some-abs-path';
 
-    await addCommand(absPath, 'fix stuff', { force: true });
+    await addCommand(absPath, 'fix stuff', { force: true, noNotify: true });
 
     expect(addJob).toHaveBeenCalledWith(
       absPath, 'quick', 'fix stuff', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
@@ -461,7 +490,7 @@ describe('duplicate detection', () => {
   it('skips addJob when duplicate pending job found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'pending' });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -472,7 +501,7 @@ describe('duplicate detection', () => {
   it('skips addJob when duplicate running job found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'running' });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -482,7 +511,7 @@ describe('duplicate detection', () => {
   it('skips addJob when recently completed duplicate exists', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'completed' as const });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -492,7 +521,7 @@ describe('duplicate detection', () => {
   it('--force bypasses duplicate check', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
 
-    await addCommand('my-project', 'fix stuff', { force: true });
+    await addCommand('my-project', 'fix stuff', { force: true, noNotify: true });
 
     expect(findDuplicateJob).not.toHaveBeenCalled();
     expect(addJob).toHaveBeenCalled();
@@ -501,7 +530,7 @@ describe('duplicate detection', () => {
   it('proceeds when no duplicate found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue(null);
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(addJob).toHaveBeenCalled();
   });
@@ -510,12 +539,172 @@ describe('duplicate detection', () => {
     mockJsonMode = true;
     vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
 
     expect(mockOutputJson).toHaveBeenCalledWith({
       duplicate: true,
       existingJob: expect.objectContaining({ id: 'dup1' }),
     });
     expect(addJob).not.toHaveBeenCalled();
+  });
+});
+
+// ── notify flag validation ─────────────────────────────────────────────────
+
+describe('notify flag validation', () => {
+  let notifyTestsDir: string;
+
+  beforeAll(() => {
+    notifyTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-notify-'));
+    mockedProjectDir = notifyTestsDir;
+    syncProjectDirEnv();
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(notifyTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(notifyTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = notifyTestsDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  it('errors when neither --notify nor --no-notify provided', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', {})).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('Missing --notify');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('--notify <key> passes key to addJob as callbackSessionKey', async () => {
+    await addCommand('my-project', 'fix stuff', { notify: 'sess123' });
+
+    // 9th positional arg (index 8) is callbackSessionKey
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'sess123',    // callbackSessionKey
+      undefined,    // callbackUrl
+    );
+  });
+
+  it('--no-notify skips notification silently (callbackSessionKey = undefined)', async () => {
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,    // callbackSessionKey = undefined (no notification)
+      undefined,
+    );
+    // No error should have occurred
+  });
+
+  it('PILOT_DEFAULT_NOTIFY env var provides fallback session key', async () => {
+    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agent:main:main',  // callbackSessionKey from env var
+      undefined,
+    );
+  });
+
+  it('--notify takes precedence over PILOT_DEFAULT_NOTIFY env var', async () => {
+    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+
+    await addCommand('my-project', 'fix stuff', { notify: 'override' });
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'override',   // explicit --notify wins over env var
+      undefined,
+    );
+  });
+
+  it('--no-notify overrides PILOT_DEFAULT_NOTIFY env var', async () => {
+    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,    // --no-notify wins over env var
+      undefined,
+    );
+  });
+
+  it('--dry-run skips the --notify requirement', async () => {
+    // No --notify, no env var, no --no-notify — but --dry-run bypasses the check
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    // With --dry-run, should NOT error about missing --notify
+    // Note: --dry-run doesn't prevent addJob from being called in the current implementation
+    // (dry-run only affects the notify requirement, not the actual queuing).
+    // The key is that no exit(2) is called for the missing notify.
+    await addCommand('my-project', 'fix stuff', { dryRun: true });
+
+    // exitSpy should NOT have been called with code 2 for the notify requirement
+    const notifyExitCalls = exitSpy.mock.calls.filter(([code]) => code === 2);
+    expect(notifyExitCalls).toHaveLength(0);
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });
