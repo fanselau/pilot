@@ -624,7 +624,19 @@ Plans:
 - [x] 37-01-PLAN.md — Foundation: types (SkillEntry, SkillManifest, Job.categories), DB migration, src/core/skills.ts library module
 - [x] 37-02-PLAN.md — Consumer wiring: pilot add --categories flag, delegate.ts skills hint in prompt
 - [x] 37-03-PLAN.md — Runner injection: injectSkills before spawn, cleanupInjectedSkills in finally block
-- [ ] 37-04-PLAN.md — pilot skills CLI subcommands (list, add, remove, categories, tag, sync), index.ts wiring, tests
+- [x] 37-04-PLAN.md — pilot skills CLI subcommands (list, add, remove, categories, tag, sync), index.ts wiring, tests
 
 **Details:**
 Read requirements/skills-system.md for full spec.
+
+### Phase 38: Pilot Hardening — Pre-Release Quality Pass
+
+**Goal:** [To be planned]
+**Depends on:** Phase 37
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 38 to break down)
+
+**Details:**
+[To be added during planning]

@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 37 of 37 (Skills System for Pilot)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-03-05 - Completed 37-02-PLAN.md (Categories flag + skills hint)
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-03-05 - Completed 37-04-PLAN.md (Skills CLI + Core Tests)
 
-Progress: ██████████████████████████████████████░ 104/105 plans
+Progress: █████████████████████████████████████████ 105/105 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 37 in progress — Skills System. Plans 01-03 done: types, DB migration, skills.ts library, --categories flag on pilot add, skills hint in delegation prompt, runner skill injection + cleanup. 476 tests passing.
+**Current focus:** Phase 37 complete — Skills System. All 4 plans done: types, DB migration, skills.ts library, --categories flag, skills hint, runner injection, CLI commands + tests. 498 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -86,7 +86,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 37: Skills System for Pilot
-- **Status:** in progress (1/4 plans complete)
+- **Status:** complete (4/4 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -177,6 +177,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 35 added: Refactor Error Handling in API Layer
 - Phase 36 added: Config File Support for Pilot CLI
 - Phase 37 added: Skills System for Pilot
+- Phase 38 added: Pilot Hardening — Pre-Release Quality Pass
 
 ## Decisions
 
@@ -494,6 +495,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-05T23:13:57Z
-Stopped at: Completed 37-02-PLAN.md (Categories flag + skills hint in delegation)
+Last session: 2026-03-05T23:21:16Z
+Stopped at: Completed 37-04-PLAN.md (Skills CLI + Core Tests) — Phase 37 complete
 Resume file: None
