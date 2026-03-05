@@ -597,8 +597,8 @@ describe('notify flag validation', () => {
     exitSpy.mockRestore();
   });
 
-  it('--notify <key> passes key to addJob as callbackSessionKey', async () => {
-    await addCommand('my-project', 'fix stuff', { notify: 'sess123' });
+  it('--notify <agentId> passes agent ID to addJob as callbackSessionKey', async () => {
+    await addCommand('my-project', 'fix stuff', { notify: 'main' });
 
     // 9th positional arg (index 8) is callbackSessionKey
     expect(addJob).toHaveBeenCalledWith(
@@ -610,7 +610,7 @@ describe('notify flag validation', () => {
       undefined,
       undefined,
       undefined,
-      'sess123',    // callbackSessionKey
+      'main',       // callbackSessionKey (plain agent ID)
       undefined,    // callbackUrl
     );
   });
@@ -634,7 +634,7 @@ describe('notify flag validation', () => {
   });
 
   it('PILOT_DEFAULT_NOTIFY env var provides fallback session key', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+    process.env.PILOT_DEFAULT_NOTIFY = 'main';
 
     await addCommand('my-project', 'fix stuff', {});
 
@@ -647,13 +647,13 @@ describe('notify flag validation', () => {
       undefined,
       undefined,
       undefined,
-      'agent:main:main',  // callbackSessionKey from env var
+      'main',  // callbackSessionKey from env var (plain agent ID)
       undefined,
     );
   });
 
   it('--notify takes precedence over PILOT_DEFAULT_NOTIFY env var', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+    process.env.PILOT_DEFAULT_NOTIFY = 'main';
 
     await addCommand('my-project', 'fix stuff', { notify: 'override' });
 
@@ -672,7 +672,7 @@ describe('notify flag validation', () => {
   });
 
   it('--no-notify overrides PILOT_DEFAULT_NOTIFY env var', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'agent:main:main';
+    process.env.PILOT_DEFAULT_NOTIFY = 'main';
 
     await addCommand('my-project', 'fix stuff', { noNotify: true });
 
@@ -746,10 +746,10 @@ describe('project owner as fallback notify', () => {
   });
 
   it('uses project owner as callbackSessionKey when no --notify and no PILOT_DEFAULT_NOTIFY', async () => {
-    // Mock getProject to return a project with owner
+    // Mock getProject to return a project with owner (plain agent ID)
     vi.mocked(getProject).mockReturnValue({
       path: path.join(ownerTestsDir, 'my-project'),
-      owner: 'agent:main:main',
+      owner: 'main',
       status: 'active',
       blockedReason: null,
       blockedAt: null,
@@ -768,7 +768,7 @@ describe('project owner as fallback notify', () => {
       undefined,
       undefined,
       undefined,
-      'agent:main:main',  // project owner as callbackSessionKey
+      'main',  // project owner as callbackSessionKey (plain agent ID)
       undefined,
     );
   });
@@ -882,7 +882,7 @@ describe('unregistered project warning', () => {
   it('does NOT warn when project is registered', async () => {
     vi.mocked(getProject).mockReturnValue({
       path: path.join(unregTestsDir, 'my-project'),
-      owner: 'agent:main:main',
+      owner: 'main',
       status: 'active',
       blockedReason: null,
       blockedAt: null,

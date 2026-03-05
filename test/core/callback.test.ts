@@ -131,7 +131,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob({ callbackUrl: 'http://job-url/hooks/agent' });
+    const job = makeTestJob({ callbackUrl: 'http://job-url/hooks/agent', callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -147,7 +147,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob({ callbackUrl: null });
+    const job = makeTestJob({ callbackUrl: null, callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -163,29 +163,34 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: 'secret-token',
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob();
+    const job = makeTestJob({ callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     const callArgs = mockFetch.mock.calls[0];
     expect(callArgs[1].headers['Authorization']).toBe('Bearer secret-token');
   });
 
-  it('includes sessionKey in body when job.callbackSessionKey is set', async () => {
+  it('sends agentId, unique sessionKey, and deliver:false when callbackSessionKey is set', async () => {
     mockFetch.mockResolvedValue({ ok: true });
     vi.mocked(getConfig).mockReturnValue({
       openclawHooksUrl: 'http://127.0.0.1:18789/hooks/agent',
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob({ callbackSessionKey: 'agent:main:subagent:abc123' });
+    const job = makeTestJob({ callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     const callArgs = mockFetch.mock.calls[0];
     const body = JSON.parse(callArgs[1].body as string) as Record<string, unknown>;
-    expect(body.sessionKey).toBe('agent:main:subagent:abc123');
+    expect(body.agentId).toBe('main');
+    expect(body.sessionKey).toBe('hook:pilot:ab12');
+    expect(body.deliver).toBe(false);
+    expect(body.name).toBe('Pilot');
+    expect(body).not.toHaveProperty('deliver', true);
+    expect(body.message as string).toContain('Notify session: agent:main:main');
   });
 
-  it('omits sessionKey from body when job.callbackSessionKey is null', async () => {
+  it('returns false when callbackSessionKey is null (no agentId)', async () => {
     mockFetch.mockResolvedValue({ ok: true });
     vi.mocked(getConfig).mockReturnValue({
       openclawHooksUrl: 'http://127.0.0.1:18789/hooks/agent',
@@ -193,11 +198,10 @@ describe('notifyJobCompletion', () => {
     } as ReturnType<typeof getConfig>);
 
     const job = makeTestJob({ callbackSessionKey: null });
-    await notifyJobCompletion(job);
+    const result = await notifyJobCompletion(job);
 
-    const callArgs = mockFetch.mock.calls[0];
-    const body = JSON.parse(callArgs[1].body as string) as Record<string, unknown>;
-    expect(body).not.toHaveProperty('sessionKey');
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result).toBe(false);
   });
 
   it('returns true on successful fetch (resp.ok = true)', async () => {
@@ -207,7 +211,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob();
+    const job = makeTestJob({ callbackSessionKey: 'main' });
     const result = await notifyJobCompletion(job);
     expect(result).toBe(true);
   });
@@ -219,7 +223,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob();
+    const job = makeTestJob({ callbackSessionKey: 'main' });
     // Must not throw — call directly and verify result
     const result = await notifyJobCompletion(job);
     expect(result).toBe(false);
@@ -232,7 +236,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob();
+    const job = makeTestJob({ callbackSessionKey: 'main' });
     const result = await notifyJobCompletion(job);
     expect(result).toBe(false);
   });
@@ -252,6 +256,7 @@ describe('notifyJobCompletion', () => {
       description: 'Implement feature X',
       startedAt: '2026-03-04T10:00:00',
       completedAt: '2026-03-04T10:47:00',
+      callbackSessionKey: 'main',
     });
     await notifyJobCompletion(job);
 
@@ -265,6 +270,7 @@ describe('notifyJobCompletion', () => {
     expect(message).toContain('test-project');
     expect(message).toContain('Implement feature X');
     expect(message).toContain('47m');
+    expect(message).toContain('Notify session: agent:main:main');
   });
 
   it('message includes error when job.error is set', async () => {
@@ -274,7 +280,7 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob({ status: 'failed', error: 'OOM killed' });
+    const job = makeTestJob({ status: 'failed', error: 'OOM killed', callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     const callArgs = mockFetch.mock.calls[0];
@@ -290,7 +296,7 @@ describe('notifyJobCompletion', () => {
     } as ReturnType<typeof getConfig>);
 
     const longDescription = 'A'.repeat(150);
-    const job = makeTestJob({ description: longDescription });
+    const job = makeTestJob({ description: longDescription, callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     const callArgs = mockFetch.mock.calls[0];
@@ -310,7 +316,7 @@ describe('notifyJobCompletion', () => {
     } as ReturnType<typeof getConfig>);
 
     const longError = 'E'.repeat(250);
-    const job = makeTestJob({ status: 'failed', error: longError });
+    const job = makeTestJob({ status: 'failed', error: longError, callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     const callArgs = mockFetch.mock.calls[0];
@@ -319,5 +325,22 @@ describe('notifyJobCompletion', () => {
     const errorLine = (message.split('\n') as string[]).find(l => l.startsWith('Error:'))!;
     // Should be at most "Error: " (7 chars) + 200 chars = 207 chars
     expect(errorLine.length).toBeLessThanOrEqual(207);
+  });
+
+  it('uses callbackSessionKey as agentId (not as sessionKey)', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+    vi.mocked(getConfig).mockReturnValue({
+      openclawHooksUrl: 'http://127.0.0.1:18789/hooks/agent',
+      openclawHooksToken: null,
+    } as ReturnType<typeof getConfig>);
+
+    const job = makeTestJob({ callbackSessionKey: 'benefitu' });
+    await notifyJobCompletion(job);
+
+    const callArgs = mockFetch.mock.calls[0];
+    const body = JSON.parse(callArgs[1].body as string) as Record<string, unknown>;
+    expect(body.agentId).toBe('benefitu');
+    expect(body.sessionKey).toBe('hook:pilot:ab12');
+    expect(body.message as string).toContain('Notify session: agent:benefitu:main');
   });
 });
