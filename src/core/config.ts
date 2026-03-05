@@ -53,84 +53,62 @@ function resolveConfigFilePath(): string {
  * Throws on invalid values with clear messages including the file path.
  */
 function validateConfigFile(config: Record<string, unknown>, filePath: string): void {
-  // Validate logging.level
+  /** Validate that a value is one of the allowed enum values. */
+  function assertEnum(keyPath: string, value: unknown, allowed: string[]): void {
+    if (!allowed.includes(value as string)) {
+      throw new Error(
+        `Invalid config value in ${filePath}: ${keyPath} must be one of ${allowed.join(', ')}, got "${value}"`,
+      );
+    }
+  }
+
+  /** Validate that a value is a number >= min. */
+  function assertMinNumber(keyPath: string, value: unknown, min: number): void {
+    if (typeof value !== 'number' || value < min) {
+      throw new Error(
+        `Invalid config value in ${filePath}: ${keyPath} must be a number >= ${min}, got ${JSON.stringify(value)}`,
+      );
+    }
+  }
+
+  // ── logging ──
   if (config.logging && typeof config.logging === 'object') {
     const logging = config.logging as Record<string, unknown>;
     if (logging.level !== undefined) {
-      const validLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
-      if (!validLevels.includes(logging.level as string)) {
-        throw new Error(
-          `Invalid config value in ${filePath}: logging.level must be one of ${validLevels.join(', ')}, got "${logging.level}"`,
-        );
-      }
+      assertEnum('logging.level', logging.level, ['DEBUG', 'INFO', 'WARN', 'ERROR']);
     }
   }
 
-  // Validate defaults.modelProfile
+  // ── defaults ──
   if (config.defaults && typeof config.defaults === 'object') {
     const defaults = config.defaults as Record<string, unknown>;
     if (defaults.modelProfile !== undefined) {
-      const validProfiles = ['quality', 'balanced', 'budget'];
-      if (!validProfiles.includes(defaults.modelProfile as string)) {
-        throw new Error(
-          `Invalid config value in ${filePath}: defaults.modelProfile must be one of ${validProfiles.join(', ')}, got "${defaults.modelProfile}"`,
-        );
-      }
+      assertEnum('defaults.modelProfile', defaults.modelProfile, ['quality', 'balanced', 'budget']);
     }
     if (defaults.providerMode !== undefined) {
-      const validModes = ['hybrid', 'claude-only', 'openai-only'];
-      if (!validModes.includes(defaults.providerMode as string)) {
-        throw new Error(
-          `Invalid config value in ${filePath}: defaults.providerMode must be one of ${validModes.join(', ')}, got "${defaults.providerMode}"`,
-        );
-      }
+      assertEnum('defaults.providerMode', defaults.providerMode, ['hybrid', 'claude-only', 'openai-only']);
     }
     if (defaults.scope !== undefined && defaults.scope !== null) {
-      const validScopes = ['quick', 'phase', 'milestone'];
-      if (!validScopes.includes(defaults.scope as string)) {
-        throw new Error(
-          `Invalid config value in ${filePath}: defaults.scope must be one of ${validScopes.join(', ')} or null, got "${defaults.scope}"`,
-        );
-      }
+      assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'milestone']);
     }
   }
 
-  // Validate runner numeric fields
+  // ── runner numeric fields ──
   if (config.runner && typeof config.runner === 'object') {
     const runner = config.runner as Record<string, unknown>;
-    if (runner.pollInterval !== undefined && (typeof runner.pollInterval !== 'number' || runner.pollInterval < 1)) {
-      throw new Error(
-        `Invalid config value in ${filePath}: runner.pollInterval must be a number >= 1, got ${JSON.stringify(runner.pollInterval)}`,
-      );
-    }
+    if (runner.pollInterval !== undefined) assertMinNumber('runner.pollInterval', runner.pollInterval, 1);
     if (runner.maxParallel !== undefined && runner.maxParallel !== null) {
-      if (typeof runner.maxParallel !== 'number' || runner.maxParallel < 1) {
-        throw new Error(
-          `Invalid config value in ${filePath}: runner.maxParallel must be a number >= 1 or null, got ${JSON.stringify(runner.maxParallel)}`,
-        );
-      }
+      assertMinNumber('runner.maxParallel', runner.maxParallel, 1);
     }
-    if (runner.defaultTimeout !== undefined && (typeof runner.defaultTimeout !== 'number' || runner.defaultTimeout < 1)) {
-      throw new Error(
-        `Invalid config value in ${filePath}: runner.defaultTimeout must be a number >= 1, got ${JSON.stringify(runner.defaultTimeout)}`,
-      );
-    }
-    if (runner.stuckThreshold !== undefined && (typeof runner.stuckThreshold !== 'number' || runner.stuckThreshold < 1)) {
-      throw new Error(
-        `Invalid config value in ${filePath}: runner.stuckThreshold must be a number >= 1, got ${JSON.stringify(runner.stuckThreshold)}`,
-      );
-    }
+    if (runner.defaultTimeout !== undefined) assertMinNumber('runner.defaultTimeout', runner.defaultTimeout, 1);
+    if (runner.stuckThreshold !== undefined) assertMinNumber('runner.stuckThreshold', runner.stuckThreshold, 1);
   }
 
-  // Validate memory fields (positive integers)
+  // ── memory fields (positive numbers) ──
   if (config.memory && typeof config.memory === 'object') {
     const memory = config.memory as Record<string, unknown>;
     for (const key of ['sessionMaxMb', 'reservedMb', 'killThresholdMb'] as const) {
-      if (memory[key] !== undefined && (typeof memory[key] !== 'number' || (memory[key] as number) < 1)) {
-        throw new Error(
-          `Invalid config value in ${filePath}: memory.${key} must be a positive number, got ${JSON.stringify(memory[key])}`,
-        );
-      }
+      if (memory[key] !== undefined) assertMinNumber(`memory.${key}`, memory[key], 1);
     }
   }
 }
