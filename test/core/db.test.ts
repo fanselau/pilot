@@ -600,6 +600,46 @@ describe('pilot.db', () => {
 
       expect(getJob(job.id)!.resumeHint).toBeNull();
     });
+
+    it('returns true when resetting a running job', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+
+      const didReset = resetToPending(job.id);
+      expect(didReset).toBe(true);
+      expect(getJob(job.id)!.status).toBe('pending');
+    });
+
+    it('is no-op on failed (force-quit) jobs', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      forceQuitJob(job.id, 'cli');
+      expect(getJob(job.id)!.status).toBe('failed');
+
+      const didReset = resetToPending(job.id, 'retry hint');
+      expect(didReset).toBe(false);
+      expect(getJob(job.id)!.status).toBe('failed'); // Still failed, not resurrected
+    });
+
+    it('is no-op on completed jobs', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      markCompleted(job.id);
+
+      const didReset = resetToPending(job.id);
+      expect(didReset).toBe(false);
+      expect(getJob(job.id)!.status).toBe('completed');
+    });
+
+    it('is no-op on cancelled jobs', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      cancel(job.id);
+
+      const didReset = resetToPending(job.id);
+      expect(didReset).toBe(false);
+      expect(getJob(job.id)!.status).toBe('cancelled');
+    });
   });
 
   // ── milestone orchestration ───────────────────────────────────────────
