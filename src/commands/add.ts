@@ -12,7 +12,7 @@
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob, findDuplicateJob } from '../core/db.js';
-import { resolveProjectDir } from '../core/config.js';
+import { resolveProjectDir, getConfig } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
 import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
@@ -29,6 +29,8 @@ interface AddOptions {
   force?: boolean;
   notify?: string;    // OpenClaw session key to wake on completion
   notifyUrl?: string; // Custom webhook URL for completion callback
+  noNotify?: boolean; // Explicitly skip completion notification
+  dryRun?: boolean;   // Show what would happen without queuing
 }
 
 function isFilePath(str: string): boolean {
@@ -218,14 +220,42 @@ async function addCommand(
     }
   }
 
+  // Resolve notify target:
+  //   1. --no-notify → skip notification (callbackSessionKey = undefined)
+  //   2. --notify <key> → use that key
+  //   3. Neither → check PILOT_DEFAULT_NOTIFY env var
+  //   4. Still nothing and NOT --dry-run → error
+  //   5. --dry-run → skip the requirement entirely
+  let resolvedNotifyKey: string | undefined;
+  if (opts.noNotify) {
+    // Explicitly opted out — no callback
+    resolvedNotifyKey = undefined;
+  } else if (opts.notify) {
+    // --notify <key> takes precedence
+    resolvedNotifyKey = opts.notify;
+  } else {
+    // Check env var fallback
+    const defaultKey = getConfig().defaultNotifySessionKey;
+    if (defaultKey) {
+      resolvedNotifyKey = defaultKey;
+    } else if (!opts.dryRun) {
+      // No notify intent and not a dry run — require explicit declaration
+      process.stderr.write(
+        'Missing --notify <sessionKey>. Use --no-notify to explicitly skip notification.\n',
+      );
+      process.exit(2);
+    }
+    // dry-run case: resolvedNotifyKey stays undefined — no error
+  }
+
   const job = addJob(
     resolvedProject, scope, description,
     requirementPath ?? undefined,
     modelProfile, providerMode,
-    undefined,          // dependsOn (not used in add command)
-    undefined,          // parentJobId (not used in add command)
-    opts.notify,        // callbackSessionKey
-    opts.notifyUrl,     // callbackUrl
+    undefined,             // dependsOn (not used in add command)
+    undefined,             // parentJobId (not used in add command)
+    resolvedNotifyKey,     // callbackSessionKey (resolved)
+    opts.notifyUrl,        // callbackUrl
   );
 
   if (isJsonMode()) {
@@ -241,6 +271,9 @@ async function addCommand(
   const tagStr = tags.length > 0 ? `  ${dim(`[${tags.join('/')}]`)}` : '';
 
   outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
+  if (resolvedNotifyKey) {
+    outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
+  }
   outputHuman(`  ${dim('Run:')} pilot service start ${dim('to process queue')}`);
 }
 

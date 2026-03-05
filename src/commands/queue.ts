@@ -102,8 +102,9 @@ async function queueCommand(opts: QueueOptions): Promise<void> {
       job.description.length > 35
         ? job.description.slice(0, 35) + '…'
         : job.description;
+    const notify = job.callbackSessionKey ? dim(`  notify:${job.callbackSessionKey}`) : '';
     outputHuman(
-      `  ${icon} ${dim(job.id)}  ${job.project.padEnd(14)}  ${dim(job.scope.padEnd(10))}  ${desc.padEnd(36)}  ${statusStr}`,
+      `  ${icon} ${dim(job.id)}  ${job.project.padEnd(14)}  ${dim(job.scope.padEnd(10))}  ${desc.padEnd(36)}  ${statusStr}${notify}`,
     );
   }
 

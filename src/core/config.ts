@@ -69,6 +69,9 @@ function getConfig(): PilotConfig {
   const openclawHooksUrl = process.env.PILOT_OPENCLAW_HOOKS_URL ?? null;
   const openclawHooksToken = process.env.PILOT_OPENCLAW_HOOKS_TOKEN ?? null;
 
+  // Default notify session key — fallback for --notify when env var is set
+  const defaultNotifySessionKey = process.env.PILOT_DEFAULT_NOTIFY ?? null;
+
   // Derived paths (not from env vars)
   const pilotDir = path.join(home, '.pilot');
   const pilotDbPath = path.join(pilotDir, 'pilot.db');
@@ -91,6 +94,7 @@ function getConfig(): PilotConfig {
     telegramChatId,
     openclawHooksUrl,
     openclawHooksToken,
+    defaultNotifySessionKey,
   };
 }
 
