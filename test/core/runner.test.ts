@@ -293,4 +293,34 @@ describe('parseVerificationResult', () => {
   });
 });
 
+// ── no auto-retry on managed project failure ───────────────────────────────
+
+describe('no auto-retry on managed project failure', () => {
+  it('parseJudgeVerdict with fail verdict does not have retryRecommendation that triggers resetToPending', () => {
+    const content = JSON.stringify({
+      verdict: 'fail',
+      confidence: 90,
+      summary: 'Build error: type mismatch',
+      retryRecommendation: 'none',
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('fail');
+    expect(result!.retryRecommendation).toBe('none');
+  });
+
+  it('parseJudgeVerdict with fail + retry-full recommendation is parsed but does not imply auto-reset', () => {
+    const content = JSON.stringify({
+      verdict: 'fail',
+      confidence: 85,
+      summary: 'Incomplete implementation',
+      retryRecommendation: 'retry-full',
+      retryHint: 'Complete the missing sections',
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('fail');
+    expect(result!.retryRecommendation).toBe('retry-full');
+  });
+});
 

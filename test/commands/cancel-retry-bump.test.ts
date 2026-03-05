@@ -25,15 +25,23 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     status: 'pending',
     priority: 0,
     dependsOn: null,
+    parentJobId: null,
     createdAt: '2026-03-02T10:00:00',
     startedAt: null,
     completedAt: null,
     error: null,
+    resumeHint: null,
     attempts: 0,
     maxAttempts: 3,
     delegationPlan: null,
     currentStep: 0,
     sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'claude-only',
+    judgeVerdict: null,
+    actualModels: null,
+    callbackUrl: null,
+    callbackSessionKey: null,
     ...overrides,
   };
 }
@@ -50,6 +58,7 @@ vi.mock('../../src/core/db.js', () => ({
   cancel: (...args: unknown[]) => mockCancel(...args),
   retry: (...args: unknown[]) => mockRetry(...args),
   bump: (...args: unknown[]) => mockBump(...args),
+  unblockProject: vi.fn(),  // added in Plan 33-01: retry also unblocks project
 }));
 
 let mockJsonMode = false;
@@ -193,7 +202,7 @@ describe('retryCommand', () => {
 
     await retryCommand('ab12');
 
-    expect(mockOutputJson).toHaveBeenCalledWith({ retried: 'ab12' });
+    expect(mockOutputJson).toHaveBeenCalledWith({ retried: 'ab12', unblocked: 'test-proj' });
   });
 
   it('exits 1 when job not found', async () => {

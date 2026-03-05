@@ -42,6 +42,7 @@ vi.mock('../../src/core/db.js', () => ({
     callbackSessionKey: _callbackSessionKey ?? null,
   })),
   findDuplicateJob: vi.fn(() => null),
+  getProject: vi.fn(() => null),
 }));
 
 // Mock output utilities
@@ -117,7 +118,7 @@ vi.mock('../../src/core/config.js', () => {
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
-import { addJob, findDuplicateJob } from '../../src/core/db.js';
+import { addJob, findDuplicateJob, getProject } from '../../src/core/db.js';
 import type { JobScope } from '../../src/core/types.js';
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────
@@ -703,6 +704,87 @@ describe('notify flag validation', () => {
     // exitSpy should NOT have been called with code 2 for the notify requirement
     const notifyExitCalls = exitSpy.mock.calls.filter(([code]) => code === 2);
     expect(notifyExitCalls).toHaveLength(0);
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ── project owner as fallback notify ──────────────────────────────────────
+
+describe('project owner as fallback notify', () => {
+  let ownerTestsDir: string;
+
+  beforeAll(() => {
+    ownerTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-owner-'));
+    mockedProjectDir = ownerTestsDir;
+    syncProjectDirEnv();
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(ownerTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(ownerTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = ownerTestsDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+    vi.mocked(getProject).mockReturnValue(null);
+  });
+
+  it('uses project owner as callbackSessionKey when no --notify and no PILOT_DEFAULT_NOTIFY', async () => {
+    // Mock getProject to return a project with owner
+    vi.mocked(getProject).mockReturnValue({
+      path: path.join(ownerTestsDir, 'my-project'),
+      owner: 'agent:main:main',
+      status: 'active',
+      blockedReason: null,
+      blockedAt: null,
+      createdAt: '2026-03-05T00:00:00Z',
+    });
+
+    // No --notify, no PILOT_DEFAULT_NOTIFY — project owner is the fallback
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agent:main:main',  // project owner as callbackSessionKey
+      undefined,
+    );
+  });
+
+  it('still errors when no --notify, no PILOT_DEFAULT_NOTIFY, and no project owner', async () => {
+    // getProject returns null (unregistered project) — no owner fallback
+    vi.mocked(getProject).mockReturnValue(null);
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', {})).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('Missing --notify');
 
     stderrSpy.mockRestore();
     exitSpy.mockRestore();
