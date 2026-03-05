@@ -255,6 +255,28 @@ async function addCommand(
     }
   }
 
+  // Warn if project is not registered (non-blocking — one-off jobs are valid)
+  {
+    const { getProject: checkProject } = await import('../core/db.js');
+    const projectRecord = checkProject(resolvedProject);
+    if (!projectRecord) {
+      process.stderr.write(
+        `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <key>\n`,
+      );
+    }
+  }
+
+  // --dry-run: preview only — do NOT write to DB
+  if (opts.dryRun) {
+    const shortDesc = description.length > 60 ? description.slice(0, 60) + '…' : description;
+    outputHuman(`  ${dim('[dry-run]')} Would queue: ${project} · ${scope} · "${shortDesc}"`);
+    if (resolvedNotifyKey) {
+      outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
+    }
+    outputHuman(`  ${dim('Project:')} ${resolvedProject}`);
+    return;
+  }
+
   const job = addJob(
     resolvedProject, scope, description,
     requirementPath ?? undefined,
