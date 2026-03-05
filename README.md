@@ -71,9 +71,11 @@ pilot service start
 
 ### Prerequisites
 
-- Bun >= 1.x
-- [opencode](https://opencode.ai) installed and configured
-- Linux (some features use `/proc` and systemd)
+- **[Bun](https://bun.sh) >= 1.x** — primary runtime (the CLI shebang targets `bun`)
+- **Node.js >= 18** — needed for `better-sqlite3` native module compilation
+- **[opencode](https://opencode.ai)** — the AI coding agent that executes work
+- **Build tools** — `build-essential`, `python3` (for compiling `better-sqlite3`)
+- **Linux** — required for daemon mode, memory management, and cgroups. Basic job running may work on macOS.
 
 ### Setting up pilot-gsd
 
@@ -104,6 +106,16 @@ export PILOT_GSD_DIR=/path/to/pilot-gsd
 ```
 
 See the [pilot-gsd](https://github.com/lucafanselau/pilot-gsd) repository for more details.
+
+### Verify your setup
+
+```bash
+pilot doctor
+```
+
+Checks opencode binary, pilot-gsd, system memory, cgroups v2, and user lingering.
+
+> For the complete installation walkthrough — including environment variables, AI provider setup, notification configuration, and daemon mode — see **[Getting Started Guide](docs/GETTING-STARTED.md)**.
 
 ---
 
