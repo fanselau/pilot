@@ -598,12 +598,18 @@ Plans:
 
 ### Phase 36: Config File Support for Pilot CLI
 
-**Goal:** [To be planned]
+**Goal:** Add layered config file system (`~/.pilot/config.json`) with resolution order: CLI flags > env vars > config file > defaults. Includes `pilot config` subcommands (init, set, get, edit, path), enhanced config display with source annotations, and config-driven defaults for model profile and provider mode.
 **Depends on:** Phase 35
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 36 to break down)
+- [ ] 36-01-PLAN.md — Config file loading with layered resolution (TDD: types, loadConfigFile, getConfig update, tests)
+- [ ] 36-02-PLAN.md — CLI config subcommands (init, set, get, edit, path, enhanced show)
+- [ ] 36-03-PLAN.md — Consumer wiring (add.ts/db.ts defaults, doctor check, comprehensive tests)
+
+Wave structure:
+- Wave 1: 36-01 (config foundation — types + loading + resolution)
+- Wave 2: 36-02 + 36-03 (CLI subcommands + consumer wiring, both depend on 36-01, independent of each other)
 
 **Details:**
-[To be added during planning]
+Read requirements/config-file.md for full spec.
