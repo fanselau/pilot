@@ -264,6 +264,60 @@ function spawnChildJobs(
   return childJobs;
 }
 
+// ── Phase number patching ─────────────────────────────────────────────────
+
+/**
+ * After an add-phase step completes, scan .planning/phases/ for the newest
+ * phase directory and patch remaining plan-phase/execute-phase step args
+ * with the actual phase number if it differs from what was predicted.
+ *
+ * Mutates `steps` array in place for steps at index > completedStepIndex.
+ */
+function patchPhaseArgs(
+  steps: DelegationStep[],
+  completedStepIndex: number,
+  projectDir: string,
+): void {
+  const phasesDir = path.join(projectDir, '.planning', 'phases');
+
+  // Find the highest-numbered phase directory (the one add-phase just created)
+  let actualPhaseNumber: number | null = null;
+  try {
+    const entries = readdirSync(phasesDir);
+    for (const entry of entries) {
+      const match = entry.match(/^(\d+)-/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (actualPhaseNumber === null || n > actualPhaseNumber) {
+          actualPhaseNumber = n;
+        }
+      }
+    }
+  } catch {
+    return; // Can't read phases dir — skip patching
+  }
+
+  if (actualPhaseNumber === null) return;
+
+  // Patch remaining plan-phase and execute-phase steps
+  for (let i = completedStepIndex + 1; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.command === 'plan-phase' || step.command === 'execute-phase') {
+      // Replace the leading phase number in args
+      // plan-phase args: "N" or "N @path/to/req.md"
+      // execute-phase args: "N"
+      const oldArgs = step.args;
+      const newArgs = step.args.replace(/^\d+/, String(actualPhaseNumber));
+      if (oldArgs !== newArgs) {
+        step.args = newArgs;
+        process.stderr.write(
+          `[runner] Patched ${step.command} args: "${oldArgs}" → "${newArgs}" (actual phase: ${actualPhaseNumber})\n`,
+        );
+      }
+    }
+  }
+}
+
 // ── Runner Class ───────────────────────────────────────────────────────────
 
 class Runner {
@@ -619,6 +673,13 @@ class Runner {
         const sessionId = findSessionByTitle(title);
         completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         advanceStep(job.id);
+
+        // After add-phase completes, patch remaining step args with actual phase number.
+        // Delegate predicts the phase number via getNextPhaseNumber(), but the actual number
+        // may differ (race condition, AI behavior). Patch plan-phase + execute-phase args.
+        if (step.command === 'add-phase') {
+          patchPhaseArgs(plan.steps, i, projectDir);
+        }
 
         // Step 3: For execute-phase commands, spawn judge to evaluate results
         if (step.command === 'execute-phase') {
@@ -1596,7 +1657,7 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner, killJobSession, parseJudgeVerdict, spawnChildJobs };
+export { Runner, createRunner, killJobSession, parseJudgeVerdict, spawnChildJobs, patchPhaseArgs };
 export type { RunnerOptions, RunnerState, JudgeVerdict, VerificationResult, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing

@@ -541,7 +541,7 @@ function parseDelegationOutput(content: string): DelegationPlan {
     if (step.command === 'phase') {
       // Extract phase info from args (e.g. "Feature Name --auto" or "@path/to/req.md --resume")
       const args = step.args.replace(/--auto|--resume/g, '').trim();
-      // Default to phase 1 — runner will patch with actual next phase number
+      // Default to phase 1 — runner patches with actual phase number after add-phase completes
       return [
         { command: 'add-phase', args },
         { command: 'plan-phase', args: `1 ${args.startsWith('@') ? args : ''}`.trim() },
