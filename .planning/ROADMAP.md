@@ -631,12 +631,19 @@ Read requirements/skills-system.md for full spec.
 
 ### Phase 38: Pilot Hardening — Pre-Release Quality Pass
 
-**Goal:** [To be planned]
+**Goal:** Fix all CRITICAL and HIGH severity issues from 5 automated audits (error handling, security, code quality, UX, dead code). Make the codebase robust enough that a new user can install, set up, queue a job, and succeed without hitting preventable failures.
 **Depends on:** Phase 37
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 38 to break down)
+- [ ] 38-01-PLAN.md — Shared utilities (errMsg), dead code cleanup, security hardening (PRAGMA allowlist, command injection, DB busy_timeout + chmod)
+- [ ] 38-02-PLAN.md — Error recovery: runner process resilience, delegate catch logging, opencode-db reconnection, callback URL security, file size limits
+- [ ] 38-03-PLAN.md — UX polish (daemon status, setup hint, scope feedback, TUI footer, kill fix, service warning) + pilot gc command
+
+Wave structure:
+- Wave 1: 38-01 (utilities + dead code + security foundation)
+- Wave 2: 38-02 (error recovery, depends on 38-01 for errMsg + clean exports)
+- Wave 3: 38-03 (UX polish + gc, depends on 38-01 + 38-02)
 
 **Details:**
-[To be added during planning]
+Read requirements/hardening.md for full spec.
