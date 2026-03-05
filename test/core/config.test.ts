@@ -622,3 +622,161 @@ describe('getConfigSource', () => {
     expect(getConfigSource('logLevel')).toBe('config');
   });
 });
+
+// ── Additional config file validation edge cases ──────────────────────────
+
+describe('config file validation edge cases', () => {
+  let tempConfigPath: string | null = null;
+
+  afterEach(() => {
+    _resetConfigCache();
+    delete process.env.PILOT_CONFIG_FILE;
+    if (tempConfigPath) {
+      cleanupTempConfig(tempConfigPath);
+      tempConfigPath = null;
+    }
+  });
+
+  it('throws on negative pollInterval', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { pollInterval: -5 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/pollInterval/i);
+  });
+
+  it('throws on defaultTimeout < 1', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { defaultTimeout: 0 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/defaultTimeout/i);
+  });
+
+  it('throws on stuckThreshold < 1', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { stuckThreshold: -1 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/stuckThreshold/i);
+  });
+
+  it('throws on non-numeric pollInterval (string)', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { pollInterval: 'fast' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/pollInterval/i);
+  });
+
+  it('throws on invalid scope value', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'global' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/scope/i);
+  });
+
+  it('allows scope = null (no default)', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: null },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const result = loadConfigFile();
+    expect(result).not.toBeNull();
+    expect(result!.defaults?.scope).toBeNull();
+  });
+
+  it('throws on memory.sessionMaxMb < 1', () => {
+    tempConfigPath = writeTempConfig({
+      memory: { sessionMaxMb: 0 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/sessionMaxMb/i);
+  });
+
+  it('allows empty config file (empty object)', () => {
+    tempConfigPath = writeTempConfig({});
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const result = loadConfigFile();
+    expect(result).not.toBeNull();
+  });
+
+  it('allows config with only unknown keys', () => {
+    tempConfigPath = writeTempConfig({
+      experimentalFeature: true,
+      v3: { enabled: true },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const result = loadConfigFile();
+    expect(result).not.toBeNull();
+  });
+});
+
+// ── getConfigFileDefaults scope variations ─────────────────────────────────
+
+describe('getConfigFileDefaults scope variations', () => {
+  let tempConfigPath: string | null = null;
+
+  afterEach(() => {
+    _resetConfigCache();
+    delete process.env.PILOT_CONFIG_FILE;
+    if (tempConfigPath) {
+      cleanupTempConfig(tempConfigPath);
+      tempConfigPath = null;
+    }
+  });
+
+  it('returns scope: "quick" when set in config', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'quick' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.scope).toBe('quick');
+  });
+
+  it('returns scope: "phase" when set in config', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'phase' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.scope).toBe('phase');
+  });
+
+  it('returns scope: "milestone" when set in config', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'milestone' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.scope).toBe('milestone');
+  });
+
+  it('returns all valid modelProfile values from config', () => {
+    for (const profile of ['quality', 'balanced', 'budget'] as const) {
+      _resetConfigCache();
+      if (tempConfigPath) cleanupTempConfig(tempConfigPath);
+      tempConfigPath = writeTempConfig({
+        defaults: { modelProfile: profile },
+      });
+      process.env.PILOT_CONFIG_FILE = tempConfigPath;
+      const defaults = getConfigFileDefaults();
+      expect(defaults.modelProfile).toBe(profile);
+    }
+  });
+
+  it('returns all valid providerMode values from config', () => {
+    for (const mode of ['hybrid', 'claude-only', 'openai-only'] as const) {
+      _resetConfigCache();
+      if (tempConfigPath) cleanupTempConfig(tempConfigPath);
+      tempConfigPath = writeTempConfig({
+        defaults: { providerMode: mode },
+      });
+      process.env.PILOT_CONFIG_FILE = tempConfigPath;
+      const defaults = getConfigFileDefaults();
+      expect(defaults.providerMode).toBe(mode);
+    }
+  });
+});

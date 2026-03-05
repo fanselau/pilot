@@ -8,7 +8,7 @@
  * which did PID/log scanning. This checks opencode binary, DB access, disk, memory.
  */
 
-import { accessSync } from 'node:fs';
+import { accessSync, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -49,6 +49,41 @@ async function doctorCommand(): Promise<void> {
     checks.push({ name: 'pilot dir', status: 'pass', detail: config.pilotDir });
   } catch {
     checks.push({ name: 'pilot dir', status: 'warn', detail: 'Will be created on first job add' });
+  }
+
+  // Check config file
+  const configPath = path.join(config.pilotDir, 'config.json');
+  try {
+    accessSync(configPath);
+    // File exists — check valid JSON
+    try {
+      const raw = readFileSync(configPath, 'utf8');
+      JSON.parse(raw);
+      // Check permissions (warn if world/group readable — may expose tokens)
+      const stats = statSync(configPath);
+      const mode = stats.mode & 0o777;
+      if ((mode & 0o044) !== 0) {
+        checks.push({
+          name: 'config file',
+          status: 'warn',
+          detail: `${configPath} — world/group readable (mode: ${mode.toString(8)}), may expose tokens. Run: chmod 600 ${configPath}`,
+        });
+      } else {
+        checks.push({ name: 'config file', status: 'pass', detail: configPath });
+      }
+    } catch (parseErr) {
+      checks.push({
+        name: 'config file',
+        status: 'fail',
+        detail: `${configPath} — invalid JSON: ${(parseErr as Error).message}`,
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'config file',
+      status: 'warn',
+      detail: 'No config file — using defaults. Run: pilot config init',
+    });
   }
 
   // Check system memory
