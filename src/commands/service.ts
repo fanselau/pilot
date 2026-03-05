@@ -14,6 +14,7 @@ import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { getConfig } from '../core/config.js';
 import { outputHuman } from '../util/output.js';
+import { errMsg } from '../util/errors.js';
 import { green, dim } from '../util/colors.js';
 
 async function serviceCommand(action: string): Promise<void> {
@@ -55,7 +56,7 @@ WantedBy=default.target
         outputHuman(`  ${green('✓')} Started ${unit}`);
       } catch (err) {
         process.stderr.write(
-          `Failed to start ${unit}: ${err instanceof Error ? err.message : String(err)}\n`,
+          `Failed to start ${unit}: ${errMsg(err)}\n`,
         );
         process.exit(1);
       }
@@ -66,7 +67,7 @@ WantedBy=default.target
         outputHuman(`  ${green('✓')} Stopped ${unit}`);
       } catch (err) {
         process.stderr.write(
-          `Failed to stop ${unit}: ${err instanceof Error ? err.message : String(err)}\n`,
+          `Failed to stop ${unit}: ${errMsg(err)}\n`,
         );
         process.exit(1);
       }

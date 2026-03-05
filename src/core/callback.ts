@@ -12,6 +12,7 @@
  */
 
 import { getConfig } from './config.js';
+import { errMsg } from '../util/errors.js';
 import type { Job } from './types.js';
 
 /**
@@ -85,7 +86,7 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     return resp.ok;
   } catch (err) {
     process.stderr.write(
-      `[callback] notifyJobCompletion failed for job ${job.id}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[callback] notifyJobCompletion failed for job ${job.id}: ${errMsg(err)}\n`,
     );
     return false;
   }

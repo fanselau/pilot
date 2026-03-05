@@ -9,6 +9,7 @@ import { accessSync } from 'node:fs';
 import { execa } from 'execa';
 import { getConfig } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
+import { errMsg } from '../util/errors.js';
 import { green, red, dim } from '../util/colors.js';
 
 async function updateCommand(): Promise<void> {
@@ -39,13 +40,13 @@ async function updateCommand(): Promise<void> {
     if (isJsonMode()) {
       outputJson({
         updated: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: errMsg(err),
       });
       return;
     }
 
     process.stderr.write(
-      `  ${red('✗')} git pull failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      `  ${red('✗')} git pull failed: ${errMsg(err)}\n`,
     );
     process.exit(1);
   }

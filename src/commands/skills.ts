@@ -14,6 +14,7 @@ import {
   PREDEFINED_CATEGORIES,
 } from '../core/skills.js';
 import { outputHuman } from '../util/output.js';
+import { errMsg } from '../util/errors.js';
 import { bold, dim } from '../util/colors.js';
 
 // ── List ──────────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ async function skillsAddCommand(
       outputHuman('No skills found in repository.');
     }
   } catch (err) {
-    process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(`Error: ${errMsg(err)}\n`);
     process.exit(1);
   }
 }

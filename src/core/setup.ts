@@ -12,6 +12,7 @@ import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, real
 import path from 'node:path';
 import { execa } from 'execa';
 import { getConfig } from './config.js';
+import { errMsg } from '../util/errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
   try {
     await mkdir(absDir, { recursive: true });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errMsg(err);
     result.errors.push(`Failed to create directory: ${msg}`);
     return result;
   }
@@ -78,7 +79,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
   try {
     await mkdir(opencodeDir, { recursive: true });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errMsg(err);
     result.errors.push(`Failed to create .opencode/: ${msg}`);
     return result;
   }
@@ -120,7 +121,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
       await symlink(link.target, linkPath);
       result.created.push(`.opencode/${link.name}/ → ${link.target}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errMsg(err);
       result.errors.push(`Failed to create symlink .opencode/${link.name}/: ${msg}`);
     }
   }
@@ -146,7 +147,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
       await writeFile(configJsonPath, JSON.stringify(opencodeConfig, null, 2) + '\n', 'utf8');
       result.created.push('opencode.json');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errMsg(err);
       result.errors.push(`Failed to create opencode.json: ${msg}`);
     }
   }
@@ -168,7 +169,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
       result.created.push('.gitignore');
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errMsg(err);
     result.errors.push(`Failed to update .gitignore: ${msg}`);
   }
 
@@ -179,7 +180,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
       await execa('git', ['init', '-q'], { cwd: absDir });
       result.created.push('git repository');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errMsg(err);
       result.errors.push(`Failed to init git: ${msg}`);
     }
   } else {

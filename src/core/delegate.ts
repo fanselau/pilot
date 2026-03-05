@@ -15,6 +15,7 @@ import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
 import { resolveSkillsForJob } from './skills.js';
+import { errMsg } from '../util/errors.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
@@ -523,7 +524,7 @@ function parseDelegationOutput(content: string): DelegationPlan {
     parsed = JSON.parse(jsonStr) as Record<string, unknown>;
   } catch (err) {
     throw new Error(
-      `Failed to parse delegation output: ${err instanceof Error ? err.message : String(err)}\nRaw content: ${content.slice(0, 500)}`,
+      `Failed to parse delegation output: ${errMsg(err)}\nRaw content: ${content.slice(0, 500)}`,
     );
   }
 

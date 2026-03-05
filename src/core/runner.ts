@@ -48,6 +48,7 @@ import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
+import { errMsg } from '../util/errors.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
@@ -462,7 +463,7 @@ class Runner {
           process.stderr.write(`[runner] Injected ${injected.length} skill(s) for job ${job.id}: ${injected.join(', ')}\n`);
         }
       } catch (err) {
-        process.stderr.write(`[runner] Warning: skill injection failed for job ${job.id}: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`[runner] Warning: skill injection failed for job ${job.id}: ${errMsg(err)}\n`);
         // Non-fatal: continue without skills
       }
     }
@@ -480,7 +481,7 @@ class Runner {
           updateSessionTitles(job.id, [_sessionTitle]);
         }
       } catch (err) {
-        throw new Error(`Delegation failed: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(`Delegation failed: ${errMsg(err)}`);
       }
       updateDelegationPlan(job.id, plan);
 
@@ -546,7 +547,7 @@ class Runner {
               );
             }
           } catch (err) {
-            throw new Error(`Re-delegation after new-milestone failed: ${err instanceof Error ? err.message : String(err)}`);
+            throw new Error(`Re-delegation after new-milestone failed: ${errMsg(err)}`);
           }
         }
 
@@ -649,7 +650,7 @@ class Runner {
         resetToPending(job.id, 'Interrupted by shutdown');
       }
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
+      const error = errMsg(err);
       this.collectActualModels(job.id);
       markFailed(job.id, error);
       // Fire-and-forget callback to wake originating session
@@ -766,14 +767,14 @@ class Runner {
     try {
       await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle, verifyTimeoutMs);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      if (errMsg.includes('timed out')) {
+      const msg = errMsg(err);
+      if (msg.includes('timed out')) {
         process.stderr.write(
           `[runner] Verification timed out after 15m for ${verifyTitle} — treating as benefit-of-doubt\n`,
         );
       } else {
         process.stderr.write(
-          `[runner] Verification session failed: ${errMsg}\n`,
+          `[runner] Verification session failed: ${msg}\n`,
         );
       }
       return null; // Benefit of doubt on spawn failure or timeout
@@ -828,7 +829,7 @@ class Runner {
       return parseVerificationResult(content);
     } catch (err) {
       process.stderr.write(
-        `[runner] runVerification: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`,
+        `[runner] runVerification: unexpected error: ${errMsg(err)}\n`,
       );
       return null;
     }
@@ -1471,7 +1472,7 @@ async function killJobSession(
       // Process already gone — consider it killed
       return { killed: true, reason: `Process ${pid} already gone (ESRCH on SIGTERM)` };
     }
-    return { killed: false, reason: `SIGTERM failed: ${err instanceof Error ? err.message : String(err)}` };
+    return { killed: false, reason: `SIGTERM failed: ${errMsg(err)}` };
   }
 
   // Wait up to 5 seconds for the process to exit (poll every 500ms)
@@ -1506,7 +1507,7 @@ async function killJobSession(
     }
     return {
       killed: false,
-      reason: `SIGKILL failed: ${err instanceof Error ? err.message : String(err)}`,
+      reason: `SIGKILL failed: ${errMsg(err)}`,
     };
   }
 }

@@ -15,6 +15,8 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { accessSync, constants } from 'node:fs';
+import { errMsg } from '../util/errors.js';
+import { truncateNullable } from '../util/format.js';
 import type { SessionInfo, SessionMessage, SessionPart } from './types.js';
 
 // ── Module-level cached DB connection ──────────────────────────────────────
@@ -106,7 +108,7 @@ function exportSessionFromDb(sessionId: string): unknown {
 
     return { messages };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errMsg(err);
     throw new Error(`Failed to export session: ${sessionId}: ${message}`);
   }
 }
@@ -230,15 +232,8 @@ function getSessionMessages(sessionId: string, since?: number): SessionMessage[]
 
 // ── Part-level queries ─────────────────────────────────────────────────────
 
-/**
- * Truncate a string to a maximum length, appending "…" if truncated.
- */
-function truncateStr(s: string | null | undefined, maxLen: number): string | undefined {
-  if (s == null) return undefined;
-  const str = String(s);
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen) + '…';
-}
+// truncateStr replaced by truncateNullable from util/format.ts
+const truncateStr = truncateNullable;
 
 /**
  * Extract tool input summary from part data based on tool type.

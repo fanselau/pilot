@@ -46,8 +46,9 @@ function formatDuration(seconds: number): string {
 
 /**
  * Truncate a string with ellipsis if it exceeds maxLen.
+ * Canonical truncation function — use this everywhere instead of local helpers.
  */
-function truncateString(str: string, maxLen: number): string {
+function truncate(str: string, maxLen: number): string {
   if (str.length <= maxLen) {
     return str;
   }
@@ -58,10 +59,22 @@ function truncateString(str: string, maxLen: number): string {
 }
 
 /**
+ * Nullable variant of truncate — returns undefined for null/undefined input.
+ * Thin wrapper for use in optional-value contexts (e.g. tool input/output extraction).
+ */
+function truncateNullable(str: string | null | undefined, maxLen: number): string | undefined {
+  if (str == null) return undefined;
+  return truncate(String(str), maxLen);
+}
+
+/** @deprecated Use `truncate` directly */
+const truncateString = truncate;
+
+/**
  * Truncate a session title to maxLen (default 80) for safe filename use.
  */
 function truncateTitle(str: string, maxLen: number = 80): string {
-  return truncateString(str, maxLen);
+  return truncate(str, maxLen);
 }
 
 /**
@@ -86,4 +99,4 @@ function formatRelativeTime(date: Date | string): string {
   return formatDistanceToNow(d, { addSuffix: true });
 }
 
-export { formatDuration, truncateString, truncateTitle, formatProgressBar, formatRelativeTime };
+export { formatDuration, truncate, truncateNullable, truncateString, truncateTitle, formatProgressBar, formatRelativeTime };
