@@ -2,7 +2,8 @@
  * Tests for pure exported helpers in runner.ts.
  *
  * Tests `parseJudgeVerdict`, `getDynamicMaxParallel`, `hasSystemdRunUser`,
- * and `spawnChildJobs` (milestone coordinator child job spawning).
+ * `spawnChildJobs` (milestone coordinator child job spawning), and
+ * `patchPhaseArgs` (phase number patching after add-phase step).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -28,7 +29,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, parseVerificationResult, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, spawnChildJobs } from '../../src/core/runner.js';
+import { parseJudgeVerdict, parseVerificationResult, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, spawnChildJobs, patchPhaseArgs } from '../../src/core/runner.js';
 import { _getTestDb, addJob, markCompleted, getJob, getChildJobs } from '../../src/core/db.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
@@ -548,5 +549,116 @@ describe('parseVerificationResult', () => {
   it('returns null for content with only opening --- but no closing', () => {
     const content = '---\nstatus: passed\nverdict: PASS\nSome body content';
     expect(parseVerificationResult(content)).toBeNull();
+  });
+});
+
+// ── patchPhaseArgs ─────────────────────────────────────────────────────────
+
+describe('patchPhaseArgs', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-patch-test-'));
+    mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('patches plan-phase and execute-phase args when actual phase differs from predicted', () => {
+    // Simulate: delegate predicted phase 5, but add-phase created phase 7
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-setup'));
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '07-new-feature'));
+
+    const steps = [
+      { command: 'add-phase', args: 'New Feature' },
+      { command: 'plan-phase', args: '5 @requirements/feature.md' },
+      { command: 'execute-phase', args: '5' },
+    ];
+
+    patchPhaseArgs(steps, 0, tmpDir);
+
+    expect(steps[1].args).toBe('7 @requirements/feature.md');
+    expect(steps[2].args).toBe('7');
+  });
+
+  it('no-ops when actual phase matches predicted', () => {
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '03-feature'));
+
+    const steps = [
+      { command: 'add-phase', args: 'Feature' },
+      { command: 'plan-phase', args: '3' },
+      { command: 'execute-phase', args: '3' },
+    ];
+
+    patchPhaseArgs(steps, 0, tmpDir);
+
+    expect(steps[1].args).toBe('3');
+    expect(steps[2].args).toBe('3');
+  });
+
+  it('does not patch steps before completedStepIndex', () => {
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '10-feature'));
+
+    const steps = [
+      { command: 'plan-phase', args: '5' },    // index 0 — should NOT be patched
+      { command: 'add-phase', args: 'Feature' }, // index 1 — completed step
+      { command: 'execute-phase', args: '5' },   // index 2 — should be patched
+    ];
+
+    patchPhaseArgs(steps, 1, tmpDir);
+
+    expect(steps[0].args).toBe('5'); // NOT patched (before completed)
+    expect(steps[2].args).toBe('10'); // patched
+  });
+
+  it('handles missing phases directory gracefully', () => {
+    // tmpDir has no .planning/phases/ at all
+    rmSync(path.join(tmpDir, '.planning'), { recursive: true, force: true });
+
+    const steps = [
+      { command: 'add-phase', args: 'Feature' },
+      { command: 'plan-phase', args: '1' },
+      { command: 'execute-phase', args: '1' },
+    ];
+
+    // Should not throw
+    patchPhaseArgs(steps, 0, tmpDir);
+
+    // Args unchanged
+    expect(steps[1].args).toBe('1');
+    expect(steps[2].args).toBe('1');
+  });
+
+  it('patches hardcoded phase 1 from deprecated command conversion', () => {
+    // parseDelegationOutput converts { command: 'phase' } to hardcoded phase 1
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '15-auth-system'));
+
+    const steps = [
+      { command: 'add-phase', args: 'Auth System' },
+      { command: 'plan-phase', args: '1 @requirements/auth.md' },
+      { command: 'execute-phase', args: '1' },
+    ];
+
+    patchPhaseArgs(steps, 0, tmpDir);
+
+    expect(steps[1].args).toBe('15 @requirements/auth.md');
+    expect(steps[2].args).toBe('15');
+  });
+
+  it('only patches plan-phase and execute-phase, not other commands', () => {
+    mkdirSync(path.join(tmpDir, '.planning', 'phases', '10-feature'));
+
+    const steps = [
+      { command: 'add-phase', args: 'Feature' },
+      { command: 'quick', args: 'Do something with 5 items' },
+      { command: 'execute-phase', args: '5' },
+    ];
+
+    patchPhaseArgs(steps, 0, tmpDir);
+
+    expect(steps[1].args).toBe('Do something with 5 items'); // NOT patched
+    expect(steps[2].args).toBe('10'); // patched
   });
 });
