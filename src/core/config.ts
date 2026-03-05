@@ -5,6 +5,7 @@
  * Pure core module — no UI dependencies.
  */
 
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PilotConfig } from './types.js';
@@ -16,6 +17,30 @@ function expandTilde(filepath: string): string {
   return filepath;
 }
 
+function resolveGsdDir(home: string): string {
+  // 1. Explicit env var override (highest priority)
+  if (process.env.PILOT_GSD_DIR) {
+    return expandTilde(process.env.PILOT_GSD_DIR);
+  }
+
+  // 2. Submodule location: <pilot_repo_root>/pilot-gsd/
+  //    Works both from source (src/core/ → ../../) and dist (dist/core/ → ../../)
+  const pilotRoot = path.resolve(import.meta.dirname, '..', '..');
+  const submodulePath = path.join(pilotRoot, 'pilot-gsd');
+  if (existsSync(submodulePath)) {
+    return submodulePath;
+  }
+
+  // 3. Home directory fallback for standalone installs
+  const homeFallback = path.join(home, 'pilot-gsd');
+  if (existsSync(homeFallback)) {
+    return homeFallback;
+  }
+
+  // 4. Return submodule path as default — doctor/setup will surface the error
+  return submodulePath;
+}
+
 function getConfig(): PilotConfig {
   const home = os.homedir();
 
@@ -23,12 +48,8 @@ function getConfig(): PilotConfig {
     process.env.PILOT_PROJECT_DIR ?? `${home}/dev`,
   );
 
-  // Resolve pilot-gsd relative to pilot's own installation
-  const pilotRoot = path.resolve(import.meta.dirname, '..', '..');
-  const defaultGsdDir = path.join(pilotRoot, 'pilot-gsd');
-  const gsdDir = expandTilde(
-    process.env.PILOT_GSD_DIR ?? defaultGsdDir,
-  );
+  // Resolve pilot-gsd: env var > submodule > home fallback
+  const gsdDir = resolveGsdDir(home);
 
   const stuckThresholdRaw = parseInt(process.env.PILOT_STUCK_THRESHOLD ?? '90', 10);
   const stuckThreshold = Number.isNaN(stuckThresholdRaw) ? 90 : stuckThresholdRaw;
