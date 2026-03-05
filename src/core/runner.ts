@@ -444,6 +444,14 @@ class Runner {
   private async launch(job: Job): Promise<void> {
     const projectDir = resolveProjectDir(job.project);
 
+    // Warn when picking up a job for an unregistered project (non-blocking)
+    const projectRecord = getProject(job.project);
+    if (!projectRecord) {
+      process.stderr.write(
+        `[runner] Warning: job ${job.id} targets unregistered project "${job.project}". Register with: pilot setup <dir> --owner <key>\n`,
+      );
+    }
+
     try {
       this.patchModelsForJob(job, projectDir);
 

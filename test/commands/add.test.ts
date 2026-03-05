@@ -790,3 +790,111 @@ describe('project owner as fallback notify', () => {
     exitSpy.mockRestore();
   });
 });
+
+// ── dry-run behavior ───────────────────────────────────────────────────────
+
+describe('dry-run behavior', () => {
+  let dryRunTestsDir: string;
+
+  beforeAll(() => {
+    dryRunTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-dryrun-'));
+    // Set up project with proper structure
+    const projectDir = path.join(dryRunTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(dryRunTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = dryRunTestsDir;
+    syncProjectDirEnv();
+    vi.clearAllMocks();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  it('--dry-run does NOT call addJob', async () => {
+    await addCommand('my-project', 'fix stuff', { dryRun: true });
+    expect(addJob).not.toHaveBeenCalled();
+  });
+
+  it('--dry-run outputs a preview without queuing', async () => {
+    await addCommand('my-project', 'fix stuff', { dryRun: true });
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('[dry-run]');
+    expect(output).toContain('Would queue');
+    expect(addJob).not.toHaveBeenCalled();
+  });
+});
+
+// ── unregistered project warning ───────────────────────────────────────────
+
+describe('unregistered project warning', () => {
+  let unregTestsDir: string;
+
+  beforeAll(() => {
+    unregTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-unreg-'));
+    const projectDir = path.join(unregTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(unregTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = unregTestsDir;
+    syncProjectDirEnv();
+    vi.clearAllMocks();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+    vi.mocked(getProject).mockReturnValue(null);
+  });
+
+  it('warns when project is not registered (getProject returns null)', async () => {
+    vi.mocked(getProject).mockReturnValue(null);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('Project not registered');
+    expect(stderrOutput).toContain('pilot setup');
+    expect(addJob).toHaveBeenCalled(); // still queued — non-blocking
+
+    stderrSpy.mockRestore();
+  });
+
+  it('does NOT warn when project is registered', async () => {
+    vi.mocked(getProject).mockReturnValue({
+      path: path.join(unregTestsDir, 'my-project'),
+      owner: 'agent:main:main',
+      status: 'active',
+      blockedReason: null,
+      blockedAt: null,
+      createdAt: '2026-03-05T00:00:00Z',
+    });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).not.toContain('Project not registered');
+
+    stderrSpy.mockRestore();
+  });
+});
