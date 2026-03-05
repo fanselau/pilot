@@ -40,13 +40,8 @@ import {
   resetToPending,
   updateJudgeVerdict,
   updateActualModels,
-  addJob,
-  getChildJobs,
-  pauseJob,
-  getMilestoneStatus,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
-import { notifyMilestonePaused } from './notify.js';
 import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
@@ -149,119 +144,6 @@ function setOomScore(score: number): void {
   } catch {
     // Non-Linux or insufficient permissions — skip silently
   }
-}
-
-// ── Milestone child job spawning ───────────────────────────────────────────
-
-/**
- * Spawn child phase jobs from ROADMAP.md for a milestone coordinator job.
- *
- * Reads .planning/ROADMAP.md in the project directory, finds incomplete phases
- * (those with at least one plan not yet checked off), and creates one phase-scope
- * job per incomplete phase with sequential depends_on chaining.
- *
- * The milestone coordinator job (parentJobId) must already be in 'running' state.
- * Child jobs are linked via parent_job_id and chained via depends_on so they
- * execute sequentially (enforced by claimNextLaunchable depends_on check).
- *
- * @param parentJobId - The milestone coordinator job's ID
- * @param projectDir  - Absolute path to the project directory
- * @param parentJob   - The milestone coordinator job (for inheriting config fields)
- * @returns Array of created child Job objects (empty if no incomplete phases found)
- */
-function spawnChildJobs(
-  parentJobId: string,
-  projectDir: string,
-  parentJob: {
-    project: string;
-    requirementPath: string | null;
-    modelProfile: import('./types.js').ModelProfile;
-    providerMode: import('./types.js').ProviderMode;
-    callbackSessionKey: string | null;
-  },
-): ReturnType<typeof addJob>[] {
-  const roadmapPath = path.join(projectDir, '.planning', 'ROADMAP.md');
-
-  let roadmapContent: string;
-  try {
-    roadmapContent = readFileSync(roadmapPath, 'utf8');
-  } catch {
-    process.stderr.write(
-      `[runner] spawnChildJobs: ROADMAP.md not found at ${roadmapPath} — no child jobs spawned\n`,
-    );
-    return [];
-  }
-
-  // Parse phase entries from ROADMAP.md
-  // Each phase starts with: ### Phase NN: ...
-  // Plans are listed as: - [x] or - [ ]
-  const lines = roadmapContent.split('\n');
-  const incompletePhases: { phaseNumber: string }[] = [];
-
-  let currentPhaseNumber: string | null = null;
-  let currentPhasePlans: { checked: boolean }[] = [];
-
-  const flushPhase = () => {
-    if (currentPhaseNumber === null) return;
-    // A phase is incomplete if it has at least one unchecked plan,
-    // or has no plans at all (hasn't been planned yet)
-    const hasUnchecked = currentPhasePlans.length === 0 || currentPhasePlans.some(p => !p.checked);
-    if (hasUnchecked) {
-      incompletePhases.push({ phaseNumber: currentPhaseNumber });
-    }
-    currentPhaseNumber = null;
-    currentPhasePlans = [];
-  };
-
-  for (const line of lines) {
-    // Match: ### Phase 30: Phase Name
-    const phaseMatch = line.match(/^###\s+Phase\s+(\d+):/);
-    if (phaseMatch) {
-      flushPhase();
-      currentPhaseNumber = phaseMatch[1];
-      continue;
-    }
-
-    // Match plan checkbox lines: - [x] ... or - [ ] ...
-    if (currentPhaseNumber !== null) {
-      const checkedMatch = line.match(/^\s*-\s+\[x\]/i);
-      const uncheckedMatch = line.match(/^\s*-\s+\[\s+\]/);
-      if (checkedMatch || uncheckedMatch) {
-        currentPhasePlans.push({ checked: !!checkedMatch });
-      }
-    }
-  }
-  flushPhase();
-
-  if (incompletePhases.length === 0) {
-    process.stderr.write(
-      `[runner] spawnChildJobs: All phases complete in ROADMAP.md — no child jobs needed\n`,
-    );
-    return [];
-  }
-
-  // Create child phase jobs with sequential depends_on chaining
-  const childJobs: ReturnType<typeof addJob>[] = [];
-  let previousJobId: string | null = null;
-
-  for (const { phaseNumber } of incompletePhases) {
-    const childJob = addJob(
-      parentJob.project,
-      'phase',
-      phaseNumber,                           // description = bare phase number
-      parentJob.requirementPath ?? undefined, // inherit requirementPath
-      parentJob.modelProfile,
-      parentJob.providerMode,
-      previousJobId ?? undefined,            // depends on previous child
-      parentJobId,                           // parent milestone job
-      parentJob.callbackSessionKey ?? undefined, // propagate session key to children
-      undefined,                             // no custom callbackUrl for children
-    );
-    childJobs.push(childJob);
-    previousJobId = childJob.id;
-  }
-
-  return childJobs;
 }
 
 // ── Runner Class ───────────────────────────────────────────────────────────
@@ -620,6 +502,30 @@ class Runner {
         completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         advanceStep(job.id);
 
+        // After new-milestone: re-delegate to get phase steps
+        if (step.command === 'new-milestone') {
+          process.stderr.write(
+            `[runner] new-milestone complete, re-delegating for phase steps...\n`,
+          );
+          try {
+            const rePlan = await delegate(job, projectDir);
+            if (rePlan.steps.length > 0) {
+              plan.steps.push(...rePlan.steps);
+              // Update stored plan so step tracking stays accurate
+              updateDelegationPlan(job.id, plan);
+              process.stderr.write(
+                `[runner] Re-delegation added ${rePlan.steps.length} steps\n`,
+              );
+            } else {
+              process.stderr.write(
+                `[runner] Re-delegation returned 0 steps — all phases may be done\n`,
+              );
+            }
+          } catch (err) {
+            throw new Error(`Re-delegation after new-milestone failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
         // Step 3: For execute-phase commands, spawn judge to evaluate results
         if (step.command === 'execute-phase') {
           // No-activity check: did the execution session actually produce output?
@@ -715,18 +621,6 @@ class Runner {
       if (allStepsCompleted) {
         this.collectActualModels(job.id);
 
-        // Milestone coordinator: spawn child phase jobs BEFORE marking completed.
-        // Children are independent phase-scope jobs — the coordinator itself finishes
-        // after spawning them. They run via normal polling loop.
-        if (job.scope === 'milestone') {
-          const childJobs = spawnChildJobs(job.id, projectDir, job);
-          if (childJobs.length > 0) {
-            process.stderr.write(
-              `[runner] Milestone ${job.id}: spawned ${childJobs.length} child phase jobs\n`,
-            );
-          }
-        }
-
         markCompleted(job.id);
         // Fire-and-forget callback to wake originating session
         const completedJob = getJob(job.id);
@@ -762,42 +656,6 @@ class Runner {
           for (const t of titles) this.sessionPids.delete(t);
         } catch { /* ignore */ }
       }
-      // Check if this job is a child of a milestone — pause milestone on failure
-      await this.checkMilestoneParent(job.id);
-    }
-  }
-
-  /**
-   * Check if a completed/failed job is a child of a milestone.
-   * If the child FAILED, pause the parent milestone and send Telegram notification.
-   * If the child COMPLETED, no action needed (milestone stays in its current state).
-   *
-   * Fire-and-forget: notification errors are swallowed.
-   */
-  private async checkMilestoneParent(jobId: string): Promise<void> {
-    try {
-      const freshJob = getJob(jobId);
-      if (!freshJob?.parentJobId) return; // Not a milestone child
-
-      const parentJobId = freshJob.parentJobId;
-      const parentJob = getJob(parentJobId);
-      if (!parentJob) return;
-
-      if (freshJob.status === 'failed') {
-        // Pause the milestone — remaining children stay pending (blocked by depends_on)
-        pauseJob(parentJobId);
-        process.stderr.write(
-          `[runner] Milestone ${parentJobId} paused: child phase ${jobId} failed\n`,
-        );
-        // Fire-and-forget Telegram notification
-        notifyMilestonePaused(parentJob, freshJob).catch(() => {});
-      }
-      // If completed: milestone stays in its current state (completed coordinator + pending children)
-    } catch (err) {
-      // Best effort — never crash the runner due to milestone status logic
-      process.stderr.write(
-        `[runner] checkMilestoneParent error for ${jobId}: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
     }
   }
 
@@ -1597,7 +1455,7 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-export { Runner, createRunner, killJobSession, parseJudgeVerdict, spawnChildJobs };
+export { Runner, createRunner, killJobSession, parseJudgeVerdict };
 export type { RunnerOptions, RunnerState, JudgeVerdict, VerificationResult, KillJobSessionResult };
 
 // Export pre-spawn checks for direct testing
