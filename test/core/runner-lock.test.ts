@@ -50,7 +50,6 @@ vi.mock('../../src/core/db.js', () => ({
 vi.mock('../../src/core/delegate.js', () => ({
   delegate: vi.fn(),
   resolveOpencodeBinary: vi.fn(() => '/usr/local/bin/opencode'),
-  fallbackPlan: vi.fn(),
 }));
 
 vi.mock('../../src/core/opencode-db.js', () => ({
