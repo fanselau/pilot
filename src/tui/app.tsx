@@ -12,7 +12,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid'
 import { Show, Switch, Match, onMount, onCleanup, batch } from 'solid-js';
 import { createPilotState } from './state.js';
 import { createPoller } from './data/poller.js';
-import { fetchQueueData, fetchRecentData } from './data/pilot-db.js';
+import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject } from './data/pilot-db.js';
 import { fetchSessionEnrichment } from './data/opencode-db.js';
 import { StatusBar } from './components/status-bar.js';
 import { FooterBar } from './components/footer-bar.js';
@@ -90,16 +90,26 @@ export function App(_props: { interval?: number }) {
     }
   }, 2000);
 
+  const projectsPoller = createPoller(() => {
+    try {
+      state.setProjects(fetchProjectData());
+    } catch {
+      // DB may not exist yet — ignore
+    }
+  }, 2000);
+
   onMount(() => {
     queuePoller.start();
     completedPoller.start();
     enrichmentPoller.start();
+    projectsPoller.start();
   });
 
   onCleanup(() => {
     queuePoller.stop();
     completedPoller.stop();
     enrichmentPoller.stop();
+    projectsPoller.stop();
   });
 
   // ── Helper: get item count for focused panel ──────────────────────────
@@ -109,6 +119,7 @@ export function App(_props: { interval?: number }) {
     if (focus === 'queue') return state.filteredQueue().length;
     if (focus === 'running') return state.running().length;
     if (focus === 'completed') return state.completed().length;
+    if (focus === 'projects') return state.projects().length;
     return 0;
   }
 
@@ -216,6 +227,22 @@ export function App(_props: { interval?: number }) {
     }
     if (key.sequence === '3') {
       state.setView('split');
+      return;
+    }
+
+    // u — unblock selected blocked project (projects panel only)
+    if (key.sequence === 'u' && state.panelFocus() === 'projects') {
+      const idx = state.selectedIndex();
+      const project = state.projects()[idx];
+      if (project && project.status === 'blocked') {
+        try {
+          unblockProject(project.path);
+          // Refresh projects immediately
+          state.setProjects(fetchProjectData());
+        } catch (err) {
+          process.stderr.write(`[tui] unblock error: ${String(err)}\n`);
+        }
+      }
       return;
     }
 

@@ -24,6 +24,7 @@ export function QueuePanel(props: {
   jobs: Job[];
   selectedIndex: number;
   focused: boolean;
+  blockedProjects?: Set<string>;
 }) {
   return (
     <box
@@ -38,15 +39,17 @@ export function QueuePanel(props: {
         <For each={props.jobs}>
           {(job, i) => {
             const selected = () => props.focused && i() === props.selectedIndex;
+            const isProjectBlocked = () => (props.blockedProjects ?? new Set()).has(job.project);
             const indicator = () => selected() ? '▸' : ' ';
+            const blockedPrefix = () => isProjectBlocked() ? '⊘ ' : '';
             const line = () =>
-              `${indicator()} #${job.id}  ${job.project}  ${job.scope}${job.modelProfile !== 'balanced' ? `  [${job.modelProfile}]` : ''}  "${truncate(job.description, 30)}"`;
+              `${indicator()} ${blockedPrefix()}#${job.id}  ${job.project}  ${job.scope}${job.modelProfile !== 'balanced' ? `  [${job.modelProfile}]` : ''}  "${truncate(job.description, 30)}"`;
 
             return (
               <box backgroundColor={selected() ? theme.highlight : undefined}>
                 <text
                   content={line()}
-                  fg={statusColors.pending}
+                  fg={isProjectBlocked() ? statusColors.failed : statusColors.pending}
                 />
               </box>
             );
