@@ -7,6 +7,53 @@
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
+/**
+ * Shape of ~/.pilot/config.json file.
+ * All fields are optional — missing fields use hardcoded defaults.
+ * Unknown keys are ignored for forward compatibility.
+ */
+export interface ConfigFileSchema {
+  projectDir?: string;
+  gsdDir?: string | null;
+  runner?: {
+    maxParallel?: number | null;  // null = auto-detect from RAM
+    pollInterval?: number;
+    defaultTimeout?: number;
+    stuckThreshold?: number;
+  };
+  memory?: {
+    sessionMaxMb?: number;
+    reservedMb?: number;
+    killThresholdMb?: number;
+  };
+  defaults?: {
+    modelProfile?: 'quality' | 'balanced' | 'budget';
+    providerMode?: 'hybrid' | 'claude-only' | 'openai-only';
+    notifyTarget?: string | null;
+    scope?: 'quick' | 'phase' | 'milestone' | null;
+  };
+  notifications?: {
+    openclawHooksUrl?: string | null;
+    openclawHooksToken?: string | null;
+    telegramBotToken?: string | null;
+    telegramChatId?: string | null;
+  };
+  logging?: {
+    level?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+    noColor?: boolean;
+  };
+}
+
+/** Source of a config value for display purposes. */
+export type ConfigSource = 'env' | 'config' | 'default' | 'auto-detect';
+
+/** Config-only defaults not in PilotConfig (accessed via getConfigFileDefaults). */
+export interface ConfigFileDefaults {
+  modelProfile: 'quality' | 'balanced' | 'budget';
+  providerMode: 'hybrid' | 'claude-only' | 'openai-only';
+  scope: 'quick' | 'phase' | 'milestone' | null;
+}
+
 export interface PilotConfig {
   pilotDir: string;          // ~/.pilot/
   pilotDbPath: string;       // ~/.pilot/pilot.db
