@@ -129,6 +129,8 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     providerMode: 'claude-only',
     judgeVerdict: null,
     actualModels: null,
+    callbackSessionKey: null,
+    callbackUrl: null,
     ...overrides,
   };
 }
@@ -190,25 +192,21 @@ describe('parseDelegationOutput', () => {
     expect(() => parseDelegationOutput(content)).toThrow('missing command or args');
   });
 
-  it('converts deprecated { command: "phase" } to multi-step', () => {
-    // Safety net: if AI outputs old single-step format, convert to multi-step
-    const content = '{"steps":[{"command":"phase","args":"Document Management UI --auto"}],"reasoning":"Old format"}';
+  it('passes { command: "phase" } through as-is (no decomposition)', () => {
+    // phase command passes through without conversion — GSD orchestrates lifecycle internally
+    const content = '{"steps":[{"command":"phase","args":"Document Management UI --auto"}],"reasoning":"New format"}';
     const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps.map(s => s.command)).toEqual([
-      'add-phase',
-      'plan-phase',
-      'execute-phase',
-    ]);
-    expect(plan.steps[0].args).toBe('Document Management UI');  // --auto stripped
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Document Management UI --auto');
   });
 
-  it('converts { command: "phase" } with requirement path', () => {
-    const content = '{"steps":[{"command":"phase","args":"@requirements/foo.md --resume"}],"reasoning":"With path"}';
+  it('passes { command: "phase" } with requirement path through as-is', () => {
+    const content = '{"steps":[{"command":"phase","args":"@requirements/foo.md --auto"}],"reasoning":"With path"}';
     const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].args).toBe('@requirements/foo.md');
-    expect(plan.steps[1].args).toBe('1 @requirements/foo.md');  // path passed to plan-phase
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@requirements/foo.md --auto');
   });
 
   it('handles missing reasoning gracefully', () => {
@@ -434,16 +432,15 @@ describe('resolvePhaseForFallback', () => {
     mockRequirementFileContent = {};
   });
 
-  it('produces 3-step plan for new requirement (no existing phase)', () => {
+  it('produces single phase command for new requirement (no existing phase)', () => {
     mockPhaseDirs = ['01-setup', '02-core', '03-ui', '04-testing', '05-deploy'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'Add dark mode support' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // No existing phase for "Add dark mode support" → full 3-step lifecycle
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
+    // No existing phase for "Add dark mode support" → single phase command (GSD orchestrates internally)
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toContain('--auto');
   });
 
   it('skips add-phase when phase dir exists, produces [plan-phase, execute-phase]', () => {
@@ -486,7 +483,7 @@ describe('resolvePhaseForFallback', () => {
     expect(plan.steps).toHaveLength(0);
   });
 
-  it('uses title from extractRequirementTitle for add-phase args', () => {
+  it('uses @requirementPath as phase command args when requirementPath provided', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockPhaseSubdirFiles = {};
     mockRequirementFileContent['requirements/dark-mode.md'] = '# Dark Mode Support\n\nAdd dark mode to the app.';
@@ -495,26 +492,24 @@ describe('resolvePhaseForFallback', () => {
       requirementPath: 'requirements/dark-mode.md',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // Title extracted from file: "Dark Mode Support"
-    // No existing phase → 3-step plan
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Dark Mode Support');
+    // No existing phase → single phase command with @requirementPath
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('@requirements/dark-mode.md --auto');
   });
 
-  it('passes @requirementPath to plan-phase args', () => {
+  it('uses title as phase command args when no requirementPath', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockPhaseSubdirFiles = {};
     mockRequirementFileContent['requirements/auth.md'] = '# Auth System\n\nAuth requirements.';
     const job = makeTestJob({
       description: 'Auth System',
-      requirementPath: 'requirements/auth.md',
+      requirementPath: null,
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[1].command).toBe('plan-phase');
-    // plan-phase gets: "{nextPhaseNumber} @requirements/auth.md"
-    expect(plan.steps[1].args).toContain('@requirements/auth.md');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Auth System --auto');
   });
 
   it('handles bare number description — checks existing phase state', () => {
@@ -534,74 +529,67 @@ describe('resolvePhaseForFallback', () => {
     expect(plan.steps[0].args).toBe('3');
   });
 
-  it('never includes --auto in any step args', () => {
+  it('includes --auto in phase command args (GSD needs it for autonomous execution)', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'Add some feature' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    for (const step of plan.steps) {
-      expect(step.args).not.toContain('--auto');
-    }
+    // phase command includes --auto (unlike plan-phase where --auto triggers broken Task() auto-advance)
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toContain('--auto');
   });
 
-  it('never produces { command: "phase" } steps', () => {
+  it('produces { command: "phase" } for new phases (passthrough to GSD)', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'New feature for the app' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
   });
 
-  it('always produces a 3-step plan when no existing phase found', () => {
+  it('produces single phase command when no existing phase found', () => {
     mockPhaseDirs = ['01-setup', '03-engine', '10-deploy'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'New feature' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('New feature --auto');
   });
 
-  it('produces 3-step plan when phases dir is empty', () => {
+  it('produces single phase command when phases dir is empty', () => {
     mockPhaseDirs = [];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'Start fresh' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Start fresh');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Start fresh --auto');
   });
 
-  it('produces 3-step plan when phases dir does not exist', () => {
+  it('produces single phase command when phases dir does not exist', () => {
     mockPhaseDirs = THROW_READDIRSYNC as unknown as string[];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ description: 'Something' });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // No existing phase found → 3-step
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Something');
+    // No existing phase found → single phase command
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toBe('Something --auto');
   });
 
-  it('produces 3-step plan for Pilot Requirement title (no blocklist match → normal phase)', () => {
+  it('produces single phase command for Pilot Requirement title (no blocklist match → normal phase)', () => {
     mockPhaseDirs = ['01-setup', '02-core'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({
       description: 'Pilot Requirement: Phase Execution Success Contract',
     });
     const plan = resolvePhaseForFallback('/tmp/project', job);
-    // No existing phase → 3-step lifecycle
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
-    // No { command: 'phase' } ever
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
+    // No existing phase → single phase command (GSD orchestrates lifecycle)
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toContain('--auto');
   });
 });
 
@@ -633,41 +621,34 @@ describe('fallbackPlan', () => {
     expect(plan.steps[1].command).toBe('quick');
   });
 
-  it('returns new-project + add-phase + plan-phase + execute-phase for uninitialized phase', () => {
+  it('returns new-project + phase for uninitialized phase', () => {
     mockRoadmapExists = false;
     const job = makeTestJob({ scope: 'phase', description: 'Add auth' });
     const plan = fallbackPlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(4);
+    expect(plan.steps).toHaveLength(2);
     expect(plan.steps[0].command).toBe('new-project');
-    expect(plan.steps[1].command).toBe('add-phase');
-    expect(plan.steps[2].command).toBe('plan-phase');
-    expect(plan.steps[3].command).toBe('execute-phase');
+    expect(plan.steps[1].command).toBe('phase');
   });
 
-  it('does NOT include --auto in phase-related delegation steps for uninitialized phase', () => {
+  it('includes --auto in phase step for uninitialized phase', () => {
     mockRoadmapExists = false;
     const job = makeTestJob({ scope: 'phase', description: 'Add auth' });
     const plan = fallbackPlan(job, '/tmp/project');
-    // Only new-project gets --auto, not add-phase/plan-phase/execute-phase
-    expect(plan.steps[1].args).not.toContain('--auto'); // add-phase
-    expect(plan.steps[2].args).not.toContain('--auto'); // plan-phase
-    expect(plan.steps[3].args).not.toContain('--auto'); // execute-phase
+    // new-project and phase both get --auto
+    expect(plan.steps[0].args).toContain('--auto'); // new-project
+    expect(plan.steps[1].args).toContain('--auto'); // phase
   });
 
-  it('delegates to resolvePhaseForFallback for initialized phase — multi-step', () => {
+  it('delegates to resolvePhaseForFallback for initialized phase — single phase command for new phase', () => {
     mockRoadmapExists = true;
     mockPhaseDirs = ['01-setup', '02-core', '03-ui'];
     mockPhaseSubdirFiles = {};
     const job = makeTestJob({ scope: 'phase', description: 'Add dark mode' });
     const plan = fallbackPlan(job, '/tmp/project');
-    // No existing phase for "Add dark mode" → 3-step lifecycle via resolvePhaseForFallback
-    expect(plan.steps).toHaveLength(3);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[1].command).toBe('plan-phase');
-    expect(plan.steps[2].command).toBe('execute-phase');
-    // No 'phase' command ever
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
+    // No existing phase for "Add dark mode" → single phase command via resolvePhaseForFallback
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].command).toBe('phase');
+    expect(plan.steps[0].args).toContain('--auto');
   });
 
   it('returns new-project (single step) for uninitialized milestone', () => {
@@ -692,22 +673,27 @@ describe('fallbackPlan', () => {
     expect(plan.reasoning).toContain('coordinator');
   });
 
-  it('never produces { command: "phase" } steps in any scenario', () => {
-    // Initialized phase
+  it('produces { command: "phase" } for new phase lifecycle (initialized and uninitialized)', () => {
+    // Initialized project, no existing phase dir — produces phase command
     mockRoadmapExists = true;
     mockPhaseDirs = ['01-setup'];
     mockPhaseSubdirFiles = {};
     const job1 = makeTestJob({ scope: 'phase', description: 'New feature' });
     const plan1 = fallbackPlan(job1, '/tmp/project');
-    expect(plan1.steps.find(s => s.command === 'phase')).toBeUndefined();
+    const phaseStep1 = plan1.steps.find(s => s.command === 'phase');
+    expect(phaseStep1).toBeDefined();
+    expect(phaseStep1!.args).toContain('--auto');
 
-    // Uninitialized phase
+    // Uninitialized project — produces new-project + phase
     mockRoadmapExists = false;
     const job2 = makeTestJob({ scope: 'phase', description: 'Another feature' });
     const plan2 = fallbackPlan(job2, '/tmp/project');
-    expect(plan2.steps.find(s => s.command === 'phase')).toBeUndefined();
+    const phaseStep2 = plan2.steps.find(s => s.command === 'phase');
+    expect(phaseStep2).toBeDefined();
+    expect(phaseStep2!.args).toContain('--auto');
 
-    // Uninitialized milestone
+    // Milestone never produces phase steps (different orchestration path)
+    mockRoadmapExists = false;
     const job3 = makeTestJob({ scope: 'milestone', description: 'Big thing' });
     const plan3 = fallbackPlan(job3, '/tmp/project');
     expect(plan3.steps.find(s => s.command === 'phase')).toBeUndefined();

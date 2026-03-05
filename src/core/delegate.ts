@@ -190,23 +190,17 @@ function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
 
     case 'phase':
       if (!hasPlanning) {
-        // Phase on uninitialized project — init then multi-step phase lifecycle
-        const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
-          ?? job.description;
-        const addPhaseArgs = title;
-        const planPhaseArgs = job.requirementPath ? `1 @${job.requirementPath}` : '1';
-        const executePhaseArgs = '1';
+        // Phase on uninitialized project — init then run phase (GSD orchestrates internally)
+        const phaseArgs = job.requirementPath ? `@${job.requirementPath} --auto` : `${job.description} --auto`;
         return {
           steps: [
             { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'add-phase', args: addPhaseArgs },
-            { command: 'plan-phase', args: planPhaseArgs },
-            { command: 'execute-phase', args: executePhaseArgs },
+            { command: 'phase', args: phaseArgs },
           ],
-          reasoning: 'Fallback: project not initialized, running new-project then multi-step phase lifecycle (add→plan→execute)',
+          reasoning: 'Fallback: project not initialized, running new-project then phase (GSD orchestrates lifecycle internally)',
         };
       }
-      // Project exists — multi-step phase orchestration with state-aware step selection
+      // Project exists — state-aware step selection
       return resolvePhaseForFallback(projectDir, job);
 
     case 'milestone':
@@ -324,24 +318,16 @@ function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
     };
   }
 
-  // No existing phase — generate all 3 steps: add-phase, plan-phase, execute-phase
-  // We don't know the phase number yet (add-phase will create it), so plan-phase
-  // and execute-phase use a placeholder. The runner's arg patching will update them
-  // after add-phase creates the directory.
-  const nextPhaseNumber = getNextPhaseNumber(phasesDir);
-  const addPhaseArgs = title;
-  const planPhaseArgs = job.requirementPath
-    ? `${nextPhaseNumber} @${job.requirementPath}`
-    : String(nextPhaseNumber);
-  const executePhaseArgs = String(nextPhaseNumber);
+  // No existing phase — use phase command (GSD orchestrates the full lifecycle internally)
+  const phaseArgs = job.requirementPath
+    ? `@${job.requirementPath} --auto`
+    : `${title} --auto`;
 
   return {
     steps: [
-      { command: 'add-phase', args: addPhaseArgs },
-      { command: 'plan-phase', args: planPhaseArgs },
-      { command: 'execute-phase', args: executePhaseArgs },
+      { command: 'phase', args: phaseArgs },
     ],
-    reasoning: `No existing phase for "${title}" — running full lifecycle: add-phase → plan-phase → execute-phase`,
+    reasoning: `No existing phase for "${title}" — running phase command (GSD orchestrates add→plan→execute internally)`,
   };
 }
 
@@ -534,20 +520,7 @@ function parseDelegationOutput(content: string): DelegationPlan {
     args: s.args,
   }));
 
-  // Safety net: convert deprecated single-step { command: 'phase' } to multi-step.
-  // The AI prompt now tells it to output add-phase/plan-phase/execute-phase directly,
-  // but older cached prompts or model drift might still produce the old format.
-  const convertedSteps = steps.flatMap(step => {
-    if (step.command === 'phase') {
-      // Extract phase info from args (e.g. "Feature Name --auto" or "@path/to/req.md --resume")
-      const args = step.args.replace(/--auto|--resume/g, '').trim();
-      // Default to phase 1 — runner patches with actual phase number after add-phase completes
-      return [
-        { command: 'add-phase', args },
-        { command: 'plan-phase', args: `1 ${args.startsWith('@') ? args : ''}`.trim() },
-        { command: 'execute-phase', args: '1' },
-      ];
-    }
+  const filteredSteps = steps.flatMap(step => {
     // Strip --auto from plan-phase args (triggers broken Task() auto-advance)
     if (step.command === 'plan-phase' && step.args.includes('--auto')) {
       return [{ command: step.command, args: step.args.replace(/--auto/g, '').trim() }];
@@ -560,7 +533,7 @@ function parseDelegationOutput(content: string): DelegationPlan {
   });
 
   return {
-    steps: convertedSteps,
+    steps: filteredSteps,
     reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
   };
 }
