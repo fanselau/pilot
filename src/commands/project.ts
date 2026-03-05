@@ -26,7 +26,7 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
   const existing = getProject(resolvedPath);
 
   if (!existing) {
-    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${projectPath} --owner <key>\n`);
+    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${projectPath} --owner <agentId>\n`);
     process.exit(1);
   }
 

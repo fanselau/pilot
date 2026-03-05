@@ -43,6 +43,10 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     // Calculate duration
     const duration = formatDuration(job.startedAt, job.completedAt);
 
+    // callbackSessionKey now stores just the agent ID (e.g. "main")
+    const agentId = job.callbackSessionKey;
+    if (!agentId) return false;
+
     // Build message
     const lines = [
       `🏗️ Pilot job ${job.id} (${job.scope}) ${job.status}.`,
@@ -53,17 +57,16 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     if (job.error) {
       lines.push(`Error: ${job.error.slice(0, 200)}`);
     }
+    lines.push(`Notify session: agent:${agentId}:main`);
 
     const body: Record<string, unknown> = {
       message: lines.join('\n'),
-      deliver: true,
+      name: 'Pilot',
+      agentId,
+      sessionKey: `hook:pilot:${job.id}`,
+      deliver: false,
       wakeMode: 'now',
     };
-
-    // Only include sessionKey if present
-    if (job.callbackSessionKey) {
-      body.sessionKey = job.callbackSessionKey;
-    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

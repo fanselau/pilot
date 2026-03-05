@@ -642,11 +642,11 @@ class Runner {
       if (failedJob) {
         notifyJobCompletion(failedJob).catch(() => {});
 
-        // If no direct callback session, notify the project owner instead
+        // If no direct callback agentId, notify the project owner (plain agent ID) instead
         if (!failedJob.callbackSessionKey) {
           const project = getProject(failedJob.project);
           if (project?.owner) {
-            // Synthesize a job-like object addressed to the owner so they learn of the block
+            // Synthesize a job-like object addressed to the owner (project.owner is a plain agent ID)
             const ownerNotifyJob = {
               ...failedJob,
               callbackSessionKey: project.owner,

@@ -27,7 +27,7 @@ interface AddOptions {
   profile?: string;
   provider?: string;
   force?: boolean;
-  notify?: string;    // OpenClaw session key to wake on completion
+  notify?: string;    // Agent ID to notify on completion (e.g. "main")
   notifyUrl?: string; // Custom webhook URL for completion callback
   noNotify?: boolean; // Explicitly skip completion notification
   dryRun?: boolean;   // Show what would happen without queuing
@@ -247,7 +247,7 @@ async function addCommand(
       } else if (!opts.dryRun) {
         // No notify intent and not a dry run — require explicit declaration
         process.stderr.write(
-          'Missing --notify <sessionKey>. Use --no-notify to explicitly skip notification,\nor register a project owner: pilot setup <dir> --owner <key>\n',
+          'Missing --notify <agentId>. Use --no-notify to explicitly skip notification,\nor register a project owner: pilot setup <dir> --owner <agentId>\n',
         );
         process.exit(2);
       }
@@ -261,7 +261,7 @@ async function addCommand(
     const projectRecord = checkProject(resolvedProject);
     if (!projectRecord) {
       process.stderr.write(
-        `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <key>\n`,
+        `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <agentId>\n`,
       );
     }
   }

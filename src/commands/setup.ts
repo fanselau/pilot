@@ -5,7 +5,7 @@
  * adds .opencode/ to .gitignore, and initializes git if needed.
  *
  * With --verify, checks an existing setup without modifying anything.
- * With --owner <key>, registers the project with an owner session key.
+ * With --owner <agentId>, registers the project with an owner agent ID.
  * With --update, updates the owner of an existing registered project.
  */
 
@@ -16,7 +16,7 @@ import { green, red, yellow, dim, bold } from '../util/colors.js';
 
 interface SetupOptions {
   verify?: boolean;
-  owner?: string;    // session key to register as project owner
+  owner?: string;    // agent ID to register as project owner
   update?: boolean;  // if true, update owner of existing project
 }
 

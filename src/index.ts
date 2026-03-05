@@ -50,7 +50,7 @@ program
   .option('--profile <profile>', 'Model profile: quality, balanced, or budget')
   .option('--provider <provider>', 'Provider mode: hybrid, claude-only, or openai-only')
   .option('--force', 'Bypass project setup check')
-  .option('--notify <sessionKey>', 'OpenClaw session key to wake on completion')
+  .option('--notify <agentId>', 'Agent ID to notify on completion (e.g. main)')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
   .action(async (project: string, requirement: string, opts: Record<string, unknown>) => {
@@ -148,7 +148,7 @@ program
   .command('setup <dir>')
   .description('Set up project for Pilot (links pilot-gsd)')
   .option('--verify', 'Verify existing setup')
-  .option('--owner <sessionKey>', 'Register project owner (session key for notifications)')
+  .option('--owner <agentId>', 'Register project owner (agent ID for notifications)')
   .option('--update', 'Update owner of existing registered project')
   .action(async (dir: string, opts: Record<string, unknown>) => {
     const { setupCommand } = await import('./commands/setup.js');
@@ -169,7 +169,7 @@ program
   .description('Show or manage a registered project')
   .option('--block <reason>', 'Block project with reason')
   .option('--unblock', 'Unblock a blocked project')
-  .option('--owner <sessionKey>', 'Change project owner')
+  .option('--owner <agentId>', 'Change project owner')
   .option('--jobs', 'Show recent jobs for this project')
   .action(async (path: string, opts: Record<string, unknown>) => {
     const { projectCommand } = await import('./commands/project.js');

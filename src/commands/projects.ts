@@ -25,7 +25,7 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
     if (opts.blocked) {
       outputHuman(`  ${dim('No blocked projects.')}`);
     } else {
-      outputHuman(`  ${dim('No registered projects. Use: pilot setup <dir> --owner <key>')}`);
+      outputHuman(`  ${dim('No registered projects. Use: pilot setup <dir> --owner <agentId>')}`);
     }
     return;
   }

@@ -25,7 +25,7 @@ export interface PilotConfig {
   telegramChatId: string | null;     // PILOT_TELEGRAM_CHAT_ID — optional Telegram chat ID
   openclawHooksUrl: string | null;   // PILOT_OPENCLAW_HOOKS_URL — base webhook URL for session wake
   openclawHooksToken: string | null; // PILOT_OPENCLAW_HOOKS_TOKEN — auth token for hooks endpoint
-  defaultNotifySessionKey: string | null;  // PILOT_DEFAULT_NOTIFY — fallback session key for --notify
+  defaultNotifySessionKey: string | null;  // PILOT_DEFAULT_NOTIFY — fallback agent ID for --notify
 }
 
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
@@ -60,7 +60,7 @@ export interface Job {
   judgeVerdict: string | null;  // JSON string of judge verdict
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
   callbackUrl: string | null;     // custom webhook URL for job completion notification
-  callbackSessionKey: string | null;  // OpenClaw session key to wake on completion
+  callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ export type ProjectStatus = 'active' | 'blocked';
 
 export interface Project {
   path: string;              // absolute project path (primary key)
-  owner: string | null;      // session key e.g. "agent:main:main"
+  owner: string | null;      // agent ID e.g. "main"
   status: ProjectStatus;
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601
