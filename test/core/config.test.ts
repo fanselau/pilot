@@ -35,8 +35,8 @@ import { resolveProjectDir, getConfig } from '../../src/core/config.js';
 
 describe('resolveProjectDir', () => {
   it('returns absolute path as-is', () => {
-    const result = resolveProjectDir('/home/user/clients/foo');
-    expect(result).toBe('/home/user/clients/foo');
+    const result = resolveProjectDir('/opt/projects/foo');
+    expect(result).toBe('/opt/projects/foo');
   });
 
   it('expands tilde to home directory', () => {

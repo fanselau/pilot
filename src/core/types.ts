@@ -10,8 +10,8 @@
 export interface PilotConfig {
   pilotDir: string;          // ~/.pilot/
   pilotDbPath: string;       // ~/.pilot/pilot.db
-  projectDir: string;        // ~/dev
-  gsdDir: string;            // ~/dev/pilot-gsd
+  projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
+  gsdDir: string;            // ./pilot-gsd (PILOT_GSD_DIR)
   stuckThreshold: number;    // minutes, default 90
   maxParallel: number;       // auto from RAM, default 1
   pollInterval: number;      // seconds, default 5

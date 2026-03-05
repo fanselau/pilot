@@ -20,11 +20,14 @@ function getConfig(): PilotConfig {
   const home = os.homedir();
 
   const projectDir = expandTilde(
-    process.env.PILOT_PROJECT_DIR ?? `${home}/dev/punchlab`,
+    process.env.PILOT_PROJECT_DIR ?? `${home}/dev`,
   );
 
+  // Resolve pilot-gsd relative to pilot's own installation
+  const pilotRoot = path.resolve(import.meta.dirname, '..', '..');
+  const defaultGsdDir = path.join(pilotRoot, 'pilot-gsd');
   const gsdDir = expandTilde(
-    process.env.PILOT_GSD_DIR ?? `${home}/dev/pilot-gsd`,
+    process.env.PILOT_GSD_DIR ?? defaultGsdDir,
   );
 
   const stuckThresholdRaw = parseInt(process.env.PILOT_STUCK_THRESHOLD ?? '90', 10);

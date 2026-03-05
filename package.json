@@ -1,5 +1,5 @@
 {
-  "name": "@punchlab/pilot",
+  "name": "pilot-cli",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
     "type": "git",
     "url": "https://github.com/lucafanselau/pilot.git"
   },
-  "author": "PunchLab <hello@punchlab.dev>",
+  "author": "Luca Fanselau",
   "license": "MIT",
   "scripts": {
     "prebuild": "rm -rf dist",
