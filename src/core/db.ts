@@ -131,6 +131,7 @@ interface JobRow {
   actual_models: string | null;
   callback_url: string | null;
   callback_session_key: string | null;
+  categories: string | null;
 }
 
 interface ProjectRow {
@@ -183,6 +184,10 @@ function rowToJob(row: JobRow): Job {
     })(),
     callbackUrl: row.callback_url ?? null,
     callbackSessionKey: row.callback_session_key ?? null,
+    categories: (() => {
+      if (!row.categories) return null;
+      try { return JSON.parse(row.categories) as string[]; } catch { return null; }
+    })(),
   };
 }
 
@@ -206,6 +211,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)",
     "ALTER TABLE jobs ADD COLUMN callback_url TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN callback_session_key TEXT DEFAULT NULL",
+    "ALTER TABLE jobs ADD COLUMN categories TEXT DEFAULT NULL",
   ];
   for (const sql of migrations) {
     try {
@@ -834,6 +840,16 @@ function updateActualModels(id: string, models: string[]): void {
 }
 
 /**
+ * Update the categories for a job.
+ * Categories are stored as a JSON array string, or null for no categories.
+ */
+function updateJobCategories(id: string, categories: string[] | null): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET categories = ? WHERE id = ?')
+    .run(categories ? JSON.stringify(categories) : null, id);
+}
+
+/**
  * Find an existing duplicate job for the given project + description/requirementPath.
  *
  * Checks in order:
@@ -1099,6 +1115,7 @@ export {
   resetToPending,
   updateJudgeVerdict,
   updateActualModels,
+  updateJobCategories,
   findDuplicateJob,
   getChildJobs,
   pauseJob,
