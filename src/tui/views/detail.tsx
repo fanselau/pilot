@@ -169,10 +169,10 @@ function formatPartLines(part: SessionPart): FormattedLine[] | null {
     const lines: FormattedLine[] = [];
 
     if (tool === 'bash') {
-      const cmd = (part.toolInput ?? '').slice(0, 120);
+      const cmd = part.toolInput ?? '';
       lines.push({ text: `  ${time}  [assistant] bash $ ${cmd}`, color: '#FACC15' }); // yellow
       if (part.toolOutput) {
-        const output = part.toolOutput.slice(0, 120).replace(/\n/g, ' ');
+        const output = part.toolOutput.replace(/\n/g, ' ');
         if (output.trim()) {
           lines.push({ text: `             -> ${output}`, color: theme.muted });
         }
@@ -180,10 +180,10 @@ function formatPartLines(part: SessionPart): FormattedLine[] | null {
     } else if (tool === 'read' || tool === 'write' || tool === 'edit') {
       lines.push({ text: `  ${time}  [assistant] ${tool} ${part.toolInput ?? ''}`, color: '#FACC15' });
     } else if (tool === 'glob' || tool === 'grep') {
-      const input = (part.toolInput ?? '').slice(0, 80);
+      const input = part.toolInput ?? '';
       lines.push({ text: `  ${time}  [assistant] ${tool} ${input}`, color: '#FACC15' });
     } else {
-      const input = (part.toolInput ?? '').slice(0, 80);
+      const input = part.toolInput ?? '';
       lines.push({ text: `  ${time}  [assistant] ${tool} ${input}`, color: '#FACC15' });
     }
     return lines;
@@ -193,7 +193,7 @@ function formatPartLines(part: SessionPart): FormattedLine[] | null {
     const text = part.text ?? '';
     if (!text.trim()) return null;
 
-    const content = text.slice(0, 200).replace(/\n/g, ' ');
+    const content = text.replace(/\n/g, ' ');
     if (part.role === 'user') {
       return [{ text: `  ${time}  [user] ${content}`, color: '#4ADE80' }]; // green
     }
