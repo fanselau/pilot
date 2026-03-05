@@ -616,12 +616,15 @@ Read requirements/config-file.md for full spec.
 
 ### Phase 37: Skills System for Pilot
 
-**Goal:** [To be planned]
+**Goal:** Manage a curated skill library at `~/.pilot/skills/` and automatically inject relevant skills into OpenCode sessions before spawning. Users install skills from GitHub, assign categories, and select categories on `pilot add`. The runner copies matched skills into the project's `.opencode/skills/` directory before each session and cleans up after.
 **Depends on:** Phase 36
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 37 to break down)
+- [ ] 37-01-PLAN.md — Foundation: types (SkillEntry, SkillManifest, Job.categories), DB migration, src/core/skills.ts library module
+- [ ] 37-02-PLAN.md — Consumer wiring: pilot add --categories flag, delegate.ts skills hint in prompt
+- [ ] 37-03-PLAN.md — Runner injection: injectSkills before spawn, cleanupInjectedSkills in finally block
+- [ ] 37-04-PLAN.md — pilot skills CLI subcommands (list, add, remove, categories, tag, sync), index.ts wiring, tests
 
 **Details:**
-[To be added during planning]
+Read requirements/skills-system.md for full spec.

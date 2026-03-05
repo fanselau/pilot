@@ -129,6 +129,7 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackSessionKey: null,
     callbackUrl: null,
+    categories: null,
     ...overrides,
   };
 }

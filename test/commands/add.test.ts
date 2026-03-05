@@ -40,6 +40,7 @@ vi.mock('../../src/core/db.js', () => ({
     actualModels: null,
     callbackUrl: _callbackUrl ?? null,
     callbackSessionKey: _callbackSessionKey ?? null,
+    categories: null,
   })),
   findDuplicateJob: vi.fn(() => null),
   getProject: vi.fn(() => null),
@@ -464,6 +465,7 @@ describe('duplicate detection', () => {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    categories: null,
   };
 
   // Use the existingTestsDir-level setup but create a fresh configured project

@@ -108,6 +108,7 @@ export interface Job {
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
   callbackUrl: string | null;     // custom webhook URL for job completion notification
   callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
+  categories: string[] | null;    // user-assigned skill categories for the job
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
@@ -186,6 +187,23 @@ export interface Project {
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601
   createdAt: string;
+}
+
+// ── Skills System ──────────────────────────────────────────────────────────
+
+/** A single installed skill entry in the manifest. */
+export interface SkillEntry {
+  name: string;        // from SKILL.md frontmatter
+  description: string; // from SKILL.md frontmatter
+  categories: string[]; // user-assigned tags (empty = universal skill)
+  source: string;      // e.g. "github:owner/repo"
+  path: string;        // absolute path to skill directory (~/.pilot/skills/<name>/)
+}
+
+/** The manifest.json file at ~/.pilot/skills/manifest.json */
+export interface SkillManifest {
+  version: 1;
+  skills: SkillEntry[];
 }
 
 // ── Status output ─────────────────────────────────────────────────────────

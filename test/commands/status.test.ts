@@ -34,6 +34,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     providerMode: 'claude-only',
     judgeVerdict: null,
     actualModels: null,
+    categories: null,
     ...overrides,
   };
 }
