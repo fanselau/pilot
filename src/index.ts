@@ -244,6 +244,68 @@ configCmd
     await configEditCommand();
   });
 
+const skillsCmd = program
+  .command('skills')
+  .description('Manage skill library for AI sessions');
+
+// Default action (no subcommand) = list
+skillsCmd.action(async () => {
+  const { skillsListCommand } = await import('./commands/skills.js');
+  await skillsListCommand();
+});
+
+skillsCmd
+  .command('list')
+  .description('List installed skills')
+  .action(async () => {
+    const { skillsListCommand } = await import('./commands/skills.js');
+    await skillsListCommand();
+  });
+
+skillsCmd
+  .command('add <repo>')
+  .description('Install skill from GitHub (e.g. owner/repo)')
+  .option('--skill <name>', 'Install specific skill by name')
+  .option('--all', 'Install all skills from repo')
+  .option('--categories <cats>', 'Assign categories (comma-separated)')
+  .action(async (repo: string, opts: Record<string, unknown>) => {
+    const { skillsAddCommand } = await import('./commands/skills.js');
+    await skillsAddCommand(repo, opts as { categories?: string; all?: boolean; skill?: string });
+  });
+
+skillsCmd
+  .command('remove <name>')
+  .description('Remove an installed skill')
+  .action(async (name: string) => {
+    const { skillsRemoveCommand } = await import('./commands/skills.js');
+    await skillsRemoveCommand(name);
+  });
+
+skillsCmd
+  .command('categories')
+  .description('List all categories with skill counts')
+  .action(async () => {
+    const { skillsCategoriesCommand } = await import('./commands/skills.js');
+    await skillsCategoriesCommand();
+  });
+
+skillsCmd
+  .command('tag <name>')
+  .description('Add/update categories for an installed skill')
+  .option('--categories <cats>', 'Categories (comma-separated)', '')
+  .action(async (name: string, opts: Record<string, unknown>) => {
+    const { skillsTagCommand } = await import('./commands/skills.js');
+    await skillsTagCommand(name, opts as { categories: string });
+  });
+
+skillsCmd
+  .command('sync')
+  .description('Re-scan skills directory and rebuild manifest')
+  .action(async () => {
+    const { skillsSyncCommand } = await import('./commands/skills.js');
+    await skillsSyncCommand();
+  });
+
 program
   .command('doctor')
   .description('Health check: opencode binary, DB access, disk, memory')
