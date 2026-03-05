@@ -4,14 +4,14 @@
 
 **Autonomous AI development pipeline CLI**
 
-[![npm](https://img.shields.io/npm/v/@punchlab/pilot?style=flat-square)](https://www.npmjs.com/package/@punchlab/pilot)
+[![npm](https://img.shields.io/npm/v/pilot-cli?style=flat-square)](https://www.npmjs.com/package/pilot-cli)
 [![Node.js](https://img.shields.io/badge/runtime-bun-black?style=flat-square)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?style=flat-square)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://opensource.org/licenses/MIT)
 
-⭐ Star this repo if you find it useful
+Star this repo if you find it useful
 
-[Quick Start](#quick-start) · [Features](#features) · [CLI Reference](#cli-reference) · [Architecture](#architecture) · [Configuration](#configuration)
+[Quick Start](#quick-start) · [Getting Started](#getting-started) · [Features](#features) · [CLI Reference](#cli-reference) · [Architecture](#architecture) · [Configuration](#configuration)
 
 </div>
 
@@ -34,7 +34,7 @@ The entire queue lives in a local SQLite database (`~/.pilot/pilot.db`). There a
 
 ```bash
 # Install globally
-npm install -g @punchlab/pilot
+npm install -g pilot-cli
 
 # Set up a project and register an owner for notifications
 pilot setup ~/dev/my-project --owner main
@@ -64,6 +64,34 @@ Install as a persistent systemd service:
 pilot service install
 pilot service start
 ```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Bun >= 1.x
+- [opencode](https://opencode.ai) installed and configured
+- Linux (some features use `/proc` and systemd)
+
+### Setting up pilot-gsd
+
+pilot-gsd contains the GSD command definitions (agent prompts and workflows).
+
+If you cloned pilot with submodules:
+
+```bash
+git submodule update --init
+```
+
+Or set the path manually:
+
+```bash
+export PILOT_GSD_DIR=/path/to/pilot-gsd
+```
+
+See the [pilot-gsd](https://github.com/lucafanselau/pilot-gsd) repository for more details.
 
 ---
 
@@ -279,9 +307,9 @@ Pilot is configured via environment variables. All have sensible defaults.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILOT_PROJECT_DIR` | `~/dev` | Root directory containing your projects |
-| `PILOT_GSD_DIR` | `~/dev/pilot-gsd` | Path to the pilot-gsd command definitions repo |
+| `PILOT_GSD_DIR` | `./pilot-gsd` (relative to pilot install) | Path to the pilot-gsd command definitions repo |
 | `PILOT_STUCK_THRESHOLD` | `90` | Minutes before a session is flagged as stuck |
-| `PILOT_MAX_PARALLEL` | auto | Max concurrent jobs (auto-detected from RAM: 1–4) |
+| `PILOT_MAX_PARALLEL` | auto | Max concurrent jobs (auto-detected from RAM: 1-4) |
 | `PILOT_POLL_INTERVAL` | `5` | Seconds between queue poll cycles |
 | `PILOT_DEFAULT_TIMEOUT` | `60` | Job timeout in minutes |
 | `PILOT_SESSION_MEMORY_MAX_MB` | `8192` | Per-session systemd memory limit (MB) |
@@ -321,6 +349,12 @@ When the runner launches a job, it writes `.planning/config.json` into the proje
 
 > [!IMPORTANT]
 > Run `pilot doctor` after installation to verify your environment is correctly configured.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please open an issue to discuss what you'd like to change before submitting a PR.
 
 ---
 
