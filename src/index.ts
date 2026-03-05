@@ -53,6 +53,7 @@ program
   .option('--notify <agentId>', 'Agent ID to notify on completion (e.g. main)')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
+  .option('--categories <cats>', 'Skill categories for this job (comma-separated): frontend,testing')
   .action(async (project: string, requirement: string, opts: Record<string, unknown>) => {
     const { addCommand } = await import('./commands/add.js');
     await addCommand(project, requirement, { ...program.opts(), ...opts } as Parameters<typeof addCommand>[2]);
