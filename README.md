@@ -1,3 +1,4 @@
+
 # Pilot
 
 Autonomous AI development pipeline CLI that monitors running AI sessions, manages a job queue, detects stuck processes, orchestrates project lifecycle commands, and provides a full-screen TUI dashboard. Replaces bash scripts with typed TypeScript for reliability.
