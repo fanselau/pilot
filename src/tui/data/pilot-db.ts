@@ -8,8 +8,8 @@
  * All reads are synchronous (better-sqlite3). Fast (<1ms) — no async needed.
  */
 
-import { getQueue, getRecent, getJob, cancel, retry, bump } from '../../core/db.js';
-import type { Job } from '../../core/types.js';
+import { getQueue, getRecent, getJob, cancel, retry, bump, getAllProjects, unblockProject } from '../../core/db.js';
+import type { Job, Project } from '../../core/types.js';
 
 // ── Read wrappers ─────────────────────────────────────────────────────────
 
@@ -33,6 +33,14 @@ export function fetchRecentData(limit = 50): Job[] {
   return getRecent(limit);
 }
 
+/**
+ * Fetch all registered projects.
+ * Dashboard uses this for the Projects panel.
+ */
+export function fetchProjectData(): Project[] {
+  return getAllProjects();
+}
+
 // ── Re-export mutations for queue management actions ──────────────────────
 
-export { cancel, retry, bump, getJob };
+export { cancel, retry, bump, getJob, unblockProject };

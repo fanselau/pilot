@@ -9,12 +9,12 @@
  */
 
 import { createSignal, createMemo, batch } from 'solid-js';
-import type { Job, SessionMessage } from '../core/types.js';
+import type { Job, SessionMessage, Project } from '../core/types.js';
 
 // ── View types ────────────────────────────────────────────────────────────
 
 export type ViewType = 'dashboard' | 'detail' | 'split';
-export type PanelFocus = 'queue' | 'running' | 'completed';
+export type PanelFocus = 'queue' | 'running' | 'completed' | 'projects';
 
 export interface FilterState {
   project?: string;
@@ -29,6 +29,7 @@ export function createPilotState() {
   const [queue, setQueue] = createSignal<Job[]>([]);
   const [running, setRunning] = createSignal<Job[]>([]);
   const [completed, setCompleted] = createSignal<Job[]>([]);
+  const [projects, setProjects] = createSignal<Project[]>([]);
 
   // ── Navigation signals ────────────────────────────────────────────────
   const [view, setView] = createSignal<ViewType>('dashboard');
@@ -64,6 +65,7 @@ export function createPilotState() {
     if (focus === 'queue') return queue()[idx] ?? null;
     if (focus === 'running') return running()[idx] ?? null;
     if (focus === 'completed') return completed()[idx] ?? null;
+    // 'projects' panel — no job selected
     return null;
   });
 
@@ -90,6 +92,7 @@ export function createPilotState() {
     queue, setQueue,
     running, setRunning,
     completed, setCompleted,
+    projects, setProjects,
 
     // Navigation
     view, setView,
@@ -142,11 +145,12 @@ export function createPilotState() {
       setView(v => v === 'split' ? 'dashboard' : 'split');
     },
 
-    /** Cycle panel focus: queue → running → completed → queue. */
+    /** Cycle panel focus: queue → running → completed → projects → queue. */
     cyclePanelFocus() {
       setPanelFocus(f => {
         if (f === 'queue') return 'running';
         if (f === 'running') return 'completed';
+        if (f === 'completed') return 'projects';
         return 'queue';
       });
       setSelectedIndex(0);
