@@ -336,6 +336,7 @@ function markCompleted(id: string): void {
 
 /**
  * Mark a job as failed. Sets completed_at and error message.
+ * Also blocks the project so no further jobs run until operator unblocks.
  */
 function markFailed(id: string, error: string): void {
   const db = getDb();
@@ -344,6 +345,12 @@ function markFailed(id: string, error: string): void {
     SET status = 'failed', completed_at = datetime('now'), error = ?
     WHERE id = ?
   `).run(error, id);
+
+  // Block the project so no further jobs run until operator unblocks
+  const job = getJob(id);
+  if (job) {
+    blockProject(job.project, error);
+  }
 }
 
 /**
@@ -422,6 +429,9 @@ function claimNextLaunchable(): Job | null {
       WHERE status = 'pending'
         AND project NOT IN (
           SELECT DISTINCT project FROM jobs WHERE status = 'running'
+        )
+        AND project NOT IN (
+          SELECT path FROM projects WHERE status = 'blocked'
         )
         AND (depends_on IS NULL OR depends_on IN (SELECT id FROM jobs WHERE status = 'completed'))
       ORDER BY priority DESC, created_at ASC

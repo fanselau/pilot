@@ -40,6 +40,7 @@ import {
   resetToPending,
   updateJudgeVerdict,
   updateActualModels,
+  getProject,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { notifyJobCompletion } from './callback.js';
@@ -605,14 +606,6 @@ class Runner {
               retryHint: errorSummary,
             }));
 
-            const freshJobForRetry = getJob(job.id);
-            if (freshJobForRetry && freshJobForRetry.attempts < freshJobForRetry.maxAttempts) {
-              resetToPending(job.id, errorSummary);
-              process.stderr.write(
-                `[runner] Verification failed for ${job.id}: ${errorSummary}. Resetting to pending.\n`,
-              );
-              return;
-            }
             throw new Error(errorSummary);
           }
         }
@@ -640,6 +633,22 @@ class Runner {
       const failedJob = getJob(job.id);
       if (failedJob) {
         notifyJobCompletion(failedJob).catch(() => {});
+
+        // If no direct callback session, notify the project owner instead
+        if (!failedJob.callbackSessionKey) {
+          const project = getProject(failedJob.project);
+          if (project?.owner) {
+            // Synthesize a job-like object addressed to the owner so they learn of the block
+            const ownerNotifyJob = {
+              ...failedJob,
+              callbackSessionKey: project.owner,
+              error: `Job ${failedJob.id} failed and blocked project ${failedJob.project}.\n` +
+                     `Reason: ${error}\n` +
+                     `Actions: pilot retry ${failedJob.id}  ·  pilot unblock "${failedJob.project}"`,
+            };
+            notifyJobCompletion(ownerNotifyJob).catch(() => {});
+          }
+        }
       }
     } finally {
       this.activeJobs.delete(job.id);

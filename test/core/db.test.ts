@@ -54,7 +54,7 @@ describe('pilot.db', () => {
       expect(job.priority).toBe(0);
       expect(job.dependsOn).toBeNull();
       expect(job.attempts).toBe(0);
-      expect(job.maxAttempts).toBe(3);
+      expect(job.maxAttempts).toBe(1);
       expect(job.delegationPlan).toBeNull();
       expect(job.currentStep).toBe(0);
       expect(job.sessionTitles).toBeNull();
