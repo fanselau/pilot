@@ -13,6 +13,7 @@ import { execa } from 'execa';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
+import { resolveTopLevelModel } from './models.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
@@ -417,9 +418,12 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
   ].join('\n');
 
   const opencodeBin = resolveOpencodeBinary();
+  const topLevelModel = resolveTopLevelModel('phase', job.modelProfile, job.providerMode);
+  process.stderr.write(`[delegate] Model: ${topLevelModel}\n`);
   const proc = execa(opencodeBin, [
     'run',
     '--format', 'default',
+    '--model', topLevelModel,
     '--title', title,
     '--command', 'gsd-delegate',
     args,
