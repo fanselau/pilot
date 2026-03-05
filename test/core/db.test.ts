@@ -32,6 +32,12 @@ import {
   getChildJobs,
   pauseJob,
   getMilestoneStatus,
+  registerProject,
+  getProject,
+  getAllProjects,
+  updateProjectOwner,
+  blockProject,
+  unblockProject,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -890,4 +896,125 @@ describe('pilot.db', () => {
 
   }); // end 'milestone orchestration'
 
+}); // end 'pilot.db'
+
+// ── managed projects ──────────────────────────────────────────────────────
+
+describe('managed projects', () => {
+  beforeEach(() => { _getTestDb(); });
+
+  describe('registerProject / getProject', () => {
+    it('registers a new project', () => {
+      registerProject('/path/to/proj', 'agent:main:main');
+      const p = getProject('/path/to/proj');
+      expect(p).not.toBeNull();
+      expect(p!.path).toBe('/path/to/proj');
+      expect(p!.owner).toBe('agent:main:main');
+      expect(p!.status).toBe('active');
+    });
+
+    it('re-registering same path updates owner (idempotent)', () => {
+      registerProject('/path/to/proj', 'agent:main:main');
+      registerProject('/path/to/proj', 'agent:other:other');
+      const p = getProject('/path/to/proj');
+      expect(p!.owner).toBe('agent:other:other');
+    });
+
+    it('returns null for unregistered project', () => {
+      expect(getProject('/nonexistent')).toBeNull();
+    });
+  });
+
+  describe('updateProjectOwner', () => {
+    it('updates owner on existing project', () => {
+      registerProject('/path/to/proj', 'old-owner');
+      updateProjectOwner('/path/to/proj', 'new-owner');
+      expect(getProject('/path/to/proj')!.owner).toBe('new-owner');
+    });
+  });
+
+  describe('getAllProjects', () => {
+    it('returns empty array when no projects registered', () => {
+      expect(getAllProjects()).toEqual([]);
+    });
+
+    it('returns all registered projects ordered by path', () => {
+      registerProject('/b/proj', 'owner-b');
+      registerProject('/a/proj', 'owner-a');
+      const all = getAllProjects();
+      expect(all.length).toBe(2);
+      expect(all[0].path).toBe('/a/proj');
+      expect(all[1].path).toBe('/b/proj');
+    });
+  });
+
+  describe('blockProject / unblockProject', () => {
+    it('blocks a project with reason', () => {
+      registerProject('/path/to/proj', 'owner');
+      blockProject('/path/to/proj', 'Build failed: type error');
+      const p = getProject('/path/to/proj');
+      expect(p!.status).toBe('blocked');
+      expect(p!.blockedReason).toBe('Build failed: type error');
+      expect(p!.blockedAt).not.toBeNull();
+    });
+
+    it('unblocks a blocked project', () => {
+      registerProject('/path/to/proj', 'owner');
+      blockProject('/path/to/proj', 'some reason');
+      unblockProject('/path/to/proj');
+      const p = getProject('/path/to/proj');
+      expect(p!.status).toBe('active');
+      expect(p!.blockedReason).toBeNull();
+      expect(p!.blockedAt).toBeNull();
+    });
+  });
+
+  describe('markFailed → blocks project', () => {
+    it('blocking a project after job failure if project is registered', () => {
+      registerProject('/test/proj', 'owner');
+      const job = addJob('/test/proj', 'quick', 'test task');
+      markRunning(job.id);
+      markFailed(job.id, 'Something went wrong');
+      const p = getProject('/test/proj');
+      expect(p!.status).toBe('blocked');
+      expect(p!.blockedReason).toBe('Something went wrong');
+    });
+
+    it('markFailed on unregistered project does not crash (blockProject no-ops)', () => {
+      const job = addJob('/unregistered/proj', 'quick', 'test task');
+      markRunning(job.id);
+      expect(() => markFailed(job.id, 'error')).not.toThrow();
+    });
+  });
+
+  describe('claimNextLaunchable — skips blocked projects', () => {
+    it('skips pending jobs for blocked projects', () => {
+      registerProject('/blocked/proj', 'owner');
+      blockProject('/blocked/proj', 'blocked');
+      addJob('/blocked/proj', 'quick', 'should be skipped');
+
+      const claimed = claimNextLaunchable();
+      expect(claimed).toBeNull();
+    });
+
+    it('claims jobs for active projects but not blocked ones', () => {
+      registerProject('/blocked/proj', 'owner');
+      blockProject('/blocked/proj', 'reason');
+
+      registerProject('/active/proj', 'owner');
+      addJob('/blocked/proj', 'quick', 'blocked job');
+      addJob('/active/proj', 'quick', 'active job');
+
+      const claimed = claimNextLaunchable();
+      expect(claimed).not.toBeNull();
+      expect(claimed!.project).toBe('/active/proj');
+    });
+  });
+
+  describe('new jobs default to max_attempts=1', () => {
+    it('addJob creates job with maxAttempts=1', () => {
+      const job = addJob('/test/proj', 'quick', 'test');
+      expect(job.maxAttempts).toBe(1);
+    });
+  });
 });
