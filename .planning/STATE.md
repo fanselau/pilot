@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 36
+## Current Phase: 37
 
 ## Current Position
 
-Phase: 36 of 36 (Config File Support for Pilot CLI)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-05 - Completed 36-03-PLAN.md (Consumer wiring: add.ts/db.ts defaults, doctor check, comprehensive tests)
+Phase: 37 of 37 (Skills System for Pilot)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-03-05 - Completed 37-01-PLAN.md (Foundation: types, DB migration, skills.ts library module)
 
-Progress: ██████████████████████████████████████ 101/101 plans
+Progress: ██████████████████████████████████████░ 102/105 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 36 complete — Config File Support. All 3 plans done: ConfigFileSchema type, loadConfigFile with validation/caching, getConfig layered resolution, getConfigSource, config CLI subcommands (init/set/get/edit/path/show), consumer wiring (add.ts/db.ts defaults), doctor config check, 476 tests passing.
+**Current focus:** Phase 37 in progress — Skills System. Plan 01 done: SkillEntry/SkillManifest types, Job.categories DB migration, full src/core/skills.ts library module with 8 exported functions, 476 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -84,6 +84,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 36: Config File Support for Pilot CLI
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 37: Skills System for Pilot
+- **Status:** in progress (1/4 plans complete)
 
 ### Quick Tasks Completed
 
@@ -482,9 +485,15 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 36-03 | add.ts resolves profile/provider to concrete value (never undefined) via getConfigFileDefaults() | db.ts fallback is safety net, not primary path; type narrows from `T | undefined` to `T` |
 | 36-03 | Doctor warns (not fails) on missing config file | Using defaults is valid; warn guides users to `pilot config init` |
 | 36-03 | Doctor warns on world/group-readable config file permissions | Config may contain tokens (telegram, openclaw); chmod 600 recommended |
+| 37-01 | PREDEFINED_CATEGORIES in skills.ts not types.ts | Runtime constant, not a type definition |
+| 37-01 | Simple line-by-line frontmatter parser (no yaml library) | Only name/description fields needed; avoids new dependency |
+| 37-01 | loadManifest returns graceful default on missing/corrupt file | Prevents crashes on first use or data corruption |
+| 37-01 | Atomic manifest writes via temp file + rename | Crash safety for manifest.json |
+| 37-01 | injectSkills writes .pilot-injected.json tracking manifest | Precise cleanup — only removes what Pilot added |
+| 37-01 | Universal skills (empty categories) always included in resolution | Skills without categories apply to all jobs |
 
 ## Session Continuity
 
-Last session: 2026-03-05T22:40:17Z
-Stopped at: Completed 36-03-PLAN.md (Consumer wiring: add.ts/db.ts defaults, doctor check, comprehensive tests)
+Last session: 2026-03-05T23:07:35Z
+Stopped at: Completed 37-01-PLAN.md (Foundation: types, DB migration, skills.ts library module)
 Resume file: None
