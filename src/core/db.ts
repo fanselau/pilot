@@ -13,7 +13,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig } from './config.js';
-import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan } from './types.js';
+import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus } from './types.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   completed_at TEXT,
   error TEXT,
   attempts INTEGER DEFAULT 0,
-  max_attempts INTEGER DEFAULT 3,
+  max_attempts INTEGER DEFAULT 1,
   delegation_plan TEXT,
   current_step INTEGER DEFAULT 0,
   session_titles TEXT,
@@ -60,6 +60,17 @@ CREATE TABLE IF NOT EXISTS job_steps (
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at TEXT,
   duration_ms INTEGER
+);
+`;
+
+const CREATE_PROJECTS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS projects (
+  path TEXT PRIMARY KEY,
+  owner TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'blocked')),
+  blocked_reason TEXT,
+  blocked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
 
@@ -120,6 +131,26 @@ interface JobRow {
   actual_models: string | null;
   callback_url: string | null;
   callback_session_key: string | null;
+}
+
+interface ProjectRow {
+  path: string;
+  owner: string | null;
+  status: string;
+  blocked_reason: string | null;
+  blocked_at: string | null;
+  created_at: string;
+}
+
+function rowToProject(row: ProjectRow): Project {
+  return {
+    path: row.path,
+    owner: row.owner,
+    status: row.status as ProjectStatus,
+    blockedReason: row.blocked_reason,
+    blockedAt: row.blocked_at,
+    createdAt: row.created_at,
+  };
 }
 
 function rowToJob(row: JobRow): Job {
@@ -194,6 +225,7 @@ function openPilotDb(): DatabaseType {
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
   migrateSchema(cachedDb!);
   return cachedDb!;
 }
@@ -211,6 +243,7 @@ function _getTestDb(): DatabaseType {
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
   migrateSchema(cachedDb!);
   return cachedDb!;
 }
@@ -840,6 +873,75 @@ function findDuplicateJob(
   return null;
 }
 
+// ── Project CRUD ──────────────────────────────────────────────────────────
+
+/**
+ * Register a project (INSERT OR IGNORE) and update its owner.
+ * If the project already exists, updates the owner.
+ * Returns the current project row.
+ */
+function registerProject(path: string, owner: string): Project {
+  const db = getDb();
+  db.prepare(`
+    INSERT OR IGNORE INTO projects (path, owner)
+    VALUES (?, ?)
+  `).run(path, owner);
+  db.prepare(`
+    UPDATE projects SET owner = ? WHERE path = ?
+  `).run(owner, path);
+  return getProject(path)!;
+}
+
+/**
+ * Get a project by path. Returns null if not registered.
+ */
+function getProject(path: string): Project | null {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM projects WHERE path = ?').get(path) as ProjectRow | undefined;
+  return row ? rowToProject(row) : null;
+}
+
+/**
+ * Get all projects, ordered by path ASC.
+ */
+function getAllProjects(): Project[] {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM projects ORDER BY path ASC').all() as ProjectRow[];
+  return rows.map(rowToProject);
+}
+
+/**
+ * Update the owner of a project.
+ */
+function updateProjectOwner(path: string, owner: string): void {
+  const db = getDb();
+  db.prepare('UPDATE projects SET owner = ? WHERE path = ?').run(owner, path);
+}
+
+/**
+ * Block a project: set status='blocked', record reason and timestamp.
+ */
+function blockProject(path: string, reason: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE projects
+    SET status = 'blocked', blocked_reason = ?, blocked_at = datetime('now')
+    WHERE path = ?
+  `).run(reason, path);
+}
+
+/**
+ * Unblock a project: set status='active', clear blocked_reason and blocked_at.
+ */
+function unblockProject(path: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE projects
+    SET status = 'active', blocked_reason = NULL, blocked_at = NULL
+    WHERE path = ?
+  `).run(path);
+}
+
 // ── Milestone Query Helpers ───────────────────────────────────────────────
 
 /**
@@ -918,6 +1020,12 @@ function clearDependsOn(id: string): void {
 export {
   openPilotDb,
   _getTestDb,
+  registerProject,
+  getProject,
+  getAllProjects,
+  updateProjectOwner,
+  blockProject,
+  unblockProject,
   addJob,
   getJob,
   getNextPending,

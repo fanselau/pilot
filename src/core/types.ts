@@ -128,6 +128,19 @@ export interface JobStep {
   durationMs: number | null;
 }
 
+// ── Project (matches projects table in pilot.db) ─────────────────────────
+
+export type ProjectStatus = 'active' | 'blocked';
+
+export interface Project {
+  path: string;              // absolute project path (primary key)
+  owner: string | null;      // session key e.g. "agent:main:main"
+  status: ProjectStatus;
+  blockedReason: string | null;
+  blockedAt: string | null;  // ISO 8601
+  createdAt: string;
+}
+
 // ── Status output ─────────────────────────────────────────────────────────
 
 export interface PilotStatusJson {
