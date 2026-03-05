@@ -746,7 +746,7 @@ describe('buildQuickArgs', () => {
 
 // ── buildMilestonePlan ────────────────────────────────────────────────────
 // buildMilestonePlan now produces a simple coordinator plan (new-milestone step).
-// Child phase jobs are spawned by the runner after the coordinator completes.
+// Runner re-delegates for phase steps after the coordinator completes.
 
 describe('buildMilestonePlan', () => {
   beforeEach(() => {
