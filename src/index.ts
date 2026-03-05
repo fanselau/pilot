@@ -1,3 +1,4 @@
+// notify test
 #!/usr/bin/env node
 /**
  * Pilot v2 CLI entry point.
