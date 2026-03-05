@@ -1,4 +1,3 @@
-// hook test v2
 #!/usr/bin/env node
 /**
  * Pilot v2 CLI entry point.
