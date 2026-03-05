@@ -117,13 +117,14 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
   const sections: SessionSection[] = [];
 
   for (const title of uniqueTitles) {
-    // Filter: only show delegation + step-referenced execution sessions
+    // Filter: only show delegation + step-referenced execution sessions + verify sessions
     const isDelegationTitle = title.startsWith('pilot-delegate-');
-    if (stepTitles && !isDelegationTitle && !stepTitles.has(title)) continue;
+    const isVerifyTitle = title.startsWith('pilot-verify-');
+    if (stepTitles && !isDelegationTitle && !stepTitles.has(title) && !isVerifyTitle) continue;
     const isDelegation = title.startsWith('pilot-delegate-');
 
     let command: string | undefined;
-    if (!isDelegation) {
+    if (!isDelegation && !isVerifyTitle) {
       // Extract command by matching known GSD commands in the title
       const knownCommands = ['add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'phase', 'quick', 'new-project'];
       for (const cmd of knownCommands) {
@@ -138,19 +139,30 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
     const parts = sessionId ? getSessionParts(sessionId, since) : [];
     const children = sessionId ? resolveChildSections(sessionId, parts, 0) : [];
 
+    let sectionType: SessionSection['type'];
+    if (isDelegation) {
+      sectionType = 'delegation';
+    } else if (isVerifyTitle) {
+      sectionType = 'verify';
+    } else {
+      sectionType = 'execution';
+    }
+
     sections.push({
       title,
-      type: isDelegation ? 'delegation' : 'execution',
+      type: sectionType,
       command,
       parts,
       children: children.length > 0 ? children : undefined,
     });
   }
 
-  // Sort: delegation first, then execution
+  // Sort: delegation first, then verify, then execution
   sections.sort((a, b) => {
     if (a.type === 'delegation' && b.type !== 'delegation') return -1;
     if (a.type !== 'delegation' && b.type === 'delegation') return 1;
+    if (a.type === 'verify' && b.type !== 'verify') return -1;
+    if (a.type !== 'verify' && b.type === 'verify') return 1;
     return 0;
   });
 

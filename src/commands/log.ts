@@ -38,22 +38,28 @@ interface LogOptions {
 interface CategorizedSession {
   title: string;
   sessionId: string | null;
-  type: 'delegation' | 'execution';
+  type: 'delegation' | 'execution' | 'verify';
   command?: string;   // extracted command for execution sessions
 }
 
 /**
- * Categorize session titles into delegation vs execution.
+ * Categorize session titles into delegation vs execution vs verify.
  * Delegation pattern: `pilot-delegate-{jobId}-N`
+ * Verify pattern: `pilot-verify-{jobId}-N`
  * Everything else is execution.
  */
 function categorizeSessions(sessionTitles: string[]): CategorizedSession[] {
   return sessionTitles.map((title) => {
     const isDelegation = title.startsWith('pilot-delegate-');
+    const isVerify = title.startsWith('pilot-verify-');
     const sessionId = findSessionByTitle(title);
 
     if (isDelegation) {
       return { title, sessionId, type: 'delegation' as const };
+    }
+
+    if (isVerify) {
+      return { title, sessionId, type: 'verify' as const };
     }
 
     // Extract command from title by matching against known GSD commands
@@ -372,7 +378,7 @@ async function logCommand(
     steps.filter((s) => s.sessionTitle).map((s) => s.sessionTitle!),
   );
   const deduplicatedSessions = stepSessionTitles.size > 0
-    ? uniqueSessions.filter((s) => s.type === 'delegation' || stepSessionTitles.has(s.title))
+    ? uniqueSessions.filter((s) => s.type === 'delegation' || s.type === 'verify' || stepSessionTitles.has(s.title))
     : uniqueSessions;
 
   // Apply --delegation filter
@@ -513,10 +519,15 @@ async function logCommand(
 
   for (const { session, parts } of sessionData) {
     // Section header
-    if (sessions.length > 1 || session.type === 'delegation') {
-      const sectionLabel = session.type === 'delegation'
-        ? `── Delegation ──`
-        : `── Execution: ${session.command ?? 'unknown'} ──`;
+    if (sessions.length > 1 || session.type === 'delegation' || session.type === 'verify') {
+      let sectionLabel: string;
+      if (session.type === 'delegation') {
+        sectionLabel = `── Delegation ──`;
+      } else if (session.type === 'verify') {
+        sectionLabel = `── Verification ──`;
+      } else {
+        sectionLabel = `── Execution: ${session.command ?? 'unknown'} ──`;
+      }
       outputHuman(`  ${dim(sectionLabel)}`);
       outputHuman('');
     }
