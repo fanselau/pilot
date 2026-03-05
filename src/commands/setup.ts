@@ -5,14 +5,19 @@
  * adds .opencode/ to .gitignore, and initializes git if needed.
  *
  * With --verify, checks an existing setup without modifying anything.
+ * With --owner <key>, registers the project with an owner session key.
+ * With --update, updates the owner of an existing registered project.
  */
 
+import path from 'node:path';
 import { setupProject, verifySetup } from '../core/setup.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, yellow, dim, bold } from '../util/colors.js';
 
 interface SetupOptions {
   verify?: boolean;
+  owner?: string;    // session key to register as project owner
+  update?: boolean;  // if true, update owner of existing project
 }
 
 async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
@@ -63,6 +68,24 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
 
   if (result.errors.length > 0) {
     process.exit(1);
+  }
+
+  // After setup completes successfully, handle owner registration
+  if (opts.owner) {
+    const { registerProject, updateProjectOwner, getProject } = await import('../core/db.js');
+    const absDir = path.resolve(dir);
+    if (opts.update) {
+      const existing = getProject(absDir);
+      if (!existing) {
+        process.stderr.write(`  ✗ Project not registered: ${absDir}\n`);
+        process.exit(1);
+      }
+      updateProjectOwner(absDir, opts.owner);
+      outputHuman(`  ${green('✓')} Updated owner: ${opts.owner}`);
+    } else {
+      registerProject(absDir, opts.owner);
+      outputHuman(`  ${green('✓')} Registered project owner: ${opts.owner}`);
+    }
   }
 }
 
