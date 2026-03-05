@@ -20,7 +20,7 @@ export function ConfirmOverlay(props: {
       top="40%"
       left="25%"
       width="50%"
-      height={5}
+      height={7}
       borderStyle="rounded"
       border={true}
       borderColor={statusColors.failed}
@@ -31,6 +31,7 @@ export function ConfirmOverlay(props: {
       flexDirection="column"
     >
       <text content={props.message} fg={theme.fg} />
+      <text content="" />
       <text content="Press y to confirm, n or Esc to cancel" fg={theme.muted} />
     </box>
   );

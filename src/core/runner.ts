@@ -727,13 +727,27 @@ class Runner {
     const ts = Date.now().toString(36).slice(-4);
     const verifyTitle = truncateTitle(`pilot-verify-${job.id}-${ts}`, 80);
 
+    // Register verify session title BEFORE spawning so fetchJobParts can find it
+    updateSessionTitles(job.id, [verifyTitle]);
+
+    // Cap verify at 15 minutes to prevent indefinite blocking
+    const config = getConfig();
+    const verifyTimeoutMs = Math.min(config.defaultTimeout, 15) * 60 * 1000;
+
     try {
-      await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle);
+      await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle, verifyTimeoutMs);
     } catch (err) {
-      process.stderr.write(
-        `[runner] Verification session failed: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
-      return null; // Benefit of doubt on spawn failure
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('timed out')) {
+        process.stderr.write(
+          `[runner] Verification timed out after 15m for ${verifyTitle} — treating as benefit-of-doubt\n`,
+        );
+      } else {
+        process.stderr.write(
+          `[runner] Verification session failed: ${errMsg}\n`,
+        );
+      }
+      return null; // Benefit of doubt on spawn failure or timeout
     }
 
     // Find VERIFICATION.md in the phase directory
@@ -800,10 +814,11 @@ class Runner {
     command: string,
     args: string,
     title: string,
+    timeoutOverrideMs?: number,
   ): Promise<void> {
     const config = getConfig();
     const opencodeBin = resolveOpencodeBinary();
-    const timeoutMs = config.defaultTimeout * 60 * 1000;
+    const timeoutMs = timeoutOverrideMs ?? config.defaultTimeout * 60 * 1000;
     const start = Date.now();
 
     // CRITICAL: Pre-spawn safety checks from SPAWN-LESSONS.md
@@ -902,6 +917,13 @@ class Runner {
       }
 
       const sessionId = findSessionByTitle(title);
+
+      if (process.env['PILOT_DEBUG']) {
+        const pollElapsedS = Math.round((Date.now() - start) / 1000);
+        process.stderr.write(
+          `[runner] poll ${title}: elapsed=${pollElapsedS}s sessionFound=${sessionFound} isSessionDone=${sessionId ? isSessionDone(sessionId) : 'n/a'}\n`,
+        );
+      }
       if (!sessionId) {
         // Session not yet in DB — check PID liveness as early termination guard
         if (procPid !== undefined) {
