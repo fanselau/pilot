@@ -280,8 +280,71 @@ function extractToolInput(tool: string, stateInput: unknown): string | undefined
     return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 200);
   }
 
-  // Default: truncate stringified input
-  return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 200);
+  if (tool === 'glob') {
+    // glob input has { pattern, path? }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.pattern === 'string') return inp.pattern;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
+  if (tool === 'grep') {
+    // grep input has { pattern, include?, path? }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.pattern === 'string') return inp.pattern;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
+  if (tool === 'list_directory') {
+    // list_directory input has { path } or { dirPath }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.path === 'string') return inp.path;
+      if (typeof inp.dirPath === 'string') return inp.dirPath;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
+  if (tool === 'search') {
+    // search input has { query } or { pattern }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.query === 'string') return inp.query;
+      if (typeof inp.pattern === 'string') return inp.pattern;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
+  if (tool === 'computer_use') {
+    // computer_use input has { action }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.action === 'string') return inp.action;
+    }
+    return 'computer_use';
+  }
+
+  if (tool === 'text_editor') {
+    // text_editor input has { command, path? }
+    if (typeof stateInput === 'object' && stateInput !== null) {
+      const inp = stateInput as Record<string, unknown>;
+      if (typeof inp.command === 'string') return inp.command;
+      if (typeof inp.path === 'string') return inp.path;
+    }
+    return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 100);
+  }
+
+  // MCP tools (prefixed with mcp_*): show compact JSON summary
+  if (tool.startsWith('mcp_')) {
+    // MCP tool: compact truncated JSON, 100 chars is enough for identification
+    return truncateStr(JSON.stringify(stateInput), 100);
+  }
+
+  // Default: truly unknown tools — compact JSON (reduced from 200 to 80 chars)
+  return truncateStr(typeof stateInput === 'string' ? stateInput : JSON.stringify(stateInput), 80);
 }
 
 /**
@@ -533,11 +596,11 @@ function isSessionDone(sessionId: string): boolean {
 
 /**
  * Aggregate token usage for a session from assistant messages.
- * Reads the `tokens.input` and `tokens.output` fields from message data JSON.
- * Returns { input: 0, output: 0 } if no tokens found or DB unavailable.
+ * Reads input, output, reasoning, cache_read, and cache_write token fields from message data JSON.
+ * Returns zeroed struct if no tokens found or DB unavailable.
  */
-function getSessionTokens(sessionId: string): { input: number; output: number } {
-  const ZERO = { input: 0, output: 0 };
+function getSessionTokens(sessionId: string): { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number } {
+  const ZERO = { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 };
   const db = openDb();
   if (db === null) {
     return ZERO;
@@ -547,11 +610,20 @@ function getSessionTokens(sessionId: string): { input: number; output: number } 
     const row = db.prepare(
       `SELECT
          COALESCE(SUM(json_extract(data, '$.tokens.input')), 0) as total_input,
-         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output
+         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output,
+         COALESCE(SUM(json_extract(data, '$.tokens.reasoning')), 0) as total_reasoning,
+         COALESCE(SUM(json_extract(data, '$.tokens.cache_read')), 0) as total_cache_read,
+         COALESCE(SUM(json_extract(data, '$.tokens.cache_write')), 0) as total_cache_write
        FROM message
        WHERE session_id = ?
          AND json_extract(data, '$.role') = 'assistant'`,
-    ).get(sessionId) as { total_input: number; total_output: number } | undefined;
+    ).get(sessionId) as {
+      total_input: number;
+      total_output: number;
+      total_reasoning: number;
+      total_cache_read: number;
+      total_cache_write: number;
+    } | undefined;
 
     if (!row) {
       return ZERO;
@@ -560,10 +632,47 @@ function getSessionTokens(sessionId: string): { input: number; output: number } 
     return {
       input: row.total_input ?? 0,
       output: row.total_output ?? 0,
+      reasoning: row.total_reasoning ?? 0,
+      cacheRead: row.total_cache_read ?? 0,
+      cacheWrite: row.total_cache_write ?? 0,
     };
   } catch {
     return ZERO;
   }
+}
+
+/**
+ * Aggregate token usage recursively across a session and all its child sessions.
+ * Traverses the session tree via getChildSessions() up to max depth 3.
+ * Returns summed token fields: { input, output, reasoning, cacheRead, cacheWrite }
+ */
+function getSessionTokensRecursive(
+  sessionId: string,
+  depth: number = 0,
+): { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number } {
+  const ZERO = { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 };
+
+  // Depth guard to prevent infinite loops from malformed data
+  if (depth > 3) return ZERO;
+
+  // Get root session tokens
+  const root = getSessionTokens(sessionId);
+  let total = { ...root };
+
+  // Recurse into child sessions
+  const children = getChildSessions(sessionId);
+  for (const child of children) {
+    const childTokens = getSessionTokensRecursive(child.id, depth + 1);
+    total = {
+      input: total.input + childTokens.input,
+      output: total.output + childTokens.output,
+      reasoning: total.reasoning + childTokens.reasoning,
+      cacheRead: total.cacheRead + childTokens.cacheRead,
+      cacheWrite: total.cacheWrite + childTokens.cacheWrite,
+    };
+  }
+
+  return total;
 }
 
 // ── Model queries ──────────────────────────────────────────────────────────
@@ -628,6 +737,7 @@ export {
   getAssistantMessageCount,
   isSessionDone,
   getSessionTokens,
+  getSessionTokensRecursive,
   getSessionModels,
   _resetDbCache,
   _setTestDb,
