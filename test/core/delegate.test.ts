@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Job } from '../../src/core/types.js';
+import { resolveTopLevelModel } from '../../src/core/models.js';
 
 // ── Mock state ─────────────────────────────────────────────────────────────
 
@@ -904,5 +905,48 @@ describe('matchesBlocklist', () => {
     // Verify it contains the key phrases
     expect(GSD_INSTRUCTION_BLOCKLIST).toContain('add a new integer phase');
     expect(GSD_INSTRUCTION_BLOCKLIST).toContain('execute all plans');
+  });
+});
+
+// ── attemptDelegation model enforcement ────────────────────────────────────
+// These tests verify the model resolution logic used in attemptDelegation:
+// - resolveTopLevelModel('phase', ...) is always used (planner tier)
+// - The correct model is selected based on modelProfile + providerMode
+
+describe('attemptDelegation model enforcement', () => {
+  it('delegation passes --model resolved to planner tier for balanced/claude-only job', () => {
+    // balanced profile → gsd-planner uses opus tier → anthropic/claude-opus-4-6
+    const model = resolveTopLevelModel('phase', 'balanced', 'claude-only');
+    expect(model).toBe('anthropic/claude-opus-4-6');
+  });
+
+  it('delegation uses planner tier regardless of job scope (quick-scoped job still gets planner model)', () => {
+    // Even if job.scope = 'quick', delegation always calls resolveTopLevelModel('phase', ...)
+    // Verify: 'phase' scope → planner tier (opus for balanced)
+    const delegationModel = resolveTopLevelModel('phase', 'balanced', 'claude-only');
+    // 'quick' scope → executor tier (sonnet for balanced)
+    const executorModel = resolveTopLevelModel('quick', 'balanced', 'claude-only');
+    // Delegation must use the planner tier, not the executor tier
+    expect(delegationModel).toBe('anthropic/claude-opus-4-6');
+    expect(executorModel).toBe('anthropic/claude-sonnet-4-6');
+    // They differ — confirms delegation uses a distinct (higher) tier than a quick job would
+    expect(delegationModel).not.toBe(executorModel);
+  });
+
+  it('budget profile uses sonnet for delegation (planner tier budget = sonnet)', () => {
+    // budget profile → gsd-planner uses sonnet tier → anthropic/claude-sonnet-4-6
+    const model = resolveTopLevelModel('phase', 'budget', 'claude-only');
+    expect(model).toBe('anthropic/claude-sonnet-4-6');
+  });
+
+  it('quality profile uses opus for delegation', () => {
+    const model = resolveTopLevelModel('phase', 'quality', 'claude-only');
+    expect(model).toBe('anthropic/claude-opus-4-6');
+  });
+
+  it('openai-only provider mode resolves to openai models for delegation', () => {
+    const model = resolveTopLevelModel('phase', 'balanced', 'openai-only');
+    // balanced/openai-only planner tier = opus → openai/gpt-5.2-codex
+    expect(model).toBe('openai/gpt-5.2-codex');
   });
 });
