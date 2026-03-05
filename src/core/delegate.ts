@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
+import { resolveSkillsForJob } from './skills.js';
 import type { Job, DelegationPlan, DelegationStep } from './types.js';
 
 /**
@@ -410,12 +411,29 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
   const ts = Date.now().toString(36).slice(-4);
   const title = `pilot-delegate-${job.id}-${attempt}-${ts}`;
 
-  const args = [
+  const argLines = [
     `scope: ${job.scope}`,
     `project: ${job.project}`,
     `description: ${job.description}`,
     `requirement_path: ${job.requirementPath ?? 'none'}`,
-  ].join('\n');
+  ];
+
+  // Append skills hint if job has categories and matched skills exist
+  try {
+    const matchedSkills = resolveSkillsForJob(job.categories ?? null);
+    if (matchedSkills.length > 0) {
+      const categoryList = job.categories?.join(', ') ?? 'none';
+      const skillNames = matchedSkills.map(s => s.name).join(', ');
+      argLines.push(`\nAvailable Skills:`);
+      argLines.push(`skill_categories: ${categoryList}`);
+      argLines.push(`matched_skills: ${skillNames}`);
+      argLines.push(`Note: Read these skills when relevant to the current task.`);
+    }
+  } catch {
+    // Skills system unavailable — skip hint silently
+  }
+
+  const args = argLines.join('\n');
 
   const opencodeBin = resolveOpencodeBinary();
   const topLevelModel = resolveTopLevelModel('phase', job.modelProfile, job.providerMode);
