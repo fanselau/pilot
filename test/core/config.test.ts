@@ -1,17 +1,15 @@
 /**
- * Tests for resolveProjectDir() and resource management config fields in src/core/config.ts.
+ * Tests for resolveProjectDir(), gsdDir resolution, and resource management config fields
+ * in src/core/config.ts.
  *
- * Covers all four resolution modes:
- *   1. Absolute path  → returned as-is
- *   2. Tilde path     → expanded to home dir
- *   3. Relative path  → resolved relative to process.cwd()
- *   4. Shorthand name → joined to configured projectDir (PILOT_PROJECT_DIR)
- *
- * Also covers the three resource management config fields:
- *   sessionMemoryMaxMb, reservedMemoryMb, memoryKillThresholdMb
+ * Covers:
+ *   - resolveProjectDir four resolution modes (absolute, tilde, relative, shorthand)
+ *   - gsdDir 3-step fallback: PILOT_GSD_DIR env → submodule → ~/pilot-gsd/
+ *   - Resource management config fields (sessionMemoryMaxMb, reservedMemoryMb, memoryKillThresholdMb)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -118,5 +116,41 @@ describe('resource management config fields', () => {
     expect(config.sessionMemoryMaxMb).toBe(8192);
     expect(config.reservedMemoryMb).toBe(4096);
     expect(config.memoryKillThresholdMb).toBe(2048);
+  });
+});
+
+// ── gsdDir resolution ─────────────────────────────────────────────────────
+
+describe('gsdDir resolution', () => {
+  afterEach(() => {
+    delete process.env.PILOT_GSD_DIR;
+  });
+
+  it('PILOT_GSD_DIR env var overrides all other resolution', () => {
+    process.env.PILOT_GSD_DIR = '/custom/gsd-path';
+    const config = getConfig();
+    expect(config.gsdDir).toBe('/custom/gsd-path');
+  });
+
+  it('PILOT_GSD_DIR with tilde expands to home directory', () => {
+    process.env.PILOT_GSD_DIR = '~/my-gsd';
+    const config = getConfig();
+    expect(config.gsdDir).toBe(path.join(os.homedir(), 'my-gsd'));
+  });
+
+  it('without env var, resolves to a path containing pilot-gsd', () => {
+    delete process.env.PILOT_GSD_DIR;
+    const config = getConfig();
+    expect(config.gsdDir).toMatch(/pilot-gsd$/);
+  });
+
+  it('without env var, resolves to submodule when it exists', () => {
+    // In the test environment (running from repo), the submodule exists
+    delete process.env.PILOT_GSD_DIR;
+    const config = getConfig();
+    // Should resolve to <repo_root>/pilot-gsd which exists as submodule
+    expect(config.gsdDir).toContain('pilot-gsd');
+    // The resolved path should actually exist (submodule was initialized)
+    expect(existsSync(config.gsdDir)).toBe(true);
   });
 });

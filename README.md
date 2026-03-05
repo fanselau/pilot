@@ -77,15 +77,27 @@ pilot service start
 
 ### Setting up pilot-gsd
 
-pilot-gsd contains the GSD command definitions (agent prompts and workflows).
+pilot-gsd contains the GSD command definitions (agent prompts and workflows) and is included as a git submodule.
 
-If you cloned pilot with submodules:
+If you cloned without `--recurse-submodules`, initialize it:
 
 ```bash
 git submodule update --init
 ```
 
-Or set the path manually:
+Alternatively, clone with submodules in one step:
+
+```bash
+git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
+```
+
+For standalone installations (e.g. via `npm install -g pilot-cli`), clone pilot-gsd to your home directory:
+
+```bash
+git clone https://github.com/lucafanselau/pilot-gsd.git ~/pilot-gsd
+```
+
+Or set a custom path:
 
 ```bash
 export PILOT_GSD_DIR=/path/to/pilot-gsd
