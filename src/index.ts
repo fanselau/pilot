@@ -158,9 +158,22 @@ program
 program
   .command('projects')
   .description('List all registered managed projects')
-  .action(async () => {
+  .option('--blocked', 'Show only blocked projects')
+  .action(async (opts: Record<string, unknown>) => {
     const { projectsCommand } = await import('./commands/projects.js');
-    await projectsCommand();
+    await projectsCommand(opts as { blocked?: boolean });
+  });
+
+program
+  .command('project <path>')
+  .description('Show or manage a registered project')
+  .option('--block <reason>', 'Block project with reason')
+  .option('--unblock', 'Unblock a blocked project')
+  .option('--owner <sessionKey>', 'Change project owner')
+  .option('--jobs', 'Show recent jobs for this project')
+  .action(async (path: string, opts: Record<string, unknown>) => {
+    const { projectCommand } = await import('./commands/project.js');
+    await projectCommand(path, opts as Parameters<typeof projectCommand>[1]);
   });
 
 program

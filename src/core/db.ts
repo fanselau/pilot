@@ -952,6 +952,37 @@ function unblockProject(path: string): void {
   `).run(path);
 }
 
+// ── Project Job Counts ────────────────────────────────────────────────────
+
+interface ProjectJobCounts {
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+}
+
+/**
+ * Get job counts by status for a project path.
+ * Returns zeroed counts if the project has no jobs.
+ */
+function getProjectJobCounts(project: string): ProjectJobCounts {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT status, COUNT(*) as count
+    FROM jobs WHERE project = ?
+    GROUP BY status
+  `).all(project) as { status: string; count: number }[];
+
+  const counts: ProjectJobCounts = { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0 };
+  for (const r of rows) {
+    if (r.status in counts) {
+      counts[r.status as keyof ProjectJobCounts] = r.count;
+    }
+  }
+  return counts;
+}
+
 // ── Milestone Query Helpers ───────────────────────────────────────────────
 
 /**
@@ -1027,6 +1058,8 @@ function clearDependsOn(id: string): void {
 
 // ── Exports ───────────────────────────────────────────────────────────────
 
+export type { ProjectJobCounts };
+
 export {
   openPilotDb,
   _getTestDb,
@@ -1036,6 +1069,7 @@ export {
   updateProjectOwner,
   blockProject,
   unblockProject,
+  getProjectJobCounts,
   addJob,
   getJob,
   getNextPending,
