@@ -55,7 +55,7 @@ export function RunningPanel(props: {
   jobs: Job[];
   selectedIndex: number;
   focused: boolean;
-  sessionTokens: Map<string, { input: number; output: number }>;
+  sessionTokens: Map<string, { input: number; output: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }>;
   lastMessages: Map<string, string>;
 }) {
   // Tick signal to force elapsed time re-computation every second
@@ -93,7 +93,7 @@ export function RunningPanel(props: {
 
             const totalTokens = () => {
               const t = tokens();
-              return t ? t.input + t.output : 0;
+              return t ? t.input + t.output + (t.reasoning ?? 0) : 0;
             };
 
             const lastMsg = () => {

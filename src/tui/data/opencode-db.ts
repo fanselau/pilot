@@ -10,6 +10,7 @@
 import {
   findSessionByTitle,
   getSessionTokens,
+  getSessionTokensRecursive,
   getLastMessage,
   getSessionMessages,
   getSessionParts,
@@ -23,7 +24,7 @@ import { getJobSteps } from '../../core/db.js';
 
 export interface SessionSection {
   title: string;
-  type: 'delegation' | 'execution' | 'subagent';
+  type: 'delegation' | 'execution' | 'subagent' | 'verify';
   command?: string;       // extracted from execution title
   agentType?: string;     // 'gsd-planner', 'gsd-executor', etc. for subagent sections
   parts: SessionPart[];
@@ -166,17 +167,18 @@ export function fetchJobParts(job: Job, since?: number): SessionSection[] {
  * @returns Maps keyed by session title for token usage and last message content
  */
 export function fetchSessionEnrichment(sessionTitles: string[]): {
-  tokens: Map<string, { input: number; output: number }>;
+  tokens: Map<string, { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }>;
   lastMsgs: Map<string, string>;
 } {
-  const tokens = new Map<string, { input: number; output: number }>();
+  const tokens = new Map<string, { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }>();
   const lastMsgs = new Map<string, string>();
 
   for (const title of sessionTitles) {
     const sessionId = findSessionByTitle(title);
     if (!sessionId) continue;
 
-    const tok = getSessionTokens(sessionId);
+    // Use recursive aggregation to include child session (subagent) tokens
+    const tok = getSessionTokensRecursive(sessionId);
     tokens.set(title, tok);
 
     const last = getLastMessage(sessionId);
@@ -205,4 +207,4 @@ export function fetchJobMessages(sessionTitle: string, since?: number): SessionM
 
 // ── Re-exports ────────────────────────────────────────────────────────────
 
-export { isSessionDone, getSessionTokens, findSessionByTitle };
+export { isSessionDone, getSessionTokens, getSessionTokensRecursive, findSessionByTitle };

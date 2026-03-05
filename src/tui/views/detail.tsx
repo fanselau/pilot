@@ -308,7 +308,7 @@ export function DetailView(props: { state: PilotStateStore }) {
       setSections(merged);
     }
 
-    // Update token count
+    // Update token count (recursive — includes subagent tokens and reasoning)
     try {
       let titles: string[] = [];
       if (currentJob.sessionTitles) {
@@ -318,7 +318,7 @@ export function DetailView(props: { state: PilotStateStore }) {
         const { tokens } = fetchSessionEnrichment(titles);
         let total = 0;
         for (const [, t] of tokens) {
-          total += t.input + t.output;
+          total += t.input + t.output + (t.reasoning ?? 0);
         }
         setTotalTokens(total);
       }

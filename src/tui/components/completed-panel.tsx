@@ -170,7 +170,7 @@ export function CompletedPanel(props: {
         const { tokens } = fetchSessionEnrichment(titles);
         let total = 0;
         for (const [, t] of tokens) {
-          total += t.input + t.output;
+          total += t.input + t.output + (t.reasoning ?? 0);
         }
         if (total > 0) {
           tokenMap.set(job.id, total);

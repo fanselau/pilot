@@ -17,6 +17,7 @@ import {
   getSessionParts,
   getChildSessions,
   getSessionTokens,
+  getSessionTokensRecursive,
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
@@ -228,15 +229,16 @@ function formatStepsSummary(steps: JobStep[]): string[] {
       verdictStr = ` [${parts.join(': ')}]`;
     }
 
-    // Per-step token usage (from opencode DB via session title)
+    // Per-step token usage (from opencode DB via session title — recursive to include subagents)
     let tokenStr = '';
     if (step.sessionTitle) {
       const sessionId = findSessionByTitle(step.sessionTitle);
       if (sessionId) {
-        const tokens = getSessionTokens(sessionId);
+        const tokens = getSessionTokensRecursive(sessionId);
         const total = tokens.input + tokens.output;
         if (total > 0) {
-          tokenStr = ` · ${formatTokenCount(total)} tok`;
+          const reasoningStr = tokens.reasoning > 0 ? ` (${formatTokenCount(tokens.reasoning)} thinking)` : '';
+          tokenStr = ` · ${formatTokenCount(total)} tok${reasoningStr}`;
         }
       }
     }
