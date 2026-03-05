@@ -192,12 +192,55 @@ program
     await updateCommand();
   });
 
-program
+const configCmd = program
   .command('config')
-  .description('Show resolved configuration')
+  .description('Configuration management');
+
+// Default action (no subcommand) = show
+configCmd.action(async () => {
+  const { configShowCommand } = await import('./commands/config.js');
+  await configShowCommand();
+});
+
+configCmd
+  .command('init')
+  .description('Create config file with defaults')
+  .option('--defaults', 'Write all defaults without prompting')
+  .action(async (opts: Record<string, unknown>) => {
+    const { configInitCommand } = await import('./commands/config.js');
+    await configInitCommand(opts as { defaults?: boolean });
+  });
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a config value (dot-notation: runner.pollInterval)')
+  .action(async (key: string, value: string) => {
+    const { configSetCommand } = await import('./commands/config.js');
+    await configSetCommand(key, value);
+  });
+
+configCmd
+  .command('get <key>')
+  .description('Get a resolved config value')
+  .action(async (key: string) => {
+    const { configGetCommand } = await import('./commands/config.js');
+    await configGetCommand(key);
+  });
+
+configCmd
+  .command('path')
+  .description('Show config file path')
   .action(async () => {
-    const { configCommand } = await import('./commands/config.js');
-    await configCommand();
+    const { configPathCommand } = await import('./commands/config.js');
+    await configPathCommand();
+  });
+
+configCmd
+  .command('edit')
+  .description('Open config in $EDITOR')
+  .action(async () => {
+    const { configEditCommand } = await import('./commands/config.js');
+    await configEditCommand();
   });
 
 program
