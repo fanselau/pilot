@@ -13,6 +13,8 @@ Star this repo if you find it useful
 
 [Quick Start](#quick-start) · [Getting Started](#getting-started) · [Features](#features) · [CLI Reference](#cli-reference) · [Architecture](#architecture) · [Configuration](#configuration)
 
+![Pilot Demo](demo/demo.svg)
+
 </div>
 
 ---
