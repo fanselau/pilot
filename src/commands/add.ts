@@ -11,7 +11,7 @@
 
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { addJob, findDuplicateJob } from '../core/db.js';
+import { addJob, findDuplicateJob, updateJobCategories } from '../core/db.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
@@ -31,6 +31,7 @@ interface AddOptions {
   notifyUrl?: string; // Custom webhook URL for completion callback
   noNotify?: boolean; // Explicitly skip completion notification
   dryRun?: boolean;   // Show what would happen without queuing
+  categories?: string; // Skill categories for this job (comma-separated string from CLI)
 }
 
 function isFilePath(str: string): boolean {
@@ -154,6 +155,11 @@ async function addCommand(
     : configDefaults.providerMode;
 
   const scope = opts.as ?? detectScope(requirement);
+
+  // Parse categories from --categories flag (comma-separated string)
+  const categories: string[] | null = opts.categories
+    ? opts.categories.split(',').map(s => s.trim()).filter(Boolean)
+    : null;
 
   // Warn when quick scope is used (explicitly or auto-detected) — encourage phase
   if (scope === 'quick' && !isJsonMode()) {
@@ -288,6 +294,11 @@ async function addCommand(
     opts.notifyUrl,        // callbackUrl
   );
 
+  // Store categories on the job record if provided
+  if (categories && categories.length > 0) {
+    updateJobCategories(job.id, categories);
+  }
+
   if (isJsonMode()) {
     outputJson({ job });
     return;
@@ -301,6 +312,9 @@ async function addCommand(
   const tagStr = tags.length > 0 ? `  ${dim(`[${tags.join('/')}]`)}` : '';
 
   outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
+  if (categories && categories.length > 0) {
+    outputHuman(`  ${dim('Categories: ' + categories.join(', '))}`);
+  }
   if (resolvedNotifyKey) {
     outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
   }
