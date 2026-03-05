@@ -43,6 +43,7 @@ import {
   getProject,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
+import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
@@ -452,6 +453,20 @@ class Runner {
       );
     }
 
+    // Inject matching skills into project's .opencode/skills/ directory
+    const resolvedSkills = resolveSkillsForJob(job.categories ?? null);
+    if (resolvedSkills.length > 0) {
+      try {
+        const injected = injectSkills(resolvedSkills, projectDir);
+        if (injected.length > 0) {
+          process.stderr.write(`[runner] Injected ${injected.length} skill(s) for job ${job.id}: ${injected.join(', ')}\n`);
+        }
+      } catch (err) {
+        process.stderr.write(`[runner] Warning: skill injection failed for job ${job.id}: ${err instanceof Error ? err.message : String(err)}\n`);
+        // Non-fatal: continue without skills
+      }
+    }
+
     try {
       this.patchModelsForJob(job, projectDir);
 
@@ -672,6 +687,12 @@ class Runner {
           const titles = JSON.parse(freshJob.sessionTitles) as string[];
           for (const t of titles) this.sessionPids.delete(t);
         } catch { /* ignore */ }
+      }
+      // Clean up injected skills
+      try {
+        cleanupInjectedSkills(projectDir);
+      } catch {
+        // Best-effort cleanup — don't fail the job
       }
     }
   }
