@@ -77,6 +77,11 @@ export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancel
 export type ModelProfile = 'quality' | 'balanced' | 'budget';
 export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
 
+export interface ModelEntry {
+  model: string;
+  variant?: string;
+}
+
 export interface Job {
   id: string;                // 4 alphanumeric chars
   project: string;
