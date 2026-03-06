@@ -35,6 +35,9 @@ describe('resolveAllAgentModels', () => {
     expect(models['gsd-planner'].model).toBe('anthropic/claude-opus-4-6');
     expect(models['gsd-executor'].model).toBe('anthropic/claude-sonnet-4-6');
     expect(models['gsd-phase-researcher'].model).toBe('anthropic/claude-sonnet-4-6');
+    expect(models['gsd-codebase-mapper'].model).toBe('openai/gpt-5.3-codex');
+    expect(models['gsd-codebase-mapper'].variant).toBe('high');
+    expect(models['gsd-verifier'].variant).toBe('high');
   });
 
   it('excludes scope keys from agent map', () => {
@@ -100,6 +103,78 @@ describe('resolveTopLevelModel with _top: keys', () => {
       model: 'openai/gpt-5.3-codex',
       variant: 'xhigh',
     });
+  });
+});
+
+describe('hybrid role-based routing', () => {
+  const buildAgents = [
+    'gsd-planner',
+    'gsd-roadmapper',
+    'gsd-executor',
+    'gsd-debugger',
+    'gsd-phase-researcher',
+    'gsd-project-researcher',
+  ];
+
+  const checkAgents = [
+    'gsd-codebase-mapper',
+    'gsd-verifier',
+    'gsd-plan-checker',
+    'gsd-integration-checker',
+  ];
+
+  const profiles: ModelProfile[] = ['quality', 'balanced', 'budget'];
+
+  it('build-role agents in hybrid match their claude-only equivalents', () => {
+    // Researchers' budget profile differs (sonnet in hybrid vs haiku in claude-only) — tested separately
+    const researcherAgents = new Set(['gsd-phase-researcher', 'gsd-project-researcher']);
+
+    for (const agent of buildAgents) {
+      for (const profile of profiles) {
+        if (researcherAgents.has(agent) && profile === 'budget') continue;
+        expect(resolveAgentModel(agent, profile, 'hybrid')).toEqual(
+          resolveAgentModel(agent, profile, 'claude-only'),
+        );
+      }
+    }
+  });
+
+  it('research-synthesizer budget in hybrid uses sonnet (not haiku)', () => {
+    const hybridBudget = resolveAgentModel('gsd-research-synthesizer', 'budget', 'hybrid');
+    expect(hybridBudget.model).toBe('anthropic/claude-sonnet-4-6');
+    // Verify it differs from claude-only budget (which uses haiku)
+    const claudeOnlyBudget = resolveAgentModel('gsd-research-synthesizer', 'budget', 'claude-only');
+    expect(claudeOnlyBudget.model).toBe('anthropic/claude-haiku-4-5');
+    expect(hybridBudget.model).not.toBe(claudeOnlyBudget.model);
+  });
+
+  it('researcher budget in hybrid uses sonnet (not haiku)', () => {
+    expect(resolveAgentModel('gsd-phase-researcher', 'budget', 'hybrid').model).toBe(
+      'anthropic/claude-sonnet-4-6',
+    );
+    expect(resolveAgentModel('gsd-project-researcher', 'budget', 'hybrid').model).toBe(
+      'anthropic/claude-sonnet-4-6',
+    );
+  });
+
+  it('check-role agents in hybrid match their openai-only equivalents', () => {
+    for (const agent of checkAgents) {
+      for (const profile of profiles) {
+        expect(resolveAgentModel(agent, profile, 'hybrid')).toEqual(
+          resolveAgentModel(agent, profile, 'openai-only'),
+        );
+      }
+    }
+  });
+
+  it('no haiku in hybrid table', () => {
+    const hybridTable = AGENT_MODELS['hybrid'];
+    for (const agentOrScope of Object.keys(hybridTable)) {
+      for (const profile of profiles) {
+        const entry = hybridTable[agentOrScope][profile as ModelProfile];
+        expect(entry.model).not.toContain('haiku');
+      }
+    }
   });
 });
 
