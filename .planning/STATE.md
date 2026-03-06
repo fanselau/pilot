@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-06 - Completed 41-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-06 - Completed 41-02-PLAN.md
 
-Progress: ██████████████████████████████████████████ 112/113 plans
+Progress: ██████████████████████████████████████████ 113/113 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 41 in progress — OpenClaw Skill Rewrite and Bundle with Pilot. Plan 01 complete: portable SKILL.md written (461 lines, no hardcoded paths). Plan 02 next: installOpenClawSkill module + init/update wiring.
+**Current focus:** Phase 41 complete — OpenClaw Skill Rewrite and Bundle with Pilot. SKILL.md bundled, installOpenClawSkill() wired into init/update, npm distribution ready.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -90,6 +90,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 38: Pilot Hardening — Pre-Release Quality Pass
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 41: OpenClaw Skill Rewrite and Bundle with Pilot
+- **Status:** complete (2/2 plans, verified ✓)
 
 ### Quick Tasks Completed
 

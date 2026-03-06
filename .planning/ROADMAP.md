@@ -666,13 +666,14 @@ Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
 
 ### Phase 41: OpenClaw Skill Rewrite and Bundle with Pilot
 
+**Status:** complete (2/2 plans, verified ✓)
 **Goal:** Bundle a complete, portable SKILL.md for OpenClaw agents in the pilot repo, auto-install it via `pilot init` and keep it in sync via `pilot update`. Replaces the stale, manually-maintained skill with hardcoded paths.
 **Depends on:** Phase 39
 **Plans:** 2 plans
 
 Plans:
 - [x] 41-01-PLAN.md — Write complete SKILL.md with all sections (role, setup, commands, profiles, categories, troubleshooting)
-- [ ] 41-02-PLAN.md — Create installOpenClawSkill() module, wire into init/update, update package.json, add tests
+- [x] 41-02-PLAN.md — Create installOpenClawSkill() module, wire into init/update, update package.json, add tests
 
 Wave structure:
 - Wave 1: 41-01 (SKILL.md content)
