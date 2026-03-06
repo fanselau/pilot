@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 41
+## Current Phase: 40
 
 ## Current Position
 
-Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 076: Add /hooks/wake comment to callback.ts
+Phase: 40 of 41 (Default Skills Library)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-06 - Completed 40-01-PLAN.md
 
-Progress: ██████████████████████████████████████████ 113/113 plans
+Progress: ██████████████████████████████████████████ 114/116 plans
 
 ## Project Reference
 

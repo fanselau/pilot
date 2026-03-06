@@ -671,7 +671,7 @@ Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
 **Plans:** 3 plans
 
 Plans:
-- [ ] 40-01-PLAN.md — Core foundation: default-skills.ts (catalog constants, stack detection, recommendation, bootstrap orchestrator) + TDD tests
+- [x] 40-01-PLAN.md — Core foundation: default-skills.ts (catalog constants, stack detection, recommendation, bootstrap orchestrator) + TDD tests
 - [ ] 40-02-PLAN.md — CLI commands: pilot skills bootstrap + pilot skills recommend + index.ts wiring + command tests
 - [ ] 40-03-PLAN.md — Setup integration: post-setup skill offer + setup.test.ts
 

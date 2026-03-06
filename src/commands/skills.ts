@@ -13,9 +13,14 @@ import {
   syncManifest,
   PREDEFINED_CATEGORIES,
 } from '../core/skills.js';
+import {
+  recommendDefaultSkills,
+  bootstrapDefaultSkills,
+} from '../core/default-skills.js';
 import { outputHuman } from '../util/output.js';
 import { errMsg } from '../util/errors.js';
-import { bold, dim } from '../util/colors.js';
+import { bold, dim, green, yellow } from '../util/colors.js';
+import { createInterface } from 'node:readline';
 
 function parseCategoriesInput(raw: string | undefined): string[] | undefined {
   if (raw === undefined) return undefined;
@@ -187,6 +192,131 @@ async function skillsSyncCommand(): Promise<void> {
   outputHuman(`Synced: ${manifest.skills.length} skills found`);
 }
 
+// ── Recommend ─────────────────────────────────────────────────────────────
+
+function parseTierOption(raw: string | undefined): 1 | 2 | 'all' {
+  if (raw === '1') return 1;
+  if (raw === '2') return 2;
+  return 'all';
+}
+
+async function skillsRecommendCommand(
+  projectDir: string,
+  options: { tier?: string },
+): Promise<void> {
+  const tier = parseTierOption(options.tier);
+  const recommendation = recommendDefaultSkills(projectDir, { tier });
+
+  if (recommendation.skills.length === 0) {
+    outputHuman('No skills to recommend for this project.');
+    return;
+  }
+
+  // Show detected stack
+  if (recommendation.detectedStack.items.length > 0) {
+    const stackNames = recommendation.detectedStack.items.map(s => s.charAt(0).toUpperCase() + s.slice(1));
+    outputHuman(`Detected stack: ${stackNames.join(', ')}`);
+    outputHuman('');
+  }
+
+  outputHuman(`Recommended skills (${recommendation.skills.length}):`);
+  outputHuman('');
+
+  // Group by tier
+  const tier1 = recommendation.skills.filter(s => s.tier === 1);
+  const tier2 = recommendation.skills.filter(s => s.tier === 2);
+
+  if (tier1.length > 0) {
+    outputHuman(`${bold('Tier 1 (Universal)')}:`);
+    for (const skill of tier1) {
+      const name = skill.install.padEnd(42);
+      const cats = dim(skill.categories.join(', '));
+      outputHuman(`  ${name}  ${cats}`);
+    }
+    outputHuman('');
+  }
+
+  if (tier2.length > 0) {
+    outputHuman(`${bold('Tier 2 (Stack-specific)')}:`);
+    for (const skill of tier2) {
+      const name = skill.install.padEnd(42);
+      const cats = skill.categories.join(', ').padEnd(28);
+      const stackTag = skill.stackKey ? dim(`(${skill.stackKey})`) : '';
+      outputHuman(`  ${name}  ${cats}  ${stackTag}`);
+    }
+    outputHuman('');
+  }
+
+  outputHuman(`Run ${bold('pilot skills bootstrap --yes')} to install all.`);
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+
+async function skillsBootstrapCommand(
+  projectDir: string,
+  options: { yes?: boolean; tier?: string },
+): Promise<void> {
+  const tier = parseTierOption(options.tier);
+
+  // Preview what will be installed
+  const recommendation = recommendDefaultSkills(projectDir, { tier });
+
+  if (recommendation.skills.length === 0) {
+    outputHuman('No skills to recommend for this project.');
+    return;
+  }
+
+  // Show detected stack
+  if (recommendation.detectedStack.items.length > 0) {
+    const stackNames = recommendation.detectedStack.items.map(s => s.charAt(0).toUpperCase() + s.slice(1));
+    outputHuman(`Detected stack: ${stackNames.join(', ')}`);
+    outputHuman('');
+  }
+
+  // Interactive confirmation unless --yes
+  if (!options.yes) {
+    if (!process.stdin.isTTY) {
+      outputHuman(yellow('Non-interactive terminal detected. Use --yes for non-interactive mode.'));
+      return;
+    }
+
+    const answer = await new Promise<string>((resolve) => {
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      rl.question(`Install ${recommendation.skills.length} recommended skills? (Y/n) `, (ans) => {
+        rl.close();
+        resolve(ans.trim());
+      });
+    });
+
+    if (answer.toLowerCase() === 'n') {
+      outputHuman('Cancelled.');
+      return;
+    }
+  }
+
+  outputHuman(`Installing ${recommendation.skills.length} recommended skills...`);
+
+  const result = await bootstrapDefaultSkills({ projectDir, yes: true, tier });
+
+  // Display results per skill
+  for (const skill of recommendation.skills) {
+    const failed = result.errors.find(e => e.skill === skill.install);
+    if (failed) {
+      outputHuman(`  ${yellow('⚠')} ${skill.install} ${dim(`(failed: ${failed.error.split('\n')[0]})`)}`);
+    } else {
+      outputHuman(`  ${green('✓')} ${skill.install}`);
+    }
+  }
+
+  outputHuman('');
+
+  if (result.failed > 0) {
+    outputHuman(`Installed ${result.installed}/${result.attempted} skills (${result.failed} failed)`);
+  } else {
+    outputHuman(`Installed ${result.installed}/${result.attempted} skills`);
+  }
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -196,4 +326,6 @@ export {
   skillsCategoriesCommand,
   skillsTagCommand,
   skillsSyncCommand,
+  skillsRecommendCommand,
+  skillsBootstrapCommand,
 };
