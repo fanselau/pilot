@@ -1,3 +1,4 @@
+// Uses: /hooks/wake
 /**
  * Job completion callback — OpenClaw /hooks/wake system event.
  *
