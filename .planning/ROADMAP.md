@@ -663,3 +663,15 @@ Plans:
 Requirements: requirements/runner-simplification.md
 Wave 1: 39-01 (foundation — types + DB)
 Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
+
+### Phase 41: OpenClaw Skill Rewrite and Bundle with Pilot
+
+**Goal:** [To be planned]
+**Depends on:** Phase 39
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 41 to break down)
+
+**Details:**
+[To be added during planning]

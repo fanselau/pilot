@@ -6,9 +6,10 @@
 ## Current Position
 
 Phase: 39 of 39 (Runner Simplification)
+**Next Phase:** 40 (Default Skills Library — Bundled Skill Catalog for Pilot)
 Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed quick task 071: Codex variant support — thinking levels for OpenAI models
+Last activity: 2026-03-06 - Completed quick task 072: Smart config initialization with auto-detect available providers
 
 Progress: ██████████████████████████████████████████ 111/112 plans
 
@@ -152,6 +153,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 068 | Update README.md to reflect current pilot capabilities. Add Skills System section under Features documenting pilot skills add/list/sync/tag/remove/categories commands with category-based matching and auto-injection. Add AI Judge section under Features documenting the verdict system (succeeded/failed/doubting with confidence score and reason) and its integration with notifications. Update Configuration section by removing stuckThreshold, defaultTimeout, and pollInterval (now internal constants) and documenting per-job --timeout flag instead. Update CLI Reference to add pilot skills commands table and add --timeout and --categories flags to pilot add. Update Architecture diagram to show skills injection in runner and judge step with verdict details in the pipeline flow. Add What's New callout near top. Keep all brand assets (header SVG, badges, demo GIF) intact. Verify existing feature descriptions remain accurate. Read the create-readme and crafting-effective-readmes skills for style guidance. | 2026-03-06 | ed05845 | [068-update-readme-md-to-reflect-current-pilot](./quick/068-update-readme-md-to-reflect-current-pilot/) |
 | 070 | Implement required categories contract for skills/add flows: enforce required `--categories` for `pilot skills tag`, reject empty category payloads at runtime, and add focused regression tests for missing/empty/valid category paths. | 2026-03-06 | 4e21208 | [070-implement-the-required-categories-requir](./quick/070-implement-the-required-categories-requir/) |
 | 071 | Codex variant support — resolveVariant(model, scope) returning high/low for Codex/GPT-5 models and null for Claude; --variant flag threaded through runner.ts and delegate.ts; PROVIDER_MODELS updated for openai-only and hybrid profiles. | 2026-03-06 | 5ab9cae | [071-codex-variant-support-thinking-levels-fo](./quick/071-codex-variant-support-thinking-levels-fo/) |
+| 072 | Smart config initialization — detectProviders() auto-detects available AI providers via opencode models; pilot init interactive command with --yes/--force; runner startup warning for misconfigured provider mode; setup triggers init when no config exists. | 2026-03-06 | 5e34ad7 | [072-implement-smart-config-initialization-wi](./quick/072-implement-smart-config-initialization-wi/) |
 
 ## Accumulated Context
 
@@ -187,6 +189,8 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 37 added: Skills System for Pilot
 - Phase 38 added: Pilot Hardening — Pre-Release Quality Pass
 - Phase 39 added: Runner Simplification
+- Phase 40 added: Default Skills Library — Bundled Skill Catalog for Pilot
+- Phase 41 added: OpenClaw Skill Rewrite and Bundle with Pilot
 
 ## Decisions
 
