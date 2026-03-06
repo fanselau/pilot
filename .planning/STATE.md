@@ -8,9 +8,9 @@
 Phase: 39 of 39 (Runner Simplification)
 Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed quick task 068: Update README.md to reflect current pilot capabilities
+Last activity: 2026-03-06 - Completed quick task 070: Implement required categories requirement for skills/add flows
 
-Progress: ██████████████████████████████████████████ 110/111 plans
+Progress: ██████████████████████████████████████████ 111/112 plans
 
 ## Project Reference
 
@@ -150,6 +150,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 065 | Fix project setup, remove delegation fallback, add project doctor — fail-fast delegation, project command linking, pilot doctor --project | 2026-03-06 | ee6a485 | [065-fix-project-setup-remove-delegation-fall](./quick/065-fix-project-setup-remove-delegation-fall/) |
 | 066 | Judge integration — runner adapts to gsd-judge: runJudge replaces runVerification, succeeded/failed/doubting verdict shape, callback webhook enriched | 2026-03-06 | 3ef8a61 | [066-judge-integration-runner-adapts-to-gsd-j](./quick/066-judge-integration-runner-adapts-to-gsd-j/) |
 | 068 | Update README.md to reflect current pilot capabilities. Add Skills System section under Features documenting pilot skills add/list/sync/tag/remove/categories commands with category-based matching and auto-injection. Add AI Judge section under Features documenting the verdict system (succeeded/failed/doubting with confidence score and reason) and its integration with notifications. Update Configuration section by removing stuckThreshold, defaultTimeout, and pollInterval (now internal constants) and documenting per-job --timeout flag instead. Update CLI Reference to add pilot skills commands table and add --timeout and --categories flags to pilot add. Update Architecture diagram to show skills injection in runner and judge step with verdict details in the pipeline flow. Add What's New callout near top. Keep all brand assets (header SVG, badges, demo GIF) intact. Verify existing feature descriptions remain accurate. Read the create-readme and crafting-effective-readmes skills for style guidance. | 2026-03-06 | ed05845 | [068-update-readme-md-to-reflect-current-pilot](./quick/068-update-readme-md-to-reflect-current-pilot/) |
+| 070 | Implement required categories contract for skills/add flows: enforce required `--categories` for `pilot skills tag`, reject empty category payloads at runtime, and add focused regression tests for missing/empty/valid category paths. | 2026-03-06 | 4e21208 | [070-implement-the-required-categories-requir](./quick/070-implement-the-required-categories-requir/) |
 
 ## Accumulated Context
 
@@ -511,9 +512,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 39-01 | timeout: number with 0=infinite as sentinel — no nullable needed | Clean sentinel value, consistent with SQLite DEFAULT 0 |
 | 39-01 | max_attempts column NOT dropped via migration (SQLite compat) | SQLite ALTER TABLE DROP COLUMN requires 3.35+; column becomes orphaned but harmless |
 | 39-01 | pollInterval kept in PilotConfig but removed from ConfigFileSchema.runner | Still an internal constant used by runner; no longer user-configurable |
+| quick-070 | `skills tag` uses Commander requiredOption and handlers still validate empty category payloads | Defense in depth: fail fast at CLI boundary and preserve correctness if wiring changes |
 
 ## Session Continuity
 
-Last session: 2026-03-06T10:09:00Z
-Stopped at: Completed 39-02-PLAN.md (Removed 120s delegation timeout, per-job spawnAndWait timeout, OOM-safe checkMemory)
+Last session: 2026-03-06T11:28:36Z
+Stopped at: Completed quick task 070 (required categories enforcement)
 Resume file: None
