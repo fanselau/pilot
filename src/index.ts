@@ -317,6 +317,25 @@ skillsCmd
     await skillsSyncCommand();
   });
 
+skillsCmd
+  .command('bootstrap [project-dir]')
+  .description('Install recommended skills for a project (detects stack)')
+  .option('--yes', 'Non-interactive: install without prompting')
+  .option('--tier <tier>', 'Filter: 1 (universal only), 2 (stack-specific only), all (default)')
+  .action(async (projectDir: string | undefined, opts: Record<string, unknown>) => {
+    const { skillsBootstrapCommand } = await import('./commands/skills.js');
+    await skillsBootstrapCommand(projectDir ?? process.cwd(), opts as { yes?: boolean; tier?: string });
+  });
+
+skillsCmd
+  .command('recommend [project-dir]')
+  .description('Show recommended skills without installing')
+  .option('--tier <tier>', 'Filter: 1 (universal only), 2 (stack-specific only), all (default)')
+  .action(async (projectDir: string | undefined, opts: Record<string, unknown>) => {
+    const { skillsRecommendCommand } = await import('./commands/skills.js');
+    await skillsRecommendCommand(projectDir ?? process.cwd(), opts as { tier?: string });
+  });
+
 program
   .command('doctor')
   .description('Health check: opencode binary, DB access, disk, memory')
