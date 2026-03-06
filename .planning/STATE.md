@@ -8,7 +8,7 @@
 Phase: 39 of 39 (Runner Simplification)
 Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed quick task 070: Implement required categories requirement for skills/add flows
+Last activity: 2026-03-06 - Completed quick task 071: Codex variant support — thinking levels for OpenAI models
 
 Progress: ██████████████████████████████████████████ 111/112 plans
 
@@ -151,6 +151,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 066 | Judge integration — runner adapts to gsd-judge: runJudge replaces runVerification, succeeded/failed/doubting verdict shape, callback webhook enriched | 2026-03-06 | 3ef8a61 | [066-judge-integration-runner-adapts-to-gsd-j](./quick/066-judge-integration-runner-adapts-to-gsd-j/) |
 | 068 | Update README.md to reflect current pilot capabilities. Add Skills System section under Features documenting pilot skills add/list/sync/tag/remove/categories commands with category-based matching and auto-injection. Add AI Judge section under Features documenting the verdict system (succeeded/failed/doubting with confidence score and reason) and its integration with notifications. Update Configuration section by removing stuckThreshold, defaultTimeout, and pollInterval (now internal constants) and documenting per-job --timeout flag instead. Update CLI Reference to add pilot skills commands table and add --timeout and --categories flags to pilot add. Update Architecture diagram to show skills injection in runner and judge step with verdict details in the pipeline flow. Add What's New callout near top. Keep all brand assets (header SVG, badges, demo GIF) intact. Verify existing feature descriptions remain accurate. Read the create-readme and crafting-effective-readmes skills for style guidance. | 2026-03-06 | ed05845 | [068-update-readme-md-to-reflect-current-pilot](./quick/068-update-readme-md-to-reflect-current-pilot/) |
 | 070 | Implement required categories contract for skills/add flows: enforce required `--categories` for `pilot skills tag`, reject empty category payloads at runtime, and add focused regression tests for missing/empty/valid category paths. | 2026-03-06 | 4e21208 | [070-implement-the-required-categories-requir](./quick/070-implement-the-required-categories-requir/) |
+| 071 | Codex variant support — resolveVariant(model, scope) returning high/low for Codex/GPT-5 models and null for Claude; --variant flag threaded through runner.ts and delegate.ts; PROVIDER_MODELS updated for openai-only and hybrid profiles. | 2026-03-06 | 5ab9cae | [071-codex-variant-support-thinking-levels-fo](./quick/071-codex-variant-support-thinking-levels-fo/) |
 
 ## Accumulated Context
 

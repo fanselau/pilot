@@ -133,20 +133,21 @@ describe('resolveVariant', () => {
     expect(resolveVariant('anthropic/claude-opus-4-6', 'judge')).toBeNull();
   });
 
-  it('returns high for codex models in phase scope', () => {
-    expect(resolveVariant('openai/gpt-5.3-codex', 'phase')).toBe('high');
+  it('returns xhigh for codex models in quality mode for non-execute scopes', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'phase', 'quality', 'gsd-plan-phase')).toBe('xhigh');
+    expect(resolveVariant('openai/gpt-5.3-codex', 'milestone', 'quality', 'gsd-new-milestone')).toBe('xhigh');
+    expect(resolveVariant('openai/gpt-5.3-codex', 'judge', 'quality', 'gsd-judge')).toBe('xhigh');
   });
 
-  it('returns high for codex models in quick scope', () => {
-    expect(resolveVariant('openai/gpt-5.3-codex', 'quick')).toBe('high');
+  it('returns high for codex models in quality mode for execute-like commands', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'phase', 'quality', 'gsd-execute-phase')).toBe('high');
+    expect(resolveVariant('openai/gpt-5.3-codex', 'quick', 'quality', 'gsd-quick')).toBe('high');
   });
 
-  it('returns high for codex models in milestone scope', () => {
-    expect(resolveVariant('openai/gpt-5.3-codex', 'milestone')).toBe('high');
-  });
-
-  it('returns low for codex models in judge scope', () => {
-    expect(resolveVariant('openai/gpt-5.3-codex', 'judge')).toBe('low');
+  it('returns high for codex models in non-quality profiles', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'phase', 'balanced')).toBe('high');
+    expect(resolveVariant('openai/gpt-5.3-codex', 'quick', 'budget')).toBe('high');
+    expect(resolveVariant('openai/gpt-5.3-codex', 'judge', 'balanced')).toBe('high');
   });
 
   it('returns null for non-codex non-gpt-5 models', () => {
@@ -155,7 +156,8 @@ describe('resolveVariant', () => {
     expect(resolveVariant('openai/gpt-4.1-nano', 'quick')).toBeNull();
   });
 
-  it('returns high for gpt-5 models without codex in name', () => {
-    expect(resolveVariant('openai/gpt-5.1-codex-mini', 'phase')).toBe('high');
+  it('returns high/xhigh for gpt-5 codex family models', () => {
+    expect(resolveVariant('openai/gpt-5.1-codex-mini', 'phase', 'balanced')).toBe('high');
+    expect(resolveVariant('openai/gpt-5.1-codex-mini', 'phase', 'quality', 'gsd-plan-phase')).toBe('xhigh');
   });
 });

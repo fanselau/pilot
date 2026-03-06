@@ -210,7 +210,7 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
 
   const opencodeBin = resolveOpencodeBinary();
   const topLevelModel = resolveTopLevelModel('phase', job.modelProfile, job.providerMode);
-  const variant = resolveVariant(topLevelModel, 'phase');
+  const variant = resolveVariant(topLevelModel, 'phase', job.modelProfile, 'gsd-delegate');
   process.stderr.write(`[delegate] Model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}\n`);
   const proc = execa(opencodeBin, [
     'run',

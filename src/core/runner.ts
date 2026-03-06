@@ -889,10 +889,9 @@ class Runner {
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
     const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
     const topLevelModel = resolveTopLevelModel(scope, profile, providerMode);
-    const variant = resolveVariant(topLevelModel, scope);
-    process.stderr.write(dim(`Top-level model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}`) + '\n');
-
     const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
+    const variant = resolveVariant(topLevelModel, scope, profile, gsdCommand);
+    process.stderr.write(dim(`Top-level model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}`) + '\n');
 
     const opencodeCmdArgs: string[] = [
       'run',

@@ -143,13 +143,32 @@ function resolveTopLevelModel(
   return PROVIDER_MODELS[providerMode][tier];
 }
 
-function resolveVariant(model: string, scope: 'phase' | 'quick' | 'milestone' | 'judge'): string | null {
+function resolveVariant(
+  model: string,
+  scope: 'phase' | 'quick' | 'milestone' | 'judge',
+  profile: ModelProfile = 'balanced',
+  command?: string,
+): string | null {
   if (!model.includes('codex') && !model.includes('gpt-5')) return null;
+
+  const isExecuteLike =
+    command === 'execute-phase' ||
+    command === 'gsd-execute-phase' ||
+    command === 'quick' ||
+    command === 'gsd-quick';
+
+  // Codex guidance: use only high / xhigh.
+  if (profile === 'quality') {
+    // Quality mode: nearly everything at xhigh except execution-style commands.
+    return isExecuteLike ? 'high' : 'xhigh';
+  }
+
+  // Balanced / budget: keep Codex on high reasoning.
   switch (scope) {
     case 'phase': return 'high';
     case 'milestone': return 'high';
     case 'quick': return 'high';
-    case 'judge': return 'low';
+    case 'judge': return 'high';
     default: return 'high';
   }
 }
