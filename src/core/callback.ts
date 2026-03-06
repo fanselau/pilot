@@ -1,11 +1,14 @@
 /**
- * Job completion callback — OpenClaw session wake via /hooks/agent webhook.
+ * Job completion callback — OpenClaw /hooks/wake system event.
  *
  * Fire-and-forget notifications — NEVER throws. All failures are logged to stderr.
- * Used to wake dormant OpenClaw sessions when a pilot job completes or fails.
+ * Used to wake the main agent session when a pilot job completes or fails.
+ * The wake endpoint enqueues a system event and triggers an immediate heartbeat,
+ * so the agent can act on it (run tests, review, create PRs, notify the user).
  *
  * Configuration:
  *   PILOT_OPENCLAW_HOOKS_URL   — base webhook URL (default: http://127.0.0.1:18789/hooks/agent)
+ *                                 /agent suffix is replaced with /wake at runtime
  *   PILOT_OPENCLAW_HOOKS_TOKEN — auth token for the hooks endpoint
  *
  * Pure core module — no UI dependencies.
@@ -112,19 +115,15 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
       lines.push(`Verdict: ${verdict.verdict} (confidence: ${verdict.confidence}%)`);
       lines.push(`Reason: ${verdict.reason.slice(0, 300)}`);
     }
-    const body: Record<string, unknown> = {
-      message: lines.join('\n'),
-      name: 'Pilot',
-      agentId,
-      sessionKey: `hook:pilot:${job.id}`,
-      deliver: true,
-      wakeMode: 'now',
+    // Use /hooks/wake to enqueue a system event in the main session.
+    // This triggers an immediate heartbeat so the main agent can act on it
+    // (run tests, review, create PRs, notify the user).
+    const wakeUrl = isTrustedUrl ? url.replace(/\/agent$/, '/wake') : url;
+
+    const body = {
+      text: lines.join('\n'),
+      mode: 'now',
     };
-    if (verdict) {
-      body.verdict = verdict.verdict;
-      body.confidence = verdict.confidence;
-      body.reason = verdict.reason;
-    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -134,7 +133,7 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const resp = await fetch(url, {
+    const resp = await fetch(wakeUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
