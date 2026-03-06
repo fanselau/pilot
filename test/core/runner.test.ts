@@ -1,8 +1,7 @@
 /**
  * Tests for pure exported helpers in runner.ts.
  *
- * Tests `parseJudgeVerdict`, `getDynamicMaxParallel`, `hasSystemdRunUser`,
- * and `parseVerificationResult` (VERIFICATION.md frontmatter parsing).
+ * Tests `parseJudgeVerdict`, `getDynamicMaxParallel`, and `hasSystemdRunUser`.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -25,7 +24,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, parseVerificationResult, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache } from '../../src/core/runner.js';
+import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache } from '../../src/core/runner.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -34,40 +33,36 @@ describe('parseJudgeVerdict', () => {
     const content = [
       "Here's my verdict:",
       '```json',
-      '{"verdict":"pass","confidence":95,"summary":"All good","retryRecommendation":"none"}',
+      '{"verdict":"succeeded","confidence":95,"reason":"All good"}',
       '```',
       'End.',
     ].join('\n');
 
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('pass');
+    expect(result!.verdict).toBe('succeeded');
     expect(result!.confidence).toBe(95);
-    expect(result!.summary).toBe('All good');
-    expect(result!.retryRecommendation).toBe('none');
+    expect(result!.reason).toBe('All good');
   });
 
   it('parses verdict from raw JSON (entire content is JSON)', () => {
-    const content = '{"verdict":"fail","confidence":80,"summary":"Missing tests","retryRecommendation":"retry-full","retryHint":"Add unit tests"}';
+    const content = '{"verdict":"failed","confidence":80,"reason":"Missing tests"}';
 
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('fail');
+    expect(result!.verdict).toBe('failed');
     expect(result!.confidence).toBe(80);
-    expect(result!.summary).toBe('Missing tests');
-    expect(result!.retryRecommendation).toBe('retry-full');
-    expect(result!.retryHint).toBe('Add unit tests');
+    expect(result!.reason).toBe('Missing tests');
   });
 
   it('parses verdict from text-wrapped JSON (extracts first {...} block)', () => {
-    const content = 'After careful analysis, I believe {"verdict":"partial","confidence":60,"summary":"Partial success","retryRecommendation":"retry-resume"} is my assessment.';
+    const content = 'After careful analysis, I believe {"verdict":"doubting","confidence":60,"reason":"Partial success"} is my assessment.';
 
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('partial');
+    expect(result!.verdict).toBe('doubting');
     expect(result!.confidence).toBe(60);
-    expect(result!.summary).toBe('Partial success');
-    expect(result!.retryRecommendation).toBe('retry-resume');
+    expect(result!.reason).toBe('Partial success');
   });
 
   it('returns null when no JSON found in content', () => {
@@ -78,7 +73,7 @@ describe('parseJudgeVerdict', () => {
   });
 
   it('returns null for invalid verdict field', () => {
-    const content = '{"verdict":"unknown","confidence":50,"summary":"test","retryRecommendation":"none"}';
+    const content = '{"verdict":"unknown","confidence":50,"reason":"test"}';
 
     const result = parseJudgeVerdict(content);
     expect(result).toBeNull();
@@ -97,10 +92,9 @@ describe('parseJudgeVerdict', () => {
       '```json',
       '',
       '  {',
-      '    "verdict": "pass",',
+      '    "verdict": "succeeded",',
       '    "confidence": 90,',
-      '    "summary": "Looks great",',
-      '    "retryRecommendation": "none"',
+      '    "reason": "Looks great"',
       '  }',
       '',
       '```',
@@ -108,9 +102,22 @@ describe('parseJudgeVerdict', () => {
 
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('pass');
+    expect(result!.verdict).toBe('succeeded');
     expect(result!.confidence).toBe(90);
-    expect(result!.summary).toBe('Looks great');
+    expect(result!.reason).toBe('Looks great');
+  });
+
+  it('parses doubting verdict with confidence', () => {
+    const content = JSON.stringify({
+      verdict: 'doubting',
+      confidence: 45,
+      reason: 'Tests pass but coverage is low',
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('doubting');
+    expect(result!.confidence).toBe(45);
+    expect(result!.reason).toBe('Tests pass but coverage is low');
   });
 });
 
@@ -180,147 +187,32 @@ describe('hasSystemdRunUser', () => {
   });
 });
 
-// ── parseVerificationResult ───────────────────────────────────────────────
+// ── judge verdict edge cases ──────────────────────────────────────────────
 
-describe('parseVerificationResult', () => {
-  it('parses fully populated VERIFICATION.md with all checks passing', () => {
-    const content = [
-      '---',
-      'phase: 31-automated-phase-verification',
-      'status: passed',
-      'verdict: PASS',
-      'score: 5/5',
-      'automated_checks:',
-      '  typescript: { pass: true, duration_ms: 8200 }',
-      '  tests: { pass: true, duration_ms: 12400 }',
-      '  build: { pass: true, duration_ms: 18600 }',
-      'blocking_issues: []',
-      '---',
-      '',
-      '# Verification Report',
-    ].join('\n');
-
-    const result = parseVerificationResult(content);
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe('passed');
-    expect(result!.verdict).toBe('PASS');
-    expect(result!.score).toBe('5/5');
-    expect(result!.automatedChecks['typescript']).toEqual({ pass: true, duration_ms: 8200 });
-    expect(result!.automatedChecks['tests']).toEqual({ pass: true, duration_ms: 12400 });
-    expect(result!.automatedChecks['build']).toEqual({ pass: true, duration_ms: 18600 });
-    expect(result!.blockingIssues).toEqual([]);
-    expect(Object.keys(result!.automatedChecks)).toHaveLength(3);
-  });
-
-  it('parses VERIFICATION.md with failed automated checks', () => {
-    const content = [
-      '---',
-      'phase: 31-automated-phase-verification',
-      'status: failed',
-      'verdict: FAIL',
-      'score: 1/2',
-      'automated_checks:',
-      '  typescript: { pass: false, duration_ms: 9100, error_summary: "3 type errors" }',
-      '  tests: { pass: true, duration_ms: 11000 }',
-      'blocking_issues:',
-      '  - "TypeScript compilation failed: 3 type errors"',
-      '---',
-    ].join('\n');
-
-    const result = parseVerificationResult(content);
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe('failed');
-    expect(result!.verdict).toBe('FAIL');
-    expect(result!.automatedChecks['typescript'].pass).toBe(false);
-    expect(result!.automatedChecks['typescript'].error_summary).toBe('3 type errors');
-    expect(result!.automatedChecks['tests'].pass).toBe(true);
-    expect(result!.blockingIssues).toHaveLength(1);
-    expect(result!.blockingIssues[0]).toBe('TypeScript compilation failed: 3 type errors');
-  });
-
-  it('parses VERIFICATION.md with gaps_found status', () => {
-    const content = [
-      '---',
-      'status: gaps_found',
-      'verdict: FAIL',
-      'score: 3/5',
-      'automated_checks:',
-      '  typescript: { pass: true, duration_ms: 7800 }',
-      'blocking_issues:',
-      '  - "Missing error handling in task 3"',
-      '---',
-    ].join('\n');
-
-    const result = parseVerificationResult(content);
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe('gaps_found');
-    expect(result!.verdict).toBe('FAIL');
-    expect(result!.score).toBe('3/5');
-  });
-
-  it('parses VERIFICATION.md with human_needed status and WARN verdict', () => {
-    const content = [
-      '---',
-      'status: human_needed',
-      'verdict: WARN',
-      'score: 5/5',
-      'automated_checks:',
-      '  typescript: { pass: true, duration_ms: 8200 }',
-      '  tests: { pass: true, duration_ms: 12400 }',
-      'blocking_issues: []',
-      '---',
-    ].join('\n');
-
-    const result = parseVerificationResult(content);
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe('human_needed');
-    expect(result!.verdict).toBe('WARN');
-    expect(result!.blockingIssues).toEqual([]);
-  });
-
-  it('returns null for content without frontmatter delimiters', () => {
-    const content = 'Just some markdown content without --- delimiters';
-    expect(parseVerificationResult(content)).toBeNull();
-  });
-
-  it('returns null for empty string', () => {
-    expect(parseVerificationResult('')).toBeNull();
-  });
-
-  it('returns null for content with only opening --- but no closing', () => {
-    const content = '---\nstatus: passed\nverdict: PASS\nSome body content';
-    expect(parseVerificationResult(content)).toBeNull();
-  });
-});
-
-// ── no auto-retry on managed project failure ───────────────────────────────
-
-describe('no auto-retry on managed project failure', () => {
-  it('parseJudgeVerdict with fail verdict does not have retryRecommendation that triggers resetToPending', () => {
+describe('judge verdict edge cases', () => {
+  it('parseJudgeVerdict with failed verdict returns correct shape', () => {
     const content = JSON.stringify({
-      verdict: 'fail',
+      verdict: 'failed',
       confidence: 90,
-      summary: 'Build error: type mismatch',
-      retryRecommendation: 'none',
+      reason: 'Build error: type mismatch',
     });
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('fail');
-    expect(result!.retryRecommendation).toBe('none');
+    expect(result!.verdict).toBe('failed');
+    expect(result!.reason).toBe('Build error: type mismatch');
   });
 
-  it('parseJudgeVerdict with fail + retry-full recommendation is parsed but does not imply auto-reset', () => {
+  it('parseJudgeVerdict with doubting verdict and low confidence returns correct shape', () => {
     const content = JSON.stringify({
-      verdict: 'fail',
-      confidence: 85,
-      summary: 'Incomplete implementation',
-      retryRecommendation: 'retry-full',
-      retryHint: 'Complete the missing sections',
+      verdict: 'doubting',
+      confidence: 30,
+      reason: 'Incomplete implementation',
     });
     const result = parseJudgeVerdict(content);
     expect(result).not.toBeNull();
-    expect(result!.verdict).toBe('fail');
-    expect(result!.retryRecommendation).toBe('retry-full');
+    expect(result!.verdict).toBe('doubting');
+    expect(result!.confidence).toBe(30);
+    expect(result!.reason).toBe('Incomplete implementation');
   });
 });
 
