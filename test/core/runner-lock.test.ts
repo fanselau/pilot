@@ -104,6 +104,15 @@ vi.mock('../../src/core/config.js', () => ({
     noColor: false,
   })),
   resolveProjectDir: vi.fn((p: string) => p),
+  getConfigFileDefaults: vi.fn(() => ({
+    modelProfile: 'balanced',
+    providerMode: 'claude-only',
+    scope: null,
+  })),
+}));
+
+vi.mock('../../src/core/providers.js', () => ({
+  checkProviderAvailability: vi.fn(() => Promise.resolve({ available: true, warning: null })),
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
