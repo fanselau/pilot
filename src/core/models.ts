@@ -30,7 +30,7 @@ const PROVIDER_MODELS: Record<ProviderMode, Record<ModelTier, string>> = {
     haiku: 'openai/gpt-4.1-mini',
   },
   hybrid: {
-    opus: 'anthropic/claude-opus-4-6',
+    opus: 'openai/gpt-5.3-codex',
     sonnet: 'openai/gpt-5.1-codex-mini',
     haiku: 'openai/gpt-4.1-nano',
   },
