@@ -17,9 +17,7 @@ export interface ConfigFileSchema {
   gsdDir?: string | null;
   runner?: {
     maxParallel?: number | null;  // null = auto-detect from RAM
-    pollInterval?: number;
-    defaultTimeout?: number;
-    stuckThreshold?: number;
+    // pollInterval, defaultTimeout, stuckThreshold are REMOVED — internal constants
   };
   memory?: {
     sessionMaxMb?: number;
@@ -59,10 +57,8 @@ export interface PilotConfig {
   pilotDbPath: string;       // ~/.pilot/pilot.db
   projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
   gsdDir: string;            // ./pilot-gsd (PILOT_GSD_DIR)
-  stuckThreshold: number;    // minutes, default 90
   maxParallel: number;       // auto from RAM, default 1
-  pollInterval: number;      // seconds, default 5
-  defaultTimeout: number;    // minutes per job, default 60
+  pollInterval: number;      // seconds, default 5 (internal constant, not user-configurable)
   sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)
   reservedMemoryMb: number;        // reserved for OS/SSH/pilot before dynamic maxParallel calc, default 4096
   memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048
@@ -98,7 +94,7 @@ export interface Job {
   error: string | null;
   resumeHint: string | null;  // hint for --resume flag on next attempt
   attempts: number;
-  maxAttempts: number;       // default 3
+  timeout: number;            // minutes, 0 = infinite (no timeout)
   delegationPlan: string | null;  // JSON string of DelegationPlan
   currentStep: number;
   sessionTitles: string | null;   // JSON array of session titles
