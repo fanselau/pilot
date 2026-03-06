@@ -58,7 +58,6 @@ export interface PilotConfig {
   projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
   gsdDir: string;            // ./pilot-gsd (PILOT_GSD_DIR)
   maxParallel: number;       // auto from RAM, default 1
-  pollInterval: number;      // seconds, default 5 (internal constant, not user-configurable)
   sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)
   reservedMemoryMb: number;        // reserved for OS/SSH/pilot before dynamic maxParallel calc, default 4096
   memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048

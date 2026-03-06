@@ -101,7 +101,7 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     `"${truncate(job.description, descWidth)}"`,
     `separator`,
     `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
-    `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}/${job.maxAttempts}   Started: ${startedStr}`,
+    `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}   Started: ${startedStr}`,
   ];
 
   if (job.actualModels && job.actualModels.length > 0) {
@@ -470,7 +470,7 @@ export function DetailView(props: { state: PilotStateStore }) {
               const executorShort = executorModel.split('/')[1] ?? executorModel;
               return `Model: ${j.modelProfile}/${j.providerMode} → ${executorShort}`;
             })()} fg={theme.muted} />
-            <text content={`   Attempts: ${currentJob()!.attempts}/${currentJob()!.maxAttempts}`} fg={theme.muted} />
+            <text content={`   Attempts: ${currentJob()!.attempts}`} fg={theme.muted} />
             <text
               content={`   Started: ${currentJob()!.startedAt ? formatTime(new Date(currentJob()!.startedAt!).getTime()) : '—'}`}
               fg={theme.muted}

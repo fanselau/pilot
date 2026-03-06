@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 39 of 39 (Runner Simplification)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed 39-01-PLAN.md
+Last activity: 2026-03-06 - Completed 39-02-PLAN.md
 
-Progress: ██████████████████████████████████████████ 109/111 plans
+Progress: ██████████████████████████████████████████ 110/111 plans
 
 ## Project Reference
 
@@ -512,6 +512,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-06T10:02:13Z
-Stopped at: Completed 39-01-PLAN.md (Types and DB schema foundation for runner simplification)
+Last session: 2026-03-06T10:09:00Z
+Stopped at: Completed 39-02-PLAN.md (Removed 120s delegation timeout, per-job spawnAndWait timeout, OOM-safe checkMemory)
 Resume file: None

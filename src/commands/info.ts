@@ -174,7 +174,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   } else if (job.status === 'completed' || job.status === 'failed') {
     outputHuman(`  ${dim(pad('Actual:'))}   ${dim('—')}`);
   }
-  outputHuman(`  ${dim(pad('Attempts:'))} ${job.attempts}/${job.maxAttempts}`);
+  outputHuman(`  ${dim(pad('Attempts:'))} ${job.attempts}`);
   outputHuman(`  ${dim(pad('Created:'))}  ${job.createdAt}`);
   outputHuman(`  ${dim(pad('Started:'))}  ${job.startedAt ?? '—'}`);
   outputHuman(`  ${dim(pad('Completed:'))} ${job.completedAt ?? '—'}`);

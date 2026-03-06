@@ -17,6 +17,9 @@ import type {
   ConfigSource,
 } from './types.js';
 
+/** Internal poll interval — hardcoded, not user-configurable. */
+export const POLL_INTERVAL_SECONDS = 5;
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function expandTilde(filepath: string): string {
@@ -97,12 +100,9 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
   // ── runner numeric fields ──
   if (config.runner && typeof config.runner === 'object') {
     const runner = config.runner as Record<string, unknown>;
-    if (runner.pollInterval !== undefined) assertMinNumber('runner.pollInterval', runner.pollInterval, 1);
     if (runner.maxParallel !== undefined && runner.maxParallel !== null) {
       assertMinNumber('runner.maxParallel', runner.maxParallel, 1);
     }
-    if (runner.defaultTimeout !== undefined) assertMinNumber('runner.defaultTimeout', runner.defaultTimeout, 1);
-    if (runner.stuckThreshold !== undefined) assertMinNumber('runner.stuckThreshold', runner.stuckThreshold, 1);
   }
 
   // ── memory fields (positive numbers) ──
@@ -203,12 +203,6 @@ function getConfig(): PilotConfig {
   // ── gsdDir: env > config > submodule > home fallback
   const gsdDir = resolveGsdDir(home, fileConfig);
 
-  // ── stuckThreshold: env > config > default (90)
-  const stuckThresholdRaw = parseInt(process.env.PILOT_STUCK_THRESHOLD ?? '', 10);
-  const stuckThreshold = !Number.isNaN(stuckThresholdRaw)
-    ? stuckThresholdRaw
-    : fileConfig?.runner?.stuckThreshold ?? 90;
-
   // ── maxParallel: env > config > auto-detect from RAM
   const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
   const defaultMaxParallel = totalMemMb < 12288 ? 1 : totalMemMb < 32768 ? 2 : totalMemMb < 49152 ? 3 : 4;
@@ -216,18 +210,6 @@ function getConfig(): PilotConfig {
   const maxParallel = !Number.isNaN(maxParallelRaw)
     ? maxParallelRaw
     : fileConfig?.runner?.maxParallel ?? defaultMaxParallel;
-
-  // ── pollInterval: env > config > default (5), min 1
-  const pollIntervalRaw = parseInt(process.env.PILOT_POLL_INTERVAL ?? '', 10);
-  const pollInterval = !Number.isNaN(pollIntervalRaw)
-    ? Math.max(1, pollIntervalRaw)
-    : fileConfig?.runner?.pollInterval ?? 5;
-
-  // ── defaultTimeout: env > config > default (60)
-  const defaultTimeoutRaw = parseInt(process.env.PILOT_DEFAULT_TIMEOUT ?? '', 10);
-  const defaultTimeout = !Number.isNaN(defaultTimeoutRaw)
-    ? defaultTimeoutRaw
-    : fileConfig?.runner?.defaultTimeout ?? 60;
 
   // ── sessionMemoryMaxMb: env > config > default (8192)
   const sessionMemoryMaxMbRaw = parseInt(process.env.PILOT_SESSION_MEMORY_MAX_MB ?? '', 10);
@@ -290,10 +272,7 @@ function getConfig(): PilotConfig {
     pilotDbPath,
     projectDir,
     gsdDir,
-    stuckThreshold,
     maxParallel,
-    pollInterval,
-    defaultTimeout,
     sessionMemoryMaxMb,
     reservedMemoryMb,
     memoryKillThresholdMb,
@@ -329,10 +308,7 @@ function getConfigFileDefaults(): ConfigFileDefaults {
 const ENV_VAR_MAP: Record<string, string> = {
   projectDir: 'PILOT_PROJECT_DIR',
   gsdDir: 'PILOT_GSD_DIR',
-  stuckThreshold: 'PILOT_STUCK_THRESHOLD',
   maxParallel: 'PILOT_MAX_PARALLEL',
-  pollInterval: 'PILOT_POLL_INTERVAL',
-  defaultTimeout: 'PILOT_DEFAULT_TIMEOUT',
   sessionMemoryMaxMb: 'PILOT_SESSION_MEMORY_MAX_MB',
   reservedMemoryMb: 'PILOT_RESERVED_MEMORY_MB',
   memoryKillThresholdMb: 'PILOT_MEMORY_KILL_THRESHOLD_MB',
@@ -349,10 +325,7 @@ const ENV_VAR_MAP: Record<string, string> = {
 const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
   projectDir: (fc) => fc.projectDir,
   gsdDir: (fc) => fc.gsdDir,
-  stuckThreshold: (fc) => fc.runner?.stuckThreshold,
   maxParallel: (fc) => fc.runner?.maxParallel,
-  pollInterval: (fc) => fc.runner?.pollInterval,
-  defaultTimeout: (fc) => fc.runner?.defaultTimeout,
   sessionMemoryMaxMb: (fc) => fc.memory?.sessionMaxMb,
   reservedMemoryMb: (fc) => fc.memory?.reservedMb,
   memoryKillThresholdMb: (fc) => fc.memory?.killThresholdMb,
@@ -379,7 +352,7 @@ function getConfigSource(key: string): ConfigSource {
     const envValue = process.env[envVar];
     if (envValue !== undefined) {
       // For numeric env vars, only count as "env" if the value is a valid number
-      if (['stuckThreshold', 'maxParallel', 'pollInterval', 'defaultTimeout',
+      if (['maxParallel',
         'sessionMemoryMaxMb', 'reservedMemoryMb', 'memoryKillThresholdMb'].includes(key)) {
         if (!Number.isNaN(parseInt(envValue, 10))) {
           return 'env';
