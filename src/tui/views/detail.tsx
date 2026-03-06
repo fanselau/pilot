@@ -93,7 +93,8 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
 
   // Always resolve the executor model for display
   const models = resolveAllAgentModels(job.modelProfile, job.providerMode);
-  const executorModel = models['gsd-executor'] ?? '';
+  const executorEntry = models['gsd-executor'];
+  const executorModel = executorEntry?.model ?? '';
   const executorShort = executorModel.split('/')[1] ?? executorModel;
 
   const lines = [
@@ -117,9 +118,10 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
 
   if (job.modelProfile !== 'balanced') {
     const uniqueModels = new Map<string, string>();
-    for (const [, model] of Object.entries(models)) {
-      const shortName = model.split('/')[1] ?? model;
-      uniqueModels.set(shortName, model);
+    for (const [, entry] of Object.entries(models)) {
+      const m = entry.model;
+      const shortName = m.split('/')[1] ?? m;
+      uniqueModels.set(shortName, m);
     }
     lines.push(`Models: ${[...uniqueModels.keys()].join('  ')}`);
   }
@@ -466,7 +468,8 @@ export function DetailView(props: { state: PilotStateStore }) {
             <text content={(() => {
               const j = currentJob()!;
               const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-              const executorModel = models['gsd-executor'] ?? '';
+              const executorEntry = models['gsd-executor'];
+              const executorModel = executorEntry?.model ?? '';
               const executorShort = executorModel.split('/')[1] ?? executorModel;
               return `Model: ${j.modelProfile}/${j.providerMode} → ${executorShort}`;
             })()} fg={theme.muted} />
@@ -483,7 +486,7 @@ export function DetailView(props: { state: PilotStateStore }) {
                 const j = currentJob()!;
                 const actualStr = j.actualModels!.join(', ');
                 const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-                const resolvedExecutor = models['gsd-executor'] ?? '';
+                const resolvedExecutor = models['gsd-executor']?.model ?? '';
                 const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
                 return hasMismatch
                   ? `Actual: ${actualStr} (MISMATCH)`
@@ -492,7 +495,7 @@ export function DetailView(props: { state: PilotStateStore }) {
               fg={(() => {
                 const j = currentJob()!;
                 const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-                const resolvedExecutor = models['gsd-executor'] ?? '';
+                const resolvedExecutor = models['gsd-executor']?.model ?? '';
                 const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
                 return hasMismatch ? '#FACC15' : theme.muted; // yellow for mismatch, muted for match
               })()}
@@ -504,9 +507,9 @@ export function DetailView(props: { state: PilotStateStore }) {
               content={(() => {
                 const models = resolveAllAgentModels(currentJob()!.modelProfile, currentJob()!.providerMode);
                 const uniqueModels = new Map<string, string>();
-                for (const [, model] of Object.entries(models)) {
-                  const shortName = model.split('/')[1] ?? model;
-                  uniqueModels.set(shortName, model);
+                for (const [, entry] of Object.entries(models)) {
+                  const shortName = entry.model.split('/')[1] ?? entry.model;
+                  uniqueModels.set(shortName, entry.model);
                 }
                 return `Models: ${[...uniqueModels.keys()].join('  ')}`;
               })()}

@@ -8,7 +8,7 @@
 Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 075: Hybrid Role-Based Model Routing
+Last activity: 2026-03-06 - Completed quick task 076: Add /hooks/wake comment to callback.ts
 
 Progress: ██████████████████████████████████████████ 113/113 plans
 
@@ -159,6 +159,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 073 | Replace tier-based model resolution — flat AGENT_MODELS lookup table with ModelEntry { model, variant? }, remove resolveVariant/PROVIDER_MODELS/AGENT_PROFILE_TIERS/ModelTier, callers destructure ModelEntry | 2026-03-06 | db9ee7b | [073-replace-the-tier-based-model-resolution](./quick/073-replace-the-tier-based-model-resolution/) |
 | 074 | Rename scope keys to _top: prefix, add openai-only xhigh variant differentiation, update resolveTopLevelModel scope-to-key mapping | 2026-03-06 | 427e0df | [074-replace-tier-system-with-explicit-agent-](./quick/074-replace-tier-system-with-explicit-agent-/) |
 | 075 | Hybrid Role-Based Model Routing | 2026-03-06 | 898222b | [075-hybrid-role-based-model-routing](./quick/075-hybrid-role-based-model-routing/) |
+| 076 | Add /hooks/wake comment to callback.ts | 2026-03-06 | e4a8d0c | [076-add-a-comment-to-the-top-of-src-core-cal](./quick/076-add-a-comment-to-the-top-of-src-core-cal/) |
 
 ## Accumulated Context
 
