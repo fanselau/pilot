@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   completed_at TEXT,
   error TEXT,
   attempts INTEGER DEFAULT 0,
-  max_attempts INTEGER DEFAULT 1,
+  timeout INTEGER DEFAULT 0,
   delegation_plan TEXT,
   current_step INTEGER DEFAULT 0,
   session_titles TEXT,
@@ -121,7 +121,7 @@ interface JobRow {
   error: string | null;
   resume_hint: string | null;
   attempts: number;
-  max_attempts: number;
+  timeout: number;
   delegation_plan: string | null;
   current_step: number;
   session_titles: string | null;
@@ -171,7 +171,7 @@ function rowToJob(row: JobRow): Job {
     error: row.error,
     resumeHint: row.resume_hint ?? null,
     attempts: row.attempts,
-    maxAttempts: row.max_attempts,
+    timeout: row.timeout ?? 0,
     delegationPlan: row.delegation_plan,
     currentStep: row.current_step,
     sessionTitles: row.session_titles,
@@ -212,6 +212,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN callback_url TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN callback_session_key TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN categories TEXT DEFAULT NULL",
+    "ALTER TABLE jobs ADD COLUMN timeout INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try {
@@ -289,6 +290,7 @@ function addJob(
   parentJobId?: string,
   callbackSessionKey?: string,
   callbackUrl?: string,
+  timeout?: number,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -297,9 +299,9 @@ function addJob(
   const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0);
 
   return getJob(id)!;
 }
