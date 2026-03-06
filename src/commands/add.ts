@@ -35,6 +35,12 @@ interface AddOptions {
   categories?: string; // Skill categories for this job (comma-separated string from CLI)
 }
 
+function parseCategoriesInput(raw: string | undefined): string[] | null {
+  if (raw === undefined) return null;
+  const parsed = raw.split(',').map(s => s.trim()).filter(Boolean);
+  return parsed;
+}
+
 function isFilePath(str: string): boolean {
   try {
     accessSync(str);
@@ -173,9 +179,11 @@ async function addCommand(
   }
 
   // Parse categories from --categories flag (comma-separated string)
-  const categories: string[] | null = opts.categories
-    ? opts.categories.split(',').map(s => s.trim()).filter(Boolean)
-    : null;
+  const categories = parseCategoriesInput(opts.categories);
+  if (opts.categories !== undefined && (!categories || categories.length === 0)) {
+    process.stderr.write('Error: --categories must include at least one category (e.g. frontend,testing)\n');
+    process.exit(2);
+  }
 
   // Warn when quick scope is used (explicitly or auto-detected) — encourage phase
   if (scope === 'quick' && !isJsonMode()) {

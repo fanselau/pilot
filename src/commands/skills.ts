@@ -17,6 +17,16 @@ import { outputHuman } from '../util/output.js';
 import { errMsg } from '../util/errors.js';
 import { bold, dim } from '../util/colors.js';
 
+function parseCategoriesInput(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  return raw.split(',').map(c => c.trim()).filter(Boolean);
+}
+
+function exitForEmptyCategories(): never {
+  process.stderr.write('Error: --categories must include at least one category (e.g. frontend,testing)\n');
+  process.exit(1);
+}
+
 // ── List ──────────────────────────────────────────────────────────────────
 
 async function skillsListCommand(): Promise<void> {
@@ -55,9 +65,10 @@ async function skillsAddCommand(
   repoRef: string,
   options: { categories?: string; all?: boolean; skill?: string },
 ): Promise<void> {
-  const categories = options.categories
-    ? options.categories.split(',').map(c => c.trim()).filter(Boolean)
-    : undefined;
+  const categories = parseCategoriesInput(options.categories);
+  if (options.categories !== undefined && (!categories || categories.length === 0)) {
+    exitForEmptyCategories();
+  }
 
   try {
     const result = await addSkill(repoRef, {
@@ -155,10 +166,10 @@ async function skillsTagCommand(
   name: string,
   options: { categories: string },
 ): Promise<void> {
-  const categories = options.categories
-    .split(',')
-    .map(c => c.trim())
-    .filter(Boolean);
+  const categories = parseCategoriesInput(options.categories);
+  if (!categories || categories.length === 0) {
+    exitForEmptyCategories();
+  }
 
   const result = tagSkill(name, categories);
   if (!result) {
