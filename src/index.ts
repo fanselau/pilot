@@ -293,7 +293,7 @@ skillsCmd
 skillsCmd
   .command('tag <name>')
   .description('Add/update categories for an installed skill')
-  .option('--categories <cats>', 'Categories (comma-separated)', '')
+  .requiredOption('--categories <cats>', 'Categories (comma-separated)')
   .action(async (name: string, opts: Record<string, unknown>) => {
     const { skillsTagCommand } = await import('./commands/skills.js');
     await skillsTagCommand(name, opts as { categories: string });
