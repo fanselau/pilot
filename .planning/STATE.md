@@ -8,7 +8,7 @@
 Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-06 - Completed 41-02-PLAN.md
+Last activity: 2026-03-06 - Completed quick task 073: Replace tier-based model resolution with flat AGENT_MODELS table
 
 Progress: ██████████████████████████████████████████ 113/113 plans
 
@@ -156,6 +156,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 070 | Implement required categories contract for skills/add flows: enforce required `--categories` for `pilot skills tag`, reject empty category payloads at runtime, and add focused regression tests for missing/empty/valid category paths. | 2026-03-06 | 4e21208 | [070-implement-the-required-categories-requir](./quick/070-implement-the-required-categories-requir/) |
 | 071 | Codex variant support — resolveVariant(model, scope) returning high/low for Codex/GPT-5 models and null for Claude; --variant flag threaded through runner.ts and delegate.ts; PROVIDER_MODELS updated for openai-only and hybrid profiles. | 2026-03-06 | 5ab9cae | [071-codex-variant-support-thinking-levels-fo](./quick/071-codex-variant-support-thinking-levels-fo/) |
 | 072 | Smart config initialization — detectProviders() auto-detects available AI providers via opencode models; pilot init interactive command with --yes/--force; runner startup warning for misconfigured provider mode; setup triggers init when no config exists. | 2026-03-06 | 5e34ad7 | [072-implement-smart-config-initialization-wi](./quick/072-implement-smart-config-initialization-wi/) |
+| 073 | Replace tier-based model resolution — flat AGENT_MODELS lookup table with ModelEntry { model, variant? }, remove resolveVariant/PROVIDER_MODELS/AGENT_PROFILE_TIERS/ModelTier, callers destructure ModelEntry | 2026-03-06 | db9ee7b | [073-replace-the-tier-based-model-resolution](./quick/073-replace-the-tier-based-model-resolution/) |
 
 ## Accumulated Context
 
