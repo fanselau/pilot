@@ -19,11 +19,11 @@ import os from 'node:os';
 /**
  * Resolve the path to the bundled SKILL.md source file.
  * Works for both:
- *   - npm-installed: dist/ → package root
- *   - locally-linked / dev: src/ → package root
+ *   - npm-installed: dist/core/ → dist/ → package root
+ *   - locally-linked / dev: src/core/ → src/ → package root
  */
 export function getSkillSourcePath(): string {
-  const pkgRoot = path.resolve(import.meta.dirname, '..');
+  const pkgRoot = path.resolve(import.meta.dirname, '..', '..');
   return path.join(pkgRoot, 'skills', 'openclaw-pilot', 'SKILL.md');
 }
 

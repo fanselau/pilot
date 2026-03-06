@@ -11,6 +11,7 @@ import { getConfig } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { errMsg } from '../util/errors.js';
 import { green, red, dim } from '../util/colors.js';
+import { installOpenClawSkill } from '../core/openclaw-skill.js';
 
 async function updateCommand(): Promise<void> {
   const config = getConfig();
@@ -36,6 +37,12 @@ async function updateCommand(): Promise<void> {
 
     outputHuman(`  ${stdout.trim()}`);
     outputHuman(`  ${green('✓')} pilot-gsd is current`);
+
+    // Update OpenClaw skill if OpenClaw is detected
+    const skillResult = installOpenClawSkill();
+    if (skillResult.installed) {
+      outputHuman(`  ${green('✓')} OpenClaw skill updated`);
+    }
   } catch (err) {
     if (isJsonMode()) {
       outputJson({

@@ -15,6 +15,7 @@ import os from 'node:os';
 import { detectProviders, getAvailableModes, getDefaultMode } from '../core/providers.js';
 import { outputHuman } from '../util/output.js';
 import { bold, dim, green, yellow } from '../util/colors.js';
+import { installOpenClawSkill } from '../core/openclaw-skill.js';
 import type { ProviderMode } from '../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -206,6 +207,14 @@ async function initCommand(opts: InitOptions): Promise<void> {
   const json = JSON.stringify(config, null, 2) + '\n';
   writeFileSync(configPath, json, 'utf-8');
   chmodSync(configPath, 0o600);
+
+  // Install OpenClaw skill if OpenClaw is detected
+  const skillResult = installOpenClawSkill();
+  if (skillResult.installed) {
+    outputHuman(`  ${green('✓')} OpenClaw skill installed`);
+  } else {
+    outputHuman(dim(`  ℹ OpenClaw not detected, skill install skipped`));
+  }
 
   // Print summary
   outputHuman(`  ${green('✓')} Config written to ${configPath}`);
