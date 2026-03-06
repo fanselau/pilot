@@ -86,6 +86,14 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     // Calculate duration
     const duration = formatDuration(job.startedAt, job.completedAt);
 
+    // Extract judge verdict if available
+    let verdict: { verdict: string; confidence: number; reason: string } | null = null;
+    if (job.judgeVerdict) {
+      try {
+        verdict = JSON.parse(job.judgeVerdict) as { verdict: string; confidence: number; reason: string };
+      } catch { /* ignore parse errors */ }
+    }
+
     // callbackSessionKey now stores just the agent ID (e.g. "main")
     const agentId = job.callbackSessionKey;
     if (!agentId) return false;
@@ -100,6 +108,10 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     if (job.error) {
       lines.push(`Error: ${job.error.slice(0, 200)}`);
     }
+    if (verdict?.reason) {
+      lines.push(`Verdict: ${verdict.verdict} (confidence: ${verdict.confidence}%)`);
+      lines.push(`Reason: ${verdict.reason.slice(0, 300)}`);
+    }
     lines.push(`Notify session: agent:${agentId}:main`);
 
     const body: Record<string, unknown> = {
@@ -110,6 +122,11 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
       deliver: false,
       wakeMode: 'now',
     };
+    if (verdict) {
+      body.verdict = verdict.verdict;
+      body.confidence = verdict.confidence;
+      body.reason = verdict.reason;
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
