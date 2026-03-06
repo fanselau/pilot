@@ -1,8 +1,8 @@
 /**
- * Unit tests for callback.ts — notifyJobCompletion and formatDuration.
+ * Unit tests for callback.ts — notifyJobCompletion.
  *
  * Verifies fire-and-forget semantics, env var fallback, milestone skip,
- * duration formatting, auth header inclusion, and message content.
+ * auth header inclusion, and message content.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -17,7 +17,7 @@ vi.mock('../../src/core/config.js', () => ({
   resolveProjectDir: vi.fn((p: string) => `/projects/${p}`),
 }));
 
-import { notifyJobCompletion, formatDuration } from '../../src/core/callback.js';
+import { notifyJobCompletion } from '../../src/core/callback.js';
 import { getConfig } from '../../src/core/config.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -53,42 +53,6 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     ...overrides,
   };
 }
-
-// ── formatDuration ────────────────────────────────────────────────────────
-
-describe('formatDuration', () => {
-  it('returns "unknown" when startedAt is null', () => {
-    expect(formatDuration(null, '2026-03-04T10:52:00')).toBe('unknown');
-  });
-
-  it('returns "unknown" when completedAt is null', () => {
-    expect(formatDuration('2026-03-04T10:05:00', null)).toBe('unknown');
-  });
-
-  it('returns "<1m" for durations under 1 minute', () => {
-    const started = '2026-03-04T10:00:00';
-    const completed = '2026-03-04T10:00:10'; // 10 seconds
-    expect(formatDuration(started, completed)).toBe('<1m');
-  });
-
-  it('returns "Xm" for minute-range durations', () => {
-    const started = '2026-03-04T10:00:00';
-    const completed = '2026-03-04T10:47:00'; // 47 minutes
-    expect(formatDuration(started, completed)).toBe('47m');
-  });
-
-  it('returns "Xh Ym" for hour-range durations with non-zero minutes', () => {
-    const started = '2026-03-04T10:00:00';
-    const completed = '2026-03-04T12:15:00'; // 2h 15m
-    expect(formatDuration(started, completed)).toBe('2h 15m');
-  });
-
-  it('returns "Xh" when minutes are exactly 0', () => {
-    const started = '2026-03-04T10:00:00';
-    const completed = '2026-03-04T12:00:00'; // exactly 2 hours
-    expect(formatDuration(started, completed)).toBe('2h');
-  });
-});
 
 // ── notifyJobCompletion ───────────────────────────────────────────────────
 

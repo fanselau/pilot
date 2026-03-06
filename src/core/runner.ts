@@ -21,8 +21,6 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { getConfig, resolveProjectDir } from './config.js';
 import {
-  getNextPending,
-  markRunning,
   markCompleted,
   markFailed,
   markStale,
@@ -1523,12 +1521,8 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 export { Runner, createRunner, killJobSession, parseJudgeVerdict };
 export type { RunnerOptions, RunnerState, JudgeVerdict, VerificationResult, KillJobSessionResult };
 
-// Export pre-spawn checks for direct testing
+// Export only the pre-spawn helpers that are needed by external consumers
 export {
-  disableSnapshotGc,
-  checkMemory,
-  enforceSpawnRateLimit,
-  validateProjectConfig,
   getAvailableMemoryMb,
 };
 

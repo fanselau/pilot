@@ -112,4 +112,4 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   }
 }
 
-export { notifyJobCompletion, formatDuration };
+export { notifyJobCompletion };

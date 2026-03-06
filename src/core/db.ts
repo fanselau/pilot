@@ -10,7 +10,7 @@
 
 import Database from './sqlite.js';
 import type { Database as DatabaseType } from './sqlite.js';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig, getConfigFileDefaults } from './config.js';
 import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus } from './types.js';
@@ -229,10 +229,19 @@ function openPilotDb(): DatabaseType {
   mkdirSync(dirname(config.pilotDbPath), { recursive: true });
   cachedDb = new Database(config.pilotDbPath) as DatabaseType;
   cachedDb!.pragma('journal_mode = WAL');
+  cachedDb!.pragma('busy_timeout = 5000');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
   migrateSchema(cachedDb!);
+
+  // Restrict DB file permissions to owner-only (chmod 600)
+  try {
+    chmodSync(config.pilotDbPath, 0o600);
+  } catch {
+    // May fail on some systems (e.g., Windows, read-only FS) — non-fatal
+  }
+
   return cachedDb!;
 }
 
@@ -1078,7 +1087,6 @@ function clearDependsOn(id: string): void {
 export type { ProjectJobCounts };
 
 export {
-  openPilotDb,
   _getTestDb,
   registerProject,
   getProject,
@@ -1097,7 +1105,6 @@ export {
   retry,
   getQueue,
   getRunningJobsForProject,
-  getRunningJobsByProject,
   getAllRunningJobs,
   reconcileStaleJobs,
   markStale,

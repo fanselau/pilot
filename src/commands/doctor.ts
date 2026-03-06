@@ -9,7 +9,7 @@
  */
 
 import { accessSync, readFileSync, statSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execaSync } from 'execa';
 import path from 'node:path';
 import os from 'node:os';
 import { getConfig } from '../core/config.js';
@@ -98,8 +98,17 @@ async function doctorCommand(): Promise<void> {
 
   // Check cgroups v2 availability (required for systemd-run memory limits)
   try {
-    execSync('mount | grep cgroup2', { stdio: 'pipe' });
-    checks.push({ name: 'cgroups v2', status: 'pass', detail: 'cgroup2 mounted' });
+    const mountResult = execaSync('mount', [], { reject: false });
+    const hasCgroup2 = mountResult.stdout.includes('cgroup2');
+    if (hasCgroup2) {
+      checks.push({ name: 'cgroups v2', status: 'pass', detail: 'cgroup2 mounted' });
+    } else {
+      checks.push({
+        name: 'cgroups v2',
+        status: 'warn',
+        detail: 'cgroup2 not mounted — systemd-run memory limits will not work (Ubuntu 20.04 or older)',
+      });
+    }
   } catch {
     checks.push({
       name: 'cgroups v2',
@@ -113,9 +122,11 @@ async function doctorCommand(): Promise<void> {
   // (process.env.USER can be empty in systemd service contexts)
   try {
     const username = os.userInfo().username;
-    const lingerOutput = execSync(`/bin/sh -c "loginctl show-user ${username} --property=Linger 2>/dev/null || echo Linger=unknown"`, {
-      encoding: 'utf8',
-    }).trim();
+    // Use array-form execa to prevent command injection via username
+    const result = execaSync('loginctl', ['show-user', username, '--property=Linger'], {
+      reject: false,
+    });
+    const lingerOutput = result.exitCode === 0 ? result.stdout.trim() : 'Linger=unknown';
     if (lingerOutput.includes('Linger=yes')) {
       checks.push({ name: 'user lingering', status: 'pass', detail: 'Enabled via loginctl' });
     } else {
