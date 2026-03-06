@@ -647,3 +647,15 @@ Wave structure:
 
 **Details:**
 Read requirements/hardening.md for full spec.
+
+### Phase 39: Runner Simplification
+
+**Goal:** [To be planned]
+**Depends on:** Phase 38
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 39 to break down)
+
+**Details:**
+[To be added during planning]

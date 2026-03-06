@@ -8,7 +8,7 @@
 Phase: 38 of 38 (Pilot Hardening — Pre-Release Quality Pass)
 Plan: 3 of 3 in current phase
 Status: Phase complete
-Last activity: 2026-03-06 - Completed 38-03-PLAN.md (UX polish + gc command)
+Last activity: 2026-03-06 - Completed quick task 065: Fix Project Setup & Remove Delegation Fallback
 
 Progress: ██████████████████████████████████████████ 108/108 plans
 
@@ -147,6 +147,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 062 | GSD submodule integration — pilot-gsd as git submodule with 3-step gsdDir fallback chain (env var → submodule → ~/pilot-gsd/) | 2026-03-05 | 2e30645 | [062-gsd-submodule-integration-pilot-gsd-is-c](./quick/062-gsd-submodule-integration-pilot-gsd-is-c/) |
 | 063 | Comprehensive installation & getting started guide — docs/GETTING-STARTED.md with all env vars, prerequisites, daemon setup, troubleshooting | 2026-03-05 | e754a2f | [063-create-a-comprehensive-installation-gett](./quick/063-create-a-comprehensive-installation-gett/) |
 | 064 | Asciinema demo recording embedded in README — demo/demo-script.sh + demo.cast + demo/demo.svg, showing real pilot status/add/log CLI usage | 2026-03-05 | a270d7b | [064-create-an-asciinema-demo-recording-for-t](./quick/064-create-an-asciinema-demo-recording-for-t/) |
+| 065 | Fix project setup, remove delegation fallback, add project doctor — fail-fast delegation, project command linking, pilot doctor --project | 2026-03-06 | ee6a485 | [065-fix-project-setup-remove-delegation-fall](./quick/065-fix-project-setup-remove-delegation-fall/) |
 
 ## Accumulated Context
 
@@ -181,6 +182,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 36 added: Config File Support for Pilot CLI
 - Phase 37 added: Skills System for Pilot
 - Phase 38 added: Pilot Hardening — Pre-Release Quality Pass
+- Phase 39 added: Runner Simplification
 
 ## Decisions
 
