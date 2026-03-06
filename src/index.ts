@@ -147,6 +147,16 @@ program
 // ── Infrastructure ────────────────────────────────────────────────────────
 
 program
+  .command('init')
+  .description('Interactive first-time configuration setup')
+  .option('--yes', 'Accept auto-detected defaults without prompting')
+  .option('--force', 'Overwrite existing config file')
+  .action(async (opts: Record<string, unknown>) => {
+    const { initCommand } = await import('./commands/init.js');
+    await initCommand(opts as { yes?: boolean; force?: boolean });
+  });
+
+program
   .command('setup <dir>')
   .description('Set up project for Pilot (links pilot-gsd)')
   .option('--verify', 'Verify existing setup')
