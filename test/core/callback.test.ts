@@ -96,11 +96,11 @@ describe('notifyJobCompletion', () => {
       openclawHooksToken: null,
     } as ReturnType<typeof getConfig>);
 
-    const job = makeTestJob({ callbackUrl: 'http://job-url/hooks/agent', callbackSessionKey: 'main' });
+    const job = makeTestJob({ callbackUrl: 'https://job-url.example.com/hooks/agent', callbackSessionKey: 'main' });
     await notifyJobCompletion(job);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://job-url/hooks/agent',
+      'https://job-url.example.com/hooks/agent',
       expect.objectContaining({ method: 'POST' }),
     );
   });

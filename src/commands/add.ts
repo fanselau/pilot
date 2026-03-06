@@ -174,6 +174,12 @@ async function addCommand(
 
   if (isFilePath(requirement)) {
     requirementPath = path.resolve(requirement);
+    // File size limit: reject files larger than 1MB
+    const fileSize = statSync(requirementPath).size;
+    if (fileSize > 1_048_576) {
+      process.stderr.write(`Error: Requirement file exceeds 1MB limit (${Math.round(fileSize / 1024)}KB): ${requirementPath}\n`);
+      process.exit(1);
+    }
     const content = readFileSync(requirementPath, 'utf8');
     // Extract title from first markdown heading
     const title = content.match(/^#\s+(.+)/m)?.[1];

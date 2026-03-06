@@ -62,8 +62,28 @@ function openDb(): DatabaseType | null {
     cachedDb = new Database(dbPath, { readonly: true, fileMustExist: true });
     return cachedDb;
   } catch (err) {
-    process.stderr.write(`Warning: Failed to open opencode DB: ${String(err)}\n`);
+    const msg = errMsg(err);
+    // If DB is corrupt or has I/O errors, don't cache the failure — retry next time
+    if (msg.includes('SQLITE_CORRUPT') || msg.includes('SQLITE_IOERR')) {
+      process.stderr.write(`Warning: opencode DB corrupt/IO error, will retry: ${msg}\n`);
+      cachedDb = null;
+    } else {
+      process.stderr.write(`Warning: Failed to open opencode DB: ${msg}\n`);
+    }
     return null;
+  }
+}
+
+/**
+ * Check if an error indicates DB corruption and reset the cached connection.
+ * Called from catch blocks in query functions so the next call retries.
+ */
+function handleDbError(err: unknown): void {
+  const msg = errMsg(err);
+  if (msg.includes('SQLITE_CORRUPT') || msg.includes('SQLITE_IOERR') || msg.includes('database disk image is malformed')) {
+    process.stderr.write(`[opencode-db] DB corruption detected, resetting connection: ${msg}\n`);
+    try { cachedDb?.close(); } catch { /* ignore */ }
+    cachedDb = null;
   }
 }
 
@@ -108,6 +128,7 @@ function exportSessionFromDb(sessionId: string): unknown {
 
     return { messages };
   } catch (err: unknown) {
+    handleDbError(err);
     const message = errMsg(err);
     throw new Error(`Failed to export session: ${sessionId}: ${message}`);
   }
@@ -129,7 +150,8 @@ function findSessionByTitle(title: string): string | null {
     ).get(title) as { id: string } | undefined;
 
     return row?.id ?? null;
-  } catch {
+  } catch (err) {
+    handleDbError(err);
     return null;
   }
 }
@@ -497,7 +519,8 @@ function getAssistantMessageCount(sessionId: string): number {
     ).get(sessionId) as { cnt: number } | undefined;
 
     return row?.cnt ?? 0;
-  } catch {
+  } catch (err) {
+    handleDbError(err);
     return 0;
   }
 }
@@ -584,7 +607,8 @@ function isSessionDone(sessionId: string): boolean {
 
     // reason = 'tool-calls' or unknown → still working
     return false;
-  } catch {
+  } catch (err) {
+    handleDbError(err);
     return false;
   }
 }

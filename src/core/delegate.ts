@@ -66,7 +66,8 @@ function extractRequirementTitle(requirementPath: string): string | null {
       return match[1].trim();
     }
     return null;
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[delegate] extractRequirementTitle readFileSync failed: ${errMsg(err)}\n`);
     return null;
   }
 }
@@ -116,8 +117,9 @@ function findExistingPhaseDir(phasesDir: string, title: string): { phaseNumber: 
       }
     }
     return null;
-  } catch {
-    return null; // ENOENT or other error
+  } catch (err) {
+    process.stderr.write(`[delegate] findExistingPhaseDir failed: ${errMsg(err)}\n`);
+    return null;
   }
 }
 
@@ -133,7 +135,8 @@ function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: nu
     const summaryCount = entries.filter(f => f.endsWith('-SUMMARY.md')).length;
     const isComplete = planCount > 0 && planCount === summaryCount;
     return { planCount, summaryCount, isComplete };
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[delegate] getPhaseState readdirSync failed for ${phaseDirName}: ${errMsg(err)}\n`);
     return { planCount: 0, summaryCount: 0, isComplete: false };
   }
 }
@@ -156,7 +159,8 @@ async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await attemptDelegation(job, projectDir, attempt);
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[delegate] attemptDelegation failed (attempt ${attempt}): ${errMsg(err)}\n`);
       if (attempt === MAX_RETRIES) {
         return fallbackPlan(job, projectDir);
       }
@@ -247,8 +251,8 @@ function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
           break;
         }
       }
-    } catch {
-      // No phases dir
+    } catch (err) {
+      process.stderr.write(`[delegate] resolvePhaseForFallback readdirSync failed: ${errMsg(err)}\n`);
     }
 
     if (phaseDirName) {
@@ -351,8 +355,9 @@ function getNextPhaseNumber(phasesDir: string): number {
       }
     }
     return maxPhase + 1;
-  } catch {
-    return 1; // No phases dir or unreadable
+  } catch (err) {
+    process.stderr.write(`[delegate] getNextPhaseNumber readdirSync failed: ${errMsg(err)}\n`);
+    return 1;
   }
 }
 
@@ -430,8 +435,8 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
       argLines.push(`matched_skills: ${skillNames}`);
       argLines.push(`Note: Read these skills when relevant to the current task.`);
     }
-  } catch {
-    // Skills system unavailable — skip hint silently
+  } catch (err) {
+    process.stderr.write(`[delegate] skills resolution failed: ${errMsg(err)}\n`);
   }
 
   const args = argLines.join('\n');
@@ -458,7 +463,8 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
   proc.catch(() => {});
   proc.unref();
 
-  const plan = await waitForDelegationResult(title);
+  const spawnedPid = proc.pid;
+  const plan = await waitForDelegationResult(title, spawnedPid);
   return { ...plan, _sessionTitle: title };
 }
 
@@ -477,14 +483,40 @@ function resolveOpencodeBinary(): string {
 /**
  * Wait for a delegation session to complete and parse its output.
  * Polls opencode DB every 2 seconds for up to 120 seconds.
+ * If pid is provided, checks process liveness each cycle — bails early on dead process.
  */
-async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
+async function waitForDelegationResult(title: string, pid?: number): Promise<DelegationPlan> {
   const maxWaitMs = 120_000;
   const pollMs = 2_000;
   const start = Date.now();
 
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, pollMs));
+
+    // Check if the spawned process is still alive
+    if (pid !== undefined) {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        // Process is dead — check if session completed before dying
+        const sessionId = findSessionByTitle(title);
+        if (sessionId && isSessionDone(sessionId)) {
+          // Session completed — extract result below
+          try {
+            const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
+            if (exported.messages.length > 0) {
+              const lastAssistant = [...exported.messages].reverse().find(m => m.role === 'assistant');
+              if (lastAssistant) {
+                return parseDelegationOutput(String(lastAssistant.content ?? ''));
+              }
+            }
+          } catch (err) {
+            process.stderr.write(`[delegate] session export failed for ${title}: ${errMsg(err)}\n`);
+          }
+        }
+        throw new Error(`Delegation process died before completing session: ${title}`);
+      }
+    }
 
     const sessionId = findSessionByTitle(title);
     if (!sessionId) continue;
@@ -504,8 +536,8 @@ async function waitForDelegationResult(title: string): Promise<DelegationPlan> {
           return parseDelegationOutput(content);
         }
       }
-    } catch {
-      // Session not ready yet
+    } catch (err) {
+      process.stderr.write(`[delegate] session export failed for ${title}: ${errMsg(err)}\n`);
     }
   }
 

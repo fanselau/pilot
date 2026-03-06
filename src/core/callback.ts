@@ -16,6 +16,36 @@ import { errMsg } from '../util/errors.js';
 import type { Job } from './types.js';
 
 /**
+ * Private IP patterns to reject for custom callback URLs.
+ * Prevents SSRF attacks against internal services.
+ */
+const PRIVATE_IP_PATTERNS = [
+  /^https?:\/\/10\./,
+  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./,
+  /^https?:\/\/192\.168\./,
+  /^https?:\/\/127\./,
+  /^https?:\/\/localhost([:\/]|$)/i,
+  /^https?:\/\/0\.0\.0\.0([:\/]|$)/,
+  /^https?:\/\/\[::1\]/,
+];
+
+/**
+ * Validate that a custom callback URL is safe to call.
+ * Returns null if valid, or an error message string if rejected.
+ */
+function validateCallbackUrl(url: string): string | null {
+  if (!url.startsWith('https://')) {
+    return 'non-HTTPS callback URL';
+  }
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(url)) {
+      return 'private IP callback URL';
+    }
+  }
+  return null;
+}
+
+/**
  * Notify the originating OpenClaw session that a job has completed or failed.
  *
  * Fire-and-forget: returns true on success, false on failure. NEVER throws.
@@ -40,6 +70,18 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
 
     // No URL configured — silent skip
     if (!url) return false;
+
+    // Determine if this is a trusted URL (matches configured openclawHooksUrl)
+    const isTrustedUrl = url === config.openclawHooksUrl;
+
+    // Validate custom (non-trusted) callback URLs
+    if (!isTrustedUrl) {
+      const validationError = validateCallbackUrl(url);
+      if (validationError) {
+        process.stderr.write(`[callback] Rejecting ${validationError}: ${url}\n`);
+        return false;
+      }
+    }
 
     // Calculate duration
     const duration = formatDuration(job.startedAt, job.completedAt);
@@ -72,7 +114,8 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (token) {
+    // Only send auth token to trusted openclawHooksUrl — never to custom URLs
+    if (token && isTrustedUrl) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
