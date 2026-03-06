@@ -666,14 +666,15 @@ Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
 
 ### Phase 40: Default Skills Library per requirements/default-skills-library.md
 
+**Status:** complete (3/3 plans, verified ✓)
 **Goal:** Bundle a curated default skills catalog with Tier 1 (universal) and Tier 2 (stack-specific) skills. During `pilot setup`, detect project stack and offer to install matching skills. `pilot skills bootstrap` command for manual library initialization via `npx skills install`.
 **Depends on:** Phase 39
 **Plans:** 3 plans
 
 Plans:
 - [x] 40-01-PLAN.md — Core foundation: default-skills.ts (catalog constants, stack detection, recommendation, bootstrap orchestrator) + TDD tests
-- [ ] 40-02-PLAN.md — CLI commands: pilot skills bootstrap + pilot skills recommend + index.ts wiring + command tests
-- [ ] 40-03-PLAN.md — Setup integration: post-setup skill offer + setup.test.ts
+- [x] 40-02-PLAN.md — CLI commands: pilot skills bootstrap + pilot skills recommend + index.ts wiring + command tests
+- [x] 40-03-PLAN.md — Setup integration: post-setup skill offer + setup.test.ts
 
 Wave structure:
 - Wave 1: 40-01 (core foundation)
