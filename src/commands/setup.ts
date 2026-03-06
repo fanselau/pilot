@@ -71,6 +71,13 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   }
 
   // After setup completes successfully, handle owner registration
+  if (!opts.owner && !isJsonMode()) {
+    outputHuman('');
+    outputHuman(`  ${dim('Hint: Register this project with an owner to enable notifications:')}`);
+    outputHuman(`  ${dim('pilot setup')} ${dir} ${dim('--owner <agent-id>')}`);
+    outputHuman('');
+  }
+
   if (opts.owner) {
     const { registerProject, updateProjectOwner, getProject } = await import('../core/db.js');
     const absDir = path.resolve(dir);

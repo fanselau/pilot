@@ -1,9 +1,9 @@
 /**
- * Tests for `pilot kill <id> --force` command.
+ * Tests for `pilot kill <id>` command.
  *
  * Covers:
  *   - Exits 1 when job not found
- *   - Exits 1 without --force flag (safety guard)
+ *   - Works without --force flag (--force is now optional for backward compat)
  *   - Exits 1 for non-running job
  *   - Calls killJobSession then forceQuitJob for running job
  *   - Still calls forceQuitJob when killJobSession returns killed:false
@@ -85,10 +85,16 @@ describe('killCommand', () => {
     expect(process.stderr.write).toHaveBeenCalledWith(expect.stringMatching(/not found/i));
   });
 
-  it('exits 1 without --force flag', async () => {
-    mockGetJob.mockReturnValue(makeRunningJob());
-    await expect(killCommand('abc1', {})).rejects.toThrow('exit:1');
-    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringMatching(/--force/i));
+  it('works without --force flag (force is now optional)', async () => {
+    const job = makeRunningJob();
+    mockGetJob.mockReturnValue(job);
+    mockKillJobSession.mockResolvedValue({ killed: true, reason: 'Sent SIGTERM to PID 1234' });
+    mockForceQuitJob.mockReturnValue({ ok: true, job });
+
+    // Should NOT exit 1 — force is no longer required
+    await killCommand('abc1', {});
+    expect(mockKillJobSession).toHaveBeenCalledWith(job);
+    expect(mockForceQuitJob).toHaveBeenCalledWith('abc1', 'cli');
   });
 
   it('exits 1 for non-running job', async () => {

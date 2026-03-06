@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 38 of 38 (Pilot Hardening — Pre-Release Quality Pass)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed 38-01-PLAN.md (Shared utilities, dead code cleanup, security hardening)
+Last activity: 2026-03-06 - Completed 38-02-PLAN.md (Error recovery hardening)
 
-Progress: █████████████████████████████████████████░░ 106/108 plans
+Progress: █████████████████████████████████████████░░ 107/108 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 38 in progress — Pilot Hardening. Plan 01 done: errMsg utility, notify.ts deleted, PRAGMA allowlist, command injection fix, DB busy_timeout + chmod 600. 492 tests passing.
+**Current focus:** Phase 38 in progress — Pilot Hardening. Plan 01 done: errMsg utility, dead code cleanup, security hardening. Plan 02 done: runner process resilience, delegate error logging, opencode-db reconnection, callback URL security, file size limits. 492 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -495,9 +495,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 38-01 | Kept getNextPending/markRunning/pauseJob/reconcileStaleJobs exported from db.ts | Tested directly in db.test.ts as legitimate public DB API |
 | 38-01 | PRAGMA validation extracts name before = sign | Handles both Bun and better-sqlite3 calling conventions |
 | 38-01 | Wrapped better-sqlite3 constructor for pragma validation | Mirrors Bun compat wrapper pattern; intercepts .pragma() calls |
+| 38-02 | acquireRunnerLock throws instead of process.exit(1) | Allows finally block cleanup (lock release, active job termination) |
+| 38-02 | PID liveness bare catch is intentional control flow | process.kill(pid, 0) throws when dead — catch means bail, not swallow |
+| 38-02 | Auth token only sent to trusted openclawHooksUrl | Custom callback URLs get no Authorization header — prevents token leakage |
+| 38-02 | handleDbError covers SQLITE_CORRUPT + SQLITE_IOERR + malformed | Three error patterns trigger cachedDb reset for auto-reconnect |
+| 38-02 | Low-memory logging uses loggedLowMemory flag | Logs once per state transition to 0 maxParallel, not every cycle |
 
 ## Session Continuity
 
-Last session: 2026-03-06T00:00:53Z
-Stopped at: Completed 38-01-PLAN.md (Shared utilities, dead code cleanup, security hardening)
+Last session: 2026-03-06T00:15:29Z
+Stopped at: Completed 38-02-PLAN.md (Error recovery hardening)
 Resume file: None

@@ -1,8 +1,9 @@
 /**
- * `pilot kill <id> --force` — Force-quit a running job.
+ * `pilot kill <id>` — Force-quit a running job.
  *
  * Kills the opencode process via OS signals and marks the job + all running
- * steps as failed in the DB. Requires --force to prevent accidents.
+ * steps as failed in the DB. The --force flag is accepted for backward
+ * compatibility but is no longer required.
  *
  * Only running jobs can be killed (pending jobs use `pilot cancel`).
  */
@@ -20,15 +21,7 @@ async function killCommand(id: string, opts: { force?: boolean }): Promise<void>
     process.exit(1);
   }
 
-  // 2. Require --force
-  if (!opts.force) {
-    process.stderr.write(
-      `Error: Use --force to terminate a running job.\n` +
-        `This will kill the active opencode session and mark the job as failed.\n` +
-        `Example: pilot kill ${id} --force\n`,
-    );
-    process.exit(1);
-  }
+  // 2. --force is accepted but no longer mandatory (backward compat)
 
   // 3. Reject non-running jobs
   if (job.status !== 'running') {

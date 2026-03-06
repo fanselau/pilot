@@ -117,19 +117,25 @@ function validateProjectSetup(projectDir: string, force: boolean): void {
  *   - Long string (>100 chars) → phase (likely a requirement description)
  *   - String with requirements-like verbs → phase
  *   - Short imperative string → quick
+ *
+ * Returns scope and a brief reason for the detection.
  */
 function detectScope(requirement: string): JobScope {
-  if (isFilePath(requirement)) return 'phase';
-  if (isDirPath(requirement)) return 'milestone';
+  return detectScopeWithReason(requirement).scope;
+}
+
+function detectScopeWithReason(requirement: string): { scope: JobScope; reason: string } {
+  if (isFilePath(requirement)) return { scope: 'phase', reason: 'requirement is a file' };
+  if (isDirPath(requirement)) return { scope: 'milestone', reason: 'requirements directory' };
 
   // Long descriptions are likely requirements, not quick fixes
-  if (requirement.length > 100) return 'phase';
+  if (requirement.length > 100) return { scope: 'phase', reason: 'long description (>100 chars)' };
 
   // Requirements-like language patterns suggest phase scope
   const requirementsPatterns = /\b(implement|build|create|add|integrate|migrate|refactor|redesign|overhaul|set\s?up|introduce)\b/i;
-  if (requirementsPatterns.test(requirement)) return 'phase';
+  if (requirementsPatterns.test(requirement)) return { scope: 'phase', reason: 'requirements-like description' };
 
-  return 'quick';
+  return { scope: 'quick', reason: 'short description' };
 }
 
 async function addCommand(
@@ -154,7 +160,16 @@ async function addCommand(
     ? validateProvider(opts.provider)
     : configDefaults.providerMode;
 
-  const scope = opts.as ?? detectScope(requirement);
+  let scope: JobScope;
+  if (opts.as) {
+    scope = opts.as;
+  } else {
+    const detected = detectScopeWithReason(requirement);
+    scope = detected.scope;
+    if (!isJsonMode()) {
+      process.stderr.write(`  Detected scope: ${detected.scope} (${detected.reason})\n`);
+    }
+  }
 
   // Parse categories from --categories flag (comma-separated string)
   const categories: string[] | null = opts.categories

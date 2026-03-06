@@ -113,7 +113,7 @@ program
 program
   .command('kill <id>')
   .description('Force-quit a running job (kills opencode session + marks failed)')
-  .option('--force', 'Required flag to confirm termination')
+  .option('--force', 'Force termination (default behavior, kept for backward compat)')
   .action(async (id: string, opts: Record<string, unknown>) => {
     const { killCommand } = await import('./commands/kill.js');
     await killCommand(id, opts as { force?: boolean });

@@ -5,7 +5,11 @@
  * Default command when no arguments provided.
  */
 
+import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import path from 'node:path';
 import { getQueue, getRecent } from '../core/db.js';
+import { getConfig } from '../core/config.js';
 import {
   getLastMessage,
   findSessionByTitle,
@@ -31,6 +35,40 @@ function isInconclusive(job: Job): boolean {
     return typeof v.confidence === 'number' && v.confidence === 0;
   } catch {
     return true; // Unparseable verdict = inconclusive
+  }
+}
+
+/**
+ * Detect the daemon runner status by checking the PID file and process liveness.
+ */
+function getDaemonStatus(): { status: 'active' | 'stopped'; pid?: number; detail: string } {
+  const config = getConfig();
+  const pidPath = path.join(config.pilotDir, 'daemon.pid');
+
+  try {
+    const pidContent = readFileSync(pidPath, 'utf8').trim();
+    const pid = parseInt(pidContent, 10);
+    if (isNaN(pid)) {
+      return { status: 'stopped', detail: 'stopped (invalid PID file)' };
+    }
+
+    try {
+      process.kill(pid, 0); // Check if process is alive (signal 0 = no-op)
+      return { status: 'active', pid, detail: `active (PID ${pid})` };
+    } catch {
+      return { status: 'stopped', detail: 'stopped (stale PID file)' };
+    }
+  } catch {
+    // No PID file — check systemd as fallback
+    try {
+      const result = execSync('systemctl --user is-active pilot-runner 2>/dev/null', { encoding: 'utf8' }).trim();
+      if (result === 'active') {
+        return { status: 'active', detail: 'active (systemd)' };
+      }
+    } catch {
+      // systemctl not available or service not found — ignore
+    }
+    return { status: 'stopped', detail: 'stopped — run: pilot service start' };
   }
 }
 
@@ -130,10 +168,12 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   const healthyActive = active.filter((j) => !isJobStale(j));
   const staleActive = active.filter((j) => isJobStale(j));
 
+  const daemon = getDaemonStatus();
+
   if (isJsonMode()) {
     outputJson({
       version: '2.0.0',
-      daemon: { active: false }, // TODO: detect daemon via PID/service
+      daemon: { active: daemon.status === 'active', pid: daemon.pid, detail: daemon.detail },
       active: healthyActive,
       stale: staleActive,
       queue: pending,
@@ -145,6 +185,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   // Header
   outputHuman('');
   outputHuman(`  ${bold('pilot')} v2`);
+
+  // Runner status
+  const runnerIcon = daemon.status === 'active' ? green('●') : dim('○');
+  outputHuman(`  Runner: ${runnerIcon} ${daemon.detail}`);
   outputHuman('');
 
   // Active section (healthy — session is alive)

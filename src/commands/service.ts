@@ -48,6 +48,11 @@ WantedBy=default.target
       await execa('systemctl', ['--user', 'enable', unit]);
       outputHuman(`  ${green('✓')} Installed ${unitPath}`);
       outputHuman(`  ${dim('Run:')} pilot service start`);
+      outputHuman('');
+      outputHuman(`  ${dim('Warning: The systemd unit bakes in the current PATH.')}`);
+      outputHuman(`  ${dim('If you update Node.js/Bun or change PATH, run:')}`);
+      outputHuman(`  ${dim('  pilot service install')}`);
+      outputHuman(`  ${dim('to regenerate the unit file.')}`);
       break;
     }
     case 'start':

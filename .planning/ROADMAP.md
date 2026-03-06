@@ -637,7 +637,7 @@ Read requirements/skills-system.md for full spec.
 
 Plans:
 - [x] 38-01-PLAN.md — Shared utilities (errMsg), dead code cleanup, security hardening (PRAGMA allowlist, command injection, DB busy_timeout + chmod)
-- [ ] 38-02-PLAN.md — Error recovery: runner process resilience, delegate catch logging, opencode-db reconnection, callback URL security, file size limits
+- [x] 38-02-PLAN.md — Error recovery: runner process resilience, delegate catch logging, opencode-db reconnection, callback URL security, file size limits
 - [ ] 38-03-PLAN.md — UX polish (daemon status, setup hint, scope feedback, TUI footer, kill fix, service warning) + pilot gc command
 
 Wave structure:
