@@ -19,11 +19,15 @@ Star this repo if you find it useful
 
 ---
 
+> **What's New:** Skills system for reusable AI capabilities, AI judge for automatic post-execution evaluation, and per-job timeouts with simplified configuration. See [Features](#features) for details.
+
+---
+
 ## What is Pilot?
 
 Pilot is an autonomous AI development pipeline. You queue work — a requirements file or a plain description — and Pilot handles the rest without human intervention.
 
-When a job is picked up, a **delegation AI** reads your project's current state (planning docs, phase summaries, roadmap) and produces a structured execution plan. The **runner** then executes each step in sequence by spawning [opencode](https://opencode.ai) sessions. After each significant step, a judge session evaluates the results automatically. Success means the job completes and your configured agent is notified. Failure triggers the retry policy or blocks the project for operator review.
+When a job is picked up, a **delegation AI** reads your project's current state (planning docs, phase summaries, roadmap) and produces a structured execution plan. The **runner** then executes each step in sequence by spawning [opencode](https://opencode.ai) sessions. After execution, an **AI judge** evaluates the results and returns a verdict with confidence score. Success means the job completes and your configured agent is notified (including the judge's verdict and reasoning). Failure triggers the retry policy or blocks the project for operator review.
 
 The entire queue lives in a local SQLite database (`~/.pilot/pilot.db`). There are no YAML files to manage, no PID tracking scripts, and no polling bash loops — just a typed TypeScript daemon reading a database.
 
@@ -137,6 +141,55 @@ pilot add my-project "Complete v2.0" --as milestone
 
 Before executing, Pilot spawns a short AI session that reads your project's `.planning/` directory and decides the exact sequence of [GSD](https://github.com/lucafanselau/pilot-gsd) commands to run — `add-phase`, `plan-phase`, `execute-phase`, `verify-phase`, and so on. This replaces fragile regex-based plan parsing.
 
+### Skills system
+
+Reusable AI capabilities that are automatically injected into sessions based on job categories. Install skills from GitHub repos, tag them with categories, and Pilot matches them to jobs at runtime.
+
+```bash
+# Install a skill from GitHub
+pilot skills add owner/repo --categories frontend,testing
+
+# List installed skills
+pilot skills list
+
+# Tag a skill with categories
+pilot skills tag my-skill --categories docs,api
+
+# See skill categories and counts
+pilot skills categories
+
+# Rebuild manifest from filesystem
+pilot skills sync
+```
+
+When a job runs, Pilot resolves matching skills (by category overlap) and copies them into the project's `.opencode/skills/` directory. After the job finishes, injected skills are cleaned up automatically. Skills with no categories are treated as universal and included in every job.
+
+```bash
+# Queue a job with skill categories
+pilot add my-project "Build the dashboard" --categories frontend,ui-design
+```
+
+### AI judge
+
+After each `execute-phase` step, Pilot spawns a lightweight judge session that evaluates the execution results. The judge returns a structured verdict:
+
+```json
+{
+  "verdict": "succeeded",
+  "confidence": 85,
+  "reason": "All planned changes implemented, tests pass, no regressions detected."
+}
+```
+
+| Verdict | Confidence | Action |
+|---------|-----------|--------|
+| `succeeded` | any | Job continues |
+| `doubting` | ≥ 50 | Treated as pass, job continues |
+| `doubting` | < 50 | Job fails with reason |
+| `failed` | any | Job fails with reason |
+
+The verdict, confidence score, and reason are included in completion notifications (webhooks and Telegram), so you know at a glance whether the AI is confident in its own work.
+
 ### Model profiles and provider modes
 
 Control the cost/quality tradeoff per job:
@@ -210,6 +263,8 @@ Pilot notifies on job completion via:
 - **Agent routing** — sends to a specific agent session via `--notify <agentId>`
 - **Telegram** — via `PILOT_TELEGRAM_BOT_TOKEN` + `PILOT_TELEGRAM_CHAT_ID`
 
+All notifications include the AI judge verdict, confidence score, and reason when available.
+
 ---
 
 ## CLI Reference
@@ -218,7 +273,7 @@ Pilot notifies on job completion via:
 
 | Command | Description |
 |---------|-------------|
-| `pilot add <project> <requirement>` | Queue work. Auto-detects scope. Flags: `--as <scope>`, `--next`, `--dry-run`, `--profile`, `--provider`, `--notify <agentId>`, `--notify-url <url>`, `--no-notify` |
+| `pilot add <project> <requirement>` | Queue work. Auto-detects scope. Flags: `--as <scope>`, `--next`, `--dry-run`, `--profile`, `--provider`, `--notify <agentId>`, `--notify-url <url>`, `--no-notify`, `--timeout <minutes>`, `--categories <cats>` |
 | `pilot status [project]` | One-shot status dashboard (default command, alias: `s`) |
 | `pilot log [id]` | Session activity stream. Flags: `--follow`, `--last <n>`, `--verbose`, `--delegation`, `--flat`, `--task <n>` |
 | `pilot info <id>` | Full job metadata, token usage, and cost estimate |
@@ -248,6 +303,17 @@ Pilot notifies on job completion via:
 | `pilot service <action>` | Daemon management: `install`, `start`, `stop`, `status` |
 | `pilot reload` | Signal running daemon to reload after build |
 | `pilot gc` | Clean old jobs and compact the database |
+
+### Skills
+
+| Command | Description |
+|---------|-------------|
+| `pilot skills` | List installed skills (alias for `pilot skills list`) |
+| `pilot skills add <repo>` | Install skills from a GitHub repo. Flags: `--skill <name>`, `--all`, `--categories <cats>` |
+| `pilot skills remove <name>` | Remove an installed skill |
+| `pilot skills tag <name>` | Add categories to a skill. Flag: `--categories <cats>` (required) |
+| `pilot skills categories` | Show all categories with skill counts |
+| `pilot skills sync` | Rebuild manifest from filesystem |
 
 ### Dashboard
 
@@ -286,6 +352,7 @@ Every command accepts `--json` for machine-readable output and `--verbose` / `-v
          │  Runner (event loop)   │
          │  - Claim next pending  │
          │  - Check RAM + limits  │
+         │  - Inject skills       │
          │  - Enforce spawn rate  │
          └────────────┬───────────┘
                       │
@@ -302,21 +369,25 @@ Every command accepts `--json` for machine-readable output and `--verbose` / `-v
          │  One per GSD command   │
          │  (plan, execute, etc.) │
          └────────────┬───────────┘
-                      │
+                      │ after execute-phase
                       ▼
          ┌────────────────────────┐
-         │  Judge evaluation      │
-         │  Reads session output  │
-         │  pass / fail / partial │
+         │  AI Judge              │
+         │  Evaluates execution   │
+         │  succeeded / failed /  │
+         │  doubting + confidence │
          └────────────┬───────────┘
                       │
                       ▼
          ┌────────────────────────┐
          │  Complete / Fail       │
          │  Notify owner agent    │
+         │  Include verdict       │
          │  Block project on fail │
          └────────────────────────┘
 ```
+
+The pipeline flow is: **delegate → execute → judge → notify**.
 
 **Three code layers:**
 
@@ -328,16 +399,13 @@ Every command accepts `--json` for machine-readable output and `--verbose` / `-v
 
 ## Configuration
 
-Pilot is configured via environment variables. All have sensible defaults.
+Pilot is configured via environment variables and an optional config file (`~/.pilot/config.json`). All have sensible defaults.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILOT_PROJECT_DIR` | `~/dev` | Root directory containing your projects |
 | `PILOT_GSD_DIR` | `./pilot-gsd` (relative to pilot install) | Path to the pilot-gsd command definitions repo |
-| `PILOT_STUCK_THRESHOLD` | `90` | Minutes before a session is flagged as stuck |
 | `PILOT_MAX_PARALLEL` | auto | Max concurrent jobs (auto-detected from RAM: 1-4) |
-| `PILOT_POLL_INTERVAL` | `5` | Seconds between queue poll cycles |
-| `PILOT_DEFAULT_TIMEOUT` | `60` | Job timeout in minutes |
 | `PILOT_SESSION_MEMORY_MAX_MB` | `8192` | Per-session systemd memory limit (MB) |
 | `PILOT_RESERVED_MEMORY_MB` | `4096` | RAM reserved for OS before dynamic parallel calc (MB) |
 | `PILOT_MEMORY_KILL_THRESHOLD_MB` | `2048` | Watchdog kills sessions if available RAM drops below (MB) |
@@ -348,6 +416,14 @@ Pilot is configured via environment variables. All have sensible defaults.
 | `PILOT_TELEGRAM_BOT_TOKEN` | (unset) | Telegram bot token for notifications |
 | `PILOT_TELEGRAM_CHAT_ID` | (unset) | Telegram chat ID for notifications |
 | `NO_COLOR` | (unset) | Set to any value to disable ANSI colors |
+
+Timeouts are set per-job rather than globally:
+
+```bash
+pilot add my-project "Long running migration" --timeout 120  # 120 minutes
+```
+
+The default is `0` (no timeout). Poll interval and stuck detection are handled internally.
 
 ### opencode.json
 

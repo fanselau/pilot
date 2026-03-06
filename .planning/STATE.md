@@ -8,7 +8,7 @@
 Phase: 39 of 39 (Runner Simplification)
 Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed 39-02-PLAN.md
+Last activity: 2026-03-06 - Completed quick task 066 (judge integration)
 
 Progress: ██████████████████████████████████████████ 110/111 plans
 
@@ -148,6 +148,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 063 | Comprehensive installation & getting started guide — docs/GETTING-STARTED.md with all env vars, prerequisites, daemon setup, troubleshooting | 2026-03-05 | e754a2f | [063-create-a-comprehensive-installation-gett](./quick/063-create-a-comprehensive-installation-gett/) |
 | 064 | Asciinema demo recording embedded in README — demo/demo-script.sh + demo.cast + demo/demo.svg, showing real pilot status/add/log CLI usage | 2026-03-05 | a270d7b | [064-create-an-asciinema-demo-recording-for-t](./quick/064-create-an-asciinema-demo-recording-for-t/) |
 | 065 | Fix project setup, remove delegation fallback, add project doctor — fail-fast delegation, project command linking, pilot doctor --project | 2026-03-06 | ee6a485 | [065-fix-project-setup-remove-delegation-fall](./quick/065-fix-project-setup-remove-delegation-fall/) |
+| 066 | Judge integration — runner adapts to gsd-judge: runJudge replaces runVerification, succeeded/failed/doubting verdict shape, callback webhook enriched | 2026-03-06 | 3ef8a61 | [066-judge-integration-runner-adapts-to-gsd-j](./quick/066-judge-integration-runner-adapts-to-gsd-j/) |
 
 ## Accumulated Context
 
