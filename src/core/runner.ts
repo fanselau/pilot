@@ -160,6 +160,8 @@ class Runner {
   // (reconciliation removed — opencode DB is ground truth, no per-cycle checks needed)
   private lockRelease: (() => Promise<void>) | null = null;
   private lockPath: string | null = null;
+  // Low-memory logging: only log once per state change (transition to 0)
+  private loggedLowMemory = false;
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -195,10 +197,9 @@ class Runner {
           const content = readFileSync(lp, 'utf8').trim();
           if (content) extra = ` (PID: ${content})`;
         } catch { /* ignore */ }
-        process.stderr.write(
-          `Error: Another runner is already active${extra}. Use 'pilot service status' to check.\n`,
+        throw new Error(
+          `Failed to acquire runner lock: another instance is running${extra}. Use 'pilot service status' to check.`,
         );
-        process.exit(1);
       }
       throw err;
     }
@@ -241,6 +242,30 @@ class Runner {
     // Set OOM score for the daemon process — survive before expendable sessions
     setOomScore(-500);
     this.setupShutdownHandlers();
+
+    // ── Process resilience handlers ──────────────────────────────────────
+    // Catch unhandled rejections/exceptions, log, cleanup, and exit.
+    const processCleanupAndExit = (label: string, reason: unknown) => {
+      process.stderr.write(`[runner] ${label}: ${errMsg(reason)}\n`);
+      // Best-effort cleanup
+      try { this.lockRelease?.(); } catch { /* best effort */ }
+      for (const [, aj] of this.activeJobs) {
+        try {
+          const pid = this.sessionPids.get(aj.title);
+          if (pid !== undefined) process.kill(pid, 'SIGTERM');
+        } catch { /* ignore */ }
+      }
+      process.exit(1);
+    };
+    const onUnhandledRejection = (reason: unknown) => processCleanupAndExit('Unhandled rejection', reason);
+    const onUncaughtException = (err: Error) => processCleanupAndExit('Uncaught exception', err);
+    process.on('unhandledRejection', onUnhandledRejection);
+    process.on('uncaughtException', onUncaughtException);
+
+    // ── Job PID file directory ───────────────────────────────────────────
+    const initConfig = getConfig();
+    const jobPidsDir = path.join(initConfig.pilotDir, 'pids');
+    mkdirSync(jobPidsDir, { recursive: true });
 
     // Write PID file so postbuild and `pilot reload` can signal us
     const pidFilePath = this.getPidFilePath();
@@ -306,14 +331,16 @@ class Runner {
 
       try {
         await killJobSession(newestEntry.job, this.sessionPids);
-      } catch {
-        // Best effort kill
+      } catch (err) {
+        process.stderr.write(`[runner] watchdog kill error: ${errMsg(err)}\n`);
       }
       try {
         resetToPending(newestEntry.job.id, 'Killed by memory pressure watchdog');
         this.activeJobs.delete(newestEntry.job.id);
-      } catch {
-        // Best effort DB update
+      } catch (err) {
+        process.stderr.write(`[runner] watchdog resetToPending error: ${errMsg(err)}\n`);
+        // Remove from activeJobs so reconciliation picks it up on the next cycle
+        this.activeJobs.delete(newestEntry.job.id);
       }
     }, watchdogIntervalMs);
 
@@ -340,6 +367,36 @@ class Runner {
       }
     }
 
+    // ── Startup: clean orphaned PID files ────────────────────────────────
+    try {
+      const pidFiles = readdirSync(jobPidsDir).filter(f => f.endsWith('.pid'));
+      let orphanCount = 0;
+      for (const pidFile of pidFiles) {
+        const jobId = pidFile.replace('.pid', '');
+        const pidContent = readFileSync(path.join(jobPidsDir, pidFile), 'utf8').trim();
+        const pid = parseInt(pidContent, 10);
+        if (!isNaN(pid)) {
+          try {
+            process.kill(pid, 0); // Check if alive
+            // PID is alive but not in activeJobs — orphaned
+            if (!this.activeJobs.has(jobId)) {
+              try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ }
+              orphanCount++;
+            }
+          } catch {
+            // PID dead — clean up file
+          }
+        }
+        // Clean up PID file regardless
+        try { unlinkSync(path.join(jobPidsDir, pidFile)); } catch { /* ignore */ }
+      }
+      if (orphanCount > 0) {
+        process.stderr.write(`[runner] Cleaned ${orphanCount} orphaned PID file(s)\n`);
+      }
+    } catch {
+      // PID directory may not exist yet — ignore
+    }
+
     try {
     while (this.running) {
       if (this.shuttingDown) break;
@@ -351,6 +408,13 @@ class Runner {
       let launched = false;
       const config = getConfig();
       const effectiveMaxParallel = getDynamicMaxParallel(this.options.maxParallel, config.sessionMemoryMaxMb, config.reservedMemoryMb);
+      // Log low-memory state transitions (once per state change)
+      if (effectiveMaxParallel === 0 && !this.loggedLowMemory) {
+        process.stderr.write('[runner] Low memory — not launching new jobs\n');
+        this.loggedLowMemory = true;
+      } else if (effectiveMaxParallel > 0) {
+        this.loggedLowMemory = false;
+      }
       while (this.activeJobs.size < effectiveMaxParallel && !this.shuttingDown) {
         const job = claimNextLaunchable();
         if (!job) break; // No more eligible jobs
@@ -403,6 +467,9 @@ class Runner {
       dbWatcher?.close();
       this.removePidFile(pidFilePath);
       await this.releaseRunnerLock();
+      // Remove process resilience handlers to prevent leaks if run() is called again
+      process.removeListener('unhandledRejection', onUnhandledRejection);
+      process.removeListener('uncaughtException', onUncaughtException);
     }
 
     // If SIGHUP triggered reload, re-exec with new code
@@ -650,7 +717,11 @@ class Runner {
     } catch (err) {
       const error = errMsg(err);
       this.collectActualModels(job.id);
-      markFailed(job.id, error);
+      try {
+        markFailed(job.id, error);
+      } catch (markErr) {
+        process.stderr.write(`[runner] markFailed also failed for ${job.id}: ${errMsg(markErr)}\n`);
+      }
       // Fire-and-forget callback to wake originating session
       const failedJob = getJob(job.id);
       if (failedJob) {
@@ -674,6 +745,10 @@ class Runner {
       }
     } finally {
       this.activeJobs.delete(job.id);
+      // Clean up job PID file
+      try {
+        unlinkSync(path.join(getConfig().pilotDir, 'pids', `${job.id}.pid`));
+      } catch { /* ENOENT or other — ignore */ }
       // Clean up tracked PIDs for this job's sessions
       try {
         const titles = JSON.parse(job.sessionTitles ?? '[]') as string[];
@@ -928,6 +1003,12 @@ class Runner {
     // Track PID for reliable kill operations (replaces pgrep)
     if (proc.pid !== undefined) {
       this.sessionPids.set(title, proc.pid);
+      // Write PID file for crash recovery — survives runner restarts
+      const jobEntry = [...this.activeJobs.entries()].find(([, v]) => v.title === title);
+      if (jobEntry) {
+        const pidFilePath = path.join(getConfig().pilotDir, 'pids', `${jobEntry[0]}.pid`);
+        try { writeFileSync(pidFilePath, String(proc.pid)); } catch { /* best effort */ }
+      }
     }
 
     // Poll opencode DB for session completion using isSessionDone() + PID liveness.

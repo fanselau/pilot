@@ -158,7 +158,7 @@ describe('Runner singleton lock', () => {
     expect(mockRelease).toHaveBeenCalled();
   });
 
-  it('exits with code 1 and writes error to stderr when lock is already held', async () => {
+  it('throws error with descriptive message when lock is already held', async () => {
     // Mock lock to throw ELOCKED error
     const elockError = Object.assign(
       new Error('Lock file is already being held'),
@@ -166,23 +166,10 @@ describe('Runner singleton lock', () => {
     );
     mockLockFn.mockRejectedValue(elockError);
 
-    // Capture stderr and process.exit
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit(${code})`);
-    }) as typeof process.exit);
-
     const { createRunner } = await import('../../src/core/runner.js');
     const runner = createRunner({ once: true, pollInterval: 1 });
 
-    await expect(runner.run()).rejects.toThrow('process.exit(1)');
-
-    // Should have written the error message
-    const stderrOutput = stderrSpy.mock.calls.map(c => c[0]).join('');
-    expect(stderrOutput).toContain('Another runner is already active');
-
-    // Should have called exit(1)
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expect(runner.run()).rejects.toThrow('Failed to acquire runner lock: another instance is running');
   });
 
   it('writes PID to lock file after successful acquisition', async () => {
@@ -228,18 +215,9 @@ describe('Runner singleton lock', () => {
     );
     mockLockFn.mockRejectedValue(elockError);
 
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit(${code})`);
-    }) as typeof process.exit);
-
     const { createRunner } = await import('../../src/core/runner.js');
     const runner = createRunner({ once: true, pollInterval: 1 });
 
-    await expect(runner.run()).rejects.toThrow('process.exit(1)');
-
-    const stderrOutput = stderrSpy.mock.calls.map(c => c[0]).join('');
-    expect(stderrOutput).toContain('Another runner is already active');
-    expect(stderrOutput).toContain('PID: 99999');
+    await expect(runner.run()).rejects.toThrow('Failed to acquire runner lock: another instance is running (PID: 99999)');
   });
 });

@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 37
+## Current Phase: 38
 
 ## Current Position
 
-Phase: 37 of 37 (Skills System for Pilot)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-03-05 - Completed 37-04-PLAN.md (Skills CLI + Core Tests)
+Phase: 38 of 38 (Pilot Hardening — Pre-Release Quality Pass)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-06 - Completed 38-01-PLAN.md (Shared utilities, dead code cleanup, security hardening)
 
-Progress: █████████████████████████████████████████ 105/105 plans
+Progress: █████████████████████████████████████████░░ 106/108 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 37 complete — Skills System. All 4 plans done: types, DB migration, skills.ts library, --categories flag, skills hint, runner injection, CLI commands + tests. 498 tests passing.
+**Current focus:** Phase 38 in progress — Pilot Hardening. Plan 01 done: errMsg utility, notify.ts deleted, PRAGMA allowlist, command injection fix, DB busy_timeout + chmod 600. 492 tests passing.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -492,9 +492,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 37-01 | Atomic manifest writes via temp file + rename | Crash safety for manifest.json |
 | 37-01 | injectSkills writes .pilot-injected.json tracking manifest | Precise cleanup — only removes what Pilot added |
 | 37-01 | Universal skills (empty categories) always included in resolution | Skills without categories apply to all jobs |
+| 38-01 | Kept getNextPending/markRunning/pauseJob/reconcileStaleJobs exported from db.ts | Tested directly in db.test.ts as legitimate public DB API |
+| 38-01 | PRAGMA validation extracts name before = sign | Handles both Bun and better-sqlite3 calling conventions |
+| 38-01 | Wrapped better-sqlite3 constructor for pragma validation | Mirrors Bun compat wrapper pattern; intercepts .pragma() calls |
 
 ## Session Continuity
 
-Last session: 2026-03-05T23:21:16Z
-Stopped at: Completed 37-04-PLAN.md (Skills CLI + Core Tests) — Phase 37 complete
+Last session: 2026-03-06T00:00:53Z
+Stopped at: Completed 38-01-PLAN.md (Shared utilities, dead code cleanup, security hardening)
 Resume file: None
