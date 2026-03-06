@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 38
+## Current Phase: 39
 
 ## Current Position
 
-Phase: 38 of 38 (Pilot Hardening — Pre-Release Quality Pass)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 065: Fix Project Setup & Remove Delegation Fallback
+Phase: 39 of 39 (Runner Simplification)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-06 - Completed 39-01-PLAN.md
 
-Progress: ██████████████████████████████████████████ 108/108 plans
+Progress: ██████████████████████████████████████████ 109/111 plans
 
 ## Project Reference
 
@@ -506,8 +506,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 38-02 | handleDbError covers SQLITE_CORRUPT + SQLITE_IOERR + malformed | Three error patterns trigger cachedDb reset for auto-reconnect |
 | 38-02 | Low-memory logging uses loggedLowMemory flag | Logs once per state transition to 0 maxParallel, not every cycle |
 
+| 39-01 | timeout: number with 0=infinite as sentinel — no nullable needed | Clean sentinel value, consistent with SQLite DEFAULT 0 |
+| 39-01 | max_attempts column NOT dropped via migration (SQLite compat) | SQLite ALTER TABLE DROP COLUMN requires 3.35+; column becomes orphaned but harmless |
+| 39-01 | pollInterval kept in PilotConfig but removed from ConfigFileSchema.runner | Still an internal constant used by runner; no longer user-configurable |
+
 ## Session Continuity
 
-Last session: 2026-03-06T00:15:29Z
-Stopped at: Completed 38-02-PLAN.md (Error recovery hardening)
+Last session: 2026-03-06T10:02:13Z
+Stopped at: Completed 39-01-PLAN.md (Types and DB schema foundation for runner simplification)
 Resume file: None

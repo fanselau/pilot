@@ -168,7 +168,7 @@ class Runner {
     this.options = {
       maxParallel: options.maxParallel ?? config.maxParallel,
       once: options.once ?? false,
-      pollInterval: options.pollInterval ?? config.pollInterval,
+      pollInterval: options.pollInterval ?? 5,
     };
   }
 
@@ -626,27 +626,19 @@ class Runner {
           if (execSessionId) {
             const assistantMsgCount = getAssistantMessageCount(execSessionId);
             if (assistantMsgCount === 0) {
-              const freshJob = getJob(job.id);
-              if (freshJob && freshJob.attempts < freshJob.maxAttempts) {
-                resetToPending(job.id, 'No activity detected — session may have crashed or exited immediately');
-                process.stderr.write(
-                  `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
-                );
-                return;
-              }
-              throw new Error('No activity detected — session produced 0 assistant messages (crash or immediate exit)');
-            }
-          } else {
-            // No session found at all — definite failure
-            const freshJob = getJob(job.id);
-            if (freshJob && freshJob.attempts < freshJob.maxAttempts) {
-              resetToPending(job.id, 'No session created — opencode may have crashed before starting');
+              resetToPending(job.id, 'No activity detected — session may have crashed or exited immediately');
               process.stderr.write(
-                `[runner] No session found for ${job.id}. Resetting to pending.\n`,
+                `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
               );
               return;
             }
-            throw new Error('No session created — opencode may have crashed before starting');
+          } else {
+            // No session found at all — reset to pending
+            resetToPending(job.id, 'No session created — opencode may have crashed before starting');
+            process.stderr.write(
+              `[runner] No session found for ${job.id}. Resetting to pending.\n`,
+            );
+            return;
           }
 
           // Verification shutdown guard
@@ -834,8 +826,7 @@ class Runner {
     updateSessionTitles(job.id, [verifyTitle]);
 
     // Cap verify at 15 minutes to prevent indefinite blocking
-    const config = getConfig();
-    const verifyTimeoutMs = Math.min(config.defaultTimeout, 15) * 60 * 1000;
+    const verifyTimeoutMs = 15 * 60 * 1000;
 
     try {
       await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle, verifyTimeoutMs);
@@ -921,12 +912,35 @@ class Runner {
   ): Promise<void> {
     const config = getConfig();
     const opencodeBin = resolveOpencodeBinary();
-    const timeoutMs = timeoutOverrideMs ?? config.defaultTimeout * 60 * 1000;
+
+    // Job-level timeout: read from job record (0 = infinite)
+    // timeoutOverrideMs is used for verification sessions (always has a cap)
+    let timeoutMs: number;
+    if (timeoutOverrideMs !== undefined) {
+      timeoutMs = timeoutOverrideMs;
+    } else {
+      const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
+      const jobTimeout = jobEntry?.job.timeout ?? 0;
+      timeoutMs = jobTimeout > 0 ? jobTimeout * 60 * 1000 : Infinity;
+    }
     const start = Date.now();
 
     // CRITICAL: Pre-spawn safety checks from SPAWN-LESSONS.md
     await disableSnapshotGc();
-    await checkMemory(config.sessionMemoryMaxMb + 1024);
+    try {
+      await checkMemory(config.sessionMemoryMaxMb + 1024);
+    } catch (memErr) {
+      // Memory still insufficient after wait — return job to pending for retry
+      const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
+      if (jobEntry) {
+        resetToPending(jobEntry.job.id, `Insufficient memory — returned to queue`);
+        process.stderr.write(
+          `[runner] Insufficient memory after 5m wait, returning job ${jobEntry.job.id} to pending\n`,
+        );
+        return; // Exit spawnAndWait cleanly — job is back in queue
+      }
+      throw memErr; // No job entry (verification session) — re-throw
+    }
     await enforceSpawnRateLimit();
     await validateProjectConfig(cwd);
 
@@ -1014,11 +1028,11 @@ class Runner {
     // Poll opencode DB for session completion using isSessionDone() + PID liveness.
     // isSessionDone() uses step-finish reason as ground truth — eliminated the broken
     // premature completion heuristic that fired when sessions had long-running tool calls.
-    const pollMs = config.pollInterval * 1000;
+    const pollMs = this.options.pollInterval * 1000;
     let sessionFound = false;
     const procPid = proc.pid;
 
-    while (Date.now() - start < timeoutMs) {
+    while (timeoutMs === Infinity || Date.now() - start < timeoutMs) {
       await this.sleep(pollMs);
 
       if (this.shuttingDown) {
@@ -1094,7 +1108,10 @@ class Runner {
       throw new Error(`Session never appeared in opencode DB: ${title}`);
     }
 
-    throw new Error(`Session timed out after ${config.defaultTimeout}m: ${title}`);
+    // Find the job timeout for the error message
+    const jobEntry2 = [...this.activeJobs.values()].find(a => a.title === title);
+    const timeoutMin = jobEntry2?.job.timeout ?? 0;
+    throw new Error(`Session timed out after ${timeoutMin}m: ${title}`);
   }
 
   /**
@@ -1406,9 +1423,10 @@ async function checkMemory(requiredMb: number): Promise<void> {
     await new Promise(r => setTimeout(r, pollMs));
   }
 
-  // After max wait, proceed anyway with a warning
-  process.stderr.write(
-    `[runner] Memory still low after ${maxWaitMs / 60000}m wait, proceeding anyway\n`,
+  // After max wait, memory still insufficient — throw so caller can return job to pending
+  const availableMb = getAvailableMemoryMb();
+  throw new Error(
+    `Insufficient memory after ${maxWaitMs / 60000}m wait: ${availableMb}MB available, need ${requiredMb}MB`,
   );
 }
 
