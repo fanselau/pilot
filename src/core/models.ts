@@ -8,7 +8,7 @@ import type { ModelEntry, ModelProfile, ProviderMode } from './types.js';
 // Each cell IS the final answer — no tiers, no indirection.
 //
 // Agents: 11 GSD agents
-// Scopes: phase, quick, milestone, judge (for resolveTopLevelModel)
+// Scopes: _top:phase, _top:quick, _top:judge (for resolveTopLevelModel)
 // Profiles: quality, balanced, budget
 // Provider modes: claude-only, openai-only, hybrid
 
@@ -29,29 +29,27 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
     'gsd-plan-checker':         { quality: { model: 'anthropic/claude-sonnet-4-6' }, balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-haiku-4-5' } },
     'gsd-integration-checker':  { quality: { model: 'anthropic/claude-sonnet-4-6' }, balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-haiku-4-5' } },
     // ── Scopes (for resolveTopLevelModel) ──
-    'phase':     { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-opus-4-6' },   budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'milestone': { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-opus-4-6' },   budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'quick':     { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'judge':     { quality: { model: 'anthropic/claude-haiku-4-5' },  balanced: { model: 'anthropic/claude-haiku-4-5' },  budget: { model: 'anthropic/claude-haiku-4-5' } },
+    '_top:phase': { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-opus-4-6' },   budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    '_top:quick': { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    '_top:judge': { quality: { model: 'anthropic/claude-haiku-4-5' },  balanced: { model: 'anthropic/claude-haiku-4-5' },  budget: { model: 'anthropic/claude-haiku-4-5' } },
   },
   'openai-only': {
-    // ── Agents (all use codex with variant 'high') ──
-    'gsd-planner':              { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-roadmapper':           { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-executor':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-phase-researcher':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-project-researcher':   { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-research-synthesizer': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-debugger':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-verifier':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    // ── Agents (codex with xhigh/high variant differentiation per spec) ──
+    'gsd-planner':              { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-roadmapper':           { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-executor':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-debugger':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-phase-researcher':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-project-researcher':   { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-research-synthesizer': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-verifier':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
     // ── Scopes ──
-    'phase':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'milestone': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'quick':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'judge':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    '_top:phase': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    '_top:quick': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
   },
   hybrid: {
     // ── Agents: opus/sonnet → Claude, haiku → Codex with variant 'high' ──
@@ -66,17 +64,15 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
     'gsd-verifier':             { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
     'gsd-plan-checker':         { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
     'gsd-integration-checker':  { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    // ── Scopes: phase/milestone use planner tiers, quick uses executor tiers, judge always haiku (codex) ──
-    'phase':     { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'milestone': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'quick':     { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'judge':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },       balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },       budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    // ── Scopes: phase uses planner tiers, quick uses executor tiers, judge uses codex ──
+    '_top:phase': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    '_top:quick': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' },     balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },       budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
   },
 };
 
 // ── Scope keys (excluded from agent iteration) ────────────────────────────
-
-const SCOPE_KEYS = new Set(['phase', 'quick', 'milestone', 'judge']);
+// Scope keys use _top: prefix — detected via startsWith instead of a Set.
 
 // ── Resolve functions ─────────────────────────────────────────────────────
 
@@ -106,7 +102,7 @@ function resolveAllAgentModels(
   const models: Record<string, ModelEntry> = {};
   const providerTable = AGENT_MODELS[providerMode];
   for (const key of Object.keys(providerTable)) {
-    if (SCOPE_KEYS.has(key)) continue; // Skip scope entries
+    if (key.startsWith('_top:')) continue; // Skip scope entries
     models[key] = resolveAgentModel(key, profile, providerMode);
   }
   return models;
@@ -116,10 +112,10 @@ function resolveAllAgentModels(
  * Resolve the top-level session model for --model flag based on scope.
  * Returns ModelEntry with model string and optional variant.
  *
- * - phase scope: orchestrator agent = uses planner tier (opus/sonnet per profile)
- * - quick scope: executor tier (opus/sonnet per profile)
- * - judge sessions: always haiku tier (cheapest — just parsing a transcript)
- * - milestone: same as phase (orchestrator)
+ * Maps scope strings to _top: prefixed keys in the AGENT_MODELS table:
+ * - 'phase' / 'milestone' → '_top:phase'
+ * - 'quick' → '_top:quick'
+ * - 'judge' → '_top:judge'
  */
 function resolveTopLevelModel(
   scope: 'phase' | 'quick' | 'milestone' | 'judge',
@@ -127,10 +123,11 @@ function resolveTopLevelModel(
   providerMode: ProviderMode,
 ): ModelEntry {
   const providerTable = AGENT_MODELS[providerMode];
-  const scopeProfiles = providerTable[scope];
+  const key = scope === 'milestone' ? '_top:phase' : `_top:${scope}`;
+  const scopeProfiles = providerTable[key];
   if (!scopeProfiles) {
-    // Fallback: use executor tier for unknown scopes
-    const fallback = providerTable['quick'];
+    // Fallback: use _top:quick for unknown scopes
+    const fallback = providerTable['_top:quick'];
     return fallback[profile];
   }
 
