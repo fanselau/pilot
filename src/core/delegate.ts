@@ -249,15 +249,14 @@ function resolveOpencodeBinary(): string {
 
 /**
  * Wait for a delegation session to complete and parse its output.
- * Polls opencode DB every 2 seconds for up to 120 seconds.
+ * Polls opencode DB every 2 seconds — no wall-clock timeout.
+ * Exits when isSessionDone() returns true, or throws immediately if the PID dies.
  * If pid is provided, checks process liveness each cycle — bails early on dead process.
  */
 async function waitForDelegationResult(title: string, pid?: number): Promise<DelegationPlan> {
-  const maxWaitMs = 120_000;
   const pollMs = 2_000;
-  const start = Date.now();
 
-  while (Date.now() - start < maxWaitMs) {
+  while (true) {
     await new Promise(r => setTimeout(r, pollMs));
 
     // Check if the spawned process is still alive
@@ -307,8 +306,6 @@ async function waitForDelegationResult(title: string, pid?: number): Promise<Del
       process.stderr.write(`[delegate] session export failed for ${title}: ${errMsg(err)}\n`);
     }
   }
-
-  throw new Error(`Delegation session timed out after ${maxWaitMs / 1000}s: ${title}`);
 }
 
 /**
