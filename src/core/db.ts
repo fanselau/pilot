@@ -1082,9 +1082,62 @@ function clearDependsOn(id: string): void {
   db.prepare('UPDATE jobs SET depends_on = NULL WHERE id = ?').run(id);
 }
 
+// ── Garbage Collection ────────────────────────────────────────────────────
+
+interface GcResult {
+  completedDeleted: number;
+  failedDeleted: number;
+}
+
+/**
+ * Delete completed and failed jobs older than the given number of days.
+ * Returns counts of deleted rows.
+ */
+function deleteOldJobs(days: number): GcResult {
+  const db = getDb();
+  const completedResult = db.prepare(
+    `DELETE FROM jobs WHERE status = 'completed' AND completed_at < datetime('now', '-' || ? || ' days')`,
+  ).run(days);
+  const failedResult = db.prepare(
+    `DELETE FROM jobs WHERE status = 'failed' AND completed_at < datetime('now', '-' || ? || ' days')`,
+  ).run(days);
+
+  return {
+    completedDeleted: completedResult.changes,
+    failedDeleted: failedResult.changes,
+  };
+}
+
+/**
+ * Count completed and failed jobs older than the given number of days.
+ * Used for --dry-run mode.
+ */
+function countOldJobs(days: number): GcResult {
+  const db = getDb();
+  const completed = db.prepare(
+    `SELECT COUNT(*) as cnt FROM jobs WHERE status = 'completed' AND completed_at < datetime('now', '-' || ? || ' days')`,
+  ).get(days) as { cnt: number };
+  const failed = db.prepare(
+    `SELECT COUNT(*) as cnt FROM jobs WHERE status = 'failed' AND completed_at < datetime('now', '-' || ? || ' days')`,
+  ).get(days) as { cnt: number };
+
+  return {
+    completedDeleted: completed.cnt,
+    failedDeleted: failed.cnt,
+  };
+}
+
+/**
+ * Vacuum the database to reclaim disk space.
+ */
+function vacuumDb(): void {
+  const db = getDb();
+  db.exec('VACUUM');
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
-export type { ProjectJobCounts };
+export type { ProjectJobCounts, GcResult };
 
 export {
   _getTestDb,
@@ -1129,4 +1182,7 @@ export {
   getMilestoneStatus,
   unpauseMilestone,
   clearDependsOn,
+  deleteOldJobs,
+  countOldJobs,
+  vacuumDb,
 };

@@ -332,10 +332,12 @@ program
 
 program
   .command('gc')
-  .description('Clean old jobs, compact DB')
-  .action(async () => {
+  .description('Clean old jobs, vacuum DB, remove orphaned PID files')
+  .option('--dry-run', 'Preview what would be cleaned without doing it')
+  .option('--days <number>', 'Age threshold in days (default: 30)', parseInt)
+  .action(async (opts: Record<string, unknown>) => {
     const { gcCommand } = await import('./commands/gc.js');
-    await gcCommand();
+    await gcCommand({ ...program.opts(), ...opts } as { dryRun?: boolean; days?: number; json?: boolean });
   });
 
 // ── TUI dashboard ─────────────────────────────────────────────────────────
