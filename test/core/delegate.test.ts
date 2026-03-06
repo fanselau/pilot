@@ -613,7 +613,7 @@ describe('attemptDelegation model enforcement', () => {
 
   it('openai-only provider mode resolves to openai models for delegation', () => {
     const model = resolveTopLevelModel('phase', 'balanced', 'openai-only');
-    // balanced/openai-only planner tier = opus → openai/gpt-5.2-codex
-    expect(model).toBe('openai/gpt-5.2-codex');
+    // balanced/openai-only planner tier = opus → openai/gpt-5.3-codex
+    expect(model).toBe('openai/gpt-5.3-codex');
   });
 });

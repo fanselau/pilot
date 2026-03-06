@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { patchAgentFrontmatter, resolveAgentModel, resolveAllAgentModels } from '../../src/core/models.js';
+import { patchAgentFrontmatter, resolveAgentModel, resolveAllAgentModels, resolveVariant } from '../../src/core/models.js';
 import type { ModelProfile, ProviderMode } from '../../src/core/types.js';
 
 const AGENT_TIERS: Record<string, Record<ModelProfile, 'opus' | 'sonnet' | 'haiku'>> = {
@@ -26,14 +26,14 @@ const PROVIDER_MODELS: Record<ProviderMode, Record<'opus' | 'sonnet' | 'haiku', 
     haiku: 'anthropic/claude-haiku-4-5',
   },
   'openai-only': {
-    opus: 'openai/gpt-5.2-codex',
-    sonnet: 'openai/gpt-5.1-codex-mini',
-    haiku: 'openai/gpt-4.1-mini',
+    opus: 'openai/gpt-5.3-codex',
+    sonnet: 'openai/gpt-5.3-codex',
+    haiku: 'openai/gpt-5.3-codex',
   },
   hybrid: {
     opus: 'anthropic/claude-opus-4-6',
-    sonnet: 'openai/gpt-5.1-codex-mini',
-    haiku: 'openai/gpt-4.1-nano',
+    sonnet: 'anthropic/claude-sonnet-4-6',
+    haiku: 'openai/gpt-5.3-codex',
   },
 };
 
@@ -57,8 +57,8 @@ describe('resolveAgentModel', () => {
     const models = resolveAllAgentModels('balanced', 'hybrid');
     expect(Object.keys(models)).toHaveLength(11);
     expect(models['gsd-planner']).toBe('anthropic/claude-opus-4-6');
-    expect(models['gsd-executor']).toBe('openai/gpt-5.1-codex-mini');
-    expect(models['gsd-phase-researcher']).toBe('openai/gpt-5.1-codex-mini');
+    expect(models['gsd-executor']).toBe('anthropic/claude-sonnet-4-6');
+    expect(models['gsd-phase-researcher']).toBe('anthropic/claude-sonnet-4-6');
   });
 });
 
@@ -122,5 +122,40 @@ describe('patchAgentFrontmatter', () => {
     expect(() => {
       patchAgentFrontmatter(projectDir, { 'gsd-verifier': 'openai/gpt-4.1-mini' });
     }).not.toThrow();
+  });
+});
+
+describe('resolveVariant', () => {
+  it('returns null for Claude models in all scopes', () => {
+    expect(resolveVariant('anthropic/claude-opus-4-6', 'phase')).toBeNull();
+    expect(resolveVariant('anthropic/claude-opus-4-6', 'quick')).toBeNull();
+    expect(resolveVariant('anthropic/claude-opus-4-6', 'milestone')).toBeNull();
+    expect(resolveVariant('anthropic/claude-opus-4-6', 'judge')).toBeNull();
+  });
+
+  it('returns high for codex models in phase scope', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'phase')).toBe('high');
+  });
+
+  it('returns high for codex models in quick scope', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'quick')).toBe('high');
+  });
+
+  it('returns high for codex models in milestone scope', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'milestone')).toBe('high');
+  });
+
+  it('returns low for codex models in judge scope', () => {
+    expect(resolveVariant('openai/gpt-5.3-codex', 'judge')).toBe('low');
+  });
+
+  it('returns null for non-codex non-gpt-5 models', () => {
+    expect(resolveVariant('anthropic/claude-haiku-4-5', 'phase')).toBeNull();
+    expect(resolveVariant('openai/gpt-4.1-mini', 'phase')).toBeNull();
+    expect(resolveVariant('openai/gpt-4.1-nano', 'quick')).toBeNull();
+  });
+
+  it('returns high for gpt-5 models without codex in name', () => {
+    expect(resolveVariant('openai/gpt-5.1-codex-mini', 'phase')).toBe('high');
   });
 });
