@@ -13,13 +13,15 @@ import type { SkillEntry, SkillManifest } from '../../src/core/types.js';
 const mockListSkills = vi.fn<() => SkillEntry[]>(() => []);
 const mockRemoveSkill = vi.fn<(name: string) => { removed: boolean }>(() => ({ removed: true }));
 const mockSyncManifest = vi.fn<() => SkillManifest>(() => ({ version: 1, skills: [] }));
+const mockAddSkill = vi.fn();
+const mockTagSkill = vi.fn();
 
 vi.mock('../../src/core/skills.js', () => ({
   listSkills: (...args: unknown[]) => mockListSkills(...(args as [])),
   removeSkill: (...args: unknown[]) => mockRemoveSkill(...(args as [string])),
   syncManifest: (...args: unknown[]) => mockSyncManifest(...(args as [])),
-  addSkill: vi.fn(),
-  tagSkill: vi.fn(),
+  addSkill: (...args: unknown[]) => mockAddSkill(...args),
+  tagSkill: (...args: unknown[]) => mockTagSkill(...args),
   PREDEFINED_CATEGORIES: [
     'frontend', 'backend', 'api', 'database', 'devops', 'testing',
     'docs', 'ui-design', 'performance', 'security', 'prompting', 'general',
@@ -54,9 +56,11 @@ vi.mock('../../src/util/colors.js', () => ({
 // ── Import commands after mocks ─────────────────────────────────────────
 
 import {
+  skillsAddCommand,
   skillsListCommand,
   skillsRemoveCommand,
   skillsSyncCommand,
+  skillsTagCommand,
 } from '../../src/commands/skills.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -157,5 +161,64 @@ describe('skillsSyncCommand', () => {
 
     const joined = outputLines.join('\n');
     expect(joined).toContain('Synced: 0 skills found');
+  });
+});
+
+// ── skillsAddCommand ────────────────────────────────────────────────────
+
+describe('skillsAddCommand', () => {
+  it('rejects empty --categories input', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    await expect(skillsAddCommand('owner/repo', { categories: ',,,' })).rejects.toThrow('process.exit(1)');
+
+    expect(mockAddSkill).not.toHaveBeenCalled();
+    const stderrOutput = stderrSpy.mock.calls.map(([line]) => line as string).join('');
+    expect(stderrOutput).toContain('--categories must include at least one category');
+
+    stderrSpy.mockRestore();
+  });
+
+  it('parses and passes valid categories to addSkill', async () => {
+    mockAddSkill.mockResolvedValue({ installed: ['my-skill'], skipped: [], available: [] });
+
+    await skillsAddCommand('owner/repo', { categories: 'frontend, testing', skill: 'my-skill' });
+
+    expect(mockAddSkill).toHaveBeenCalledWith('owner/repo', {
+      categories: ['frontend', 'testing'],
+      all: undefined,
+      skill: 'my-skill',
+    });
+  });
+});
+
+// ── skillsTagCommand ────────────────────────────────────────────────────
+
+describe('skillsTagCommand', () => {
+  it('rejects empty categories payload for required tag flow', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    await expect(skillsTagCommand('my-skill', { categories: '   ,  ' })).rejects.toThrow('process.exit(1)');
+
+    expect(mockTagSkill).not.toHaveBeenCalled();
+    const stderrOutput = stderrSpy.mock.calls.map(([line]) => line as string).join('');
+    expect(stderrOutput).toContain('--categories must include at least one category');
+
+    stderrSpy.mockRestore();
+  });
+
+  it('parses valid categories and forwards them to tagSkill', async () => {
+    mockTagSkill.mockReturnValue({
+      name: 'my-skill',
+      description: 'desc',
+      categories: ['frontend', 'testing'],
+      source: 'github:test/repo',
+      path: '/tmp/skills/my-skill',
+    });
+
+    await skillsTagCommand('my-skill', { categories: 'frontend, testing' });
+
+    expect(mockTagSkill).toHaveBeenCalledWith('my-skill', ['frontend', 'testing']);
+    expect(outputLines.join('\n')).toContain('Updated my-skill categories: frontend, testing');
   });
 });

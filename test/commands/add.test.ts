@@ -44,6 +44,7 @@ vi.mock('../../src/core/db.js', () => ({
   })),
   findDuplicateJob: vi.fn(() => null),
   getProject: vi.fn(() => null),
+  updateJobCategories: vi.fn(),
 }));
 
 // Mock output utilities
@@ -124,7 +125,7 @@ vi.mock('../../src/core/config.js', () => {
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
-import { addJob, findDuplicateJob, getProject } from '../../src/core/db.js';
+import { addJob, findDuplicateJob, getProject, updateJobCategories } from '../../src/core/db.js';
 import type { JobScope } from '../../src/core/types.js';
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────
@@ -308,6 +309,29 @@ describe('addCommand', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).not.toContain('[');
+  });
+
+  it('parses valid comma-separated categories and stores them on the job', async () => {
+    await addCommand('my-project', 'fix stuff', { categories: 'frontend, testing', noNotify: true });
+
+    expect(updateJobCategories).toHaveBeenCalledWith('ab12', ['frontend', 'testing']);
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Categories: frontend, testing');
+  });
+
+  it('rejects empty categories payloads from --categories', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', { categories: ',,,', noNotify: true })).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(addJob).not.toHaveBeenCalled();
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('--categories must include at least one category');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });
 
