@@ -108,6 +108,8 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
         // Show detected stack
         if (recommendation.detectedStack.items.length > 0) {
           outputHuman(`  ${dim('Detected stack:')} ${recommendation.detectedStack.items.join(', ')}`);
+        } else {
+          outputHuman(`  ${dim('Detected stack:')} ${dim('none')}`);
         }
 
         outputHuman(`  ${dim(`${recommendation.skills.length} recommended skills available`)}`);

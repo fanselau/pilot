@@ -227,7 +227,8 @@ describe('setup skill offer', () => {
     await setupCommand('/tmp/my-project', {});
 
     const joined = outputLines.join('\n');
-    expect(joined).not.toContain('Detected stack:');
+    expect(joined).toContain('Detected stack:');
+    expect(joined).toContain('none');
     expect(joined).toContain('1 recommended skills available');
   });
 
