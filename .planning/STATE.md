@@ -88,6 +88,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 37: Skills System for Pilot
 - **Status:** complete (4/4 plans, verified ✓)
 
+### Phase 38: Pilot Hardening — Pre-Release Quality Pass
+- **Status:** complete (3/3 plans, verified ✓)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |

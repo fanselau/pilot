@@ -126,7 +126,39 @@ async function setupProject(dir: string): Promise<SetupResult> {
     }
   }
 
-  // 4. Create opencode.json (skip if either opencode.json or legacy claude.json exists)
+  // 4. Link project commands into .opencode/command/ (only for real dirs, not symlinks)
+  const commandDir = path.join(opencodeDir, 'command');
+  try {
+    const commandDirStats = await lstat(commandDir);
+    // Only link project commands when .opencode/command/ is a real directory (not a symlink)
+    // Symlinked command dirs already have all commands via the GSD dir
+    if (!commandDirStats.isSymbolicLink() && commandDirStats.isDirectory()) {
+      const projectCommandsDir = path.join(absDir, 'commands');
+      if (await isDirectory(projectCommandsDir)) {
+        const commandFiles = await readdir(projectCommandsDir);
+        const mdFiles = commandFiles.filter((f) => f.endsWith('.md'));
+        for (const filename of mdFiles) {
+          const targetPath = path.join(absDir, 'commands', filename);
+          const linkPath2 = path.join(commandDir, filename);
+          if (await exists(linkPath2)) {
+            result.skipped.push(`${filename} (already exists in .opencode/command/)`);
+          } else {
+            try {
+              await symlink(targetPath, linkPath2);
+              result.created.push(`✓ Linked command: ${filename} → .opencode/command/${filename}`);
+            } catch (err: unknown) {
+              const msg = errMsg(err);
+              result.errors.push(`Failed to link command ${filename}: ${msg}`);
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // .opencode/command/ doesn't exist yet — skip project command linking
+  }
+
+  // 5. Create opencode.json (skip if either opencode.json or legacy claude.json exists)
   const configJsonPath = path.join(absDir, 'opencode.json');
   const legacyConfigPath = path.join(absDir, 'claude.json');
   if (await exists(configJsonPath)) {
@@ -152,7 +184,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
     }
   }
 
-  // 5. Update .gitignore
+  // 6. Update .gitignore
   const gitignorePath = path.join(absDir, '.gitignore');
   try {
     if (await exists(gitignorePath)) {
@@ -173,7 +205,7 @@ async function setupProject(dir: string): Promise<SetupResult> {
     result.errors.push(`Failed to update .gitignore: ${msg}`);
   }
 
-  // 6. Git init if not already a repo
+  // 7. Git init if not already a repo
   const gitDir = path.join(absDir, '.git');
   if (!(await exists(gitDir))) {
     try {

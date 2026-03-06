@@ -10,13 +10,13 @@
  */
 
 import { execa } from 'execa';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
 import { resolveSkillsForJob } from './skills.js';
 import { errMsg } from '../util/errors.js';
-import type { Job, DelegationPlan, DelegationStep } from './types.js';
+import type { Job, DelegationPlan } from './types.js';
 
 /**
  * Known GSD instruction text fragments that should NEVER appear in a phase title.
@@ -73,57 +73,6 @@ function extractRequirementTitle(requirementPath: string): string | null {
 }
 
 /**
- * Slugify a title to lowercase-hyphenated form for directory matching.
- * e.g. "Phase Delegation: Revert to Multi-Step" → "phase-delegation-revert-to-multi-step"
- */
-function slugifyTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Find an existing phase directory in .planning/phases/ that matches a title.
- * Scans for dirs matching `NN-slug` where slug is a substring match against the
- * slugified title.
- *
- * Returns { phaseNumber, dirName } or null if not found.
- */
-function findExistingPhaseDir(phasesDir: string, title: string): { phaseNumber: number; dirName: string } | null {
-  try {
-    const titleSlug = slugifyTitle(title);
-    const entries = readdirSync(phasesDir);
-
-    for (const entry of entries) {
-      const match = entry.match(/^(\d+)-(.+)$/);
-      if (!match) continue;
-
-      const phaseNumber = parseInt(match[1], 10);
-      const dirSlug = match[2];
-
-      // Check if the directory slug is a substring of the title slug, or vice versa
-      // This handles both exact and partial matches (e.g. shortened slugs)
-      if (titleSlug.includes(dirSlug) || dirSlug.includes(titleSlug)) {
-        return { phaseNumber, dirName: entry };
-      }
-
-      // Also check word-level overlap: if the directory slug words appear in title slug
-      const titleWords = titleSlug.split('-').filter(w => w.length > 3);
-      const dirWords = dirSlug.split('-').filter(w => w.length > 3);
-      const overlap = titleWords.filter(w => dirWords.includes(w));
-      if (overlap.length >= 2) {
-        return { phaseNumber, dirName: entry };
-      }
-    }
-    return null;
-  } catch (err) {
-    process.stderr.write(`[delegate] findExistingPhaseDir failed: ${errMsg(err)}\n`);
-    return null;
-  }
-}
-
-/**
  * Get the state of a phase directory: plan count, summary count, and whether complete.
  * isComplete = planCount > 0 && planCount === summaryCount
  */
@@ -145,197 +94,15 @@ function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: nu
  * Spawn a delegation AI session to determine what GSD commands to run for a job.
  * Uses a short cheap AI session that reads .planning/ and outputs a JSON plan.
  *
- * Tries delegation AI once, then falls back to deterministic scope-based mapping.
+ * Fails fast on error — the runner's job retry mechanism (attempts 1/3 → 2/3 → 3/3)
+ * handles retries. No fallback plan guessing.
  */
 async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
-  // Bare-number descriptions (e.g. "25") are explicit phase identifiers —
-  // skip delegation AI entirely, go straight to deterministic fallback.
-  if (job.scope === 'phase' && /^\d+$/.test(job.description.trim())) {
-    return fallbackPlan(job, projectDir);
+  try {
+    return await attemptDelegation(job, projectDir, 1);
+  } catch (err) {
+    throw new Error(`${errMsg(err)}. Check project setup with: pilot doctor --project ${projectDir}`);
   }
-
-  const MAX_RETRIES = 1;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await attemptDelegation(job, projectDir, attempt);
-    } catch (err) {
-      process.stderr.write(`[delegate] attemptDelegation failed (attempt ${attempt}): ${errMsg(err)}\n`);
-      if (attempt === MAX_RETRIES) {
-        return fallbackPlan(job, projectDir);
-      }
-      await new Promise(r => setTimeout(r, 5000 * attempt));
-    }
-  }
-
-  return fallbackPlan(job, projectDir);
-}
-
-/**
- * Fallback when delegation AI fails: deterministic scope → command mapping.
- * Inspects project state to build an appropriate plan.
- */
-function fallbackPlan(job: Job, projectDir: string): DelegationPlan {
-  const hasPlanning = existsSync(path.join(projectDir, '.planning', 'ROADMAP.md'));
-
-  switch (job.scope) {
-    case 'quick':
-      if (!hasPlanning) {
-        // Quick on uninitialized project — init first, then quick
-        return {
-          steps: [
-            { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'quick', args: buildQuickArgs(job) },
-          ],
-          reasoning: 'Fallback: project not initialized, running new-project then quick task',
-        };
-      }
-      return {
-        steps: [{ command: 'quick', args: buildQuickArgs(job) }],
-        reasoning: 'Fallback: direct quick mapping',
-      };
-
-    case 'phase':
-      if (!hasPlanning) {
-        // Phase on uninitialized project — init then run phase (GSD orchestrates internally)
-        const phaseArgs = job.requirementPath ? `@${job.requirementPath} --auto` : `${job.description} --auto`;
-        return {
-          steps: [
-            { command: 'new-project', args: buildNewProjectArgs(job) },
-            { command: 'phase', args: phaseArgs },
-          ],
-          reasoning: 'Fallback: project not initialized, running new-project then phase (GSD orchestrates lifecycle internally)',
-        };
-      }
-      // Project exists — state-aware step selection
-      return resolvePhaseForFallback(projectDir, job);
-
-    case 'milestone':
-      if (!hasPlanning) {
-        // Milestone on uninitialized project — init first, then spawn child jobs
-        return {
-          steps: [{ command: 'new-project', args: buildNewProjectArgs(job) }],
-          reasoning: 'Milestone on uninitialized project — init first, then spawn child jobs',
-        };
-      }
-      // Milestone coordinator — single new-milestone step, runner spawns child phase jobs
-      return buildMilestonePlan(job, projectDir);
-  }
-}
-
-/**
- * R1: Resolve phase identifier for fallback when scope='phase' and project has ROADMAP.md.
- *
- * Produces multi-step delegation plans: [add-phase, plan-phase, execute-phase]
- * with state-aware step selection that skips already-completed steps.
- *
- * - Existing phase dir found → skip add-phase
- * - Existing plans found → skip plan-phase
- * - All plans have summaries → all steps skipped (phase complete)
- * - Bare number description → only execute-phase (or nothing if complete)
- */
-function resolvePhaseForFallback(projectDir: string, job: Job): DelegationPlan {
-  const phasesDir = path.join(projectDir, '.planning', 'phases');
-
-  // Handle bare number descriptions (e.g. job.description === "25")
-  if (/^\d+$/.test(job.description.trim())) {
-    const phaseNumber = parseInt(job.description.trim(), 10);
-    // Find the phase directory by number
-    let phaseDirName: string | null = null;
-    try {
-      const entries = readdirSync(phasesDir);
-      for (const entry of entries) {
-        const match = entry.match(/^(\d+)-/);
-        if (match && parseInt(match[1], 10) === phaseNumber) {
-          phaseDirName = entry;
-          break;
-        }
-      }
-    } catch (err) {
-      process.stderr.write(`[delegate] resolvePhaseForFallback readdirSync failed: ${errMsg(err)}\n`);
-    }
-
-    if (phaseDirName) {
-      const state = getPhaseState(phasesDir, phaseDirName);
-      if (state.isComplete) {
-        return {
-          steps: [],
-          reasoning: `Phase ${phaseNumber} already complete (${state.planCount}/${state.summaryCount} plans have summaries)`,
-        };
-      }
-      if (state.planCount > 0) {
-        // Plans exist but not all executed — only execute-phase needed
-        return {
-          steps: [{ command: 'execute-phase', args: String(phaseNumber) }],
-          reasoning: `Phase ${phaseNumber} has ${state.planCount} plans, ${state.summaryCount} summaries — running execute-phase only`,
-        };
-      }
-      // Phase dir exists but no plans — plan-phase + execute-phase
-      return {
-        steps: [
-          { command: 'plan-phase', args: String(phaseNumber) },
-          { command: 'execute-phase', args: String(phaseNumber) },
-        ],
-        reasoning: `Phase ${phaseNumber} directory exists but has no plans — running plan-phase then execute-phase`,
-      };
-    } else {
-      // Phase dir not found — can't add without a title, just execute
-      return {
-        steps: [{ command: 'execute-phase', args: String(phaseNumber) }],
-        reasoning: `Phase ${phaseNumber} explicitly requested — running execute-phase`,
-      };
-    }
-  }
-
-  // Non-numeric: use title-based phase lookup
-  const title = (job.requirementPath ? extractRequirementTitle(job.requirementPath) : null)
-    ?? job.description;
-
-  const existing = findExistingPhaseDir(phasesDir, title);
-
-  if (existing) {
-    // Phase directory exists — check state to determine which steps are needed
-    const state = getPhaseState(phasesDir, existing.dirName);
-
-    if (state.isComplete) {
-      return {
-        steps: [],
-        reasoning: `Phase "${title}" already complete (dir: ${existing.dirName}, ${state.planCount}/${state.summaryCount} plans have summaries)`,
-      };
-    }
-
-    if (state.planCount > 0) {
-      // Plans exist but not all executed — only execute-phase
-      return {
-        steps: [{ command: 'execute-phase', args: String(existing.phaseNumber) }],
-        reasoning: `Phase "${title}" (${existing.dirName}) has ${state.planCount} plans, ${state.summaryCount} summaries — running execute-phase only`,
-      };
-    }
-
-    // Phase dir exists but no plans — plan-phase + execute-phase
-    const planPhaseArgs = job.requirementPath
-      ? `${existing.phaseNumber} @${job.requirementPath}`
-      : String(existing.phaseNumber);
-    return {
-      steps: [
-        { command: 'plan-phase', args: planPhaseArgs },
-        { command: 'execute-phase', args: String(existing.phaseNumber) },
-      ],
-      reasoning: `Phase "${title}" directory ${existing.dirName} exists but has no plans — running plan-phase then execute-phase`,
-    };
-  }
-
-  // No existing phase — use phase command (GSD orchestrates the full lifecycle internally)
-  const phaseArgs = job.requirementPath
-    ? `@${job.requirementPath} --auto`
-    : `${title} --auto`;
-
-  return {
-    steps: [
-      { command: 'phase', args: phaseArgs },
-    ],
-    reasoning: `No existing phase for "${title}" — running phase command (GSD orchestrates add→plan→execute internally)`,
-  };
 }
 
 /**
