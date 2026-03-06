@@ -650,12 +650,16 @@ Read requirements/hardening.md for full spec.
 
 ### Phase 39: Runner Simplification
 
-**Goal:** [To be planned]
+**Goal:** Remove dead config knobs (stuckThreshold, defaultTimeout, pollInterval), hardcode maxAttempts=1, add per-job opt-in timeout via `--timeout` flag. Trust opencode for completion detection; infinite run by default.
 **Depends on:** Phase 38
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 39 to break down)
+- [ ] 39-01-PLAN.md — Remove stuckThreshold/defaultTimeout from types + maxAttempts from Job; add timeout field to Job + DB schema
+- [ ] 39-02-PLAN.md — Remove 120s delegation timeout; fix checkMemory OOM behavior; use job-level timeout in runner
+- [ ] 39-03-PLAN.md — Remove config knobs from config CLI surface; add --timeout to pilot add; show timeout in pilot queue; fix all tests
 
 **Details:**
-[To be added during planning]
+Requirements: requirements/runner-simplification.md
+Wave 1: 39-01 (foundation — types + DB)
+Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
