@@ -94,6 +94,19 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
       outputHuman(`  ${green('✓')} Registered project owner: ${opts.owner}`);
     }
   }
+
+  // Trigger init if no config file exists
+  const { existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { homedir } = await import('node:os');
+  const configPath = join(homedir(), '.pilot', 'config.json');
+  if (!existsSync(configPath) && !isJsonMode()) {
+    outputHuman('');
+    outputHuman(dim(`  No config file found. Running initial configuration...`));
+    outputHuman('');
+    const { initCommand } = await import('./init.js');
+    await initCommand({});
+  }
 }
 
 export { setupCommand };

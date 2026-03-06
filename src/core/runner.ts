@@ -387,6 +387,17 @@ class Runner {
       // PID directory may not exist yet — ignore
     }
 
+    // ── Startup: check provider mode availability ─────────────────────
+    {
+      const { checkProviderAvailability } = await import('./providers.js');
+      const { getConfigFileDefaults } = await import('./config.js');
+      const defaults = getConfigFileDefaults();
+      const { warning } = await checkProviderAvailability(defaults.providerMode);
+      if (warning) {
+        process.stderr.write(`${warning}\n`);
+      }
+    }
+
     try {
     while (this.running) {
       if (this.shuttingDown) break;
