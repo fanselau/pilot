@@ -13,6 +13,7 @@ import { execaSync } from 'execa';
 import path from 'node:path';
 import os from 'node:os';
 import { getConfig } from '../core/config.js';
+import { errMsg } from '../util/errors.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, yellow, dim, bold } from '../util/colors.js';
 
@@ -75,7 +76,7 @@ async function doctorCommand(): Promise<void> {
       checks.push({
         name: 'config file',
         status: 'fail',
-        detail: `${configPath} — invalid JSON: ${(parseErr as Error).message}`,
+        detail: `${configPath} — invalid JSON: ${errMsg(parseErr)}`,
       });
     }
   } catch {

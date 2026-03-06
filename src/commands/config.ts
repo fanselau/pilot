@@ -13,6 +13,7 @@ import { getConfig, getConfigSource, getConfigFileDefaults, loadConfigFile } fro
 import type { ConfigSource } from '../core/types.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, yellow, red } from '../util/colors.js';
+import { errMsg } from '../util/errors.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -370,7 +371,7 @@ async function configSetCommand(key: string, value: string): Promise<void> {
   try {
     parsedValue = parseFieldValue(key, value, spec);
   } catch (err) {
-    outputHuman(red(`  Invalid value: ${(err as Error).message}`));
+    outputHuman(red(`  Invalid value: ${errMsg(err)}`));
     process.exitCode = 1;
     return;
   }

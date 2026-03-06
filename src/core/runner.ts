@@ -583,7 +583,7 @@ class Runner {
         } catch (spawnErr) {
           const sessionId = findSessionByTitle(title);
           completeStep(currentStepRowId, 'failed', null,
-            spawnErr instanceof Error ? spawnErr.message : String(spawnErr),
+            errMsg(spawnErr),
             sessionId ?? null);
           throw spawnErr;
         }

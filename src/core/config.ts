@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { errMsg } from '../util/errors.js';
 import type {
   PilotConfig,
   ConfigFileSchema,
@@ -144,7 +145,7 @@ function loadConfigFile(): ConfigFileSchema | null {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
     throw new Error(
-      `Failed to parse config file ${filePath}: ${(err as Error).message}`,
+      `Failed to parse config file ${filePath}: ${errMsg(err)}`,
     );
   }
 

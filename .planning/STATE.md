@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 38 of 38 (Pilot Hardening — Pre-Release Quality Pass)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-06 - Completed 38-02-PLAN.md (Error recovery hardening)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-06 - Completed 38-03-PLAN.md (UX polish + gc command)
 
-Progress: █████████████████████████████████████████░░ 107/108 plans
+Progress: ██████████████████████████████████████████ 108/108 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 38 in progress — Pilot Hardening. Plan 01 done: errMsg utility, dead code cleanup, security hardening. Plan 02 done: runner process resilience, delegate error logging, opencode-db reconnection, callback URL security, file size limits. 492 tests passing.
+**Current focus:** Phase 38 complete — Pilot Hardening. All 3 plans done: errMsg utility + dead code + security (01), error recovery + process resilience (02), UX polish + gc command (03). 492 tests passing. Codebase hardened for pre-release quality.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
