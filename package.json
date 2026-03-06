@@ -6,7 +6,8 @@
     "pilot": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "description": "Autonomous AI development pipeline CLI — monitors, orchestrates, and manages AI coding agents",
   "keywords": [
