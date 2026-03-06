@@ -671,7 +671,7 @@ Wave 2: 39-02 + 39-03 in parallel (runner/delegate + config/CLI)
 **Plans:** 2 plans
 
 Plans:
-- [ ] 41-01-PLAN.md — Write complete SKILL.md with all sections (role, setup, commands, profiles, categories, troubleshooting)
+- [x] 41-01-PLAN.md — Write complete SKILL.md with all sections (role, setup, commands, profiles, categories, troubleshooting)
 - [ ] 41-02-PLAN.md — Create installOpenClawSkill() module, wire into init/update, update package.json, add tests
 
 Wave structure:

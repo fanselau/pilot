@@ -1,24 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 39
+## Current Phase: 41
 
 ## Current Position
 
-Phase: 39 of 39 (Runner Simplification)
-**Next Phase:** 40 (Default Skills Library — Bundled Skill Catalog for Pilot)
-Plan: 2 of 3 in current phase
+Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
+Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-06 - Completed quick task 072: Smart config initialization with auto-detect available providers
+Last activity: 2026-03-06 - Completed 41-01-PLAN.md
 
-Progress: ██████████████████████████████████████████ 111/112 plans
+Progress: ██████████████████████████████████████████ 112/113 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 38 complete — Pilot Hardening. All 3 plans done: errMsg utility + dead code + security (01), error recovery + process resilience (02), UX polish + gc command (03). 492 tests passing. Codebase hardened for pre-release quality.
+**Current focus:** Phase 41 in progress — OpenClaw Skill Rewrite and Bundle with Pilot. Plan 01 complete: portable SKILL.md written (461 lines, no hardcoded paths). Plan 02 next: installOpenClawSkill module + init/update wiring.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
