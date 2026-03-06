@@ -44,7 +44,7 @@ import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
-import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
+import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel, resolveVariant } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { errMsg } from '../util/errors.js';
 import { dim } from '../util/colors.js';
@@ -889,7 +889,8 @@ class Runner {
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
     const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
     const topLevelModel = resolveTopLevelModel(scope, profile, providerMode);
-    process.stderr.write(dim(`Top-level model: ${topLevelModel}`) + '\n');
+    const variant = resolveVariant(topLevelModel, scope);
+    process.stderr.write(dim(`Top-level model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}`) + '\n');
 
     const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
 
@@ -897,6 +898,7 @@ class Runner {
       'run',
       '--format', 'default',
       '--model', topLevelModel,
+      ...(variant ? ['--variant', variant] : []),
       '--title', title,
       '--command', gsdCommand,
       // Pass args as a single positional string. NEVER use -- separator
