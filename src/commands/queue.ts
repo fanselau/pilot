@@ -103,8 +103,9 @@ async function queueCommand(opts: QueueOptions): Promise<void> {
         ? job.description.slice(0, 35) + '…'
         : job.description;
     const notify = job.callbackSessionKey ? dim(`  notify:${job.callbackSessionKey}`) : '';
+    const timeoutStr = job.timeout > 0 ? dim(`  timeout:${job.timeout}m`) : '';
     outputHuman(
-      `  ${icon} ${dim(job.id)}  ${job.project.padEnd(14)}  ${dim(job.scope.padEnd(10))}  ${desc.padEnd(36)}  ${statusStr}${notify}`,
+      `  ${icon} ${dim(job.id)}  ${job.project.padEnd(14)}  ${dim(job.scope.padEnd(10))}  ${desc.padEnd(36)}  ${statusStr}${notify}${timeoutStr}`,
     );
   }
 

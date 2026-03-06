@@ -50,6 +50,7 @@ program
   .option('--profile <profile>', 'Model profile: quality, balanced, or budget')
   .option('--provider <provider>', 'Provider mode: hybrid, claude-only, or openai-only')
   .option('--force', 'Bypass project setup check')
+  .option('--timeout <minutes>', 'Per-job timeout in minutes (default: 0 = infinite)', (v: string) => parseInt(v, 10))
   .option('--notify <agentId>', 'Agent ID to notify on completion (e.g. main)')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')

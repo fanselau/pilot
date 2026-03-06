@@ -39,7 +39,7 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     error: null,
     resumeHint: null,
     attempts: 1,
-    maxAttempts: 3,
+    timeout: 0,
     delegationPlan: null,
     currentStep: 1,
     sessionTitles: null,

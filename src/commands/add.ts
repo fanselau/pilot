@@ -27,6 +27,7 @@ interface AddOptions {
   profile?: string;
   provider?: string;
   force?: boolean;
+  timeout?: number;   // Per-job timeout in minutes (0 = infinite, default)
   notify?: string;    // Agent ID to notify on completion (e.g. "main")
   notifyUrl?: string; // Custom webhook URL for completion callback
   noNotify?: boolean; // Explicitly skip completion notification
@@ -313,6 +314,7 @@ async function addCommand(
     undefined,             // parentJobId (not used in add command)
     resolvedNotifyKey,     // callbackSessionKey (resolved)
     opts.notifyUrl,        // callbackUrl
+    opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
   );
 
   // Store categories on the job record if provided
@@ -335,6 +337,9 @@ async function addCommand(
   outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
   if (categories && categories.length > 0) {
     outputHuman(`  ${dim('Categories: ' + categories.join(', '))}`);
+  }
+  if (opts.timeout && opts.timeout > 0) {
+    outputHuman(`  ${dim(`Timeout: ${opts.timeout}m`)}`);
   }
   if (resolvedNotifyKey) {
     outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);

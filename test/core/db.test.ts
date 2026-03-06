@@ -60,7 +60,7 @@ describe('pilot.db', () => {
       expect(job.priority).toBe(0);
       expect(job.dependsOn).toBeNull();
       expect(job.attempts).toBe(0);
-      expect(job.maxAttempts).toBe(1);
+      expect(job.timeout).toBe(0);
       expect(job.delegationPlan).toBeNull();
       expect(job.currentStep).toBe(0);
       expect(job.sessionTitles).toBeNull();
@@ -1011,10 +1011,10 @@ describe('managed projects', () => {
     });
   });
 
-  describe('new jobs default to max_attempts=1', () => {
-    it('addJob creates job with maxAttempts=1', () => {
+  describe('new jobs default to timeout=0', () => {
+    it('addJob creates job with timeout=0 (no limit)', () => {
       const job = addJob('/test/proj', 'quick', 'test');
-      expect(job.maxAttempts).toBe(1);
+      expect(job.timeout).toBe(0);
     });
   });
 });

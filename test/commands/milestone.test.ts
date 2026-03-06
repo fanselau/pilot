@@ -27,7 +27,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     completedAt: null,
     error: null,
     attempts: 0,
-    maxAttempts: 3,
+    timeout: 0,
     delegationPlan: null,
     currentStep: 0,
     sessionTitles: null,
@@ -36,6 +36,8 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     modelProfile: 'balanced',
     providerMode: 'claude-only',
+    callbackUrl: null,
+    callbackSessionKey: null,
     categories: null,
     ...overrides,
   };

@@ -24,17 +24,24 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     status: 'running',
     priority: 0,
     dependsOn: null,
+    parentJobId: null,
     createdAt: '2026-03-03T10:00:00Z',
     startedAt: '2026-03-03T10:05:00Z',
     completedAt: null,
     error: null,
+    resumeHint: null,
     attempts: 1,
-    maxAttempts: 3,
+    timeout: 0,
     delegationPlan: null,
     currentStep: 0,
     sessionTitles: null,
     modelProfile: 'balanced',
     providerMode: 'hybrid',
+    judgeVerdict: null,
+    actualModels: null,
+    callbackUrl: null,
+    callbackSessionKey: null,
+    categories: null,
     ...overrides,
   };
 }
@@ -248,10 +255,10 @@ describe('buildHeaderLines', () => {
       expect(lines[4]).toContain('quality/claude-only');
     });
 
-    it('contains attempts and maxAttempts', () => {
-      const job = makeJob({ attempts: 2, maxAttempts: 3 });
+    it('contains attempts', () => {
+      const job = makeJob({ attempts: 2 });
       const lines = buildHeaderLines(job, 100);
-      expect(lines[4]).toContain('2/3');
+      expect(lines[4]).toContain('Attempts: 2');
     });
 
     it('contains Started label', () => {
@@ -292,7 +299,6 @@ describe('buildHeaderLines', () => {
         modelProfile: 'balanced',
         providerMode: 'hybrid',
         attempts: 1,
-        maxAttempts: 3,
         startedAt: '2026-03-03T10:05:00Z',
       });
 
@@ -318,7 +324,7 @@ describe('buildHeaderLines', () => {
 
       // Model/attempts/started
       expect(lines[4]).toContain('balanced/hybrid');
-      expect(lines[4]).toContain('1/3');
+      expect(lines[4]).toContain('Attempts: 1');
       expect(lines[4]).toContain('Started:');
     });
 
@@ -338,7 +344,6 @@ describe('buildHeaderLines', () => {
         modelProfile: 'quality',
         providerMode: 'claude-only',
         attempts: 3,
-        maxAttempts: 3,
         startedAt: '2026-03-03T08:00:00Z',
       });
 
@@ -366,7 +371,7 @@ describe('buildHeaderLines', () => {
 
       // Model
       expect(lines[4]).toContain('quality/claude-only');
-      expect(lines[4]).toContain('3/3');
+      expect(lines[4]).toContain('Attempts: 3');
 
       // Resolved models line (only for non-balanced profiles)
       expect(lines[5]).toContain('Models:');

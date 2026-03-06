@@ -218,8 +218,6 @@ describe('config file loading', () => {
   it('getConfig returns defaults when config file is missing', () => {
     process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
     const config = getConfig();
-    expect(config.pollInterval).toBe(5);
-    expect(config.defaultTimeout).toBe(60);
     expect(config.logLevel).toBe('INFO');
   });
 
@@ -227,13 +225,13 @@ describe('config file loading', () => {
 
   it('loadConfigFile reads and parses valid JSON', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 10 },
+      runner: { maxParallel: 2 },
       logging: { level: 'DEBUG' },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     const result = loadConfigFile();
     expect(result).not.toBeNull();
-    expect(result!.runner?.pollInterval).toBe(10);
+    expect(result!.runner?.maxParallel).toBe(2);
     expect(result!.logging?.level).toBe('DEBUG');
   });
 
@@ -271,14 +269,6 @@ describe('config file loading', () => {
     expect(() => loadConfigFile()).toThrowError(/providerMode/i);
   });
 
-  it('throws on pollInterval < 1', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 0 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    expect(() => loadConfigFile()).toThrowError(/pollInterval/i);
-  });
-
   it('throws on maxParallel < 1 (non-null)', () => {
     tempConfigPath = writeTempConfig({
       runner: { maxParallel: 0 },
@@ -302,42 +292,42 @@ describe('config file loading', () => {
   it('ignores unknown top-level keys', () => {
     tempConfigPath = writeTempConfig({
       futureFeature: true,
-      runner: { pollInterval: 7 },
+      runner: { maxParallel: 2 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     const result = loadConfigFile();
     expect(result).not.toBeNull();
-    expect(result!.runner?.pollInterval).toBe(7);
+    expect(result!.runner?.maxParallel).toBe(2);
   });
 
   // ── Caching ──────────────────────────────────────────────────────────
 
   it('caches config file after first read', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 15 },
+      runner: { maxParallel: 2 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     const first = loadConfigFile();
     // Overwrite the file with different content
-    writeFileSync(tempConfigPath, JSON.stringify({ runner: { pollInterval: 99 } }));
+    writeFileSync(tempConfigPath, JSON.stringify({ runner: { maxParallel: 4 } }));
     const second = loadConfigFile();
     // Should still get the cached value
     expect(first).toEqual(second);
-    expect(second!.runner?.pollInterval).toBe(15);
+    expect(second!.runner?.maxParallel).toBe(2);
   });
 
   it('_resetConfigCache allows re-reading', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 15 },
+      runner: { maxParallel: 2 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     const first = loadConfigFile();
-    expect(first!.runner?.pollInterval).toBe(15);
+    expect(first!.runner?.maxParallel).toBe(2);
     // Write new content
-    writeFileSync(tempConfigPath, JSON.stringify({ runner: { pollInterval: 99 } }));
+    writeFileSync(tempConfigPath, JSON.stringify({ runner: { maxParallel: 4 } }));
     _resetConfigCache();
     const second = loadConfigFile();
-    expect(second!.runner?.pollInterval).toBe(99);
+    expect(second!.runner?.maxParallel).toBe(4);
   });
 });
 
@@ -349,9 +339,6 @@ describe('config resolution order', () => {
   afterEach(() => {
     _resetConfigCache();
     delete process.env.PILOT_CONFIG_FILE;
-    delete process.env.PILOT_POLL_INTERVAL;
-    delete process.env.PILOT_DEFAULT_TIMEOUT;
-    delete process.env.PILOT_STUCK_THRESHOLD;
     delete process.env.PILOT_LOG_LEVEL;
     delete process.env.PILOT_SESSION_MEMORY_MAX_MB;
     delete process.env.PILOT_RESERVED_MEMORY_MB;
@@ -369,49 +356,31 @@ describe('config resolution order', () => {
 
   it('config file value used when env var is unset', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 10 },
+      runner: { maxParallel: 3 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    delete process.env.PILOT_POLL_INTERVAL;
+    delete process.env.PILOT_MAX_PARALLEL;
     const config = getConfig();
-    expect(config.pollInterval).toBe(10);
+    expect(config.maxParallel).toBe(3);
   });
 
   it('env var overrides config file value', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 10 },
+      runner: { maxParallel: 3 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    process.env.PILOT_POLL_INTERVAL = '3';
+    process.env.PILOT_MAX_PARALLEL = '2';
     const config = getConfig();
-    expect(config.pollInterval).toBe(3);
+    expect(config.maxParallel).toBe(2);
+    delete process.env.PILOT_MAX_PARALLEL;
   });
 
-  it('default used when both env var and config file are unset', () => {
+  it('default used when both env var and config file are unset (maxParallel auto-detects)', () => {
     process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
-    delete process.env.PILOT_POLL_INTERVAL;
+    delete process.env.PILOT_MAX_PARALLEL;
     const config = getConfig();
-    expect(config.pollInterval).toBe(5);
-  });
-
-  it('config file sets defaultTimeout', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { defaultTimeout: 120 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    delete process.env.PILOT_DEFAULT_TIMEOUT;
-    const config = getConfig();
-    expect(config.defaultTimeout).toBe(120);
-  });
-
-  it('config file sets stuckThreshold', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { stuckThreshold: 45 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    delete process.env.PILOT_STUCK_THRESHOLD;
-    const config = getConfig();
-    expect(config.stuckThreshold).toBe(45);
+    // maxParallel auto-detects from RAM — just verify it's a positive number
+    expect(config.maxParallel).toBeGreaterThan(0);
   });
 
   it('config file sets logLevel', () => {
@@ -570,7 +539,7 @@ describe('getConfigSource', () => {
   afterEach(() => {
     _resetConfigCache();
     delete process.env.PILOT_CONFIG_FILE;
-    delete process.env.PILOT_POLL_INTERVAL;
+    delete process.env.PILOT_MAX_PARALLEL;
     delete process.env.PILOT_LOG_LEVEL;
     if (tempConfigPath) {
       cleanupTempConfig(tempConfigPath);
@@ -580,31 +549,31 @@ describe('getConfigSource', () => {
 
   it('returns "default" when no env var or config file set', () => {
     process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
-    delete process.env.PILOT_POLL_INTERVAL;
-    expect(getConfigSource('pollInterval')).toBe('default');
+    delete process.env.PILOT_LOG_LEVEL;
+    expect(getConfigSource('logLevel')).toBe('default');
   });
 
   it('returns "config" when value comes from config file', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 10 },
+      runner: { maxParallel: 4 },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    delete process.env.PILOT_POLL_INTERVAL;
-    expect(getConfigSource('pollInterval')).toBe('config');
+    delete process.env.PILOT_MAX_PARALLEL;
+    expect(getConfigSource('maxParallel')).toBe('config');
   });
 
   it('returns "env" when value comes from env var', () => {
-    process.env.PILOT_POLL_INTERVAL = '3';
-    expect(getConfigSource('pollInterval')).toBe('env');
+    process.env.PILOT_LOG_LEVEL = 'DEBUG';
+    expect(getConfigSource('logLevel')).toBe('env');
   });
 
   it('returns "env" when env var overrides config file', () => {
     tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 10 },
+      logging: { level: 'WARN' },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    process.env.PILOT_POLL_INTERVAL = '3';
-    expect(getConfigSource('pollInterval')).toBe('env');
+    process.env.PILOT_LOG_LEVEL = 'DEBUG';
+    expect(getConfigSource('logLevel')).toBe('env');
   });
 
   it('returns "auto-detect" for maxParallel when neither env nor config set', () => {
@@ -635,38 +604,6 @@ describe('config file validation edge cases', () => {
       cleanupTempConfig(tempConfigPath);
       tempConfigPath = null;
     }
-  });
-
-  it('throws on negative pollInterval', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { pollInterval: -5 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    expect(() => loadConfigFile()).toThrowError(/pollInterval/i);
-  });
-
-  it('throws on defaultTimeout < 1', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { defaultTimeout: 0 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    expect(() => loadConfigFile()).toThrowError(/defaultTimeout/i);
-  });
-
-  it('throws on stuckThreshold < 1', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { stuckThreshold: -1 },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    expect(() => loadConfigFile()).toThrowError(/stuckThreshold/i);
-  });
-
-  it('throws on non-numeric pollInterval (string)', () => {
-    tempConfigPath = writeTempConfig({
-      runner: { pollInterval: 'fast' },
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    expect(() => loadConfigFile()).toThrowError(/pollInterval/i);
   });
 
   it('throws on invalid scope value', () => {
