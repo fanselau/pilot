@@ -43,7 +43,7 @@ import {
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
-import { findSessionByTitle, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
+import { findSessionByTitle, exportSessionFromDb, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { errMsg } from '../util/errors.js';
@@ -65,19 +65,9 @@ interface RunnerState {
 }
 
 interface JudgeVerdict {
-  verdict: 'pass' | 'fail' | 'partial';
+  verdict: 'succeeded' | 'failed' | 'doubting';
   confidence: number;
-  summary: string;
-  retryRecommendation: 'none' | 'retry-full' | 'retry-resume';
-  retryHint?: string;
-}
-
-interface VerificationResult {
-  status: 'passed' | 'gaps_found' | 'failed' | 'human_needed';
-  verdict: 'PASS' | 'FAIL' | 'WARN';
-  score: string;  // e.g., "5/7"
-  automatedChecks: Record<string, { pass: boolean; duration_ms?: number; error_summary?: string; summary?: string }>;
-  blockingIssues: string[];
+  reason: string;
 }
 
 // ── Spawn rate limiter (module-level) ──────────────────────────────────────
@@ -641,53 +631,36 @@ class Runner {
             return;
           }
 
-          // Verification shutdown guard
+          // Judge shutdown guard
           if (this.shuttingDown) {
             resetToPending(job.id, 'Interrupted before verification');
             process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
             return;
           }
 
-          // Run gsd-verify-phase to get structured verdict from VERIFICATION.md
-          const verificationResult = await this.runVerification(job, projectDir, step);
+          // Run gsd-judge to get structured verdict from session output
+          const judgeVerdict = await this.runJudge(job, projectDir, step);
 
-          if (verificationResult === null) {
-            // Benefit of doubt — VERIFICATION.md missing or unparseable
+          if (judgeVerdict === null) {
+            // Judge crash or unparseable — benefit of doubt
             updateJudgeVerdict(job.id, JSON.stringify({
-              verdict: 'pass',
+              verdict: 'succeeded',
               confidence: 0,
-              summary: 'Verification failed — benefit of doubt (VERIFICATION.md missing or unparseable)',
-              retryRecommendation: 'none',
+              reason: 'judge unavailable',
             }));
-          } else if (verificationResult.verdict === 'PASS') {
-            updateJudgeVerdict(job.id, JSON.stringify({
-              verdict: 'pass',
-              confidence: 90,
-              summary: `${verificationResult.score} checks passed`,
-              retryRecommendation: 'none',
-            }));
-          } else if (verificationResult.verdict === 'WARN') {
-            // Human verification needed — runner can't do it, treat as pass
-            updateJudgeVerdict(job.id, JSON.stringify({
-              verdict: 'pass',
-              confidence: 70,
-              summary: 'human verification needed',
-              retryRecommendation: 'none',
-            }));
+          } else if (judgeVerdict.verdict === 'succeeded') {
+            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+          } else if (judgeVerdict.verdict === 'doubting') {
+            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+            if (judgeVerdict.confidence < 50) {
+              // Low confidence doubt — treat as fail
+              throw new Error(judgeVerdict.reason);
+            }
+            // confidence >= 50 — treat as pass, fall through
           } else {
-            // FAIL — build error summary and decide retry vs hard fail
-            const errorSummary = verificationResult.blockingIssues.length > 0
-              ? verificationResult.blockingIssues.join('; ')
-              : 'Automated checks failed';
-            updateJudgeVerdict(job.id, JSON.stringify({
-              verdict: 'fail',
-              confidence: 95,
-              summary: errorSummary,
-              retryRecommendation: 'retry-resume',
-              retryHint: errorSummary,
-            }));
-
-            throw new Error(errorSummary);
+            // 'failed'
+            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+            throw new Error(judgeVerdict.reason);
           }
         }
       }
@@ -806,97 +779,61 @@ class Runner {
   }
 
   /**
-   * Spawn gsd-verify-phase to verify a completed execute-phase step.
+   * Spawn gsd-judge to evaluate a completed execute-phase step.
    * Returns null on any failure (benefit of doubt — mark as completed).
    *
-   * Reads VERIFICATION.md from the phase directory after the verify session completes.
-   * Parses structured frontmatter verdict (PASS/FAIL/WARN) + automated_checks.
+   * Extracts JSON verdict from the last assistant message of the judge session.
+   * Same pattern as delegation JSON extraction in delegate.ts.
    */
-  private async runVerification(job: Job, projectDir: string, step: DelegationStep): Promise<VerificationResult | null> {
+  private async runJudge(job: Job, projectDir: string, step: DelegationStep): Promise<JudgeVerdict | null> {
     const phaseNum = step.args.match(/(\d+)/)?.[1];
     if (!phaseNum) {
-      process.stderr.write(`[runner] runVerification: no phase number found in step args "${step.args}"\n`);
+      process.stderr.write(`[runner] runJudge: no phase number found in step args "${step.args}"\n`);
       return null;
     }
 
     const ts = Date.now().toString(36).slice(-4);
-    const verifyTitle = truncateTitle(`pilot-verify-${job.id}-${ts}`, 80);
+    const judgeTitle = truncateTitle(`pilot-judge-${job.id}-${ts}`, 80);
+    updateSessionTitles(job.id, [judgeTitle]);
 
-    // Register verify session title BEFORE spawning so fetchJobParts can find it
-    updateSessionTitles(job.id, [verifyTitle]);
-
-    // Cap verify at 15 minutes to prevent indefinite blocking
-    const verifyTimeoutMs = 15 * 60 * 1000;
+    // Cap judge at 15 minutes
+    const judgeTimeoutMs = 15 * 60 * 1000;
 
     try {
-      await this.spawnAndWait(projectDir, 'gsd-verify-phase', phaseNum, verifyTitle, verifyTimeoutMs);
+      await this.spawnAndWait(projectDir, 'gsd-judge', `${job.id} ${phaseNum}`, judgeTitle, judgeTimeoutMs);
     } catch (err) {
       const msg = errMsg(err);
       if (msg.includes('timed out')) {
-        process.stderr.write(
-          `[runner] Verification timed out after 15m for ${verifyTitle} — treating as benefit-of-doubt\n`,
-        );
+        process.stderr.write(`[runner] Judge timed out after 15m for ${judgeTitle} — benefit of doubt\n`);
       } else {
-        process.stderr.write(
-          `[runner] Verification session failed: ${msg}\n`,
-        );
+        process.stderr.write(`[runner] Judge session failed: ${msg}\n`);
       }
       return null; // Benefit of doubt on spawn failure or timeout
     }
 
-    // Find VERIFICATION.md in the phase directory
-    try {
-      const phasesDir = path.join(projectDir, '.planning', 'phases');
-      let entries: string[];
-      try {
-        entries = readdirSync(phasesDir);
-      } catch {
-        process.stderr.write(`[runner] runVerification: .planning/phases not found at ${phasesDir}\n`);
-        return null;
-      }
-
-      // Find directory matching phase number (padded XX-* or unpadded N-*)
-      const paddedNum = phaseNum.padStart(2, '0');
-      const phaseDir = entries.find(e => {
-        return e.startsWith(`${paddedNum}-`) || e.startsWith(`${phaseNum}-`);
-      });
-
-      if (!phaseDir) {
-        process.stderr.write(`[runner] runVerification: no phase dir found for phase ${phaseNum}\n`);
-        return null;
-      }
-
-      const phaseDirPath = path.join(phasesDir, phaseDir);
-      let phaseFiles: string[];
-      try {
-        phaseFiles = readdirSync(phaseDirPath);
-      } catch {
-        process.stderr.write(`[runner] runVerification: cannot read phase dir ${phaseDirPath}\n`);
-        return null;
-      }
-
-      const verificationFile = phaseFiles.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
-      if (!verificationFile) {
-        process.stderr.write(`[runner] runVerification: no VERIFICATION.md found in ${phaseDirPath}\n`);
-        return null;
-      }
-
-      const verificationPath = path.join(phaseDirPath, verificationFile);
-      let content: string;
-      try {
-        content = readFileSync(verificationPath, 'utf8');
-      } catch {
-        process.stderr.write(`[runner] runVerification: cannot read ${verificationPath}\n`);
-        return null;
-      }
-
-      return parseVerificationResult(content);
-    } catch (err) {
-      process.stderr.write(
-        `[runner] runVerification: unexpected error: ${errMsg(err)}\n`,
-      );
+    // Extract JSON from judge session output (same pattern as delegation)
+    const sessionId = findSessionByTitle(judgeTitle);
+    if (!sessionId) {
+      process.stderr.write(`[runner] runJudge: session not found for ${judgeTitle}\n`);
       return null;
     }
+
+    try {
+      const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
+      if (exported.messages.length > 0) {
+        const lastAssistant = [...exported.messages]
+          .reverse()
+          .find(m => m.role === 'assistant');
+        if (lastAssistant) {
+          const content = String(lastAssistant.content ?? '');
+          return parseJudgeVerdict(content, judgeTitle);
+        }
+      }
+    } catch (err) {
+      process.stderr.write(`[runner] runJudge: session export failed for ${judgeTitle}: ${errMsg(err)}\n`);
+    }
+
+    return null; // Benefit of doubt
   }
 
   /**
@@ -946,7 +883,7 @@ class Runner {
 
     // Resolve top-level model for --model flag
     // Judge/verify sessions use 'judge' scope (cheap tier); all others use job scope from activeJobs
-    const isJudge = command === 'pilot-judge' || command === 'gsd-verify-phase';
+    const isJudge = command === 'gsd-judge';
     const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
     const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
@@ -1190,118 +1127,6 @@ class Runner {
   }
 }
 
-// ── Verification result parsing ───────────────────────────────────────────
-
-/**
- * Parse VERIFICATION.md frontmatter into a structured VerificationResult.
- *
- * Handles nested `automated_checks:` block with inline YAML objects like:
- *   automated_checks:
- *     typescript: { pass: true, duration_ms: 8200 }
- *     tests: { pass: false, summary: "3 failed", error_summary: "3 type errors" }
- *
- * Returns null if:
- * - No valid frontmatter delimiters (--- / ---)
- * - Required fields (status, verdict) are missing or invalid
- *
- * Exported for direct unit testing.
- */
-export function parseVerificationResult(content: string): VerificationResult | null {
-  // Extract frontmatter: content between first --- and second ---
-  const firstDelim = content.indexOf('---');
-  if (firstDelim === -1) return null;
-
-  const afterFirst = content.indexOf('\n', firstDelim) + 1;
-  const secondDelim = content.indexOf('\n---', afterFirst);
-  if (secondDelim === -1) return null;
-
-  const frontmatter = content.slice(afterFirst, secondDelim);
-
-  // Parse top-level fields
-  const statusMatch = frontmatter.match(/^status:\s*(passed|gaps_found|failed|human_needed)\s*$/m);
-  const verdictMatch = frontmatter.match(/^verdict:\s*(PASS|FAIL|WARN)\s*$/m);
-  const scoreMatch = frontmatter.match(/^score:\s*(.+?)\s*$/m);
-
-  // Validate required fields
-  if (!statusMatch || !verdictMatch) return null;
-
-  const status = statusMatch[1] as VerificationResult['status'];
-  const verdict = verdictMatch[1] as VerificationResult['verdict'];
-  const score = scoreMatch ? scoreMatch[1].trim() : '';
-
-  // Parse automated_checks: block
-  const automatedChecks: VerificationResult['automatedChecks'] = {};
-
-  const lines = frontmatter.split('\n');
-  let inAutomatedChecks = false;
-
-  for (const line of lines) {
-    if (line.match(/^automated_checks:\s*$/)) {
-      inAutomatedChecks = true;
-      continue;
-    }
-
-    if (inAutomatedChecks) {
-      // Non-indented line ends the block
-      if (line.length > 0 && !line.match(/^\s/)) {
-        inAutomatedChecks = false;
-        continue;
-      }
-
-      // Parse indented check line: "  checkname: { ... }"
-      const checkMatch = line.match(/^\s+(\w+):\s*\{(.+)\}\s*$/);
-      if (checkMatch) {
-        const checkName = checkMatch[1];
-        const inlineObj = checkMatch[2];
-
-        const passMatch = inlineObj.match(/pass:\s*(true|false)/);
-        const durationMatch = inlineObj.match(/duration_ms:\s*(\d+)/);
-        const errorSummaryMatch = inlineObj.match(/error_summary:\s*"([^"]*)"/);
-        const summaryMatch = inlineObj.match(/summary:\s*"([^"]*)"/);
-
-        if (passMatch) {
-          const checkEntry: { pass: boolean; duration_ms?: number; error_summary?: string; summary?: string } = {
-            pass: passMatch[1] === 'true',
-          };
-          if (durationMatch) checkEntry.duration_ms = parseInt(durationMatch[1], 10);
-          if (errorSummaryMatch) checkEntry.error_summary = errorSummaryMatch[1];
-          if (summaryMatch) checkEntry.summary = summaryMatch[1];
-          automatedChecks[checkName] = checkEntry;
-        }
-      }
-    }
-  }
-
-  // Parse blocking_issues: list
-  const blockingIssues: string[] = [];
-
-  // Handle empty array inline: blocking_issues: []
-  const emptyBlockingMatch = frontmatter.match(/^blocking_issues:\s*\[\]\s*$/m);
-  if (!emptyBlockingMatch) {
-    // Find blocking_issues: line and collect following list items
-    const blockingIdx = lines.findIndex(l => l.match(/^blocking_issues:\s*$/));
-    if (blockingIdx !== -1) {
-      for (let i = blockingIdx + 1; i < lines.length; i++) {
-        const itemMatch = lines[i].match(/^\s*-\s*"?(.+?)"?\s*$/);
-        if (itemMatch) {
-          blockingIssues.push(itemMatch[1]);
-        } else if (lines[i].length > 0 && !lines[i].match(/^\s/)) {
-          // Non-indented non-empty line ends the list
-          break;
-        }
-      }
-    }
-  }
-
-  return {
-    status,
-    verdict,
-    score,
-    automatedChecks,
-    blockingIssues,
-  };
-}
-
 // ── Judge verdict parsing ──────────────────────────────────────────────────
 
 /**
@@ -1342,7 +1167,7 @@ function parseJudgeVerdict(content: string, sessionTitle?: string): JudgeVerdict
     }
 
     const verdict = JSON.parse(jsonStr) as JudgeVerdict;
-    if (!['pass', 'fail', 'partial'].includes(verdict.verdict)) return null;
+    if (!['succeeded', 'failed', 'doubting'].includes(verdict.verdict)) return null;
     return verdict;
   } catch {
     if (sessionTitle) {
@@ -1618,7 +1443,7 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
 // ── Exports ────────────────────────────────────────────────────────────────
 
 export { Runner, createRunner, killJobSession, parseJudgeVerdict };
-export type { RunnerOptions, RunnerState, JudgeVerdict, VerificationResult, KillJobSessionResult };
+export type { RunnerOptions, RunnerState, JudgeVerdict, KillJobSessionResult };
 
 // Export only the pre-spawn helpers that are needed by external consumers
 export {
