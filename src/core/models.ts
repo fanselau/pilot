@@ -25,7 +25,7 @@ const PROVIDER_MODELS: Record<ProviderMode, Record<ModelTier, string>> = {
     haiku: 'anthropic/claude-haiku-4-5',
   },
   'openai-only': {
-    opus: 'openai/gpt-5.2-codex',
+    opus: 'openai/gpt-5.3-codex',
     sonnet: 'openai/gpt-5.1-codex-mini',
     haiku: 'openai/gpt-4.1-mini',
   },
