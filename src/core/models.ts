@@ -51,20 +51,25 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
     '_top:quick': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
     '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
   },
+  // ── Hybrid: role-based separation ──
+  // Build agents (planner, roadmapper, executor, debugger, researchers) → Claude (mirrors claude-only)
+  // Check agents (verifier, plan-checker, integration-checker, codebase-mapper, judge) → Codex (mirrors openai-only)
+  // Two different models = two different perspectives on the same code.
   hybrid: {
-    // ── Agents: opus/sonnet → Claude, haiku → Codex with variant 'high' ──
-    'gsd-planner':              { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'gsd-roadmapper':           { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'gsd-executor':             { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'gsd-phase-researcher':     { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-project-researcher':   { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-research-synthesizer': { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-debugger':             { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    'gsd-codebase-mapper':      { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },       budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-verifier':             { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-plan-checker':         { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-integration-checker':  { quality: { model: 'anthropic/claude-sonnet-4-6' },                 balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    // ── Scopes: phase uses planner tiers, quick uses executor tiers, judge uses codex ──
+    // ── Build role: mirrors claude-only (sonnet substituted for haiku on budget researchers) ──
+    'gsd-planner':              { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-opus-4-6' },   budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-roadmapper':           { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-executor':             { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-debugger':             { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-phase-researcher':     { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-project-researcher':   { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    'gsd-research-synthesizer': { quality: { model: 'anthropic/claude-sonnet-4-6' }, balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
+    // ── Check role: mirrors openai-only exactly ──
+    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-verifier':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    // ── Scopes: phase/quick → Claude, judge → Codex ──
     '_top:phase': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
     '_top:quick': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
     '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' },     balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },       budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
