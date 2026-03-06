@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { patchAgentFrontmatter, resolveAgentModel, resolveAllAgentModels, AGENT_MODELS } from '../../src/core/models.js';
+import { patchAgentFrontmatter, resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, AGENT_MODELS } from '../../src/core/models.js';
 import type { ModelProfile, ProviderMode } from '../../src/core/types.js';
 
-const SCOPE_KEYS = new Set(['phase', 'quick', 'milestone', 'judge']);
+const isScopeKey = (key: string) => key.startsWith('_top:');
 
 describe('resolveAgentModel', () => {
   it('resolves all agent/profile/provider combinations from AGENT_MODELS', () => {
@@ -14,7 +14,7 @@ describe('resolveAgentModel', () => {
 
     for (const provider of providers) {
       for (const agentName of Object.keys(AGENT_MODELS[provider])) {
-        if (SCOPE_KEYS.has(agentName)) continue;
+        if (isScopeKey(agentName)) continue;
         for (const profile of profiles) {
           const expected = AGENT_MODELS[provider][agentName][profile];
           expect(resolveAgentModel(agentName, profile, provider)).toEqual(expected);
@@ -39,15 +39,14 @@ describe('resolveAllAgentModels', () => {
 
   it('excludes scope keys from agent map', () => {
     const models = resolveAllAgentModels('balanced', 'claude-only');
-    expect(models['phase']).toBeUndefined();
-    expect(models['quick']).toBeUndefined();
-    expect(models['milestone']).toBeUndefined();
-    expect(models['judge']).toBeUndefined();
+    expect(models['_top:phase']).toBeUndefined();
+    expect(models['_top:quick']).toBeUndefined();
+    expect(models['_top:judge']).toBeUndefined();
   });
 
   it('includes variant for openai-only models', () => {
     const models = resolveAllAgentModels('balanced', 'openai-only');
-    expect(models['gsd-planner'].variant).toBe('high');
+    expect(models['gsd-planner'].variant).toBe('xhigh');
     expect(models['gsd-executor'].variant).toBe('high');
   });
 
@@ -55,6 +54,52 @@ describe('resolveAllAgentModels', () => {
     const models = resolveAllAgentModels('balanced', 'claude-only');
     expect(models['gsd-planner'].variant).toBeUndefined();
     expect(models['gsd-executor'].variant).toBeUndefined();
+  });
+});
+
+describe('openai-only xhigh variant differentiation', () => {
+  it('uses xhigh variant for quality profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'quality', 'openai-only').variant).toBe('xhigh');
+  });
+
+  it('uses xhigh variant for balanced profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'balanced', 'openai-only').variant).toBe('xhigh');
+  });
+
+  it('uses high variant for budget profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'budget', 'openai-only').variant).toBe('high');
+  });
+
+  it('uses high variant for quality profile on executor (stays high)', () => {
+    expect(resolveAgentModel('gsd-executor', 'quality', 'openai-only').variant).toBe('high');
+  });
+});
+
+describe('resolveTopLevelModel with _top: keys', () => {
+  it('resolves phase scope in openai-only to xhigh quality', () => {
+    expect(resolveTopLevelModel('phase', 'quality', 'openai-only')).toEqual({
+      model: 'openai/gpt-5.3-codex',
+      variant: 'xhigh',
+    });
+  });
+
+  it('resolves milestone scope same as phase (both map to _top:phase)', () => {
+    expect(resolveTopLevelModel('milestone', 'quality', 'openai-only')).toEqual(
+      resolveTopLevelModel('phase', 'quality', 'openai-only'),
+    );
+  });
+
+  it('resolves quick scope in claude-only to balanced sonnet', () => {
+    expect(resolveTopLevelModel('quick', 'balanced', 'claude-only')).toEqual({
+      model: 'anthropic/claude-sonnet-4-6',
+    });
+  });
+
+  it('resolves judge scope in hybrid to xhigh quality codex', () => {
+    expect(resolveTopLevelModel('judge', 'quality', 'hybrid')).toEqual({
+      model: 'openai/gpt-5.3-codex',
+      variant: 'xhigh',
+    });
   });
 });
 
