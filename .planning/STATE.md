@@ -8,7 +8,7 @@
 Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 074: Rename scope keys to _top: prefix and update openai-only xhigh variants
+Last activity: 2026-03-06 - Completed quick task 075: Hybrid Role-Based Model Routing
 
 Progress: ██████████████████████████████████████████ 113/113 plans
 
@@ -158,6 +158,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 072 | Smart config initialization — detectProviders() auto-detects available AI providers via opencode models; pilot init interactive command with --yes/--force; runner startup warning for misconfigured provider mode; setup triggers init when no config exists. | 2026-03-06 | 5e34ad7 | [072-implement-smart-config-initialization-wi](./quick/072-implement-smart-config-initialization-wi/) |
 | 073 | Replace tier-based model resolution — flat AGENT_MODELS lookup table with ModelEntry { model, variant? }, remove resolveVariant/PROVIDER_MODELS/AGENT_PROFILE_TIERS/ModelTier, callers destructure ModelEntry | 2026-03-06 | db9ee7b | [073-replace-the-tier-based-model-resolution](./quick/073-replace-the-tier-based-model-resolution/) |
 | 074 | Rename scope keys to _top: prefix, add openai-only xhigh variant differentiation, update resolveTopLevelModel scope-to-key mapping | 2026-03-06 | 427e0df | [074-replace-tier-system-with-explicit-agent-](./quick/074-replace-tier-system-with-explicit-agent-/) |
+| 075 | Hybrid Role-Based Model Routing | 2026-03-06 | 898222b | [075-hybrid-role-based-model-routing](./quick/075-hybrid-role-based-model-routing/) |
 
 ## Accumulated Context
 

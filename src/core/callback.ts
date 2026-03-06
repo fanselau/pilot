@@ -112,14 +112,12 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
       lines.push(`Verdict: ${verdict.verdict} (confidence: ${verdict.confidence}%)`);
       lines.push(`Reason: ${verdict.reason.slice(0, 300)}`);
     }
-    lines.push(`Notify session: agent:${agentId}:main`);
-
     const body: Record<string, unknown> = {
       message: lines.join('\n'),
       name: 'Pilot',
       agentId,
       sessionKey: `hook:pilot:${job.id}`,
-      deliver: false,
+      deliver: true,
       wakeMode: 'now',
     };
     if (verdict) {
