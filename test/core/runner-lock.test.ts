@@ -63,7 +63,7 @@ vi.mock('../../src/core/opencode-db.js', () => ({
 vi.mock('../../src/core/models.js', () => ({
   patchAgentFrontmatter: vi.fn(),
   resolveAllAgentModels: vi.fn(() => ({})),
-  resolveTopLevelModel: vi.fn(() => 'claude-sonnet-4-5'),
+  resolveTopLevelModel: vi.fn(() => ({ model: 'claude-sonnet-4-5' })),
 }));
 
 // ── Mock node:fs to intercept lock file operations ─────────────────────────

@@ -44,7 +44,7 @@ import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
-import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel, resolveVariant } from './models.js';
+import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { errMsg } from '../util/errors.js';
 import { dim } from '../util/colors.js';
@@ -899,9 +899,8 @@ class Runner {
     const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
     const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
-    const topLevelModel = resolveTopLevelModel(scope, profile, providerMode);
+    const { model: topLevelModel, variant } = resolveTopLevelModel(scope, profile, providerMode);
     const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
-    const variant = resolveVariant(topLevelModel, scope, profile, gsdCommand);
     process.stderr.write(dim(`Top-level model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}`) + '\n');
 
     const opencodeCmdArgs: string[] = [

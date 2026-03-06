@@ -167,7 +167,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   outputHuman(`  ${dim(pad('Model:'))}    ${job.modelProfile}/${job.providerMode}`);
   if (job.actualModels && job.actualModels.length > 0) {
     const actualStr = job.actualModels.join(', ');
-    const resolvedExecutor = resolvedModels['gsd-executor'] ?? '';
+    const resolvedExecutor = resolvedModels['gsd-executor']?.model ?? '';
     const hasMismatch = !job.actualModels.some(m => m === resolvedExecutor);
     const colorFn = hasMismatch ? yellow : dim;
     outputHuman(`  ${colorFn(pad('Actual:'))}   ${colorFn(actualStr)}${hasMismatch ? yellow(' (differs from intended)') : ''}`);
@@ -187,9 +187,10 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   if (job.modelProfile !== 'balanced') {
     outputHuman(`  ${bold('Resolved Models')}`);
     outputHuman(`  ${hr()}`);
-    for (const [agentName, modelId] of Object.entries(resolvedModels)) {
+    for (const [agentName, entry] of Object.entries(resolvedModels)) {
       const shortAgent = agentName.replace('gsd-', '');
-      outputHuman(`    ${dim(shortAgent.padEnd(24))} ${modelId}`);
+      const display = entry.variant ? `${entry.model} (variant: ${entry.variant})` : entry.model;
+      outputHuman(`    ${dim(shortAgent.padEnd(24))} ${display}`);
     }
     outputHuman('');
   }
