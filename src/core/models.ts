@@ -26,13 +26,13 @@ const PROVIDER_MODELS: Record<ProviderMode, Record<ModelTier, string>> = {
   },
   'openai-only': {
     opus: 'openai/gpt-5.3-codex',
-    sonnet: 'openai/gpt-5.1-codex-mini',
-    haiku: 'openai/gpt-4.1-mini',
+    sonnet: 'openai/gpt-5.3-codex',
+    haiku: 'openai/gpt-5.3-codex',
   },
   hybrid: {
-    opus: 'openai/gpt-5.3-codex',
-    sonnet: 'openai/gpt-5.1-codex-mini',
-    haiku: 'openai/gpt-4.1-nano',
+    opus: 'anthropic/claude-opus-4-6',
+    sonnet: 'anthropic/claude-sonnet-4-6',
+    haiku: 'openai/gpt-5.3-codex',
   },
 };
 
@@ -143,4 +143,15 @@ function resolveTopLevelModel(
   return PROVIDER_MODELS[providerMode][tier];
 }
 
-export { resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, patchAgentFrontmatter, PROVIDER_MODELS };
+function resolveVariant(model: string, scope: 'phase' | 'quick' | 'milestone' | 'judge'): string | null {
+  if (!model.includes('codex') && !model.includes('gpt-5')) return null;
+  switch (scope) {
+    case 'phase': return 'high';
+    case 'milestone': return 'high';
+    case 'quick': return 'high';
+    case 'judge': return 'low';
+    default: return 'high';
+  }
+}
+
+export { resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, resolveVariant, patchAgentFrontmatter, PROVIDER_MODELS };
