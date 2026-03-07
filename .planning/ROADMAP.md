@@ -703,6 +703,7 @@ Read requirements/openclaw-skill-bundle.md for full spec.
 
 ### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
 
+**Status:** complete (3/3 plans, verified ✓)
 **Goal:** Make the test suite deterministic on any machine, remove the false npm install story, and ship a real CHANGELOG so Pilot is ready for soft launch.
 **Depends on:** Phase 41
 **Plans:** 3 plans
