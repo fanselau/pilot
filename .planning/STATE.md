@@ -7,18 +7,18 @@
 
 Phase: 43 (Job Undo and Recovery Checkpoints)
 **Next Phase:** 44 (TBD)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-07 - Completed 43-02-PLAN.md
+Last activity: 2026-03-07 - Completed 43-03-PLAN.md
 
-Progress: ███████░░░ 10/15 plans (67%)
+Progress: ███████░░░ 11/15 plans (73%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 43 in progress — runner recovery preflight and checkpoint capture complete (43-02); undo command and visibility plans remain.
+**Current focus:** Phase 43 in progress — guarded undo command delivered (43-03); recovery visibility surfaces remain for 43-04.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -536,9 +536,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 43-02 | updateJobRecoveryStart is persisted before dirty-start refusal | Captures real attempt context (base + startedDirty) even when launch is safely refused |
 | 43-02 | git recovery helpers normalize expected git non-zero outcomes to typed values | No-commit and non-ancestor conditions are expected branches, not exceptions |
 | 43-02 | updateJobRecoveryHead runs before markCompleted/markFailed in both terminal paths | Ensures undo checkpoint metadata survives failed jobs and is available for recovery tooling |
+| 43-03 | `pilot undo` force overrides are limited to guarded-history and dirty-start cases | Preserves conservative defaults while allowing explicit operator-controlled recovery when needed |
+| 43-03 | Dirty worktree stays a hard refusal for destructive undo even with --force | Prevents accidental discard of current uncommitted edits during rollback |
 
 ## Session Continuity
 
-Last session: 2026-03-07T22:46:16Z
-Stopped at: Completed 43-02-PLAN.md
+Last session: 2026-03-07T22:59:19Z
+Stopped at: Completed 43-03-PLAN.md
 Resume file: None
