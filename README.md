@@ -4,7 +4,6 @@
 
 <br><br>
 
-[![npm](https://img.shields.io/npm/v/pilot-cli?style=flat-square)](https://www.npmjs.com/package/pilot-cli)
 [![Node.js](https://img.shields.io/badge/runtime-bun-black?style=flat-square)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?style=flat-square)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://opensource.org/licenses/MIT)
@@ -39,9 +38,25 @@ The entire queue lives in a local SQLite database (`~/.pilot/pilot.db`). There a
 ## Quick Start
 
 ```bash
-# Install globally
-npm install -g pilot-cli
+# Clone with submodules (includes pilot-gsd command definitions)
+git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
+cd pilot
 
+# Install dependencies and build
+bun install
+bun run build
+
+# Link globally so `pilot` is available system-wide
+bun link --global
+
+# Verify install
+pilot --version
+pilot doctor
+```
+
+Set up a project and run your first job:
+
+```bash
 # Set up a project and register an owner for notifications
 pilot setup ~/dev/my-project --owner main
 
@@ -71,6 +86,8 @@ pilot service install
 pilot service start
 ```
 
+> For the complete installation walkthrough, see **[Getting Started Guide](docs/GETTING-STARTED.md)**.
+
 ---
 
 ## Getting Started
@@ -99,7 +116,7 @@ Alternatively, clone with submodules in one step:
 git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
 ```
 
-For standalone installations (e.g. via `npm install -g pilot-cli`), clone pilot-gsd to your home directory:
+If you want pilot-gsd in a separate location (e.g. shared across multiple checkouts), clone it to your home directory:
 
 ```bash
 git clone https://github.com/lucafanselau/pilot-gsd.git ~/pilot-gsd
