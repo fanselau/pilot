@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 41
+## Current Phase: 42
 
 ## Current Position
 
-Phase: 41 of 41 (OpenClaw Skill Rewrite and Bundle with Pilot)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-06 - Completed Phase 40: Default Skills Library (3/3 plans, verified ✓)
+Phase: 42 (Release Hardening — Config Isolation, Install Story, and Changelog)
+Plan: 2 of 3 in current phase (01 + 02 complete)
+Status: In progress
+Last activity: 2026-03-07 - Completed 42-01-PLAN.md (config isolation)
 
-Progress: ██████████████████████████████████████████ 116/116 plans
+Progress: ██████████████████████████████████████████ 118/119 plans
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 40 complete — Default Skills Library. Curated Tier 1/Tier 2 catalog, stack detection, `pilot skills bootstrap`, setup integration.
+**Current focus:** Phase 42 in progress — Release Hardening. Config isolation, install story fix, changelog.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -96,6 +96,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 41: OpenClaw Skill Rewrite and Bundle with Pilot
 - **Status:** complete (2/2 plans, verified ✓)
+
+### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
+- **Status:** in progress (1/3 plans complete)
 
 ### Quick Tasks Completed
 
