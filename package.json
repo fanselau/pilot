@@ -24,6 +24,7 @@
   },
   "author": "Luca Fanselau",
   "license": "MIT",
+  "private": true,
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc",
