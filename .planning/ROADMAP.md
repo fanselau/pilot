@@ -703,12 +703,18 @@ Read requirements/openclaw-skill-bundle.md for full spec.
 
 ### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
 
-**Goal:** [To be planned]
+**Goal:** Make the test suite deterministic on any machine, remove the false npm install story, and ship a real CHANGELOG so Pilot is ready for soft launch.
 **Depends on:** Phase 41
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 42 to break down)
+- [ ] 42-01-PLAN.md — Fix 3 failing tests + config isolation (beforeEach cache reset, PILOT_CONFIG_FILE isolation in db tests, 5 regression cases)
+- [ ] 42-02-PLAN.md — Remove npm install references from README + GETTING-STARTED.md, replace with clone+build install path
+- [ ] 42-03-PLAN.md — Write real CHANGELOG.md pre-release section covering all major capability areas
+
+Wave structure:
+- Wave 1: 42-01 + 42-02 (independent — tests and docs have no file overlap)
+- Wave 2: 42-03 (CHANGELOG, depends on 42-02 so README context is settled)
 
 **Details:**
-[To be added during planning]
+Read requirements/release-hardening-config-isolation-install-story-and-changelog.md for full spec.

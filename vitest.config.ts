@@ -3,6 +3,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['test/**/*.test.{ts,tsx}'],
+    setupFiles: ['test/setup.ts'],
     pool: 'forks',
     poolOptions: {
       forks: {
