@@ -1,23 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 42
+## Current Phase: 43
 
 ## Current Position
 
-Phase: 42 (Release Hardening — Config Isolation, Install Story, and Changelog)
-Plan: 3 of 3 in current phase (all complete)
-Status: Phase complete
-Last activity: 2026-03-07 - Completed 42-03-PLAN.md (changelog)
+Phase: 43 (Job Undo and Recovery Checkpoints)
+**Next Phase:** 44 (TBD)
+Plan: 2 of 4 in current phase
+Status: In progress
+Last activity: 2026-03-07 - Completed 43-02-PLAN.md
 
-Progress: ████████████████████████████████████████████ 119/119 plans (100%)
+Progress: ███████░░░ 10/15 plans (67%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 42 complete — Release Hardening. Config isolation, install story fix, changelog. All plans verified ✓.
+**Current focus:** Phase 43 in progress — runner recovery preflight and checkpoint capture complete (43-02); undo command and visibility plans remain.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -204,6 +205,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 40 added: Default Skills Library — Bundled Skill Catalog for Pilot
 - Phase 41 added: OpenClaw Skill Rewrite and Bundle with Pilot
 - Phase 42 added: Release Hardening — Config Isolation, Install Story, and Changelog
+- Phase 43 added: Job Undo and Recovery Checkpoints
 
 ## Decisions
 
@@ -531,9 +533,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 39-01 | max_attempts column NOT dropped via migration (SQLite compat) | SQLite ALTER TABLE DROP COLUMN requires 3.35+; column becomes orphaned but harmless |
 | 39-01 | pollInterval kept in PilotConfig but removed from ConfigFileSchema.runner | Still an internal constant used by runner; no longer user-configurable |
 | quick-070 | `skills tag` uses Commander requiredOption and handlers still validate empty category payloads | Defense in depth: fail fast at CLI boundary and preserve correctness if wiring changes |
+| 43-02 | updateJobRecoveryStart is persisted before dirty-start refusal | Captures real attempt context (base + startedDirty) even when launch is safely refused |
+| 43-02 | git recovery helpers normalize expected git non-zero outcomes to typed values | No-commit and non-ancestor conditions are expected branches, not exceptions |
+| 43-02 | updateJobRecoveryHead runs before markCompleted/markFailed in both terminal paths | Ensures undo checkpoint metadata survives failed jobs and is available for recovery tooling |
 
 ## Session Continuity
 
-Last session: 2026-03-07T18:14:35Z
-Stopped at: Completed 42-03-PLAN.md (Phase 42 complete — all 119 plans done)
+Last session: 2026-03-07T22:46:16Z
+Stopped at: Completed 43-02-PLAN.md
 Resume file: None
