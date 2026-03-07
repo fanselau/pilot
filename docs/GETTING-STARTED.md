@@ -362,6 +362,14 @@ pilot add my-project "Add a README with project description"
 
 Pilot auto-detects this as a `quick` scope task. You can override with `--as phase` or `--as milestone`.
 
+If you intentionally need to run on a dirty repo snapshot, queue with `--force-dirty`:
+
+```bash
+pilot add my-project "Investigate local regression" --force-dirty
+```
+
+Use this sparingly. Dirty-start jobs have weaker recovery guarantees.
+
 ### 4. Start the runner
 
 ```bash
@@ -392,7 +400,50 @@ Add `--verbose` for full session transcript, or `--follow` to tail in real time.
 
 ---
 
-## 7. Model Profiles & Provider Modes
+## 7. Recovery Safety Model
+
+Pilot's recovery system is conservative by default:
+
+1. At execution time, Pilot checks the target repository worktree.
+2. If the worktree is dirty, execution is refused by default.
+3. If the job starts clean, Pilot records base/head checkpoints for safer undo.
+
+### Clean default and dirty refusal
+
+- Default behavior: jobs run only on clean worktrees.
+- Typical refusal copy: `Refusing to start job <id>: worktree is dirty...`
+- Operator action: commit, stash, or discard local edits, then retry the job.
+
+### `--force-dirty` vs `--force`
+
+- `pilot add --force-dirty` affects **job start** and allows a dirty-start run.
+- `pilot undo --force` affects **undo execution** and overrides guarded history checks.
+- `pilot undo --force` does **not** bypass a currently dirty worktree.
+
+### Undo workflow
+
+```bash
+# inspect first
+pilot undo ab12 --dry-run
+
+# apply when safe
+pilot undo ab12
+```
+
+If newer commits exist after the job checkpoint, Pilot refuses by default and tells you to undo newer work first (or re-run with `--force`).
+
+### Quick troubleshooting for common recovery refusals
+
+| Message snippet | Meaning | What to do |
+|---|---|---|
+| `worktree is dirty` (runner start) | Job refused before execution | Commit/stash/discard edits, then `pilot retry <id>` |
+| `job started from a dirty worktree` | Undo is guarded due to dirty start | Re-run `pilot undo <id> --force` only if you accept losing pre-existing edits |
+| `newer commits exist after this checkpoint` | Undo would discard newer history | Undo newer jobs first, or use `--force` intentionally |
+| `missing recovery checkpoints` / `cannot resolve stored ... checkpoint` | Metadata or commit no longer available | Undo unavailable for that job; inspect history manually |
+
+---
+
+## 8. Model Profiles & Provider Modes
 
 Control the cost/quality tradeoff per job with `--profile` and `--provider` flags on `pilot add`:
 
@@ -427,7 +478,7 @@ The judge always uses the cheapest tier (Haiku) regardless of profile — it onl
 
 ---
 
-## 8. Notifications (Optional)
+## 9. Notifications (Optional)
 
 ### OpenClaw Webhooks
 
@@ -473,7 +524,7 @@ export PILOT_TELEGRAM_CHAT_ID=123456789
 
 ---
 
-## 9. Daemon Mode (systemd)
+## 10. Daemon Mode (systemd)
 
 Run Pilot as a persistent background service that continuously processes the job queue.
 
@@ -545,7 +596,7 @@ bun run build && pilot reload
 
 ---
 
-## 10. Verification Checklist
+## 11. Verification Checklist
 
 Run through this checklist to confirm everything is set up correctly:
 
@@ -577,7 +628,7 @@ pilot add my-project "Hello world test" --dry-run
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### "opencode binary not found"
 

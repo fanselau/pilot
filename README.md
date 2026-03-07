@@ -154,6 +154,36 @@ pilot add my-project requirements/auth.md --as phase
 pilot add my-project "Complete v2.0" --as milestone
 ```
 
+By default, jobs start only when the target repo is clean. If you intentionally need to run on a dirty worktree, queue with `--force-dirty`:
+
+```bash
+pilot add my-project "Investigate local regression" --force-dirty
+```
+
+`--force-dirty` weakens rollback guarantees for that run. It is not the same as undo `--force`.
+
+### Recovery checkpoints and guarded undo
+
+Pilot records a per-job git base/head checkpoint and exposes guarded rollback via `pilot undo`.
+
+```bash
+# Safe path: inspect first, then apply
+pilot undo ab12 --dry-run
+pilot undo ab12
+
+# Refusal when newer work exists after the job checkpoint
+pilot undo ab12
+# Refusing undo for job ab12: newer commits exist after this checkpoint...
+
+# Explicit override (history may be discarded)
+pilot undo ab12 --force
+```
+
+Safety model:
+- clean start (default) -> safest checkpoint + undo behavior
+- dirty start (`pilot add --force-dirty`) -> undo becomes guarded
+- undo `--force` only overrides guarded history/dirty-start checks; it does **not** bypass a currently dirty worktree
+
 ### Delegation AI
 
 Before executing, Pilot spawns a short AI session that reads your project's `.planning/` directory and decides the exact sequence of [GSD](https://github.com/lucafanselau/pilot-gsd) commands to run — `add-phase`, `plan-phase`, `execute-phase`, `verify-phase`, and so on. This replaces fragile regex-based plan parsing.
@@ -290,7 +320,7 @@ All notifications include the AI judge verdict, confidence score, and reason whe
 
 | Command | Description |
 |---------|-------------|
-| `pilot add <project> <requirement>` | Queue work. Auto-detects scope. Flags: `--as <scope>`, `--next`, `--dry-run`, `--profile`, `--provider`, `--notify <agentId>`, `--notify-url <url>`, `--no-notify`, `--timeout <minutes>`, `--categories <cats>` |
+| `pilot add <project> <requirement>` | Queue work. Auto-detects scope. Flags: `--as <scope>`, `--next`, `--dry-run`, `--force-dirty`, `--profile`, `--provider`, `--notify <agentId>`, `--notify-url <url>`, `--no-notify`, `--timeout <minutes>`, `--categories <cats>` |
 | `pilot status [project]` | One-shot status dashboard (default command, alias: `s`) |
 | `pilot log [id]` | Session activity stream. Flags: `--follow`, `--last <n>`, `--verbose`, `--delegation`, `--flat`, `--task <n>` |
 | `pilot info <id>` | Full job metadata, token usage, and cost estimate |
@@ -303,6 +333,7 @@ All notifications include the AI judge verdict, confidence score, and reason whe
 | `pilot cancel <id>` | Cancel a pending job |
 | `pilot kill <id>` | Force-quit a running job (kills opencode session + marks failed). Requires `--force` |
 | `pilot retry <id>` | Retry a failed job |
+| `pilot undo <id> [--dry-run] [--force]` | Roll back a job to its recorded base checkpoint with safety guards for dirty starts and newer/diverged history |
 | `pilot bump <id>` | Move job to front of queue |
 | `pilot milestone <action> <id>` | Milestone management: `status`, `resume`, `skip` |
 
