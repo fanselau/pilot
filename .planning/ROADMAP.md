@@ -708,9 +708,9 @@ Read requirements/openclaw-skill-bundle.md for full spec.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 42-01-PLAN.md — Fix 3 failing tests + config isolation (beforeEach cache reset, PILOT_CONFIG_FILE isolation in db tests, 5 regression cases)
+- [x] 42-01-PLAN.md — Fix 3 failing tests + config isolation (beforeEach cache reset, PILOT_CONFIG_FILE isolation in db tests, 5 regression cases)
 - [x] 42-02-PLAN.md — Remove npm install references from README + GETTING-STARTED.md, replace with clone+build install path
-- [ ] 42-03-PLAN.md — Write real CHANGELOG.md pre-release section covering all major capability areas
+- [x] 42-03-PLAN.md — Write real CHANGELOG.md pre-release section covering all major capability areas
 
 Wave structure:
 - Wave 1: 42-01 + 42-02 (independent — tests and docs have no file overlap)

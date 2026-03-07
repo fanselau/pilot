@@ -145,7 +145,7 @@ function loadConfigFile(): ConfigFileSchema | null {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
     throw new Error(
-      `Failed to parse config file ${filePath}: ${errMsg(err)}`,
+      `Failed to parse config file ${filePath}: ${errMsg(err)}. Fix the JSON syntax or run 'pilot config init' to create a fresh config.`,
     );
   }
 

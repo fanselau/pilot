@@ -777,6 +777,7 @@ describe('config isolation', () => {
     expect(thrown).not.toBeNull();
     expect(thrown!.message).toContain(tmpFile);           // file path present
     expect(thrown!.message).toContain('Failed to parse'); // actionable prefix
+    expect(thrown!.message).toContain('pilot config init'); // actionable next-step guidance
     rmSync(tmpFile, { force: true });
   });
 
