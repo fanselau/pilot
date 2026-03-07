@@ -700,3 +700,15 @@ Wave structure:
 
 **Details:**
 Read requirements/openclaw-skill-bundle.md for full spec.
+
+### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
+
+**Goal:** [To be planned]
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 42 to break down)
+
+**Details:**
+[To be added during planning]

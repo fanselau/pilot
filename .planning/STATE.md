@@ -200,6 +200,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 39 added: Runner Simplification
 - Phase 40 added: Default Skills Library — Bundled Skill Catalog for Pilot
 - Phase 41 added: OpenClaw Skill Rewrite and Bundle with Pilot
+- Phase 42 added: Release Hardening — Config Isolation, Install Story, and Changelog
 
 ## Decisions
 
