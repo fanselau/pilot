@@ -39,8 +39,11 @@ import {
   updateJudgeVerdict,
   updateActualModels,
   getProject,
+  updateJobRecoveryStart,
+  updateJobRecoveryHead,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
+import { isGitWorktree, isWorktreeDirty, resolveCommitOrNull } from './git-recovery.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
@@ -520,21 +523,45 @@ class Runner {
       );
     }
 
-    // Inject matching skills into project's .opencode/skills/ directory
-    const resolvedSkills = resolveSkillsForJob(job.categories ?? null);
-    if (resolvedSkills.length > 0) {
-      try {
-        const injected = injectSkills(resolvedSkills, projectDir);
-        if (injected.length > 0) {
-          process.stderr.write(`[runner] Injected ${injected.length} skill(s) for job ${job.id}: ${injected.join(', ')}\n`);
-        }
-      } catch (err) {
-        process.stderr.write(`[runner] Warning: skill injection failed for job ${job.id}: ${errMsg(err)}\n`);
-        // Non-fatal: continue without skills
-      }
-    }
-
     try {
+      // Recovery preflight: capture baseline + enforce clean worktree by default.
+      const gitWorktree = await isGitWorktree(projectDir);
+      if (!gitWorktree) {
+        throw new Error(
+          `Refusing to start job ${job.id}: project is not a git worktree (${projectDir}). Initialize git or reconfigure the project path.`,
+        );
+      }
+
+      const gitBaseCommit = await resolveCommitOrNull(projectDir, 'HEAD');
+      const startedDirty = await isWorktreeDirty(projectDir);
+      updateJobRecoveryStart(job.id, gitBaseCommit, startedDirty);
+
+      if (startedDirty && !job.allowDirtyStart) {
+        throw new Error(
+          `Refusing to start job ${job.id}: repository has uncommitted changes. Please commit, stash, or discard your changes, then retry. If you intentionally accept weaker recovery guarantees, re-queue with \`pilot add ... --force-dirty\`.`,
+        );
+      }
+
+      if (startedDirty && job.allowDirtyStart) {
+        process.stderr.write(
+          `[runner] Warning: job ${job.id} is starting with a dirty worktree (--force-dirty). Recovery guarantees are weaker for this run.\n`,
+        );
+      }
+
+      // Inject matching skills into project's .opencode/skills/ directory
+      const resolvedSkills = resolveSkillsForJob(job.categories ?? null);
+      if (resolvedSkills.length > 0) {
+        try {
+          const injected = injectSkills(resolvedSkills, projectDir);
+          if (injected.length > 0) {
+            process.stderr.write(`[runner] Injected ${injected.length} skill(s) for job ${job.id}: ${injected.join(', ')}\n`);
+          }
+        } catch (err) {
+          process.stderr.write(`[runner] Warning: skill injection failed for job ${job.id}: ${errMsg(err)}\n`);
+          // Non-fatal: continue without skills
+        }
+      }
+
       this.patchModelsForJob(job, projectDir);
 
       // Step 1: Delegation — get execution plan (typically single step for phase jobs)
@@ -677,6 +704,7 @@ class Runner {
       }
 
       if (allStepsCompleted) {
+        await this.captureRecoveryHead(job.id, projectDir);
         this.collectActualModels(job.id);
 
         markCompleted(job.id);
@@ -692,6 +720,7 @@ class Runner {
       }
     } catch (err) {
       const error = errMsg(err);
+      await this.captureRecoveryHead(job.id, projectDir);
       this.collectActualModels(job.id);
       try {
         markFailed(job.id, error);
@@ -1135,6 +1164,17 @@ class Runner {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(r => setTimeout(r, ms));
+  }
+
+  private async captureRecoveryHead(jobId: string, projectDir: string): Promise<void> {
+    try {
+      const gitHeadCommit = await resolveCommitOrNull(projectDir, 'HEAD');
+      updateJobRecoveryHead(jobId, gitHeadCommit);
+    } catch (err) {
+      process.stderr.write(
+        `[runner] Warning: failed to capture git head checkpoint for ${jobId}: ${errMsg(err)}\n`,
+      );
+    }
   }
 }
 
