@@ -102,48 +102,27 @@ Pilot is designed for Linux. Several features depend on Linux-specific APIs:
 
 ## 2. Installation
 
-### From npm (recommended)
-
 ```bash
-npm install -g pilot-cli
-```
-
-Verify:
-
-```bash
-pilot --help
-```
-
-Then clone the GSD command definitions separately:
-
-```bash
-git clone https://github.com/lucafanselau/pilot-gsd.git ~/pilot-gsd
-```
-
-Or set a custom location:
-
-```bash
-export PILOT_GSD_DIR=/path/to/your/pilot-gsd
-```
-
-### From source (development)
-
-```bash
+# Clone with submodules (includes pilot-gsd command definitions)
 git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
 cd pilot
+
+# Install dependencies
 bun install
+
+# Build the CLI
 bun run build
-npm link
-```
 
-Verify:
+# Link globally so `pilot` is available system-wide
+bun link --global
 
-```bash
+# Verify
+pilot --version
 pilot --help
 ```
 
 > [!NOTE]
-> If you cloned without `--recurse-submodules`, initialize the pilot-gsd submodule:
+> If you cloned without `--recurse-submodules`, initialize the submodule:
 > ```bash
 > git submodule update --init
 > ```
@@ -153,8 +132,8 @@ pilot --help
 Pilot finds the GSD command definitions using a 3-step fallback chain:
 
 1. **`PILOT_GSD_DIR` env var** — highest priority, use this for custom locations
-2. **`<pilot-root>/pilot-gsd/` submodule** — works for both `src/` and `dist/` layouts
-3. **`~/pilot-gsd/` home directory fallback** — for standalone npm installs
+2. **`<pilot-root>/pilot-gsd/` submodule** — default after clone with `--recurse-submodules`
+3. **`~/pilot-gsd/` home directory fallback** — manual clone to `~/pilot-gsd/`
 
 Run `pilot doctor` to confirm GSD is found.
 
@@ -643,8 +622,6 @@ sudo dnf groupinstall "Development Tools" && sudo dnf install python3
 Then reinstall:
 
 ```bash
-npm install -g pilot-cli
-# or if building from source:
 bun install
 ```
 
