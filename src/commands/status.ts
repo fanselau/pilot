@@ -20,6 +20,19 @@ import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
 import type { Job } from '../core/types.js';
 
+interface RecoveryTag {
+  tag: string;
+  state: 'safe' | 'guarded' | 'unavailable';
+  reason:
+    | 'checkpoint-ready'
+    | 'dirty-start'
+    | 'newer-work'
+    | 'diverged-history'
+    | 'job-not-terminal'
+    | 'checkpoint-missing';
+  action: string;
+}
+
 /**
  * Determine if a completed phase job is "inconclusive" (judge failed or gave benefit of doubt).
  * Quick jobs skip the judge entirely — they always show ✓.
@@ -157,6 +170,86 @@ function isJobStale(job: Job): boolean {
   }
 }
 
+function inferKnownGuardState(job: Job): 'newer-work' | 'diverged-history' | null {
+  const lower = `${job.error ?? ''} ${job.resumeHint ?? ''}`.toLowerCase();
+  if (
+    lower.includes('newer commits exist') ||
+    lower.includes('newer work') ||
+    lower.includes('ahead of this checkpoint')
+  ) {
+    return 'newer-work';
+  }
+  if (lower.includes('diverged')) {
+    return 'diverged-history';
+  }
+  return null;
+}
+
+function getRecoveryTag(job: Job): RecoveryTag {
+  if (job.status === 'pending' || job.status === 'running') {
+    return {
+      tag: 'undo:unavailable',
+      state: 'unavailable',
+      reason: 'job-not-terminal',
+      action: 'wait for terminal status',
+    };
+  }
+
+  if (!job.gitBaseCommit || !job.gitHeadCommit) {
+    return {
+      tag: 'undo:unavailable',
+      state: 'unavailable',
+      reason: 'checkpoint-missing',
+      action: 'job has no recorded checkpoints',
+    };
+  }
+
+  const knownGuard = inferKnownGuardState(job);
+  if (knownGuard === 'newer-work') {
+    return {
+      tag: 'undo:guarded-newer-work',
+      state: 'guarded',
+      reason: 'newer-work',
+      action: 'undo newer work first or use --force',
+    };
+  }
+
+  if (knownGuard === 'diverged-history') {
+    return {
+      tag: 'undo:guarded-diverged',
+      state: 'guarded',
+      reason: 'diverged-history',
+      action: 'inspect history before using --force',
+    };
+  }
+
+  if (job.startedDirty) {
+    return {
+      tag: 'undo:guarded-dirty-start',
+      state: 'guarded',
+      reason: 'dirty-start',
+      action: 'requires --force (dirty start)',
+    };
+  }
+
+  return {
+    tag: 'undo:safe',
+    state: 'safe',
+    reason: 'checkpoint-ready',
+    action: 'safe to preview with pilot undo --dry-run',
+  };
+}
+
+function formatRecoveryTag(job: Job): string {
+  const recovery = getRecoveryTag(job);
+  return `${recovery.tag} ${recovery.action}`;
+}
+
+function buildRecoveryMap(jobs: Job[]): Record<string, RecoveryTag> {
+  const entries = jobs.map((job) => [job.id, getRecoveryTag(job)] as const);
+  return Object.fromEntries(entries);
+}
+
 async function statusCommand(opts: StatusOptions): Promise<void> {
   const queue = getQueue();
   const recent = getRecent(10);
@@ -171,6 +264,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   const daemon = getDaemonStatus();
 
   if (isJsonMode()) {
+    const recovery = buildRecoveryMap([...healthyActive, ...staleActive, ...pending, ...recent]);
     outputJson({
       version: '2.0.0',
       daemon: { active: daemon.status === 'active', pid: daemon.pid, detail: daemon.detail },
@@ -178,6 +272,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       stale: staleActive,
       queue: pending,
       recent,
+      recovery,
     });
     return;
   }
@@ -198,7 +293,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const elapsed = getJobElapsed(job);
       const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${blue('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}`,
+        `  ${blue('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
       );
 
       // Show latest session activity if available
@@ -217,7 +312,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const elapsed = getJobElapsed(job);
       const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${yellow('⚠')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim('[stale — will be reconciled]')}`,
+        `  ${yellow('⚠')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim('[stale — will be reconciled]')}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
       );
     }
     outputHuman('');
@@ -229,7 +324,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     for (const job of pending) {
       const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${dim('○')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}`,
+        `  ${dim('○')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
       );
     }
     outputHuman('');
@@ -249,7 +344,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const desc = sanitizeDesc(job.description);
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}${failReason}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim(`[${formatRecoveryTag(job)}]`)}${failReason}`,
       );
     }
     outputHuman('');

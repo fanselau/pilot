@@ -37,6 +37,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    gitBaseCommit: null,
+    gitHeadCommit: null,
+    allowDirtyStart: false,
+    startedDirty: false,
     ...overrides,
   };
 }
@@ -54,6 +58,7 @@ vi.mock('../../src/core/db.js', () => ({
 vi.mock('../../src/core/opencode-db.js', () => ({
   getLastMessage: () => null,
   findSessionByTitle: () => null,
+  isSessionDone: () => false,
 }));
 
 let mockJsonMode = false;
@@ -126,6 +131,63 @@ describe('statusCommand', () => {
     expect(output).toContain('Queue');
     expect(output).toContain('hub');
     expect(output).toContain('pending');
+    expect(output).toContain('undo:unavailable');
+  });
+
+  it('shows undo:safe tag for checkpointed terminal jobs', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'sa11',
+        status: 'completed',
+        project: 'safe-proj',
+        completedAt: '2026-03-02T09:55:00',
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('undo:safe');
+  });
+
+  it('shows undo:guarded-dirty-start tag when job started dirty', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'gd11',
+        status: 'completed',
+        project: 'guarded-proj',
+        completedAt: '2026-03-02T09:55:00',
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+        startedDirty: true,
+      }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('undo:guarded-dirty-start');
+  });
+
+  it('shows undo:guarded-newer-work tag when newer-work guard is known', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'gn11',
+        status: 'failed',
+        project: 'newer-work-proj',
+        completedAt: '2026-03-02T09:56:00',
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+        error: 'Refusing undo: newer commits exist after this checkpoint',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('undo:guarded-newer-work');
   });
 
   it('displays completed and failed in recent section', async () => {
@@ -164,9 +226,15 @@ describe('statusCommand', () => {
     expect(jsonData).toHaveProperty('active');
     expect(jsonData).toHaveProperty('queue');
     expect(jsonData).toHaveProperty('recent');
+    expect(jsonData).toHaveProperty('recovery');
     expect(jsonData.active).toHaveLength(1);
     expect(jsonData.queue).toHaveLength(1);
     expect(jsonData.recent).toHaveLength(1);
+    expect(jsonData.recovery).toMatchObject({
+      aa11: expect.objectContaining({ tag: 'undo:unavailable' }),
+      bb22: expect.objectContaining({ tag: 'undo:unavailable' }),
+      cc33: expect.objectContaining({ tag: 'undo:unavailable' }),
+    });
   });
 
   it('does not call outputHuman when in JSON mode', async () => {

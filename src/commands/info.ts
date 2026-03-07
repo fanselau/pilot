@@ -9,11 +9,19 @@
  */
 
 import { getJob, getJobSteps } from '../core/db.js';
+import { resolveProjectDir } from '../core/config.js';
+import {
+  classifyHeadRelation,
+  isGitWorktree,
+  isWorktreeDirty,
+  resolveCommitOrNull,
+} from '../core/git-recovery.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
 import type { DelegationPlan } from '../core/types.js';
+import type { HeadRelation } from '../core/git-recovery.js';
 
 // ── Cost estimation ────────────────────────────────────────────────────────
 
@@ -46,6 +54,248 @@ function formatStatusColor(status: string): string {
 
 function hr(): string {
   return '────────────────────────────────────────────────────────────────────────────';
+}
+
+interface RecoveryInfo {
+  tag: string;
+  state: 'safe' | 'guarded' | 'unavailable';
+  reason:
+    | 'checkpoint-ready'
+    | 'no-commit-delta'
+    | 'dirty-start'
+    | 'newer-work'
+    | 'diverged-history'
+    | 'worktree-dirty-now'
+    | 'missing-checkpoints'
+    | 'not-git-worktree'
+    | 'current-head-unresolved'
+    | 'base-checkpoint-unresolved'
+    | 'head-checkpoint-unresolved';
+  guidance: string;
+  baseCommit: string | null;
+  headCommit: string | null;
+  currentHead: string | null;
+  baseShort: string | null;
+  headShort: string | null;
+  currentShort: string | null;
+  allowDirtyStart: boolean;
+  startedDirty: boolean;
+  relation: HeadRelation | null;
+  blockedByNewerWork: boolean;
+  diverged: boolean;
+  producedCommitDelta: boolean | null;
+  worktreeDirtyNow: boolean | null;
+  projectIsGit: boolean;
+}
+
+function shortCommit(commit: string | null): string | null {
+  return commit ? commit.slice(0, 12) : null;
+}
+
+function formatCommitDisplay(commit: string | null): string {
+  if (!commit) {
+    return '—';
+  }
+  return `${commit.slice(0, 12)} (${commit})`;
+}
+
+function inferRecoveryFromMetadata(
+  state: RecoveryInfo['state'],
+  reason: RecoveryInfo['reason'],
+  guidance: string,
+  baseCommit: string | null,
+  headCommit: string | null,
+  currentHead: string | null,
+  allowDirtyStart: boolean,
+  startedDirty: boolean,
+): RecoveryInfo {
+  return {
+    tag:
+      state === 'safe'
+        ? 'undo:safe'
+        : state === 'guarded'
+          ? 'undo:guarded'
+          : 'undo:unavailable',
+    state,
+    reason,
+    guidance,
+    baseCommit,
+    headCommit,
+    currentHead,
+    baseShort: shortCommit(baseCommit),
+    headShort: shortCommit(headCommit),
+    currentShort: shortCommit(currentHead),
+    allowDirtyStart,
+    startedDirty,
+    relation: null,
+    blockedByNewerWork: false,
+    diverged: false,
+    producedCommitDelta:
+      baseCommit !== null && headCommit !== null ? baseCommit !== headCommit : null,
+    worktreeDirtyNow: null,
+    projectIsGit: false,
+  };
+}
+
+async function buildRecoveryInfo(job: {
+  id: string;
+  project: string;
+  gitBaseCommit: string | null;
+  gitHeadCommit: string | null;
+  allowDirtyStart: boolean;
+  startedDirty: boolean;
+}): Promise<RecoveryInfo> {
+  const projectDir = resolveProjectDir(job.project);
+  const hasCheckpoints = !!job.gitBaseCommit && !!job.gitHeadCommit;
+
+  if (!hasCheckpoints) {
+    return inferRecoveryFromMetadata(
+      'unavailable',
+      'missing-checkpoints',
+      'Undo unavailable: this job has no recorded base/head checkpoints.',
+      job.gitBaseCommit,
+      job.gitHeadCommit,
+      null,
+      job.allowDirtyStart,
+      job.startedDirty,
+    );
+  }
+
+  const inGitWorktree = await isGitWorktree(projectDir);
+  if (!inGitWorktree) {
+    return inferRecoveryFromMetadata(
+      'unavailable',
+      'not-git-worktree',
+      'Undo unavailable: project is not currently a git worktree.',
+      job.gitBaseCommit,
+      job.gitHeadCommit,
+      null,
+      job.allowDirtyStart,
+      job.startedDirty,
+    );
+  }
+
+  const [currentHead, baseCommit, headCommit, worktreeDirtyNow] = await Promise.all([
+    resolveCommitOrNull(projectDir, 'HEAD'),
+    resolveCommitOrNull(projectDir, job.gitBaseCommit!),
+    resolveCommitOrNull(projectDir, job.gitHeadCommit!),
+    isWorktreeDirty(projectDir),
+  ]);
+
+  if (!currentHead) {
+    return {
+      ...inferRecoveryFromMetadata(
+        'unavailable',
+        'current-head-unresolved',
+        'Undo unavailable: could not resolve current repository HEAD.',
+        baseCommit,
+        headCommit,
+        currentHead,
+        job.allowDirtyStart,
+        job.startedDirty,
+      ),
+      projectIsGit: true,
+      worktreeDirtyNow,
+    };
+  }
+
+  if (!baseCommit) {
+    return {
+      ...inferRecoveryFromMetadata(
+        'unavailable',
+        'base-checkpoint-unresolved',
+        `Undo unavailable: stored base checkpoint ${job.gitBaseCommit} cannot be resolved.`,
+        baseCommit,
+        headCommit,
+        currentHead,
+        job.allowDirtyStart,
+        job.startedDirty,
+      ),
+      projectIsGit: true,
+      worktreeDirtyNow,
+    };
+  }
+
+  if (!headCommit) {
+    return {
+      ...inferRecoveryFromMetadata(
+        'unavailable',
+        'head-checkpoint-unresolved',
+        `Undo unavailable: stored head checkpoint ${job.gitHeadCommit} cannot be resolved.`,
+        baseCommit,
+        headCommit,
+        currentHead,
+        job.allowDirtyStart,
+        job.startedDirty,
+      ),
+      projectIsGit: true,
+      worktreeDirtyNow,
+    };
+  }
+
+  const producedCommitDelta = baseCommit !== headCommit;
+  const relation = await classifyHeadRelation(projectDir, headCommit, currentHead);
+  const blockedByNewerWork = relation === 'newer-work-exists';
+  const diverged = relation === 'diverged';
+
+  let state: RecoveryInfo['state'] = 'safe';
+  let reason: RecoveryInfo['reason'] = 'checkpoint-ready';
+  let guidance = 'Undo is safe to preview now (recommended: pilot undo <id> --dry-run).';
+  let tag = 'undo:safe';
+
+  if (!producedCommitDelta) {
+    reason = 'no-commit-delta';
+    guidance = 'This job recorded no commit delta between base/head checkpoints (nothing to undo).';
+  }
+
+  if (job.startedDirty) {
+    state = 'guarded';
+    reason = 'dirty-start';
+    tag = 'undo:guarded-dirty-start';
+    guidance = 'Undo guarded: job started from a dirty worktree; override requires --force and may discard pre-existing edits.';
+  }
+
+  if (blockedByNewerWork) {
+    state = 'guarded';
+    reason = 'newer-work';
+    tag = 'undo:guarded-newer-work';
+    guidance = 'Undo blocked by newer work: current HEAD is ahead of this job checkpoint. Undo newer work first or use --force.';
+  }
+
+  if (diverged) {
+    state = 'guarded';
+    reason = 'diverged-history';
+    tag = 'undo:guarded-diverged';
+    guidance = 'Undo guarded: current HEAD diverged from this checkpoint. Review history and use --force only intentionally.';
+  }
+
+  if (worktreeDirtyNow) {
+    state = 'guarded';
+    reason = 'worktree-dirty-now';
+    tag = 'undo:guarded-dirty-worktree';
+    guidance = 'Undo blocked right now: worktree has local changes. Commit/stash/discard them first.';
+  }
+
+  return {
+    tag,
+    state,
+    reason,
+    guidance,
+    baseCommit,
+    headCommit,
+    currentHead,
+    baseShort: shortCommit(baseCommit),
+    headShort: shortCommit(headCommit),
+    currentShort: shortCommit(currentHead),
+    allowDirtyStart: job.allowDirtyStart,
+    startedDirty: job.startedDirty,
+    relation,
+    blockedByNewerWork,
+    diverged,
+    producedCommitDelta,
+    worktreeDirtyNow,
+    projectIsGit: true,
+  };
 }
 
 // ── Main command ──────────────────────────────────────────────────────────
@@ -103,6 +353,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   }
   const totalTokens = totalInput + totalOutput;
   const estimatedCostUsd = estimateCost(totalInput, totalOutput);
+  const recovery = await buildRecoveryInfo(job);
 
   // ── JSON output ────────────────────────────────────────────────────────
 
@@ -114,6 +365,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       delegationPlan,
       steps,
       sessions: sessionTokens,
+      recovery,
       resolvedModels,
       actualModels: job.actualModels,
       tokenUsage: {
@@ -181,6 +433,21 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   if (job.dependsOn) {
     outputHuman(`  ${dim(pad('Depends On:'))} ${job.dependsOn}`);
   }
+  outputHuman('');
+
+  outputHuman(`  ${bold('Recovery')}`);
+  outputHuman(`  ${hr()}`);
+  outputHuman(`  ${dim(pad('Safety:'))}   ${recovery.tag} (${recovery.state})`);
+  outputHuman(`  ${dim(pad('Base:'))}     ${formatCommitDisplay(recovery.baseCommit)}`);
+  outputHuman(`  ${dim(pad('Head:'))}     ${formatCommitDisplay(recovery.headCommit)}`);
+  outputHuman(`  ${dim(pad('Current:'))}  ${formatCommitDisplay(recovery.currentHead)}`);
+  outputHuman(`  ${dim(pad('Dirty start:'))} ${recovery.startedDirty ? 'yes' : 'no'}`);
+  outputHuman(`  ${dim(pad('Allow dirty:'))} ${recovery.allowDirtyStart ? 'yes' : 'no'}`);
+  outputHuman(`  ${dim(pad('Worktree:'))} ${recovery.worktreeDirtyNow === null ? '—' : recovery.worktreeDirtyNow ? 'dirty' : 'clean'}`);
+  if (recovery.relation) {
+    outputHuman(`  ${dim(pad('Relation:'))} ${recovery.relation}`);
+  }
+  outputHuman(`  ${dim(pad('Guidance:'))} ${recovery.guidance}`);
   outputHuman('');
 
   // Resolved models (when not default profile)
