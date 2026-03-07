@@ -4,8 +4,9 @@
  * Uses in-memory database via _getTestDb() for isolation.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DelegationPlan } from '../../src/core/types.js';
+import { _resetConfigCache } from '../../src/core/config.js';
 
 // Import the module under test — will fail until db.ts is implemented
 import {
@@ -42,8 +43,15 @@ import {
 
 describe('pilot.db', () => {
   beforeEach(() => {
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/pilot-test-isolation';
+    _resetConfigCache();
     // Get a fresh in-memory DB for each test
     _getTestDb();
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_CONFIG_FILE;
+    _resetConfigCache();
   });
 
   // ── addJob ────────────────────────────────────────────────────────────

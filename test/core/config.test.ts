@@ -198,6 +198,10 @@ function cleanupTempConfig(filePath: string): void {
 describe('config file loading', () => {
   let tempConfigPath: string | null = null;
 
+  beforeEach(() => {
+    _resetConfigCache();
+  });
+
   afterEach(() => {
     _resetConfigCache();
     delete process.env.PILOT_CONFIG_FILE;
@@ -715,5 +719,72 @@ describe('getConfigFileDefaults scope variations', () => {
       const defaults = getConfigFileDefaults();
       expect(defaults.providerMode).toBe(mode);
     }
+  });
+});
+
+// ── Config isolation regression tests ─────────────────────────────────────
+
+describe('config isolation', () => {
+  beforeEach(() => {
+    _resetConfigCache();
+  });
+
+  afterEach(() => {
+    _resetConfigCache();
+    delete process.env.PILOT_CONFIG_FILE;
+  });
+
+  it('no config file present — getConfigFileDefaults returns hardcoded defaults', () => {
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/isolation-test.json';
+    const defaults = getConfigFileDefaults();
+    expect(defaults.modelProfile).toBe('balanced');
+    expect(defaults.providerMode).toBe('claude-only');
+    expect(defaults.scope).toBeNull();
+    // logLevel is in getConfig(), not getConfigFileDefaults() — verify separately
+    const config = getConfig();
+    expect(config.logLevel).toBe('INFO');
+  });
+
+  it('explicit PILOT_CONFIG_FILE path overrides ~/.pilot/config.json', () => {
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `pilot-isolation-test-${Date.now()}.json`);
+    writeFileSync(tmpFile, JSON.stringify({ logging: { level: 'DEBUG' } }));
+    process.env.PILOT_CONFIG_FILE = tmpFile;
+    const result = loadConfigFile();
+    expect(result?.logging?.level).toBe('DEBUG');
+    rmSync(tmpFile, { force: true });
+  });
+
+  it('discovered config file present — loads and applies values', () => {
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `pilot-isolation-test-${Date.now()}.json`);
+    writeFileSync(tmpFile, JSON.stringify({ defaults: { modelProfile: 'budget' } }));
+    process.env.PILOT_CONFIG_FILE = tmpFile;
+    const result = loadConfigFile();
+    expect(result?.defaults?.modelProfile).toBe('budget');
+    rmSync(tmpFile, { force: true });
+  });
+
+  it('invalid config file — error includes file path, parse cause, and is actionable', () => {
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `pilot-isolation-test-${Date.now()}.json`);
+    writeFileSync(tmpFile, '{ bad json }');
+    process.env.PILOT_CONFIG_FILE = tmpFile;
+    // Error must include: (1) the file path so user knows which file, (2) the parse cause
+    // Error pattern from src/core/config.ts: "Failed to parse config file <path>: <cause>"
+    let thrown: Error | null = null;
+    try { loadConfigFile(); } catch (e) { thrown = e as Error; }
+    expect(thrown).not.toBeNull();
+    expect(thrown!.message).toContain(tmpFile);           // file path present
+    expect(thrown!.message).toContain('Failed to parse'); // actionable prefix
+    rmSync(tmpFile, { force: true });
+  });
+
+  it('host config is present but unit tests remain isolated via PILOT_CONFIG_FILE', () => {
+    // Verify that when PILOT_CONFIG_FILE is set to a nonexistent path,
+    // the real ~/.pilot/config.json is NOT loaded even if it exists on this machine.
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/forced-isolation.json';
+    const result = loadConfigFile();
+    expect(result).toBeNull();
   });
 });
