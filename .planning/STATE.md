@@ -7,18 +7,18 @@
 
 Phase: 43 (Job Undo and Recovery Checkpoints)
 **Next Phase:** 44 (TBD)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-03-07 - Completed 43-03-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-03-07 - Completed 43-04-PLAN.md
 
-Progress: ███████░░░ 11/15 plans (73%)
+Progress: ████████░░ 12/15 plans (80%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 43 in progress — guarded undo command delivered (43-03); recovery visibility surfaces remain for 43-04.
+**Current focus:** Phase 43 complete — recovery visibility shipped across CLI/TUI/docs with full regression pass.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -538,9 +538,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 43-02 | updateJobRecoveryHead runs before markCompleted/markFailed in both terminal paths | Ensures undo checkpoint metadata survives failed jobs and is available for recovery tooling |
 | 43-03 | `pilot undo` force overrides are limited to guarded-history and dirty-start cases | Preserves conservative defaults while allowing explicit operator-controlled recovery when needed |
 | 43-03 | Dirty worktree stays a hard refusal for destructive undo even with --force | Prevents accidental discard of current uncommitted edits during rollback |
+| 43-04 | status recovery visibility stays metadata-first, with newer-work tags shown only when known | Keeps `pilot status` cheap while still surfacing actionable guard states |
+| 43-04 | `pilot info` adds live per-job relation checks and emits a stable `recovery` JSON object | Enables explicit newer-work/diverged guidance without breaking existing JSON consumers |
+| 43-04 | TUI detail header uses concise single-line recovery labels (safe/guarded/unavailable + reason) | Preserves scanability in narrow terminals while exposing checkpoint safety context |
 
 ## Session Continuity
 
-Last session: 2026-03-07T22:59:19Z
-Stopped at: Completed 43-03-PLAN.md
+Last session: 2026-03-07T23:11:47Z
+Stopped at: Completed 43-04-PLAN.md
 Resume file: None
