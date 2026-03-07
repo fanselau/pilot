@@ -6,7 +6,7 @@
 ## Current Position
 
 Phase: 43 (Job Undo and Recovery Checkpoints)
-**Next Phase:** 44 (TBD)
+**Next Phase:** None (milestone complete)
 Plan: 4 of 4 in current phase
 Status: Phase complete
 Last activity: 2026-03-07 - Completed 43-04-PLAN.md
@@ -18,7 +18,7 @@ Progress: ████████░░ 12/15 plans (80%)
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 43 complete — recovery visibility shipped across CLI/TUI/docs with full regression pass.
+**Current focus:** Phase 43 verified and complete — recovery checkpoints, guarded undo, and recovery visibility are shipped across CLI/TUI/docs.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -100,6 +100,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 43: Job Undo and Recovery Checkpoints
+- **Status:** complete (4/4 plans, verified ✓)
 
 ### Quick Tasks Completed
 

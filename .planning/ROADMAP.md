@@ -719,3 +719,25 @@ Wave structure:
 
 **Details:**
 Read requirements/release-hardening-config-isolation-install-story-and-changelog.md for full spec.
+
+### Phase 43: Job Undo and Recovery Checkpoints
+
+**Status:** complete (4/4 plans, verified ✓)
+**Goal:** Ship a conservative recovery MVP by recording per-job git checkpoints, enforcing clean-worktree execution by default, and adding guarded `pilot undo` with clear CLI/TUI safety visibility.
+**Depends on:** Phase 42
+**Plans:** 4 plans
+
+Plans:
+- [x] 43-01-PLAN.md — Add recovery metadata schema/types and `pilot add --force-dirty` queue-time intent capture
+- [x] 43-02-PLAN.md — Enforce runner clean-worktree preflight and capture base/head checkpoints around execution
+- [x] 43-03-PLAN.md — Implement guarded `pilot undo <id>` with `--dry-run` and `--force` safety rules
+- [x] 43-04-PLAN.md — Expose recovery state in status/info/TUI, update docs, and run regression verification
+
+Wave structure:
+- Wave 1: 43-01 (schema + add-command plumbing foundation)
+- Wave 2: 43-02 (runner preflight/checkpoint capture depends on 43-01)
+- Wave 3: 43-03 (undo command depends on 43-02)
+- Wave 4: 43-04 (visibility/docs verification depends on 43-02 + 43-03)
+
+**Details:**
+Read requirements/job-undo-and-recovery-checkpoints.md for full spec.
