@@ -41,7 +41,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   current_step INTEGER DEFAULT 0,
   session_titles TEXT,
   model_profile TEXT NOT NULL DEFAULT 'balanced',
-  provider_mode TEXT NOT NULL DEFAULT 'claude-only'
+  provider_mode TEXT NOT NULL DEFAULT 'claude-only',
+  git_base_commit TEXT,
+  git_head_commit TEXT,
+  allow_dirty_start INTEGER NOT NULL DEFAULT 0,
+  started_dirty INTEGER NOT NULL DEFAULT 0
 );
 `;
 
@@ -132,6 +136,10 @@ interface JobRow {
   callback_url: string | null;
   callback_session_key: string | null;
   categories: string | null;
+  git_base_commit: string | null;
+  git_head_commit: string | null;
+  allow_dirty_start: number;
+  started_dirty: number;
 }
 
 interface ProjectRow {
@@ -188,6 +196,10 @@ function rowToJob(row: JobRow): Job {
       if (!row.categories) return null;
       try { return JSON.parse(row.categories) as string[]; } catch { return null; }
     })(),
+    gitBaseCommit: row.git_base_commit ?? null,
+    gitHeadCommit: row.git_head_commit ?? null,
+    allowDirtyStart: row.allow_dirty_start === 1,
+    startedDirty: row.started_dirty === 1,
   };
 }
 
@@ -213,6 +225,10 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN callback_session_key TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN categories TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN timeout INTEGER DEFAULT 0",
+    'ALTER TABLE jobs ADD COLUMN git_base_commit TEXT',
+    'ALTER TABLE jobs ADD COLUMN git_head_commit TEXT',
+    'ALTER TABLE jobs ADD COLUMN allow_dirty_start INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
   ];
   for (const sql of migrations) {
     try {
@@ -291,6 +307,7 @@ function addJob(
   callbackSessionKey?: string,
   callbackUrl?: string,
   timeout?: number,
+  allowDirtyStart?: boolean,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -299,9 +316,9 @@ function addJob(
   const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0, allowDirtyStart ? 1 : 0);
 
   return getJob(id)!;
 }
@@ -604,6 +621,30 @@ function updateSessionTitles(id: string, titles: string[]): void {
     JSON.stringify(merged),
     id,
   );
+}
+
+/**
+ * Persist attempt-start recovery metadata for a job.
+ * Overwrites previous attempt metadata for git_base_commit and started_dirty.
+ */
+function updateJobRecoveryStart(
+  id: string,
+  gitBaseCommit: string | null,
+  startedDirty: boolean,
+): void {
+  const db = getDb();
+  db.prepare(
+    'UPDATE jobs SET git_base_commit = ?, started_dirty = ? WHERE id = ?',
+  ).run(gitBaseCommit, startedDirty ? 1 : 0, id);
+}
+
+/**
+ * Persist attempt-end recovery metadata for a job.
+ * Overwrites previous attempt metadata for git_head_commit.
+ */
+function updateJobRecoveryHead(id: string, gitHeadCommit: string | null): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET git_head_commit = ? WHERE id = ?').run(gitHeadCommit, id);
 }
 
 // ── Force Quit ────────────────────────────────────────────────────────
@@ -1168,6 +1209,8 @@ export {
   advanceStep,
   bump,
   updateSessionTitles,
+  updateJobRecoveryStart,
+  updateJobRecoveryHead,
   claimNextLaunchable,
   forceQuitJob,
   recordStep,

@@ -24,6 +24,8 @@ import {
   advanceStep,
   bump,
   updateSessionTitles,
+  updateJobRecoveryStart,
+  updateJobRecoveryHead,
   _getTestDb,
   claimNextLaunchable,
   forceQuitJob,
@@ -76,6 +78,10 @@ describe('pilot.db', () => {
       expect(job.createdAt).toBeDefined();
       expect(job.modelProfile).toBe('balanced');
       expect(job.providerMode).toBe('claude-only');
+      expect(job.gitBaseCommit).toBeNull();
+      expect(job.gitHeadCommit).toBeNull();
+      expect(job.allowDirtyStart).toBe(false);
+      expect(job.startedDirty).toBe(false);
     });
 
     it('stores requirementPath when provided', () => {
@@ -118,6 +124,71 @@ describe('pilot.db', () => {
       const job = addJob('proj', 'quick', 'plain task');
       expect(job.callbackSessionKey).toBeNull();
       expect(job.callbackUrl).toBeNull();
+    });
+
+    it('stores allowDirtyStart=true when explicitly provided', () => {
+      const job = addJob(
+        'proj',
+        'quick',
+        'dirty-start task',
+        undefined,
+        'balanced',
+        'claude-only',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        true,
+      );
+      expect(job.allowDirtyStart).toBe(true);
+    });
+  });
+
+  // ── recovery metadata ────────────────────────────────────────────────
+
+  describe('recovery metadata', () => {
+    it('defaults recovery metadata for new jobs', () => {
+      const job = addJob('proj', 'quick', 'task');
+      expect(job.gitBaseCommit).toBeNull();
+      expect(job.gitHeadCommit).toBeNull();
+      expect(job.allowDirtyStart).toBe(false);
+      expect(job.startedDirty).toBe(false);
+    });
+
+    it('updates git_base_commit and started_dirty via updateJobRecoveryStart', () => {
+      const job = addJob('proj', 'quick', 'task', undefined, undefined, undefined, undefined, undefined, undefined, undefined, 0, true);
+      updateJobRecoveryStart(job.id, 'abc1234', true);
+
+      const updated = getJob(job.id);
+      expect(updated).not.toBeNull();
+      expect(updated!.gitBaseCommit).toBe('abc1234');
+      expect(updated!.startedDirty).toBe(true);
+      expect(updated!.allowDirtyStart).toBe(true);
+    });
+
+    it('updates git_head_commit via updateJobRecoveryHead', () => {
+      const job = addJob('proj', 'quick', 'task');
+      updateJobRecoveryHead(job.id, 'def5678');
+
+      const updated = getJob(job.id);
+      expect(updated).not.toBeNull();
+      expect(updated!.gitHeadCommit).toBe('def5678');
+    });
+
+    it('allows recovery attempt metadata to be overwritten on later updates', () => {
+      const job = addJob('proj', 'quick', 'task');
+      updateJobRecoveryStart(job.id, 'base-one', true);
+      updateJobRecoveryHead(job.id, 'head-one');
+
+      updateJobRecoveryStart(job.id, 'base-two', false);
+      updateJobRecoveryHead(job.id, 'head-two');
+
+      const updated = getJob(job.id);
+      expect(updated).not.toBeNull();
+      expect(updated!.gitBaseCommit).toBe('base-two');
+      expect(updated!.gitHeadCommit).toBe('head-two');
+      expect(updated!.startedDirty).toBe(false);
     });
   });
 

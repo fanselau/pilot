@@ -109,6 +109,10 @@ export interface Job {
   callbackUrl: string | null;     // custom webhook URL for job completion notification
   callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
   categories: string[] | null;    // user-assigned skill categories for the job
+  gitBaseCommit: string | null;
+  gitHeadCommit: string | null;
+  allowDirtyStart: boolean;
+  startedDirty: boolean;
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
