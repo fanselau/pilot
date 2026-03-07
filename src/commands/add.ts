@@ -27,6 +27,7 @@ interface AddOptions {
   profile?: string;
   provider?: string;
   force?: boolean;
+  forceDirty?: boolean;
   timeout?: number;   // Per-job timeout in minutes (0 = infinite, default)
   notify?: string;    // Agent ID to notify on completion (e.g. "main")
   notifyUrl?: string; // Custom webhook URL for completion callback
@@ -323,6 +324,7 @@ async function addCommand(
     resolvedNotifyKey,     // callbackSessionKey (resolved)
     opts.notifyUrl,        // callbackUrl
     opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+    opts.forceDirty ?? false,
   );
 
   // Store categories on the job record if provided
@@ -348,6 +350,9 @@ async function addCommand(
   }
   if (opts.timeout && opts.timeout > 0) {
     outputHuman(`  ${dim(`Timeout: ${opts.timeout}m`)}`);
+  }
+  if (opts.forceDirty) {
+    outputHuman(`  ${yellow('⚠')} Starting with dirty worktree (--force-dirty). Recovery guarantees are weaker for this job.`);
   }
   if (resolvedNotifyKey) {
     outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
