@@ -130,6 +130,16 @@ program
   });
 
 program
+  .command('undo <id>')
+  .description('Undo a job using recorded git recovery checkpoints')
+  .option('--dry-run', 'Preview what undo would reset without mutating git state')
+  .option('--force', 'Override guarded-history and dirty-start safety refusals')
+  .action(async (id: string, opts: Record<string, unknown>) => {
+    const { undoCommand } = await import('./commands/undo.js');
+    await undoCommand(id, opts as { dryRun?: boolean; force?: boolean });
+  });
+
+program
   .command('bump <id>')
   .description('Move job to front of queue')
   .action(async (id: string) => {
