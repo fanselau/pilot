@@ -65,6 +65,76 @@ function statusColor(status: string): string {
   }
 }
 
+interface RecoveryHeader {
+  line: string;
+  state: 'safe' | 'guarded' | 'unavailable';
+}
+
+function shortCommit(commit: string | null): string {
+  return commit ? commit.slice(0, 12) : '—';
+}
+
+function inferKnownRecoveryGuard(job: Job): 'blocked-newer-work' | 'diverged-history' | null {
+  const lower = `${job.error ?? ''} ${job.resumeHint ?? ''}`.toLowerCase();
+  if (
+    lower.includes('newer commits exist') ||
+    lower.includes('newer work') ||
+    lower.includes('ahead of this checkpoint')
+  ) {
+    return 'blocked-newer-work';
+  }
+  if (lower.includes('diverged')) {
+    return 'diverged-history';
+  }
+  return null;
+}
+
+export function buildRecoveryHeader(job: Job): RecoveryHeader {
+  const base = shortCommit(job.gitBaseCommit);
+  const head = shortCommit(job.gitHeadCommit);
+
+  if (job.status === 'pending' || job.status === 'running') {
+    return {
+      line: `Recovery: unavailable (active job)   base:${base} head:${head}`,
+      state: 'unavailable',
+    };
+  }
+
+  if (!job.gitBaseCommit || !job.gitHeadCommit) {
+    return {
+      line: `Recovery: unavailable (missing-checkpoint)   base:${base} head:${head}`,
+      state: 'unavailable',
+    };
+  }
+
+  const knownGuard = inferKnownRecoveryGuard(job);
+  if (knownGuard === 'blocked-newer-work') {
+    return {
+      line: `Recovery: guarded (blocked-newer-work)   base:${base} head:${head}`,
+      state: 'guarded',
+    };
+  }
+
+  if (knownGuard === 'diverged-history') {
+    return {
+      line: `Recovery: guarded (diverged-history)   base:${base} head:${head}`,
+      state: 'guarded',
+    };
+  }
+
+  if (job.startedDirty) {
+    return {
+      line: `Recovery: guarded (dirty-start)   base:${base} head:${head}`,
+      state: 'guarded',
+    };
+  }
+
+  return {
+    line: `Recovery: safe   base:${base} head:${head}`,
+    state: 'safe',
+  };
+}
+
 export function parseStepInfo(job: Job): { label: string; index: string } {
   if (!job.delegationPlan) return { label: '—', index: '—' };
   try {
@@ -103,6 +173,7 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     `separator`,
     `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
     `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}   Started: ${startedStr}`,
+    buildRecoveryHeader(job).line,
   ];
 
   if (job.actualModels && job.actualModels.length > 0) {
@@ -479,6 +550,16 @@ export function DetailView(props: { state: PilotStateStore }) {
               fg={theme.muted}
             />
           </box>
+          {/* Line 6: recovery safety + checkpoint commits */}
+          <text
+            content={buildRecoveryHeader(currentJob()!).line}
+            fg={(() => {
+              const state = buildRecoveryHeader(currentJob()!).state;
+              if (state === 'guarded') return '#FACC15';
+              if (state === 'unavailable') return '#F59E0B';
+              return theme.muted;
+            })()}
+          />
           {/* Line 5b: actual model (when available, from opencode DB) */}
           <Show when={currentJob()!.actualModels !== null && (currentJob()!.actualModels?.length ?? 0) > 0}>
             <text

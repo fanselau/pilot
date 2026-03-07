@@ -42,6 +42,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    gitBaseCommit: '1111111111111111111111111111111111111111',
+    gitHeadCommit: '2222222222222222222222222222222222222222',
+    allowDirtyStart: false,
+    startedDirty: false,
     ...overrides,
   };
 }
@@ -152,10 +156,10 @@ describe('parseStepInfo', () => {
 // ── buildHeaderLines ──────────────────────────────────────────────────────────
 
 describe('buildHeaderLines', () => {
-  it('returns exactly 5 lines', () => {
+  it('returns exactly 6 lines', () => {
     const job = makeJob();
     const lines = buildHeaderLines(job, 100);
-    expect(lines).toHaveLength(5);
+    expect(lines).toHaveLength(6);
   });
 
   describe('line 1 — identity', () => {
@@ -281,8 +285,39 @@ describe('buildHeaderLines', () => {
     });
   });
 
+  describe('line 6 — recovery metadata', () => {
+    it('shows safe state with base/head shas by default', () => {
+      const job = makeJob({ status: 'completed' });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines[5]).toContain('Recovery: safe');
+      expect(lines[5]).toContain('base:111111111111');
+      expect(lines[5]).toContain('head:222222222222');
+    });
+
+    it('shows dirty-start guarded reason', () => {
+      const job = makeJob({ status: 'completed', startedDirty: true });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines[5]).toContain('Recovery: guarded (dirty-start)');
+    });
+
+    it('shows newer-work blocked guarded reason when available', () => {
+      const job = makeJob({
+        status: 'completed',
+        error: 'Refusing undo for job ab12: newer commits exist after this checkpoint.',
+      });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines[5]).toContain('Recovery: guarded (blocked-newer-work)');
+    });
+
+    it('shows unavailable state for missing checkpoints', () => {
+      const job = makeJob({ status: 'completed', gitBaseCommit: null, gitHeadCommit: null });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines[5]).toContain('Recovery: unavailable (missing-checkpoint)');
+    });
+  });
+
   describe('width-specific header composition', () => {
-    it('produces valid 5-line header at narrow width (100 cols)', () => {
+    it('produces valid 6-line header at narrow width (100 cols)', () => {
       const plan = makeDelegationPlan([
         { command: 'plan-phase', args: '3 --auto' },
         { command: 'execute-phase', args: '3 --auto' },
@@ -292,7 +327,6 @@ describe('buildHeaderLines', () => {
         id: 'ab12',
         project: 'my-project',
         scope: 'phase',
-        status: 'running',
         description: 'Implement user authentication with JWT tokens',
         delegationPlan: plan,
         currentStep: 1,
@@ -300,15 +334,16 @@ describe('buildHeaderLines', () => {
         providerMode: 'hybrid',
         attempts: 1,
         startedAt: '2026-03-03T10:05:00Z',
+        status: 'completed',
       });
 
       const lines = buildHeaderLines(job, 100);
-      expect(lines).toHaveLength(5);
+      expect(lines).toHaveLength(6);
 
       // Identity
       expect(lines[0]).toContain('#ab12');
       expect(lines[0]).toContain('my-project');
-      expect(lines[0]).toContain('running');
+      expect(lines[0]).toContain('completed');
 
       // Description within bounds
       expect(lines[1]).toMatch(/^".*"$/);
@@ -326,9 +361,13 @@ describe('buildHeaderLines', () => {
       expect(lines[4]).toContain('balanced/hybrid');
       expect(lines[4]).toContain('Attempts: 1');
       expect(lines[4]).toContain('Started:');
+
+      // Recovery
+      expect(lines[5]).toContain('Recovery: safe');
+      expect(lines[5]).toContain('base:111111111111');
     });
 
-    it('produces valid 6-line header at wide width (160 cols) for non-balanced profile', () => {
+    it('produces valid 7-line header at wide width (160 cols) for non-balanced profile', () => {
       const plan = makeDelegationPlan([
         { command: 'plan-phase', args: '7 --auto' },
         { command: 'execute-phase', args: '7 --auto' },
@@ -337,7 +376,6 @@ describe('buildHeaderLines', () => {
         id: 'cd34',
         project: 'big-service',
         scope: 'milestone',
-        status: 'running',
         description: 'Build complete payment integration with Stripe webhooks and subscription management',
         delegationPlan: plan,
         currentStep: 0,
@@ -345,17 +383,18 @@ describe('buildHeaderLines', () => {
         providerMode: 'claude-only',
         attempts: 3,
         startedAt: '2026-03-03T08:00:00Z',
+        status: 'completed',
       });
 
       const lines = buildHeaderLines(job, 160);
-      // 6 lines: identity, description, separator, step/elapsed, model/attempts, resolved models
-      expect(lines).toHaveLength(6);
+      // 7 lines: identity, description, separator, step/elapsed, model/attempts, recovery, resolved models
+      expect(lines).toHaveLength(7);
 
       // Identity
       expect(lines[0]).toContain('#cd34');
       expect(lines[0]).toContain('big-service');
       expect(lines[0]).toContain('milestone');
-      expect(lines[0]).toContain('running');
+      expect(lines[0]).toContain('completed');
 
       // Description — wider terminal shows more
       expect(lines[1]).toMatch(/^".*"$/);
@@ -373,9 +412,13 @@ describe('buildHeaderLines', () => {
       expect(lines[4]).toContain('quality/claude-only');
       expect(lines[4]).toContain('Attempts: 3');
 
+      // Recovery
+      expect(lines[5]).toContain('Recovery: safe');
+      expect(lines[5]).toContain('base:111111111111');
+
       // Resolved models line (only for non-balanced profiles)
-      expect(lines[5]).toContain('Models:');
-      expect(lines[5]).toContain('claude-opus-4-6');
+      expect(lines[6]).toContain('Models:');
+      expect(lines[6]).toContain('claude-opus-4-6');
     });
 
     it('wide header description line is longer than narrow for same long description', () => {
