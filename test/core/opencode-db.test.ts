@@ -14,6 +14,9 @@ import {
   getLastMessage,
   isSessionDone,
   getSessionTokens,
+  getSessionModels,
+  getSessionModelsById,
+  getSessionModelsRecursive,
   getAssistantMessageCount,
   _resetDbCache,
   _setTestDb,
@@ -88,11 +91,12 @@ function insertSession(
   title: string,
   timeCreated: number,
   timeUpdated: number,
+  parentId: string | null = null,
 ): void {
   db.prepare(
-    `INSERT INTO session (id, project_id, slug, directory, title, time_created, time_updated)
-     VALUES (?, 'proj1', ?, '/tmp/test', ?, ?, ?)`,
-  ).run(id, title.toLowerCase(), title, timeCreated, timeUpdated);
+    `INSERT INTO session (id, project_id, parent_id, slug, directory, title, time_created, time_updated)
+     VALUES (?, 'proj1', ?, ?, '/tmp/test', ?, ?, ?)`,
+  ).run(id, parentId, title.toLowerCase(), title, timeCreated, timeUpdated);
 }
 
 function insertMessage(
@@ -535,6 +539,127 @@ describe('getSessionTokens', () => {
     const tokens = getSessionTokens('sess1');
     expect(tokens.input).toBe(0);
     expect(tokens.output).toBe(0);
+  });
+});
+
+// ── getSessionModels / getSessionModelsById / getSessionModelsRecursive ────
+
+describe('model usage queries', () => {
+  it('collects normalized distinct models by session ID', () => {
+    insertSession(db, 'sess1', 'root-session', 1000, 2000);
+    insertMessage(db, 'msg1', 'sess1', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+    });
+    insertMessage(db, 'msg2', 'sess1', 1200, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+    insertMessage(db, 'msg3', 'sess1', 1300, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+
+    expect(getSessionModelsById('sess1')).toEqual([
+      'anthropic/claude-sonnet-4-5',
+      'openai/gpt-5',
+    ]);
+  });
+
+  it('recursively collects models across parent and child sessions', () => {
+    insertSession(db, 'root', 'root-session', 1000, 5000);
+    insertSession(db, 'child-a', 'child-a', 2000, 4000, 'root');
+    insertSession(db, 'child-b', 'child-b', 3000, 4500, 'root');
+
+    insertMessage(db, 'm-root', 'root', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+    });
+    insertMessage(db, 'm-a', 'child-a', 2100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+    insertMessage(db, 'm-b', 'child-b', 3100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-haiku-4-5',
+    });
+
+    expect(getSessionModelsRecursive('root')).toEqual([
+      'anthropic/claude-sonnet-4-5',
+      'openai/gpt-5',
+      'anthropic/claude-haiku-4-5',
+    ]);
+  });
+
+  it('filters malformed provider/model combinations and falls back safely', () => {
+    insertSession(db, 'sess1', 'root-session', 1000, 2000);
+    insertMessage(db, 'valid', 'sess1', 1100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+    insertMessage(db, 'missing-provider', 'sess1', 1200, {
+      role: 'assistant',
+      modelID: 'gpt-5',
+    });
+    insertMessage(db, 'missing-model', 'sess1', 1300, {
+      role: 'assistant',
+      providerID: 'anthropic',
+    });
+    insertMessage(db, 'whitespace-model', 'sess1', 1400, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: '   ',
+    });
+
+    expect(getSessionModelsById('sess1')).toEqual(['openai/gpt-5']);
+  });
+
+  it('guards recursion with visited tracking on cyclic parent relationships', () => {
+    insertSession(db, 'sess-a', 'session-a', 1000, 2000, 'sess-b');
+    insertSession(db, 'sess-b', 'session-b', 1100, 2100, 'sess-a');
+
+    insertMessage(db, 'm-a', 'sess-a', 1200, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+    });
+    insertMessage(db, 'm-b', 'sess-b', 1300, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+
+    expect(getSessionModelsRecursive('sess-a')).toEqual([
+      'anthropic/claude-sonnet-4-5',
+      'openai/gpt-5',
+    ]);
+  });
+
+  it('keeps title-based helper backward compatible via latest matching session', () => {
+    insertSession(db, 'root', 'job-session', 1000, 4000);
+    insertSession(db, 'child', 'job-session-child', 2000, 3000, 'root');
+    insertMessage(db, 'm-root', 'root', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+    });
+    insertMessage(db, 'm-child', 'child', 2100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+
+    expect(getSessionModels('job-session')).toEqual([
+      'anthropic/claude-sonnet-4-5',
+      'openai/gpt-5',
+    ]);
   });
 });
 

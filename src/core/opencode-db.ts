@@ -696,6 +696,84 @@ function getSessionTokensRecursive(
 
 // ── Model queries ──────────────────────────────────────────────────────────
 
+const MAX_SESSION_TREE_DEPTH = 8;
+
+function normalizeModelKey(providerId: unknown, modelId: unknown): string | null {
+  if (typeof providerId !== 'string' || typeof modelId !== 'string') {
+    return null;
+  }
+
+  const provider = providerId.trim();
+  const model = modelId.trim();
+  if (!provider || !model) {
+    return null;
+  }
+
+  if (provider.toLowerCase() === 'null' || model.toLowerCase() === 'null') {
+    return null;
+  }
+
+  return `${provider}/${model}`;
+}
+
+/**
+ * Get distinct provider/model strings used in one specific session.
+ * Session is resolved by ID (not title) for deterministic lookup.
+ */
+function getSessionModelsById(sessionId: string): string[] {
+  const db = openDb();
+  if (db === null) {
+    return [];
+  }
+
+  try {
+    const rows = db.prepare(
+      `SELECT DISTINCT
+         json_extract(data, '$.providerID') as provider_id,
+         json_extract(data, '$.modelID') as model_id
+       FROM message
+       WHERE session_id = ?
+         AND json_extract(data, '$.role') = 'assistant'`,
+    ).all(sessionId) as Array<{ provider_id: unknown; model_id: unknown }>;
+
+    const models: string[] = [];
+    for (const row of rows) {
+      const normalized = normalizeModelKey(row.provider_id, row.model_id);
+      if (normalized) {
+        models.push(normalized);
+      }
+    }
+    return models;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get distinct provider/model strings used by a session tree.
+ * Traverses child sessions via parent_id recursively.
+ */
+function getSessionModelsRecursive(
+  sessionId: string,
+  depth: number = 0,
+  visited: Set<string> = new Set(),
+): string[] {
+  if (depth > MAX_SESSION_TREE_DEPTH || visited.has(sessionId)) {
+    return [];
+  }
+
+  visited.add(sessionId);
+  const models = new Set<string>(getSessionModelsById(sessionId));
+
+  for (const child of getChildSessions(sessionId)) {
+    for (const model of getSessionModelsRecursive(child.id, depth + 1, visited)) {
+      models.add(model);
+    }
+  }
+
+  return Array.from(models);
+}
+
 /**
  * Get distinct provider/model strings used in a session's assistant messages.
  * Reads providerID and modelID from the message data JSON column.
@@ -705,19 +783,12 @@ function getSessionTokensRecursive(
  * Filters out null entries (messages without modelID set).
  */
 function getSessionModels(sessionTitle: string): string[] {
-  const db = openDb();
-  if (db === null) return [];
-  try {
-    const rows = db.prepare(`
-      SELECT DISTINCT json_extract(m.data, '$.providerID') || '/' || json_extract(m.data, '$.modelID') as model
-      FROM message m JOIN session s ON m.session_id = s.id
-      WHERE s.title = ? AND json_extract(m.data, '$.role') = 'assistant'
-        AND json_extract(m.data, '$.modelID') IS NOT NULL
-    `).all(sessionTitle) as Array<{ model: string }>;
-    return rows.map(r => r.model).filter(m => m && !m.startsWith('null'));
-  } catch {
+  const sessionId = findSessionByTitle(sessionTitle);
+  if (!sessionId) {
     return [];
   }
+
+  return getSessionModelsRecursive(sessionId);
 }
 
 // ── Test helpers ───────────────────────────────────────────────────────────
@@ -757,6 +828,8 @@ export {
   isSessionDone,
   getSessionTokens,
   getSessionTokensRecursive,
+  getSessionModelsById,
+  getSessionModelsRecursive,
   getSessionModels,
   _resetDbCache,
   _setTestDb,
