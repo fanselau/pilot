@@ -10,6 +10,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { getQueue, getRecent, getProject, getJob } from '../core/db.js';
 import { getConfig } from '../core/config.js';
+import { buildJobObservability } from '../core/job-observability.js';
 import {
   getLastMessage,
   findSessionByTitle,
@@ -19,7 +20,7 @@ import { buildJobWhy, buildUndoWhy } from '../core/job-introspection.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
-import type { Job } from '../core/types.js';
+import type { Job, JobObservabilitySnapshot } from '../core/types.js';
 
 interface RecoveryTag {
   tag: string;
@@ -133,6 +134,58 @@ function getSessionActivity(job: Job): string | null {
   } catch {
     return null;
   }
+}
+
+function formatCompactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function shortModel(model: string): string {
+  const parts = model.split('/');
+  return parts[parts.length - 1] ?? model;
+}
+
+function formatCompactObservability(snapshot: JobObservabilitySnapshot): string {
+  const modelSignal = snapshot.observed.models.length === 0
+    ? '?'
+    : snapshot.observed.models.length === 1
+      ? shortModel(snapshot.observed.models[0])
+      : `mixed:${snapshot.observed.models.length}`;
+
+  const tokenSignal = snapshot.tokens.totals
+    ? formatCompactNumber(snapshot.tokens.totals.total)
+    : '?';
+
+  const costSignal = snapshot.cost.estimatedUsd === null
+    ? '?'
+    : snapshot.cost.estimatedUsd >= 1
+      ? `~$${snapshot.cost.estimatedUsd.toFixed(2)}`
+      : `~$${snapshot.cost.estimatedUsd.toFixed(4)}`;
+
+  const markers: string[] = [];
+  if (!snapshot.terminal) {
+    markers.push('live');
+  }
+  if (
+    snapshot.observed.status !== 'available'
+    || snapshot.tokens.status !== 'available'
+    || snapshot.cost.status !== 'estimated'
+  ) {
+    markers.push('partial');
+  }
+
+  const markerSuffix = markers.length > 0 ? ` ${markers.join('/')}` : '';
+  return `model:${modelSignal} tok:${tokenSignal} cost:${costSignal}${markerSuffix}`;
+}
+
+function buildObservabilityMap(jobs: Job[]): Record<string, JobObservabilitySnapshot> {
+  const map: Record<string, JobObservabilitySnapshot> = {};
+  for (const job of jobs) {
+    map[job.id] = buildJobObservability(job);
+  }
+  return map;
 }
 
 /**
@@ -272,6 +325,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     ...recent.map((job) => [job.id, buildJobWhy(job)] as const),
   ];
   const why = Object.fromEntries(whyEntries);
+  const observability = buildObservabilityMap([...healthyActive, ...staleActive, ...pending, ...recent]);
 
   if (isJsonMode()) {
     const recovery = buildRecoveryMap([...healthyActive, ...staleActive, ...pending, ...recent]);
@@ -284,6 +338,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       recent,
       recovery,
       why,
+      observability,
     });
     return;
   }
@@ -304,7 +359,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const elapsed = getJobElapsed(job);
       const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${blue('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
+        `  ${blue('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}`,
       );
 
       // Show latest session activity if available
@@ -323,7 +378,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const elapsed = getJobElapsed(job);
       const desc = sanitizeDesc(job.description);
       outputHuman(
-        `  ${yellow('⚠')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim('[stale — will be reconciled]')}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
+        `  ${yellow('⚠')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim('[stale — will be reconciled]')}  ${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}`,
       );
     }
     outputHuman('');
@@ -367,7 +422,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
             : '';
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}${failReason}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
       );
       if (showWhy && (job.status === 'failed' || job.status === 'cancelled' || statusWhy.code === 'no-commit-delta')) {
         outputHuman(`    ${dim(`└ ${formatWhyLine(statusWhy.what, statusWhy.why, statusWhy.next)}`)}`);

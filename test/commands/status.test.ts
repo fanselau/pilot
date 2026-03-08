@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Job } from '../../src/core/types.js';
+import type { Job, JobObservabilitySnapshot } from '../../src/core/types.js';
 
 // ── Mock data ──────────────────────────────────────────────────────────────
 
@@ -83,6 +83,12 @@ vi.mock('../../src/core/opencode-db.js', () => ({
   isSessionDone: () => false,
 }));
 
+const mockBuildJobObservability = vi.fn();
+
+vi.mock('../../src/core/job-observability.js', () => ({
+  buildJobObservability: (...args: unknown[]) => mockBuildJobObservability(...args),
+}));
+
 let mockJsonMode = false;
 const mockOutputJson = vi.fn();
 const mockOutputHuman = vi.fn();
@@ -109,6 +115,65 @@ vi.mock('../../src/util/format.js', () => ({
 
 import { statusCommand } from '../../src/commands/status.js';
 
+function makeObservability(job: Job, overrides: Partial<JobObservabilitySnapshot> = {}): JobObservabilitySnapshot {
+  const running = job.status === 'running';
+  const pending = job.status === 'pending';
+  const terminal = !running && !pending;
+  const defaultStatus = pending ? 'unavailable' : running ? 'partial' : 'available';
+
+  return {
+    jobId: job.id,
+    jobStatus: job.status,
+    terminal,
+    requested: {
+      modelProfile: job.modelProfile,
+      providerMode: job.providerMode,
+      scope: job.scope,
+      intendedExecutorModel: 'anthropic/claude-sonnet-4-6',
+      notes: [],
+    },
+    observed: {
+      status: defaultStatus,
+      models: pending ? [] : ['anthropic/claude-sonnet-4-6'],
+      notes: [],
+    },
+    tokens: {
+      status: defaultStatus,
+      totals: pending
+        ? null
+        : {
+          input: 8_000,
+          output: 2_000,
+          reasoning: 500,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 10_500,
+        },
+      byModel: pending
+        ? {}
+        : {
+          'anthropic/claude-sonnet-4-6': {
+            input: 8_000,
+            output: 2_000,
+            reasoning: 500,
+            cacheRead: 0,
+            cacheWrite: 0,
+            total: 10_500,
+          },
+        },
+      notes: [],
+    },
+    cost: {
+      status: pending ? 'unavailable' : running ? 'partial' : 'estimated',
+      currency: 'USD',
+      estimatedUsd: pending ? null : 0.0525,
+      byModel: [],
+      notes: running ? ['Live running estimate.'] : [],
+    },
+    ...overrides,
+  };
+}
+
 // ── Setup ──────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -117,6 +182,7 @@ beforeEach(() => {
   mockQueue = [];
   mockRecent = [];
   mockProjects = {};
+  mockBuildJobObservability.mockImplementation((job: Job) => makeObservability(job));
 });
 
 afterEach(() => {
@@ -145,6 +211,7 @@ describe('statusCommand', () => {
     expect(output).toContain('Active');
     expect(output).toContain('resume-roast');
     expect(output).toContain('fix navbar');
+    expect(output).toContain('[obs model:claude-sonnet-4-6 tok:10.5k cost:~$0.0525 live/partial]');
   });
 
   it('displays pending jobs in queue section', async () => {
@@ -303,6 +370,7 @@ describe('statusCommand', () => {
     expect(jsonData).toHaveProperty('recent');
     expect(jsonData).toHaveProperty('recovery');
     expect(jsonData).toHaveProperty('why');
+    expect(jsonData).toHaveProperty('observability');
     expect(jsonData.active).toHaveLength(1);
     expect(jsonData.queue).toHaveLength(1);
     expect(jsonData.recent).toHaveLength(1);
@@ -315,6 +383,20 @@ describe('statusCommand', () => {
       aa11: expect.objectContaining({ code: 'running' }),
       bb22: expect.objectContaining({ code: 'project-serial' }),
       cc33: expect.objectContaining({ code: 'undo-unavailable' }),
+    });
+    expect(jsonData.observability).toMatchObject({
+      aa11: expect.objectContaining({
+        terminal: false,
+        tokens: expect.objectContaining({ status: 'partial' }),
+      }),
+      bb22: expect.objectContaining({
+        terminal: false,
+        tokens: expect.objectContaining({ status: 'unavailable' }),
+      }),
+      cc33: expect.objectContaining({
+        terminal: true,
+        tokens: expect.objectContaining({ status: 'available' }),
+      }),
     });
   });
 
