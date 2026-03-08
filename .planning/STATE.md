@@ -6,19 +6,19 @@
 ## Current Position
 
 Phase: 49 (Surface Judge Verdict and Status Badges in TUI / Status Views)
-Plan: 1 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-08 - Completed 49-01-PLAN.md (Shared judge verdict parser/formatter foundation)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-08 - Completed 49-03-PLAN.md (TUI completed/detail badge visibility and dedicated status/verdict/retry/undo lines)
 
-Progress: █████████░ 35/40 plans (88%)
-**Next Plan:** 49-02-PLAN.md (CLI status/info wiring for explicit judge badges)
+Progress: █████████░ 37/40 plans (93%)
+**Next Plan:** None - Phase 49 complete
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 49 in progress — shared judge verdict parser/formatter foundation shipped with deterministic core tests (10/10 passing), ready for CLI and TUI badge wiring.
+**Current focus:** Phase 49 complete — CLI and TUI surfaces now expose explicit judge verdict/retry/undo triage badges for terminal jobs.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -622,9 +622,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 48-01 | existsSync for sentinel check (not async access()) | Single file existence; simpler code, no need for async |
 | 48-01 | Validation returns error in result.errors (not throws) | Consistent with setupProject() error handling pattern |
 | 49-01 | buildJudgeSignal returns outcome='none' for non-phase jobs | Prevents judge badges from leaking into quick/milestone surfaces |
+| 49-02 | status.ts recent rows consume buildJudgeSignal for completed phase judge badges | Keeps pass/inconclusive semantics aligned with shared core helper while preserving retry/undo/obs row context |
+| 49-02 | info.ts Verdict line now uses buildJudgeSignal + formatJudgeReason | Unifies reason/confidence parsing semantics across status/info/TUI and keeps summary fallback compatibility |
+| 49-03 | completed-panel terminal rows compose [judge:*], retry, and undo badges from shared helpers | Keeps TUI badge semantics aligned with core judge/introspection logic and avoids ad-hoc parsing drift |
+| 49-03 | detail header adds explicit Status/Verdict/Retry/Undo lines; wait context stays in supplemental reason lines | Makes operator triage signals scan-friendly without losing existing contextual guidance |
 
 ## Session Continuity
 
-Last session: 2026-03-08T21:14:11Z
-Stopped at: Completed 49-01-PLAN.md
+Last session: 2026-03-08T21:23:05Z
+Stopped at: Completed 49-03-PLAN.md
 Resume file: None
