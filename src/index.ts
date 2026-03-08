@@ -395,6 +395,48 @@ modelsCmd
     await modelsResetCommand(mode, program.opts() as { json?: boolean });
   });
 
+modelsCmd
+  .command('add-provider <name>')
+  .description('Create a new custom provider mode')
+  .option('--clone <mode>', 'Clone entries from an existing provider mode')
+  .action(async (name: string, opts: Record<string, unknown>) => {
+    const { modelsAddProviderCommand } = await import('./commands/models.js');
+    await modelsAddProviderCommand(name, { ...program.opts(), ...opts } as { clone?: string; json?: boolean });
+  });
+
+modelsCmd
+  .command('remove-provider <name>')
+  .description('Remove a custom provider mode')
+  .action(async (name: string) => {
+    const { modelsRemoveProviderCommand } = await import('./commands/models.js');
+    await modelsRemoveProviderCommand(name, program.opts() as { json?: boolean });
+  });
+
+modelsCmd
+  .command('diff')
+  .description('Show customized model entries vs built-in defaults')
+  .option('--provider-mode <mode>', 'Provider mode to diff (default: configured mode)')
+  .action(async (opts: Record<string, unknown>) => {
+    const { modelsDiffCommand } = await import('./commands/models.js');
+    await modelsDiffCommand({ ...program.opts(), providerMode: opts.providerMode as string | undefined } as { json?: boolean; providerMode?: string });
+  });
+
+modelsCmd
+  .command('export')
+  .description('Export all model config as JSON')
+  .action(async () => {
+    const { modelsExportCommand } = await import('./commands/models.js');
+    await modelsExportCommand(program.opts() as { json?: boolean });
+  });
+
+modelsCmd
+  .command('import <file>')
+  .description('Import model config from JSON file')
+  .action(async (file: string) => {
+    const { modelsImportCommand } = await import('./commands/models.js');
+    await modelsImportCommand(file, program.opts() as { json?: boolean });
+  });
+
 program
   .command('doctor')
   .description('Health check: opencode binary, DB access, disk, memory')

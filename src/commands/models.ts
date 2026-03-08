@@ -5,22 +5,32 @@
  * - modelsShowCommand: Display current model mapping as a table
  * - modelsEditCommand: Interactive model reassignment
  * - modelsResetCommand: Reset to built-in defaults
+ * - modelsAddProviderCommand: Create custom provider mode
+ * - modelsRemoveProviderCommand: Delete custom provider mode
+ * - modelsDiffCommand: Show customized vs defaults
+ * - modelsExportCommand: Export config as JSON
+ * - modelsImportCommand: Import config from JSON file
  *
  * Uses Node.js built-in readline for interactive edit (same pattern as init.ts).
  */
 
+import { readFileSync } from 'node:fs';
 import readline from 'node:readline';
 import {
   getAllEntriesForMode,
   getProviderModes,
+  getProviderMode,
   isCustomized,
   setModelEntry,
+  addProviderMode,
+  removeProviderMode,
+  cloneProviderMode,
   resetProviderMode,
   resetAllToDefaults,
 } from '../core/model-store.js';
 import { getConfigFileDefaults } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
-import { bold, dim, yellow, green, cyan } from '../util/colors.js';
+import { bold, dim, yellow, green, cyan, red } from '../util/colors.js';
 import type { ModelProfileRow, ProviderModeRow } from '../core/types.js';
 import type { ModelProfile } from '../core/types.js';
 
@@ -393,6 +403,364 @@ async function modelsResetCommand(providerMode?: string, opts?: ResetOptions): P
   }
 }
 
+// ── Add Provider command ──────────────────────────────────────────────────
+
+/** Valid provider mode name: lowercase alphanumeric + hyphens, 2-50 chars. */
+const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$/;
+
+interface AddProviderOptions {
+  clone?: string;
+  json?: boolean;
+}
+
+/**
+ * `pilot models add-provider <name>`
+ *
+ * Create a new custom provider mode, optionally cloning from an existing one.
+ */
+async function modelsAddProviderCommand(name: string, opts: AddProviderOptions): Promise<void> {
+  // Validate name format
+  if (!PROVIDER_NAME_RE.test(name)) {
+    const msg = `Invalid provider mode name "${name}". Must be 2-50 chars, lowercase alphanumeric + hyphens.`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  // Check if already exists
+  const existing = getProviderMode(name);
+  if (existing) {
+    const msg = `Provider mode '${name}' already exists.`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  let entryCount = 0;
+
+  if (opts.clone) {
+    // Verify source mode exists
+    const sourceMode = getProviderMode(opts.clone);
+    if (!sourceMode) {
+      const msg = `Source provider mode '${opts.clone}' not found.`;
+      if (isJsonMode()) {
+        outputJson({ error: msg });
+      } else {
+        process.stderr.write(`  ${red('✗')} ${msg}\n`);
+      }
+      process.exit(2);
+    }
+
+    // Create the mode first, then clone entries
+    addProviderMode(name, `Custom mode cloned from ${opts.clone}`, false);
+    cloneProviderMode(opts.clone, name);
+
+    const entries = getAllEntriesForMode(name);
+    entryCount = entries.length;
+  } else {
+    // Create empty mode
+    addProviderMode(name, 'Custom provider mode', false);
+  }
+
+  if (isJsonMode()) {
+    outputJson({ created: true, name, entries: entryCount });
+  } else {
+    if (opts.clone) {
+      outputHuman(`\n  ${green('✓')} Created provider mode '${bold(name)}' with ${entryCount} entries cloned from '${opts.clone}'.`);
+    } else {
+      outputHuman(`\n  ${green('✓')} Created provider mode '${bold(name)}'.`);
+      outputHuman(`  ${dim('Populate it with:')} pilot models edit`);
+    }
+    outputHuman('');
+  }
+}
+
+// ── Remove Provider command ──────────────────────────────────────────────
+
+interface RemoveProviderOptions {
+  json?: boolean;
+}
+
+/**
+ * `pilot models remove-provider <name>`
+ *
+ * Remove a custom provider mode and all its model entries.
+ * Refuses to remove built-in modes.
+ */
+async function modelsRemoveProviderCommand(name: string, opts: RemoveProviderOptions): Promise<void> {
+  const existing = getProviderMode(name);
+  if (!existing) {
+    const msg = `Provider mode '${name}' not found.`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  if (existing.is_builtin === 1) {
+    const msg = `Cannot remove built-in provider mode '${name}'. Only custom modes can be removed.`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  removeProviderMode(name);
+
+  if (isJsonMode()) {
+    outputJson({ removed: true, name });
+  } else {
+    outputHuman(`\n  ${green('✓')} Removed provider mode '${bold(name)}' and all its model entries.\n`);
+  }
+}
+
+// ── Diff command ──────────────────────────────────────────────────────────
+
+interface DiffOptions {
+  json?: boolean;
+  providerMode?: string;
+}
+
+/**
+ * `pilot models diff`
+ *
+ * Show customized entries that differ from their built-in defaults.
+ */
+async function modelsDiffCommand(opts: DiffOptions): Promise<void> {
+  const defaults = getConfigFileDefaults();
+  const mode = opts.providerMode ?? defaults.providerMode;
+
+  const entries = getAllEntriesForMode(mode);
+  if (entries.length === 0) {
+    if (isJsonMode()) {
+      outputJson({ providerMode: mode, diffs: [], message: `Provider mode '${mode}' not found or has no entries.` });
+    } else {
+      outputHuman(`\n  ${yellow(`Provider mode '${mode}' not found or has no entries.`)}\n`);
+    }
+    return;
+  }
+
+  // Collect customized entries with before/after
+  const { AGENT_MODELS } = await import('../core/models.js');
+  const agentMap = (AGENT_MODELS as Record<string, Record<string, Record<string, { model: string; variant?: string }>>>)[mode];
+
+  interface DiffEntry {
+    agentOrScope: string;
+    profile: string;
+    defaultModel: string | null;
+    defaultVariant: string | null;
+    currentModel: string;
+    currentVariant: string | null;
+  }
+
+  const diffs: DiffEntry[] = [];
+
+  for (const e of entries) {
+    if (!isCustomized(e.provider_mode, e.agent_or_scope, e.profile as ModelProfile)) continue;
+
+    // Find default value
+    let defaultModel: string | null = null;
+    let defaultVariant: string | null = null;
+    if (agentMap) {
+      const profileMap = agentMap[e.agent_or_scope];
+      if (profileMap) {
+        const defaultEntry = profileMap[e.profile];
+        if (defaultEntry) {
+          defaultModel = defaultEntry.model;
+          defaultVariant = defaultEntry.variant ?? null;
+        }
+      }
+    }
+
+    diffs.push({
+      agentOrScope: e.agent_or_scope,
+      profile: e.profile,
+      defaultModel,
+      defaultVariant,
+      currentModel: e.model,
+      currentVariant: e.variant,
+    });
+  }
+
+  if (diffs.length === 0) {
+    if (isJsonMode()) {
+      outputJson({ providerMode: mode, diffs: [] });
+    } else {
+      outputHuman(`\n  No customizations found for provider mode '${bold(mode)}'.\n`);
+    }
+    return;
+  }
+
+  if (isJsonMode()) {
+    outputJson({ providerMode: mode, diffs });
+    return;
+  }
+
+  outputHuman('');
+  outputHuman(`  ${bold(`Customizations in '${mode}':`)} (${diffs.length} changed)`);
+  outputHuman('');
+
+  for (const d of diffs) {
+    const defaultDisplay = d.defaultModel
+      ? (d.defaultVariant ? `${d.defaultModel} (${d.defaultVariant})` : d.defaultModel)
+      : dim('(not in defaults)');
+    const currentDisplay = d.currentVariant
+      ? `${d.currentModel} (${d.currentVariant})`
+      : d.currentModel;
+
+    outputHuman(`  ${bold(d.agentOrScope)} (${d.profile}):`);
+    outputHuman(`    Default: ${defaultDisplay}`);
+    outputHuman(`    Current: ${yellow(currentDisplay)}`);
+  }
+  outputHuman('');
+}
+
+// ── Export command ────────────────────────────────────────────────────────
+
+/**
+ * `pilot models export`
+ *
+ * Export all model_profiles and provider_modes as JSON to stdout.
+ */
+async function modelsExportCommand(_opts: { json?: boolean }): Promise<void> {
+  const modes = getProviderModes();
+
+  const allEntries: ModelProfileRow[] = [];
+  for (const m of modes) {
+    const entries = getAllEntriesForMode(m.name);
+    allEntries.push(...entries);
+  }
+
+  const exportData = {
+    version: 1,
+    provider_modes: modes.map((m) => ({
+      name: m.name,
+      description: m.description,
+      is_builtin: m.is_builtin === 1,
+    })),
+    model_profiles: allEntries.map((e) => ({
+      provider_mode: e.provider_mode,
+      agent_or_scope: e.agent_or_scope,
+      profile: e.profile,
+      model: e.model,
+      variant: e.variant,
+    })),
+  };
+
+  // Always output JSON for export (it's a data dump)
+  process.stdout.write(JSON.stringify(exportData, null, 2) + '\n');
+}
+
+// ── Import command ────────────────────────────────────────────────────────
+
+interface ImportOptions {
+  json?: boolean;
+}
+
+interface ImportData {
+  version: number;
+  provider_modes: Array<{ name: string; description: string; is_builtin?: boolean }>;
+  model_profiles: Array<{
+    provider_mode: string;
+    agent_or_scope: string;
+    profile: string;
+    model: string;
+    variant: string | null;
+  }>;
+}
+
+/**
+ * `pilot models import <file>`
+ *
+ * Read JSON file and upsert provider modes and model entries.
+ */
+async function modelsImportCommand(file: string, opts: ImportOptions): Promise<void> {
+  let raw: string;
+  try {
+    raw = readFileSync(file, 'utf8');
+  } catch (err) {
+    const msg = `Cannot read file: ${file}`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  let data: ImportData;
+  try {
+    data = JSON.parse(raw) as ImportData;
+  } catch {
+    const msg = `Invalid JSON in file: ${file}`;
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  // Validate structure
+  if (typeof data.version !== 'number' || !Array.isArray(data.provider_modes) || !Array.isArray(data.model_profiles)) {
+    const msg = 'Invalid import format. Must have version (number), provider_modes (array), and model_profiles (array).';
+    if (isJsonMode()) {
+      outputJson({ error: msg });
+    } else {
+      process.stderr.write(`  ${red('✗')} ${msg}\n`);
+    }
+    process.exit(2);
+  }
+
+  // Upsert provider modes (skip if already exists)
+  let modesImported = 0;
+  for (const pm of data.provider_modes) {
+    const existing = getProviderMode(pm.name);
+    if (!existing) {
+      addProviderMode(pm.name, pm.description, pm.is_builtin ?? false);
+      modesImported++;
+    }
+  }
+
+  // Upsert model entries
+  let entriesImported = 0;
+  for (const mp of data.model_profiles) {
+    setModelEntry(
+      mp.provider_mode,
+      mp.agent_or_scope,
+      mp.profile as ModelProfile,
+      mp.model,
+      mp.variant,
+    );
+    entriesImported++;
+  }
+
+  if (isJsonMode()) {
+    outputJson({ imported: true, providerModes: modesImported, modelEntries: entriesImported });
+  } else {
+    outputHuman(`\n  ${green('✓')} Imported ${modesImported} provider modes and ${entriesImported} model entries.\n`);
+  }
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
-export { modelsShowCommand, modelsEditCommand, modelsResetCommand };
+export {
+  modelsShowCommand,
+  modelsEditCommand,
+  modelsResetCommand,
+  modelsAddProviderCommand,
+  modelsRemoveProviderCommand,
+  modelsDiffCommand,
+  modelsExportCommand,
+  modelsImportCommand,
+};

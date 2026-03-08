@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 46 (Dynamic Model Configuration)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-08 - Completed 46-02-PLAN.md (DB-backed resolve functions with hardcoded fallback)
+Last activity: 2026-03-08 - Completed 46-03-PLAN.md (Models CLI command group: show/edit/reset)
 
-Progress: ██░░░ 2/5 plans (40%)
+Progress: ███░░ 3/5 plans (60%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 02 complete: resolve functions now read from DB with hardcoded fallback.
+**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 03 complete: `pilot models` CLI command group with show/edit/reset for user-facing model configuration.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -110,7 +110,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (6/6 plans, verified ✓)
 
 ### Phase 46: Dynamic Model Configuration
-- **Status:** in progress (2/5 plans complete)
+- **Status:** in progress (3/5 plans complete)
 
 ### Quick Tasks Completed
 
@@ -589,9 +589,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 46-02 | Config providerMode validation accepts any non-empty string | Actual validation at resolution time — DB may not be available during early config parse |
 | 46-02 | ESM circular dependency (models→model-store→models) safe via live bindings | AGENT_MODELS accessed inside functions at call time, not at import evaluation time |
 | 46-02 | Resolve functions: try DB → catch → fall through to AGENT_MODELS | Graceful degradation ensures pilot works even when DB is unavailable |
+| 46-03 | Agents and Scopes displayed in separate table sections | _top: prefix entries are visually distinct from agent entries |
+| 46-03 | Profile selection includes 'all' option in edit flow | Common case: user wants same model for all profiles of an agent |
+| 46-03 | Default confirm is 'n' in edit flow | Safety: accidental Enter doesn't apply unwanted changes |
+| 46-03 | Available modes listed when no specific mode requested | Discoverability: users see what other modes they can inspect |
 
 ## Session Continuity
 
-Last session: 2026-03-08T08:52:11Z
-Stopped at: Completed 46-02-PLAN.md
+Last session: 2026-03-08T08:57:00Z
+Stopped at: Completed 46-03-PLAN.md
 Resume file: None
