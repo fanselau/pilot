@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job, JobStep } from '../../src/core/types.js';
+import type { Job, JobStep, JobObservabilitySnapshot } from '../../src/core/types.js';
 
 const mockGetJob = vi.fn();
 const mockGetQueue = vi.fn();
@@ -23,6 +23,12 @@ vi.mock('../../src/core/opencode-db.js', () => ({
   getChildSessions: (...args: unknown[]) => mockGetChildSessions(...args),
   getSessionTokens: (...args: unknown[]) => mockGetSessionTokens(...args),
   getSessionTokensRecursive: (...args: unknown[]) => mockGetSessionTokensRecursive(...args),
+}));
+
+const mockBuildJobObservability = vi.fn();
+
+vi.mock('../../src/core/job-observability.js', () => ({
+  buildJobObservability: (...args: unknown[]) => mockBuildJobObservability(...args),
 }));
 
 let mockJsonMode = false;
@@ -102,6 +108,56 @@ function makeStep(overrides: Partial<JobStep> = {}): JobStep {
   };
 }
 
+function makeObservability(overrides: Partial<JobObservabilitySnapshot> = {}): JobObservabilitySnapshot {
+  return {
+    jobId: 'ab12',
+    jobStatus: 'completed',
+    terminal: true,
+    requested: {
+      modelProfile: 'balanced',
+      providerMode: 'hybrid',
+      scope: 'phase',
+      intendedExecutorModel: 'anthropic/claude-sonnet-4-6',
+      notes: [],
+    },
+    observed: {
+      status: 'available',
+      models: ['anthropic/claude-sonnet-4-6'],
+      notes: [],
+    },
+    tokens: {
+      status: 'available',
+      totals: {
+        input: 12_000,
+        output: 3_000,
+        reasoning: 1_000,
+        cacheRead: 0,
+        cacheWrite: 0,
+        total: 16_000,
+      },
+      byModel: {
+        'anthropic/claude-sonnet-4-6': {
+          input: 12_000,
+          output: 3_000,
+          reasoning: 1_000,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 16_000,
+        },
+      },
+      notes: [],
+    },
+    cost: {
+      status: 'partial',
+      currency: 'USD',
+      estimatedUsd: 0.081,
+      byModel: [],
+      notes: ['Reasoning tokens are present but excluded from estimate.'],
+    },
+    ...overrides,
+  };
+}
+
 describe('logCommand --summary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -115,6 +171,7 @@ describe('logCommand --summary', () => {
     mockGetChildSessions.mockReturnValue([]);
     mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
     mockGetSessionTokensRecursive.mockReturnValue({ input: 0, output: 0, reasoning: 0 });
+    mockBuildJobObservability.mockReturnValue(makeObservability());
   });
 
   it('renders deterministic human summary for completed no-op jobs', async () => {
@@ -146,6 +203,10 @@ describe('logCommand --summary', () => {
     expect(output).toContain('Summary');
     expect(output).toContain('final step: 2/2 execute-phase [completed]');
     expect(output).toContain('signals: build=pass  test=pass');
+    expect(output).toContain('observed models (available): anthropic/claude-sonnet-4-6');
+    expect(output).toContain('tokens (available): 16.0k total (12.0k in / 3.0k out / 1.0k thinking)');
+    expect(output).toContain('estimated cost: ~$0.0810 (partial)');
+    expect(output).toContain('cost note: Reasoning tokens are present but excluded from estimate.');
     expect(output).toContain('commit delta: no-op');
     expect(output).toContain('Job produced no commit delta');
     expect(mockGetSessionParts).not.toHaveBeenCalled();
@@ -187,6 +248,26 @@ describe('logCommand --summary', () => {
     expect(payload.summary.signals).toMatchObject({ build: 'fail', test: 'fail' });
     expect(payload.summary.commitDelta).toMatchObject({ state: 'changed' });
     expect(payload.summary.failureReason).toContain('build failed and tests failed');
+    expect(payload.summary.observability).toMatchObject({
+      observed: { status: 'available' },
+      tokens: { status: 'available' },
+      cost: { status: 'partial' },
+    });
+    expect(payload.summary.failureContext).toMatchObject({
+      failed: true,
+      failedStep: {
+        index: 1,
+        total: 1,
+        command: 'execute-phase',
+      },
+      completedBeforeFailure: {
+        completed: 0,
+        total: 1,
+      },
+      retry: {
+        code: 'retryable-failure',
+      },
+    });
     expect(mockGetSessionParts).not.toHaveBeenCalled();
   });
 
@@ -205,6 +286,7 @@ describe('logCommand --summary', () => {
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(output).toContain('what: Last run failed but appears retryable.');
     expect(output).toContain('next: Run pilot retry ab12.');
+    expect(output).toContain('retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
   });
 
   it('surfaces guarded undo/no-step fallback state without transcript reads', async () => {

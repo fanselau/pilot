@@ -12,7 +12,8 @@
  */
 
 import { getJob, getQueue, getJobSteps } from '../core/db.js';
-import { buildJobWhy } from '../core/job-introspection.js';
+import { buildJobWhy, buildRetryWhy } from '../core/job-introspection.js';
+import { buildJobObservability } from '../core/job-observability.js';
 import {
   findSessionByTitle,
   getSessionParts,
@@ -22,7 +23,7 @@ import {
 } from '../core/opencode-db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
-import type { SessionPart, Job, JobStep } from '../core/types.js';
+import type { SessionPart, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
 
 interface LogOptions {
   json?: boolean;
@@ -202,6 +203,25 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
+function formatObservabilityStatus(status: JobObservabilitySnapshot['tokens']['status']): string {
+  switch (status) {
+    case 'available':
+      return 'available';
+    case 'partial':
+      return 'partial/live';
+    default:
+      return 'unavailable';
+  }
+}
+
+function formatEstimatedCost(observability: JobObservabilitySnapshot): string {
+  if (observability.cost.estimatedUsd === null) {
+    return `unavailable (${observability.cost.status})`;
+  }
+  const precision = observability.cost.estimatedUsd >= 1 ? 2 : 4;
+  return `~$${observability.cost.estimatedUsd.toFixed(precision)} (${observability.cost.status})`;
+}
+
 /**
  * Render a compact step summary for the human log output.
  * Includes per-step token usage when available from opencode DB.
@@ -296,6 +316,22 @@ interface LogSummaryData {
     build: OutcomeSignal;
     test: OutcomeSignal;
   };
+  observability: JobObservabilitySnapshot;
+  failureContext: {
+    failed: boolean;
+    failedStep: {
+      index: number;
+      total: number;
+      command: string;
+      verdictSource: string | null;
+      verdictReason: string | null;
+    } | null;
+    completedBeforeFailure: {
+      completed: number;
+      total: number;
+    };
+    retry: ReturnType<typeof buildRetryWhy>;
+  };
   commitDelta: {
     state: 'changed' | 'no-op' | 'unknown';
     baseCommit: string | null;
@@ -380,9 +416,12 @@ function shortCommit(commit: string | null): string {
 
 function buildSummaryData(job: Job, steps: JobStep[]): LogSummaryData {
   const why = buildJobWhy(job);
+  const retry = buildRetryWhy(job);
+  const observability = buildJobObservability(job);
   const step = resolveSummaryStep(steps);
   const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
   const failedStep = [...ordered].reverse().find((entry) => entry.status === 'failed');
+  const completedCount = ordered.filter((entry) => entry.status === 'completed').length;
 
   let failureReason: string | null = null;
   if (job.status === 'failed' || job.status === 'cancelled') {
@@ -397,6 +436,24 @@ function buildSummaryData(job: Job, steps: JobStep[]): LogSummaryData {
     code: why.code,
     step,
     signals: collectOutcomeSignals(steps),
+    observability,
+    failureContext: {
+      failed: job.status === 'failed' || job.status === 'cancelled',
+      failedStep: failedStep
+        ? {
+          index: failedStep.stepIndex + 1,
+          total: ordered.length,
+          command: failedStep.command,
+          verdictSource: failedStep.verdictSource,
+          verdictReason: failedStep.verdictReason,
+        }
+        : null,
+      completedBeforeFailure: {
+        completed: completedCount,
+        total: ordered.length,
+      },
+      retry,
+    },
     commitDelta: resolveCommitDelta(job),
     failureReason,
   };
@@ -428,6 +485,22 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
     outputHuman(`  ${dim(`signals: ${signalParts.join('  ')}`)}`);
   }
 
+  const observedModels = summary.observability.observed.models.length > 0
+    ? summary.observability.observed.models.join(', ')
+    : '—';
+  outputHuman(
+    `  ${dim(`observed models (${formatObservabilityStatus(summary.observability.observed.status)}): ${observedModels}`)}`,
+  );
+  if (summary.observability.tokens.totals) {
+    const totals = summary.observability.tokens.totals;
+    outputHuman(
+      `  ${dim(`tokens (${formatObservabilityStatus(summary.observability.tokens.status)}): ${formatTokenCount(totals.total)} total (${formatTokenCount(totals.input)} in / ${formatTokenCount(totals.output)} out / ${formatTokenCount(totals.reasoning)} thinking)`)}`,
+    );
+  } else {
+    outputHuman(`  ${dim(`tokens (${formatObservabilityStatus(summary.observability.tokens.status)}): unavailable`)}`);
+  }
+  outputHuman(`  ${dim(`estimated cost: ${formatEstimatedCost(summary.observability)}`)}`);
+
   if (summary.commitDelta.state === 'unknown') {
     outputHuman('  commit delta: unknown (missing recovery checkpoints)');
   } else if (summary.commitDelta.state === 'no-op') {
@@ -442,6 +515,39 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
 
   if (summary.failureReason) {
     outputHuman(`  ${red(`failure: ${summary.failureReason}`)}`);
+  }
+
+  if (summary.failureContext.failed) {
+    if (summary.failureContext.failedStep) {
+      const failureStep = summary.failureContext.failedStep;
+      outputHuman(
+        `  ${dim(`failure step: ${failureStep.index}/${failureStep.total} ${failureStep.command}`)}`,
+      );
+      if (failureStep.verdictSource || failureStep.verdictReason) {
+        const reason = [failureStep.verdictSource, failureStep.verdictReason]
+          .filter((part): part is string => Boolean(part))
+          .join(': ');
+        outputHuman(`  ${dim(`failure detail: ${reason}`)}`);
+      }
+    } else {
+      outputHuman(`  ${dim('failure step: unavailable (no step metadata)')}`);
+    }
+    outputHuman(
+      `  ${dim(`completed before failure: ${summary.failureContext.completedBeforeFailure.completed}/${summary.failureContext.completedBeforeFailure.total}`)}`,
+    );
+    outputHuman(
+      `  ${dim(`retry guidance: ${summary.failureContext.retry.badge} (${summary.failureContext.retry.code}) — ${summary.failureContext.retry.next}`)}`,
+    );
+  }
+
+  for (const note of summary.observability.observed.notes) {
+    outputHuman(`  ${dim(`observed note: ${note}`)}`);
+  }
+  for (const note of summary.observability.tokens.notes) {
+    outputHuman(`  ${dim(`token note: ${note}`)}`);
+  }
+  for (const note of summary.observability.cost.notes) {
+    outputHuman(`  ${dim(`cost note: ${note}`)}`);
   }
 
   outputHuman(`  ${dim(`what: ${summary.what}`)}`);
