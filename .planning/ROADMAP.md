@@ -848,3 +848,22 @@ Wave structure:
 
 **Details:**
 Read requirements/fix-new-project-setup.md for full spec.
+
+### Phase 49: Surface Judge Verdict and Status Badges in TUI / Status Views
+
+**Status:** in progress (1/3 plans complete)
+**Goal:** Surface explicit judge outcome and operational safety badges across TUI completed/detail views and `pilot status` so operators can instantly distinguish pass/fail/doubt/inconclusive, retryability, and undo safety without drilling into logs.
+**Depends on:** Phase 48
+**Plans:** 3 plans
+
+Plans:
+- [x] 49-01-PLAN.md — Shared judge verdict parser/formatter foundation with deterministic core tests
+- [ ] 49-02-PLAN.md — CLI status/info wiring for explicit judge badges and shared verdict semantics
+- [ ] 49-03-PLAN.md — TUI completed/detail badge visibility and dedicated status/verdict/retry/undo lines
+
+Wave structure:
+- Wave 1: 49-01 (shared verdict formatter foundation)
+- Wave 2: 49-02 + 49-03 in parallel (CLI and TUI wiring, both depend on 49-01)
+
+**Details:**
+Read requirements/surface-judge-verdict-and-badges-in-tui.md for full spec.

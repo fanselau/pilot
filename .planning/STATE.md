@@ -1,23 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 48
+## Current Phase: 49
 
 ## Current Position
 
-Phase: 48 (Fix New Project Setup Critical Bugs)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Completed 48-02-PLAN.md (Test coverage for command layout validation)
+Phase: 49 (Surface Judge Verdict and Status Badges in TUI / Status Views)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 49-01-PLAN.md (Shared judge verdict parser/formatter foundation)
 
-Progress: ██ 2/2 plans (100%)
+Progress: █████████░ 35/40 plans (88%)
+**Next Plan:** 49-02-PLAN.md (CLI status/info wiring for explicit judge badges)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 48 complete — pilot-gsd submodule updated to working fork, setupProject() validates command layout with test coverage (805 tests passing).
+**Current focus:** Phase 49 in progress — shared judge verdict parser/formatter foundation shipped with deterministic core tests (10/10 passing), ready for CLI and TUI badge wiring.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -229,6 +230,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 46 added: Dynamic Model Configuration
 - Phase 47 added: AGENTS.md Integration — CLI Commands & Doctor Check
 - Phase 48 added: Fix New Project Setup Critical Bugs
+- Phase 49 added: Surface Judge Verdict and Status Badges in TUI / Status Views
 
 ## Decisions
 
@@ -619,9 +621,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 48-01 | gsd-delegate.md as sentinel file for command layout validation | Pilot-specific command only in correct flat layout; simple existence check |
 | 48-01 | existsSync for sentinel check (not async access()) | Single file existence; simpler code, no need for async |
 | 48-01 | Validation returns error in result.errors (not throws) | Consistent with setupProject() error handling pattern |
+| 49-01 | buildJudgeSignal returns outcome='none' for non-phase jobs | Prevents judge badges from leaking into quick/milestone surfaces |
 
 ## Session Continuity
 
-Last session: 2026-03-08T14:04:17Z
-Stopped at: Completed 48-01-PLAN.md
+Last session: 2026-03-08T21:14:11Z
+Stopped at: Completed 49-01-PLAN.md
 Resume file: None
