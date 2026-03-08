@@ -82,6 +82,7 @@ describe('pilot.db', () => {
       expect(job.gitHeadCommit).toBeNull();
       expect(job.allowDirtyStart).toBe(false);
       expect(job.startedDirty).toBe(false);
+      expect(job.skipGracePeriod).toBe(false);
     });
 
     it('stores requirementPath when provided', () => {
@@ -142,6 +143,25 @@ describe('pilot.db', () => {
         true,
       );
       expect(job.allowDirtyStart).toBe(true);
+    });
+
+    it('stores skipGracePeriod=true when explicitly provided', () => {
+      const job = addJob(
+        'proj',
+        'quick',
+        'skip-grace task',
+        undefined,
+        'balanced',
+        'claude-only',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        false,
+        true,
+      );
+      expect(job.skipGracePeriod).toBe(true);
     });
   });
 
@@ -205,6 +225,13 @@ describe('pilot.db', () => {
 
     it('returns null for unknown id', () => {
       expect(getJob('zzzz')).toBeNull();
+    });
+
+    it('maps skipGracePeriod from stored row values', () => {
+      const created = addJob('proj', 'quick', 'grace mapping', undefined, undefined, undefined, undefined, undefined, undefined, undefined, 0, false, true);
+      const fetched = getJob(created.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.skipGracePeriod).toBe(true);
     });
   });
 

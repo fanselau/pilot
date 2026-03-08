@@ -58,6 +58,7 @@ export interface PilotConfig {
   projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
   gsdDir: string;            // ./pilot-gsd (PILOT_GSD_DIR)
   maxParallel: number;       // auto from RAM, default 1
+  queueGraceSeconds: number; // minimum queue age before launch eligibility, default 120
   sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)
   reservedMemoryMb: number;        // reserved for OS/SSH/pilot before dynamic maxParallel calc, default 4096
   memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048
@@ -113,6 +114,7 @@ export interface Job {
   gitHeadCommit: string | null;
   allowDirtyStart: boolean;
   startedDirty: boolean;
+  skipGracePeriod: boolean;
 }
 
 // ── Delegation AI ─────────────────────────────────────────────────────────

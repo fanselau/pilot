@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   git_base_commit TEXT,
   git_head_commit TEXT,
   allow_dirty_start INTEGER NOT NULL DEFAULT 0,
-  started_dirty INTEGER NOT NULL DEFAULT 0
+  started_dirty INTEGER NOT NULL DEFAULT 0,
+  skip_grace_period INTEGER NOT NULL DEFAULT 0
 );
 `;
 
@@ -140,6 +141,7 @@ interface JobRow {
   git_head_commit: string | null;
   allow_dirty_start: number;
   started_dirty: number;
+  skip_grace_period: number;
 }
 
 interface ProjectRow {
@@ -200,6 +202,7 @@ function rowToJob(row: JobRow): Job {
     gitHeadCommit: row.git_head_commit ?? null,
     allowDirtyStart: row.allow_dirty_start === 1,
     startedDirty: row.started_dirty === 1,
+    skipGracePeriod: row.skip_grace_period === 1,
   };
 }
 
@@ -229,6 +232,7 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN git_head_commit TEXT',
     'ALTER TABLE jobs ADD COLUMN allow_dirty_start INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
   ];
   for (const sql of migrations) {
     try {
@@ -308,6 +312,7 @@ function addJob(
   callbackUrl?: string,
   timeout?: number,
   allowDirtyStart?: boolean,
+  skipGracePeriod?: boolean,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -316,9 +321,9 @@ function addJob(
   const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0, allowDirtyStart ? 1 : 0);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start, skip_grace_period)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0, allowDirtyStart ? 1 : 0, skipGracePeriod ? 1 : 0);
 
   return getJob(id)!;
 }
