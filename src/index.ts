@@ -96,6 +96,16 @@ program
   });
 
 program
+  .command('export <id>')
+  .description('Generate portable markdown artifact for a job')
+  .option('--output <path>', 'Write export markdown to a specific file path')
+  .option('--stdout', 'Print markdown export to stdout instead of writing a file')
+  .action(async (id: string, opts: Record<string, unknown>) => {
+    const { exportCommand } = await import('./commands/export.js');
+    await exportCommand(id, { ...program.opts(), ...opts } as { json?: boolean; output?: string; stdout?: boolean });
+  });
+
+program
   .command('queue')
   .alias('q')
   .description('Show job queue')

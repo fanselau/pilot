@@ -1,7 +1,57 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Job, JobObservabilitySnapshot, JobStep } from '../../src/core/types.js';
 import type { JobWhy } from '../../src/core/job-introspection.js';
 import { buildJobExportMarkdown } from '../../src/core/job-export.js';
+
+const mockGetJob = vi.fn();
+const mockGetJobSteps = vi.fn();
+
+vi.mock('../../src/core/db.js', () => ({
+  getJob: (...args: unknown[]) => mockGetJob(...args),
+  getJobSteps: (...args: unknown[]) => mockGetJobSteps(...args),
+}));
+
+const mockBuildJobObservability = vi.fn();
+
+vi.mock('../../src/core/job-observability.js', () => ({
+  buildJobObservability: (...args: unknown[]) => mockBuildJobObservability(...args),
+}));
+
+const mockBuildJobWhy = vi.fn();
+const mockBuildRetryWhy = vi.fn();
+const mockBuildUndoWhy = vi.fn();
+
+vi.mock('../../src/core/job-introspection.js', () => ({
+  buildJobWhy: (...args: unknown[]) => mockBuildJobWhy(...args),
+  buildRetryWhy: (...args: unknown[]) => mockBuildRetryWhy(...args),
+  buildUndoWhy: (...args: unknown[]) => mockBuildUndoWhy(...args),
+}));
+
+const mockGetConfig = vi.fn();
+
+vi.mock('../../src/core/config.js', () => ({
+  getConfig: (...args: unknown[]) => mockGetConfig(...args),
+}));
+
+let mockJsonMode = false;
+const mockOutputJson = vi.fn();
+const mockOutputHuman = vi.fn();
+
+vi.mock('../../src/util/output.js', () => ({
+  isJsonMode: () => mockJsonMode,
+  outputJson: (...args: unknown[]) => mockOutputJson(...args),
+  outputHuman: (...args: unknown[]) => mockOutputHuman(...args),
+}));
+
+const mockMkdirSync = vi.fn();
+const mockWriteFileSync = vi.fn();
+
+vi.mock('node:fs', () => ({
+  mkdirSync: (...args: unknown[]) => mockMkdirSync(...args),
+  writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
+}));
+
+import { exportCommand } from '../../src/commands/export.js';
 
 function makeJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -222,5 +272,84 @@ describe('buildJobExportMarkdown', () => {
     expect(markdown).toContain('Failure reason: build failed due to type errors in export command implementation');
     expect(markdown).toContain('Retry context: Last run failed but appears retryable.');
     expect(markdown).toContain('Commit delta: no-op');
+  });
+});
+
+describe('exportCommand', () => {
+  let stderrSpy: any;
+  let exitSpy: any;
+  let stdoutSpy: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockJsonMode = false;
+
+    mockGetJob.mockReturnValue(makeJob());
+    mockGetJobSteps.mockReturnValue([makeStep()]);
+    mockBuildJobObservability.mockReturnValue(makeObservability());
+    mockBuildJobWhy.mockReturnValue(statusWhy);
+    mockBuildRetryWhy.mockReturnValue(retryWhy);
+    mockBuildUndoWhy.mockReturnValue(undoWhy);
+    mockGetConfig.mockReturnValue({ pilotDir: '/tmp/pilot-home' });
+
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: string | number | null) => {
+      throw new Error(`exit:${String(code)}`);
+    }) as never);
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+    stdoutSpy.mockRestore();
+  });
+
+  it('writes markdown export to the default output location', async () => {
+    await exportCommand('ab12', {});
+
+    expect(mockMkdirSync).toHaveBeenCalledWith('/tmp/pilot-home/exports', { recursive: true });
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    expect(mockWriteFileSync.mock.calls[0][0]).toBe('/tmp/pilot-home/exports/job-ab12.md');
+    expect(String(mockWriteFileSync.mock.calls[0][1])).toContain('# Pilot Job Export: ab12');
+    expect(mockOutputHuman).toHaveBeenCalledWith(expect.stringContaining('Export written: /tmp/pilot-home/exports/job-ab12.md'));
+  });
+
+  it('supports explicit output path control via --output', async () => {
+    await exportCommand('ab12', { output: '/tmp/custom/report.md' });
+
+    expect(mockMkdirSync).toHaveBeenCalledWith('/tmp/custom', { recursive: true });
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      '/tmp/custom/report.md',
+      expect.stringContaining('# Pilot Job Export: ab12'),
+      'utf8',
+    );
+  });
+
+  it('supports stdout mode without writing files', async () => {
+    await exportCommand('ab12', { stdout: true });
+
+    expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining('# Pilot Job Export: ab12'));
+    expect(mockWriteFileSync).not.toHaveBeenCalled();
+  });
+
+  it('fails with clear error when the job does not exist', async () => {
+    mockGetJob.mockReturnValue(null);
+
+    await expect(exportCommand('zz99', {})).rejects.toThrow('exit:1');
+
+    expect(stderrSpy).toHaveBeenCalledWith('Job not found: zz99\n');
+  });
+
+  it('fails with actionable error when writing export fails', async () => {
+    mockWriteFileSync.mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    await expect(exportCommand('ab12', {})).rejects.toThrow('exit:1');
+
+    const stderr = stderrSpy.mock.calls.map((call) => String(call[0])).join('');
+    expect(stderr).toContain('Failed to write export artifact');
+    expect(stderr).toContain('Try a different path with --output <path> or use --stdout');
   });
 });
