@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job, JobStep, ModelEntry } from '../../src/core/types.js';
+import type { Job, JobStep, ModelEntry, JobObservabilitySnapshot } from '../../src/core/types.js';
 
 const mockGetJob = vi.fn();
 const mockGetJobSteps = vi.fn();
@@ -39,6 +39,12 @@ const mockResolveAllAgentModels = vi.fn();
 
 vi.mock('../../src/core/models.js', () => ({
   resolveAllAgentModels: (...args: unknown[]) => mockResolveAllAgentModels(...args),
+}));
+
+const mockBuildJobObservability = vi.fn();
+
+vi.mock('../../src/core/job-observability.js', () => ({
+  buildJobObservability: (...args: unknown[]) => mockBuildJobObservability(...args),
 }));
 
 let mockJsonMode = false;
@@ -105,6 +111,56 @@ const resolvedModels: Record<string, ModelEntry> = {
   'gsd-orchestrator': { model: 'anthropic/claude-opus-4-6' },
 };
 
+function makeObservability(overrides: Partial<JobObservabilitySnapshot> = {}): JobObservabilitySnapshot {
+  return {
+    jobId: 'ab12',
+    jobStatus: 'completed',
+    terminal: true,
+    requested: {
+      modelProfile: 'balanced',
+      providerMode: 'hybrid',
+      scope: 'quick',
+      intendedExecutorModel: 'anthropic/claude-sonnet-4-20250514',
+      notes: [],
+    },
+    observed: {
+      status: 'available',
+      models: ['anthropic/claude-sonnet-4-6'],
+      notes: [],
+    },
+    tokens: {
+      status: 'available',
+      totals: {
+        input: 10_000,
+        output: 2_500,
+        reasoning: 1_000,
+        cacheRead: 500,
+        cacheWrite: 200,
+        total: 14_200,
+      },
+      byModel: {
+        'anthropic/claude-sonnet-4-6': {
+          input: 10_000,
+          output: 2_500,
+          reasoning: 1_000,
+          cacheRead: 500,
+          cacheWrite: 200,
+          total: 14_200,
+        },
+      },
+      notes: [],
+    },
+    cost: {
+      status: 'partial',
+      currency: 'USD',
+      estimatedUsd: 0.0725,
+      byModel: [],
+      notes: ['Reasoning tokens are present but excluded from estimate.'],
+    },
+    ...overrides,
+  };
+}
+
 describe('infoCommand recovery visibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -117,6 +173,7 @@ describe('infoCommand recovery visibility', () => {
     mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
 
     mockResolveAllAgentModels.mockReturnValue(resolvedModels);
+    mockBuildJobObservability.mockReturnValue(makeObservability());
     mockIsGitWorktree.mockResolvedValue(true);
     mockIsWorktreeDirty.mockResolvedValue(false);
     mockClassifyHeadRelation.mockResolvedValue('exact');
@@ -151,6 +208,14 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('222222222222');
     expect(output).toContain('Guidance:');
     expect(output).toContain('pilot undo <id> --dry-run');
+    expect(output).toContain('Observability');
+    expect(output).toContain('Requested lane/profile: balanced/hybrid (quick)');
+    expect(output).toContain('Observed models (available): anthropic/claude-sonnet-4-6');
+    expect(output).toContain('Tokens (available): input 10.0k · output 2.5k · reasoning 1.0k');
+    expect(output).toContain('Estimated cost (USD): ~$0.0725 (partial)');
+    expect(output).toContain('Cost note: Reasoning tokens are present but excluded from estimate.');
+    expect(output).toContain('Failure Insight');
+    expect(output).toContain('Outcome: job is not failed/cancelled');
   });
 
   it('returns triage+recovery objects in JSON output with newer-work guard state', async () => {
@@ -165,6 +230,8 @@ describe('infoCommand recovery visibility', () => {
     expect(payload).toHaveProperty('steps');
     expect(payload).toHaveProperty('sessions');
     expect(payload).toHaveProperty('tokenUsage');
+    expect(payload).toHaveProperty('observability');
+    expect(payload).toHaveProperty('failureContext');
     expect(payload).toHaveProperty('triage');
     expect(payload).toHaveProperty('recovery');
     expect(payload.triage).toMatchObject({
@@ -187,6 +254,30 @@ describe('infoCommand recovery visibility', () => {
       blockedByNewerWork: true,
     });
     expect(payload.recovery.guidance).toContain('Undo blocked by newer work');
+    expect(payload.observability).toMatchObject({
+      observed: {
+        status: 'available',
+      },
+      tokens: {
+        status: 'available',
+      },
+      cost: {
+        status: 'partial',
+      },
+    });
+    expect(payload.failureContext).toMatchObject({
+      failed: false,
+      commitDelta: 'changed',
+      retry: {
+        code: 'retry-unavailable',
+      },
+    });
+    expect(payload.tokenUsage).toMatchObject({
+      totalInput: 10_000,
+      totalOutput: 2_500,
+      total: 14_200,
+      estimatedCostUsd: 0.0725,
+    });
   });
 
   it('marks recovery unavailable when checkpoint metadata is missing', async () => {
@@ -206,6 +297,38 @@ describe('infoCommand recovery visibility', () => {
         error: 'network timeout',
       }),
     );
+    mockGetJobSteps.mockReturnValue([
+      {
+        id: 1,
+        jobId: 'ab12',
+        stepIndex: 0,
+        command: 'plan-phase',
+        args: '45',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'completed',
+        verdictSource: 'semantic-check',
+        verdictReason: 'build passed',
+        startedAt: '2026-03-07T00:01:00Z',
+        completedAt: '2026-03-07T00:02:00Z',
+        durationMs: 60_000,
+      },
+      {
+        id: 2,
+        jobId: 'ab12',
+        stepIndex: 1,
+        command: 'execute-phase',
+        args: '45',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'failed',
+        verdictSource: 'semantic-check',
+        verdictReason: 'tests failed',
+        startedAt: '2026-03-07T00:02:00Z',
+        completedAt: '2026-03-07T00:03:00Z',
+        durationMs: 60_000,
+      },
+    ]);
 
     await infoCommand('ab12', {});
 
@@ -213,6 +336,10 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('What happened: Last run failed but appears retryable. Last failure: network timeout');
     expect(output).toContain('What next: Run pilot retry ab12.');
     expect(output).toContain('Retryability: retryable (retryable-failure)');
+    expect(output).toContain('Failure step: 2/2 execute-phase');
+    expect(output).toContain('Failure reason: semantic-check: tests failed');
+    expect(output).toContain('Completed before failure: 1/2');
+    expect(output).toContain('Retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
   });
 
   it('shows no-op and guarded undo states in triage summary context', async () => {

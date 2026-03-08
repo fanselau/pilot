@@ -17,23 +17,13 @@ import {
   resolveCommitOrNull,
 } from '../core/git-recovery.js';
 import { buildJobWhy, buildRetryWhy, buildUndoWhy } from '../core/job-introspection.js';
+import { buildJobObservability } from '../core/job-observability.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
-import type { DelegationPlan, Job, JobStep } from '../core/types.js';
+import type { DelegationPlan, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
 import type { HeadRelation } from '../core/git-recovery.js';
-
-// ── Cost estimation ────────────────────────────────────────────────────────
-
-// Sonnet pricing (rough estimate): $3/M input, $15/M output
-const INPUT_COST_PER_M = 3;
-const OUTPUT_COST_PER_M = 15;
-
-function estimateCost(inputTokens: number, outputTokens: number): number {
-  return (inputTokens / 1_000_000) * INPUT_COST_PER_M +
-         (outputTokens / 1_000_000) * OUTPUT_COST_PER_M;
-}
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
 
@@ -41,6 +31,34 @@ function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
+}
+
+function formatObservabilityStatus(status: JobObservabilitySnapshot['tokens']['status']): string {
+  switch (status) {
+    case 'available':
+      return 'available';
+    case 'partial':
+      return 'partial/live';
+    default:
+      return 'unavailable';
+  }
+}
+
+function formatObservedModels(observability: JobObservabilitySnapshot): string {
+  if (observability.observed.models.length === 0) {
+    return '—';
+  }
+  return observability.observed.models.join(', ');
+}
+
+function formatEstimatedCost(observability: JobObservabilitySnapshot): string {
+  const { cost } = observability;
+  if (cost.estimatedUsd === null) {
+    return `unavailable (${cost.status})`;
+  }
+
+  const precision = cost.estimatedUsd >= 1 ? 2 : 4;
+  return `~$${cost.estimatedUsd.toFixed(precision)} (${cost.status})`;
 }
 
 function formatStatusColor(status: string): string {
@@ -112,6 +130,23 @@ interface InfoTriage {
   retry: ReturnType<typeof buildRetryWhy>;
   undo: ReturnType<typeof buildUndoWhy>;
   recoveryTag: string;
+}
+
+interface InfoFailureContext {
+  failed: boolean;
+  failedStep: {
+    index: number;
+    total: number;
+    command: string;
+    verdictSource: string | null;
+    verdictReason: string | null;
+  } | null;
+  completedBeforeFailure: {
+    completed: number;
+    total: number;
+  };
+  commitDelta: 'changed' | 'no-op' | 'unknown';
+  retry: ReturnType<typeof buildRetryWhy>;
 }
 
 function shortCommit(commit: string | null): string | null {
@@ -186,6 +221,32 @@ function buildInfoTriage(job: Job, steps: JobStep[], recovery: RecoveryInfo): In
     retry,
     undo,
     recoveryTag: recovery.tag,
+  };
+}
+
+function buildFailureContext(job: Job, steps: JobStep[], triage: InfoTriage): InfoFailureContext {
+  const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
+  const failedStep = [...ordered].reverse().find((step) => step.status === 'failed');
+  const completed = ordered.filter((step) => step.status === 'completed').length;
+  const retry = buildRetryWhy(job);
+
+  return {
+    failed: job.status === 'failed' || job.status === 'cancelled',
+    failedStep: failedStep
+      ? {
+        index: failedStep.stepIndex + 1,
+        total: ordered.length,
+        command: failedStep.command,
+        verdictSource: failedStep.verdictSource,
+        verdictReason: failedStep.verdictReason,
+      }
+      : null,
+    completedBeforeFailure: {
+      completed,
+      total: ordered.length,
+    },
+    commitDelta: triage.checkpoints.delta,
+    retry,
   };
 }
 
@@ -434,17 +495,18 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     return { title, sessionId, tokens };
   });
 
-  // Aggregate totals
-  let totalInput = 0;
-  let totalOutput = 0;
-  for (const s of sessionTokens) {
-    totalInput += s.tokens.input;
-    totalOutput += s.tokens.output;
-  }
-  const totalTokens = totalInput + totalOutput;
-  const estimatedCostUsd = estimateCost(totalInput, totalOutput);
   const recovery = await buildRecoveryInfo(job);
   const triage = buildInfoTriage(job, steps, recovery);
+  const observability = buildJobObservability(job);
+  const failureContext = buildFailureContext(job, steps, triage);
+  const tokenTotals = observability.tokens.totals ?? {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    total: 0,
+  };
 
   // ── JSON output ────────────────────────────────────────────────────────
 
@@ -459,12 +521,14 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       sessions: sessionTokens,
       recovery,
       resolvedModels,
+      observability,
+      failureContext,
       actualModels: job.actualModels,
       tokenUsage: {
-        totalInput,
-        totalOutput,
-        total: totalTokens,
-        estimatedCostUsd: parseFloat(estimatedCostUsd.toFixed(4)),
+        totalInput: tokenTotals.input,
+        totalOutput: tokenTotals.output,
+        total: tokenTotals.total,
+        estimatedCostUsd: observability.cost.estimatedUsd,
       },
     });
     return;
@@ -533,15 +597,6 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
 
   // Config / timing
   outputHuman(`  ${dim(pad('Model:'))}    ${job.modelProfile}/${job.providerMode}`);
-  if (job.actualModels && job.actualModels.length > 0) {
-    const actualStr = job.actualModels.join(', ');
-    const resolvedExecutor = resolvedModels['gsd-executor']?.model ?? '';
-    const hasMismatch = !job.actualModels.some(m => m === resolvedExecutor);
-    const colorFn = hasMismatch ? yellow : dim;
-    outputHuman(`  ${colorFn(pad('Actual:'))}   ${colorFn(actualStr)}${hasMismatch ? yellow(' (differs from intended)') : ''}`);
-  } else if (job.status === 'completed' || job.status === 'failed') {
-    outputHuman(`  ${dim(pad('Actual:'))}   ${dim('—')}`);
-  }
   outputHuman(`  ${dim(pad('Attempts:'))} ${job.attempts}`);
   outputHuman(`  ${dim(pad('Created:'))}  ${job.createdAt}`);
   outputHuman(`  ${dim(pad('Started:'))}  ${job.startedAt ?? '—'}`);
@@ -653,18 +708,68 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     outputHuman('');
   }
 
-  // Token usage summary
-  outputHuman(`  ${bold('Token Usage')}`);
+  outputHuman(`  ${bold('Observability')}`);
   outputHuman(`  ${hr()}`);
-  if (totalTokens > 0) {
+  outputHuman(`  ${dim('Requested lane/profile:')} ${observability.requested.modelProfile}/${observability.requested.providerMode} (${observability.requested.scope})`);
+  outputHuman(`  ${dim('Requested executor model:')} ${observability.requested.intendedExecutorModel ?? '—'}`);
+  outputHuman(`  ${dim(`Observed models (${formatObservabilityStatus(observability.observed.status)}):`)} ${formatObservedModels(observability)}`);
+
+  if (observability.tokens.totals) {
+    const totals = observability.tokens.totals;
     outputHuman(
-      `  Total: ${formatTokenCount(totalInput)} input / ${formatTokenCount(totalOutput)} output (${formatTokenCount(totalTokens)} total)`,
+      `  ${dim(`Tokens (${formatObservabilityStatus(observability.tokens.status)}):`)} input ${formatTokenCount(totals.input)} · output ${formatTokenCount(totals.output)} · reasoning ${formatTokenCount(totals.reasoning)} · cache r/w ${formatTokenCount(totals.cacheRead)}/${formatTokenCount(totals.cacheWrite)} · total ${formatTokenCount(totals.total)}`,
     );
-    outputHuman(
-      `  Est. cost: $${estimatedCostUsd.toFixed(2)} (based on claude-sonnet-4-20250514 pricing: $${INPUT_COST_PER_M}/$${OUTPUT_COST_PER_M} per 1M)`,
-    );
+    if (Object.keys(observability.tokens.byModel).length > 0) {
+      outputHuman(`  ${dim('Token breakdown by model:')}`);
+      for (const [model, tokens] of Object.entries(observability.tokens.byModel)) {
+        outputHuman(
+          `    ${dim(model)}: in ${formatTokenCount(tokens.input)} · out ${formatTokenCount(tokens.output)} · total ${formatTokenCount(tokens.total)}`,
+        );
+      }
+    }
   } else {
-    outputHuman(`  ${dim('No token data available')}`);
+    outputHuman(`  ${dim(`Tokens (${formatObservabilityStatus(observability.tokens.status)}):`)} unavailable`);
+  }
+
+  outputHuman(`  ${dim('Estimated cost (USD):')} ${formatEstimatedCost(observability)}`);
+  for (const note of observability.requested.notes) {
+    outputHuman(`  ${dim(`Requested note: ${note}`)}`);
+  }
+  for (const note of observability.observed.notes) {
+    outputHuman(`  ${dim(`Observed note: ${note}`)}`);
+  }
+  for (const note of observability.tokens.notes) {
+    outputHuman(`  ${dim(`Token note: ${note}`)}`);
+  }
+  for (const note of observability.cost.notes) {
+    outputHuman(`  ${dim(`Cost note: ${note}`)}`);
+  }
+  outputHuman('');
+
+  outputHuman(`  ${bold('Failure Insight')}`);
+  outputHuman(`  ${hr()}`);
+  outputHuman(`  ${dim('Commit delta signal:')} ${failureContext.commitDelta}`);
+  if (!failureContext.failed) {
+    outputHuman(`  ${dim('Outcome:')} job is not failed/cancelled`);
+    outputHuman(`  ${dim('Retry guidance:')} ${failureContext.retry.badge} (${failureContext.retry.code}) — ${failureContext.retry.next}`);
+  } else {
+    if (failureContext.failedStep) {
+      outputHuman(
+        `  ${dim('Failure step:')} ${failureContext.failedStep.index}/${failureContext.failedStep.total} ${failureContext.failedStep.command}`,
+      );
+      if (failureContext.failedStep.verdictSource || failureContext.failedStep.verdictReason) {
+        const detail = [failureContext.failedStep.verdictSource, failureContext.failedStep.verdictReason]
+          .filter((part): part is string => Boolean(part))
+          .join(': ');
+        outputHuman(`  ${dim('Failure reason:')} ${detail}`);
+      }
+    } else {
+      outputHuman('  Failed without step-level metadata (likely pre-step or runner-level failure).');
+    }
+    outputHuman(
+      `  ${dim('Completed before failure:')} ${failureContext.completedBeforeFailure.completed}/${failureContext.completedBeforeFailure.total}`,
+    );
+    outputHuman(`  ${dim('Retry guidance:')} ${failureContext.retry.badge} (${failureContext.retry.code}) — ${failureContext.retry.next}`);
   }
   outputHuman('');
 }
