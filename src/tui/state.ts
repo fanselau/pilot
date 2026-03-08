@@ -53,7 +53,7 @@ export function createPilotState() {
   const [logSearchQuery, setLogSearchQuery] = createSignal('');
 
   // ── Session enrichment signals ────────────────────────────────────────
-  const [sessionTokens, setSessionTokens] = createSignal<Map<string, { input: number; output: number }>>(new Map());
+  const [sessionTokens, setSessionTokens] = createSignal<Map<string, { input: number; output: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }>>(new Map());
   const [lastMessages, setLastMessages] = createSignal<Map<string, string>>(new Map());
   const [observabilitySnapshots, setObservabilitySnapshots] = createSignal<Map<string, JobObservabilitySnapshot>>(new Map());
 

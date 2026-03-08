@@ -18,7 +18,6 @@ import { createSignal, createEffect, on, onMount, onCleanup, For, Show } from 's
 import { createPoller } from '../data/poller.js';
 import { fetchJobParts } from '../data/opencode-db.js';
 import type { SessionSection } from '../data/opencode-db.js';
-import { fetchSessionEnrichment } from '../data/opencode-db.js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme, subagentColors } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
@@ -27,7 +26,7 @@ import { getConfig } from '../../core/config.js';
 import { buildJobWhy, buildUndoWhy } from '../../core/job-introspection.js';
 import type { JobWhyContext } from '../../core/job-introspection.js';
 import type { PilotStateStore } from '../state.js';
-import type { Job, SessionPart, DelegationPlan, JobStatus } from '../../core/types.js';
+import type { Job, JobObservabilitySnapshot, SessionPart, DelegationPlan, JobStatus } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -67,6 +66,8 @@ function statusColor(status: string): string {
     default: return theme.muted;
   }
 }
+
+const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled']);
 
 interface RecoveryHeader {
   line: string;
@@ -176,6 +177,115 @@ export function buildReasonHeaderLines(job: Job, reasonContext: JobWhyContext = 
   return lines;
 }
 
+function formatUsdEstimate(usd: number): string {
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  if (usd >= 0.01) return `$${usd.toFixed(3)}`;
+  return '<$0.01';
+}
+
+function shortModelName(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed) return 'unknown';
+  const [, short] = trimmed.split('/');
+  return short ?? trimmed;
+}
+
+function summarizeObservedModels(models: string[]): string {
+  if (models.length === 0) return 'n/a';
+  if (models.length <= 2) return models.map(shortModelName).join(', ');
+  return `${shortModelName(models[0])}, ${shortModelName(models[1])}, +${models.length - 2}`;
+}
+
+export function buildTokenHeaderLine(
+  snapshot: JobObservabilitySnapshot | null,
+  fallbackTotal: number = 0,
+  liveFallback: boolean = false,
+): string {
+  if (!snapshot) {
+    if (fallbackTotal > 0) {
+      return liveFallback
+        ? `Tokens: live ${formatTokens(fallbackTotal)} tok (legacy)`
+        : `Tokens: ${formatTokens(fallbackTotal)} tok (legacy)`;
+    }
+    return liveFallback ? 'Tokens: live unavailable' : 'Tokens: unavailable';
+  }
+
+  const totals = snapshot.tokens.totals;
+  const live = !snapshot.terminal;
+  if (!totals) {
+    return `Tokens: ${live ? 'live unavailable' : 'unavailable'}`;
+  }
+
+  const statusPrefix = snapshot.tokens.status === 'available'
+    ? ''
+    : live
+      ? 'live '
+      : 'partial ';
+
+  const hints: string[] = [];
+  if (totals.input > 0) hints.push(`${formatTokens(totals.input)} in`);
+  if (totals.output > 0) hints.push(`${formatTokens(totals.output)} out`);
+  if (totals.reasoning > 0) hints.push(`${formatTokens(totals.reasoning)} reasoning`);
+  if (totals.cacheRead > 0) hints.push(`${formatTokens(totals.cacheRead)} cache-r`);
+  if (totals.cacheWrite > 0) hints.push(`${formatTokens(totals.cacheWrite)} cache-w`);
+  const hintText = hints.length > 0 ? ` (${hints.slice(0, 3).join(' / ')})` : '';
+
+  return `Tokens: ${statusPrefix}${formatTokens(totals.total)} tok${hintText}`;
+}
+
+export function buildActualHeaderLine(
+  snapshot: JobObservabilitySnapshot | null,
+  intendedModel: string | null,
+  liveFallback: boolean = false,
+): { line: string; mismatch: boolean } {
+  if (!snapshot || snapshot.observed.models.length === 0) {
+    return {
+      line: `Actual: ${snapshot ? (!snapshot.terminal ? 'live unavailable' : 'unavailable') : liveFallback ? 'live unavailable' : 'unavailable'}`,
+      mismatch: false,
+    };
+  }
+
+  const live = !snapshot.terminal;
+  const statusPrefix = snapshot.observed.status === 'available'
+    ? ''
+    : live
+      ? 'live '
+      : 'partial ';
+
+  const mismatch = Boolean(
+    intendedModel
+    && snapshot.observed.models.length > 0
+    && !snapshot.observed.models.includes(intendedModel),
+  );
+
+  return {
+    line: `Actual: ${statusPrefix}${summarizeObservedModels(snapshot.observed.models)}${mismatch ? ' (MISMATCH)' : ''}`,
+    mismatch,
+  };
+}
+
+export function buildEstimatedCostHeaderLine(
+  snapshot: JobObservabilitySnapshot | null,
+  liveFallback: boolean = false,
+): string {
+  if (!snapshot) {
+    return liveFallback ? 'Estimated cost: live unavailable' : 'Estimated cost: unavailable';
+  }
+
+  if (snapshot.cost.estimatedUsd === null) {
+    return `Estimated cost: ${snapshot.terminal ? 'unavailable' : 'live unavailable'}`;
+  }
+
+  if (snapshot.cost.status === 'partial') {
+    const caveat = snapshot.cost.notes[0]
+      ? truncate(snapshot.cost.notes[0], 60)
+      : 'incomplete pricing/token data';
+    return `Estimated cost: ~${formatUsdEstimate(snapshot.cost.estimatedUsd)} est (partial; ${caveat})`;
+  }
+
+  return `Estimated cost: ~${formatUsdEstimate(snapshot.cost.estimatedUsd)} est`;
+}
+
 /**
  * Build an array of line strings representing the header for a job.
  * Used for testing header composition without a UI renderer.
@@ -183,7 +293,12 @@ export function buildReasonHeaderLines(job: Job, reasonContext: JobWhyContext = 
  * @param job - The job to build header for
  * @param cols - Terminal width (default 80)
  */
-export function buildHeaderLines(job: Job, cols: number = 80, reasonContext: JobWhyContext = {}): string[] {
+export function buildHeaderLines(
+  job: Job,
+  cols: number = 80,
+  reasonContext: JobWhyContext = {},
+  snapshot: JobObservabilitySnapshot | null = null,
+): string[] {
   const descWidth = Math.max(20, cols - 4);
   const stepInfo = parseStepInfo(job);
   const startedStr = job.startedAt
@@ -196,35 +311,22 @@ export function buildHeaderLines(job: Job, cols: number = 80, reasonContext: Job
   const executorModel = executorEntry?.model ?? '';
   const executorShort = executorModel.split('/')[1] ?? executorModel;
 
+  const isLive = !TERMINAL_STATUSES.has(job.status);
+  const tokenLine = buildTokenHeaderLine(snapshot, 0, isLive);
+  const actualLine = buildActualHeaderLine(snapshot, executorModel, isLive).line;
+  const estimateLine = buildEstimatedCostHeaderLine(snapshot, isLive);
+
   const lines = [
     `#${job.id}  ${job.project}  ${job.scope}  ${job.status}`,
     `"${truncate(job.description, descWidth)}"`,
     `separator`,
-    `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}   ◆ tokens`,
-    `Model: ${job.modelProfile}/${job.providerMode} → ${executorShort}   Attempts: ${job.attempts}   Started: ${startedStr}`,
+    `⏱ ${formatElapsed(job.startedAt)}   Step ${stepInfo.index}: ${stepInfo.label}`,
+    tokenLine,
+    `Requested: ${job.modelProfile}/${job.providerMode} -> ${executorShort}   Attempts: ${job.attempts}   Started: ${startedStr}`,
+    actualLine,
+    estimateLine,
     buildRecoveryHeader(job).line,
   ];
-
-  if (job.actualModels && job.actualModels.length > 0) {
-    const actualStr = job.actualModels.join(', ');
-    const resolvedExecutor = executorModel;
-    const hasMismatch = !job.actualModels.some(m => m === resolvedExecutor);
-    if (hasMismatch) {
-      lines.push(`Actual: ${actualStr} (MISMATCH)`);
-    } else {
-      lines.push(`Actual: ${actualStr}`);
-    }
-  }
-
-  if (job.modelProfile !== 'balanced') {
-    const uniqueModels = new Map<string, string>();
-    for (const [, entry] of Object.entries(models)) {
-      const m = entry.model;
-      const shortName = m.split('/')[1] ?? m;
-      uniqueModels.set(shortName, m);
-    }
-    lines.push(`Models: ${[...uniqueModels.keys()].join('  ')}`);
-  }
 
   lines.push(...buildReasonHeaderLines(job, reasonContext));
 
@@ -317,7 +419,6 @@ function formatPartLines(part: SessionPart): FormattedLine[] | null {
 
 export function DetailView(props: { state: PilotStateStore }) {
   const [sections, setSections] = createSignal<SessionSection[]>([]);
-  const [totalTokens, setTotalTokens] = createSignal(0);
   const [tick, setTick] = createSignal(0);
   const queueGraceSeconds = getConfig().queueGraceSeconds ?? 0;
 
@@ -413,23 +514,6 @@ export function DetailView(props: { state: PilotStateStore }) {
       setSections(merged);
     }
 
-    // Update token count (recursive — includes subagent tokens and reasoning)
-    try {
-      let titles: string[] = [];
-      if (currentJob.sessionTitles) {
-        titles = JSON.parse(currentJob.sessionTitles) as string[];
-      }
-      if (titles.length > 0) {
-        const { tokens } = fetchSessionEnrichment(titles);
-        let total = 0;
-        for (const [, t] of tokens) {
-          total += t.input + t.output + (t.reasoning ?? 0);
-        }
-        setTotalTokens(total);
-      }
-    } catch {
-      // ignore
-    }
   }, 1000);
 
   onMount(() => {
@@ -444,7 +528,6 @@ export function DetailView(props: { state: PilotStateStore }) {
 
   createEffect(on(() => props.state.detailJobId(), () => {
     setSections([]);
-    setTotalTokens(0);
     lastSeenMap.clear();
   }));
 
@@ -570,6 +653,53 @@ export function DetailView(props: { state: PilotStateStore }) {
     return j ? formatElapsed(j.startedAt) : '0s';
   };
 
+  const observabilitySnapshot = (): JobObservabilitySnapshot | null => {
+    const current = currentJob();
+    if (!current) return null;
+    return props.state.observabilitySnapshots().get(current.id) ?? null;
+  };
+
+  const intendedExecutorModel = (): string | null => {
+    const current = currentJob();
+    if (!current) return null;
+    const models = resolveAllAgentModels(current.modelProfile, current.providerMode);
+    return models['gsd-executor']?.model ?? null;
+  };
+
+  const fallbackTokenTotal = (): number => {
+    const current = currentJob();
+    if (!current) return 0;
+    const title = getSessionTitle(current);
+    const tokens = props.state.sessionTokens().get(title);
+    if (!tokens) return 0;
+    return tokens.input + tokens.output + (tokens.reasoning ?? 0) + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0);
+  };
+
+  const tokenLine = () => buildTokenHeaderLine(
+    observabilitySnapshot(),
+    fallbackTokenTotal(),
+    !TERMINAL_STATUSES.has(currentJob()?.status ?? 'pending'),
+  );
+
+  const requestedLine = () => {
+    const current = currentJob();
+    if (!current) return '';
+    const executorModel = intendedExecutorModel() ?? '';
+    const executorShort = executorModel.split('/')[1] ?? executorModel;
+    return `Requested: ${current.modelProfile}/${current.providerMode} -> ${executorShort}   Attempts: ${current.attempts}   Started: ${current.startedAt ? formatTime(new Date(current.startedAt).getTime()) : '—'}`;
+  };
+
+  const actualLine = () => buildActualHeaderLine(
+    observabilitySnapshot(),
+    intendedExecutorModel(),
+    !TERMINAL_STATUSES.has(currentJob()?.status ?? 'pending'),
+  );
+
+  const estimatedLine = () => buildEstimatedCostHeaderLine(
+    observabilitySnapshot(),
+    !TERMINAL_STATUSES.has(currentJob()?.status ?? 'pending'),
+  );
+
   return (
     <box flexDirection="column" flexGrow={1}>
       <Show when={currentJob()} fallback={
@@ -597,29 +727,26 @@ export function DetailView(props: { state: PilotStateStore }) {
           />
           {/* Line 3: separator */}
           <text content="────────────────────────────────────────────────────────────────────────────" fg={theme.border} />
-          {/* Line 4: elapsed + step + tokens */}
+          {/* Line 4: elapsed + step */}
           <box flexDirection="row">
             <text content={`⏱ ${elapsed()}`} fg={theme.muted} />
             <text content={`   Step ${parseStepInfo(currentJob()!).index}: ${parseStepInfo(currentJob()!).label}`} fg={theme.muted} />
-            <text content={`   ◆ ${formatTokens(totalTokens())} tokens`} fg={theme.muted} />
           </box>
-          {/* Line 5: model (always show resolved executor) + attempts + started */}
-          <box flexDirection="row">
-            <text content={(() => {
-              const j = currentJob()!;
-              const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-              const executorEntry = models['gsd-executor'];
-              const executorModel = executorEntry?.model ?? '';
-              const executorShort = executorModel.split('/')[1] ?? executorModel;
-              return `Model: ${j.modelProfile}/${j.providerMode} → ${executorShort}`;
-            })()} fg={theme.muted} />
-            <text content={`   Attempts: ${currentJob()!.attempts}`} fg={theme.muted} />
-            <text
-              content={`   Started: ${currentJob()!.startedAt ? formatTime(new Date(currentJob()!.startedAt!).getTime()) : '—'}`}
-              fg={theme.muted}
-            />
-          </box>
-          {/* Line 6: recovery safety + checkpoint commits */}
+          {/* Line 5: token totals + breakdown hints */}
+          <text content={tokenLine()} fg={theme.muted} />
+          {/* Line 6: requested lane/model + attempts */}
+          <text content={requestedLine()} fg={theme.muted} />
+          {/* Line 7: actual observed models (with mismatch signal) */}
+          <text
+            content={actualLine().line}
+            fg={actualLine().mismatch ? '#FACC15' : theme.muted}
+          />
+          {/* Line 8: estimated cost (with caveats when partial) */}
+          <text
+            content={estimatedLine()}
+            fg={estimatedLine().includes('partial') ? '#F59E0B' : theme.muted}
+          />
+          {/* Line 9: recovery safety + checkpoint commits */}
           <text
             content={buildRecoveryHeader(currentJob()!).line}
             fg={(() => {
@@ -632,56 +759,19 @@ export function DetailView(props: { state: PilotStateStore }) {
           <For each={reasonLines()}>
             {(line) => <text content={line} fg={theme.muted} />}
           </For>
-          {/* Line 5b: actual model (when available, from opencode DB) */}
-          <Show when={currentJob()!.actualModels !== null && (currentJob()!.actualModels?.length ?? 0) > 0}>
-            <text
-              content={(() => {
-                const j = currentJob()!;
-                const actualStr = j.actualModels!.join(', ');
-                const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-                const resolvedExecutor = models['gsd-executor']?.model ?? '';
-                const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
-                return hasMismatch
-                  ? `Actual: ${actualStr} (MISMATCH)`
-                  : `Actual: ${actualStr}`;
-              })()}
-              fg={(() => {
-                const j = currentJob()!;
-                const models = resolveAllAgentModels(j.modelProfile, j.providerMode);
-                const resolvedExecutor = models['gsd-executor']?.model ?? '';
-                const hasMismatch = !j.actualModels!.some(m => m === resolvedExecutor);
-                return hasMismatch ? '#FACC15' : theme.muted; // yellow for mismatch, muted for match
-              })()}
-            />
-          </Show>
-          {/* Line 5c: resolved models (only for non-default profiles) */}
-          <Show when={currentJob()!.modelProfile !== 'balanced'}>
-            <text
-              content={(() => {
-                const models = resolveAllAgentModels(currentJob()!.modelProfile, currentJob()!.providerMode);
-                const uniqueModels = new Map<string, string>();
-                for (const [, entry] of Object.entries(models)) {
-                  const shortName = entry.model.split('/')[1] ?? entry.model;
-                  uniqueModels.set(shortName, entry.model);
-                }
-                return `Models: ${[...uniqueModels.keys()].join('  ')}`;
-              })()}
-              fg={theme.muted}
-            />
-          </Show>
-          {/* Line 6: session title */}
+          {/* Line 10: session title */}
           <text
             content={`Session: ${truncate(getSessionTitle(currentJob()!), 80)}`}
             fg={theme.muted}
           />
-          {/* Line 7: descendant count (only when > 0) */}
+          {/* Line 11: descendant count (only when > 0) */}
           <Show when={countDescendants(sections()) > 0}>
             <text
               content={`Descendants: ${countDescendants(sections())} subagent ${countDescendants(sections()) === 1 ? 'session' : 'sessions'}`}
               fg={theme.muted}
             />
           </Show>
-          {/* Line 8: separator */}
+          {/* Line 12: separator */}
           <text content="────────────────────────────────────────────────────────────────────────────" fg={theme.border} />
         </box>
 
