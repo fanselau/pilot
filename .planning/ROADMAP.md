@@ -789,3 +789,15 @@ Wave structure:
 
 **Details:**
 Read requirements/job-observability-cost-tracking-and-export.md for full spec.
+
+### Phase 46: Dynamic Model Configuration
+
+**Goal:** [To be planned]
+**Depends on:** Phase 45
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 46 to break down)
+
+**Details:**
+[To be added during planning]

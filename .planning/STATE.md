@@ -6,7 +6,7 @@
 ## Current Position
 
 Phase: 45 (Job Observability, Cost Tracking, and Export)
-**Next Phase:** None (milestone complete)
+**Next Phase:** Phase 46 (Dynamic Model Configuration)
 **Next Plan:** None (phase complete)
 Plan: 6 of 6 in current phase
 Status: Phase complete
@@ -219,6 +219,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 43 added: Job Undo and Recovery Checkpoints
 - Phase 44 added: QoL Introspection and Queue Grace Period
 - Phase 45 added: Job Observability, Cost Tracking, and Export
+- Phase 46 added: Dynamic Model Configuration
 
 ## Decisions
 
