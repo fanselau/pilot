@@ -4,7 +4,7 @@
  * Mocks: db.ts (getQueue/getRecent), opencode-db.ts, output.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Job } from '../../src/core/types.js';
 
 // ── Mock data ──────────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: null,
     allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -49,10 +50,31 @@ function makeJob(overrides: Partial<Job> = {}): Job {
 
 let mockQueue: Job[] = [];
 let mockRecent: Job[] = [];
+let mockProjects: Record<string, { status: 'active' | 'blocked'; blockedReason: string | null }> = {};
 
 vi.mock('../../src/core/db.js', () => ({
   getQueue: () => mockQueue,
   getRecent: (_limit: number) => mockRecent,
+  getJob: (id: string) => [...mockQueue, ...mockRecent].find((job) => job.id === id) ?? null,
+  getProject: (projectPath: string) => {
+    const project = mockProjects[projectPath];
+    if (!project) return null;
+    return {
+      path: projectPath,
+      owner: null,
+      status: project.status,
+      blockedReason: project.blockedReason,
+      blockedAt: null,
+      createdAt: '2026-03-01T00:00:00',
+    };
+  },
+}));
+
+vi.mock('../../src/core/config.js', () => ({
+  getConfig: () => ({
+    pilotDir: '/tmp/pilot-test',
+    queueGraceSeconds: 120,
+  }),
 }));
 
 vi.mock('../../src/core/opencode-db.js', () => ({
@@ -94,6 +116,11 @@ beforeEach(() => {
   mockJsonMode = false;
   mockQueue = [];
   mockRecent = [];
+  mockProjects = {};
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -132,6 +159,54 @@ describe('statusCommand', () => {
     expect(output).toContain('hub');
     expect(output).toContain('pending');
     expect(output).toContain('undo:unavailable');
+  });
+
+  it('renders concise why line for grace-wait jobs with --why', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-08T00:00:30Z'));
+
+    mockQueue = [
+      makeJob({
+        id: 'gw11',
+        status: 'pending',
+        project: 'grace-proj',
+        createdAt: '2026-03-08 00:00:00',
+      }),
+    ];
+
+    await statusCommand({ why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('grace-wait:90s');
+    expect(output).toContain('what: Job is waiting for the queue grace window.');
+    expect(output).toContain('next: Wait for grace to elapse or queue with --start-immediately.');
+
+    vi.useRealTimers();
+  });
+
+  it('shows retryability badges for failed jobs in recent section', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'rt11',
+        status: 'failed',
+        error: 'network timeout',
+        completedAt: '2026-03-02T09:56:00',
+      }),
+      makeJob({
+        id: 'nr11',
+        status: 'failed',
+        gitBaseCommit: 'abc',
+        gitHeadCommit: 'abc',
+        completedAt: '2026-03-02T09:57:00',
+      }),
+    ];
+
+    await statusCommand({ why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('[retryable]');
+    expect(output).toContain('[needs-revision]');
+    expect(output).toContain('Retry alone is unlikely to fix this failure.');
   });
 
   it('shows undo:safe tag for checkpointed terminal jobs', async () => {
@@ -227,6 +302,7 @@ describe('statusCommand', () => {
     expect(jsonData).toHaveProperty('queue');
     expect(jsonData).toHaveProperty('recent');
     expect(jsonData).toHaveProperty('recovery');
+    expect(jsonData).toHaveProperty('why');
     expect(jsonData.active).toHaveLength(1);
     expect(jsonData.queue).toHaveLength(1);
     expect(jsonData.recent).toHaveLength(1);
@@ -234,6 +310,11 @@ describe('statusCommand', () => {
       aa11: expect.objectContaining({ tag: 'undo:unavailable' }),
       bb22: expect.objectContaining({ tag: 'undo:unavailable' }),
       cc33: expect.objectContaining({ tag: 'undo:unavailable' }),
+    });
+    expect(jsonData.why).toMatchObject({
+      aa11: expect.objectContaining({ code: 'running' }),
+      bb22: expect.objectContaining({ code: 'project-serial' }),
+      cc33: expect.objectContaining({ code: 'undo-unavailable' }),
     });
   });
 

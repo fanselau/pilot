@@ -8,13 +8,14 @@
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
-import { getQueue, getRecent } from '../core/db.js';
+import { getQueue, getRecent, getProject, getJob } from '../core/db.js';
 import { getConfig } from '../core/config.js';
 import {
   getLastMessage,
   findSessionByTitle,
   isSessionDone,
 } from '../core/opencode-db.js';
+import { buildJobWhy, buildUndoWhy } from '../core/job-introspection.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
@@ -23,13 +24,7 @@ import type { Job } from '../core/types.js';
 interface RecoveryTag {
   tag: string;
   state: 'safe' | 'guarded' | 'unavailable';
-  reason:
-    | 'checkpoint-ready'
-    | 'dirty-start'
-    | 'newer-work'
-    | 'diverged-history'
-    | 'job-not-terminal'
-    | 'checkpoint-missing';
+  reason: 'checkpoint-ready' | 'dirty-start' | 'newer-work' | 'diverged-history' | 'job-not-terminal' | 'checkpoint-missing';
   action: string;
 }
 
@@ -87,6 +82,7 @@ function getDaemonStatus(): { status: 'active' | 'stopped'; pid?: number; detail
 
 interface StatusOptions {
   json?: boolean;
+  why?: boolean;
 }
 
 /**
@@ -170,79 +166,56 @@ function isJobStale(job: Job): boolean {
   }
 }
 
-function inferKnownGuardState(job: Job): 'newer-work' | 'diverged-history' | null {
-  const lower = `${job.error ?? ''} ${job.resumeHint ?? ''}`.toLowerCase();
-  if (
-    lower.includes('newer commits exist') ||
-    lower.includes('newer work') ||
-    lower.includes('ahead of this checkpoint')
-  ) {
-    return 'newer-work';
-  }
-  if (lower.includes('diverged')) {
-    return 'diverged-history';
-  }
-  return null;
-}
-
 function getRecoveryTag(job: Job): RecoveryTag {
-  if (job.status === 'pending' || job.status === 'running') {
+  const undo = buildUndoWhy(job);
+
+  if (undo.code === 'undo-safe') {
     return {
-      tag: 'undo:unavailable',
-      state: 'unavailable',
-      reason: 'job-not-terminal',
-      action: 'wait for terminal status',
+      tag: undo.badge,
+      state: 'safe',
+      reason: 'checkpoint-ready',
+      action: undo.next,
     };
   }
 
-  if (!job.gitBaseCommit || !job.gitHeadCommit) {
+  if (undo.code === 'undo-guarded-dirty-start') {
     return {
-      tag: 'undo:unavailable',
-      state: 'unavailable',
-      reason: 'checkpoint-missing',
-      action: 'job has no recorded checkpoints',
-    };
-  }
-
-  const knownGuard = inferKnownGuardState(job);
-  if (knownGuard === 'newer-work') {
-    return {
-      tag: 'undo:guarded-newer-work',
-      state: 'guarded',
-      reason: 'newer-work',
-      action: 'undo newer work first or use --force',
-    };
-  }
-
-  if (knownGuard === 'diverged-history') {
-    return {
-      tag: 'undo:guarded-diverged',
-      state: 'guarded',
-      reason: 'diverged-history',
-      action: 'inspect history before using --force',
-    };
-  }
-
-  if (job.startedDirty) {
-    return {
-      tag: 'undo:guarded-dirty-start',
+      tag: undo.badge,
       state: 'guarded',
       reason: 'dirty-start',
-      action: 'requires --force (dirty start)',
+      action: undo.next,
+    };
+  }
+
+  if (undo.code === 'undo-guarded-newer-work') {
+    return {
+      tag: undo.badge,
+      state: 'guarded',
+      reason: 'newer-work',
+      action: undo.next,
+    };
+  }
+
+  if (undo.code === 'undo-guarded-diverged') {
+    return {
+      tag: undo.badge,
+      state: 'guarded',
+      reason: 'diverged-history',
+      action: undo.next,
     };
   }
 
   return {
-    tag: 'undo:safe',
-    state: 'safe',
-    reason: 'checkpoint-ready',
-    action: 'safe to preview with pilot undo --dry-run',
+    tag: undo.badge,
+    state: 'unavailable',
+    reason: job.status === 'pending' || job.status === 'running' ? 'job-not-terminal' : 'checkpoint-missing',
+    action: undo.next,
   };
 }
 
 function formatRecoveryTag(job: Job): string {
   const recovery = getRecoveryTag(job);
-  return `${recovery.tag} ${recovery.action}`;
+  return recovery.tag;
 }
 
 function buildRecoveryMap(jobs: Job[]): Record<string, RecoveryTag> {
@@ -250,18 +223,55 @@ function buildRecoveryMap(jobs: Job[]): Record<string, RecoveryTag> {
   return Object.fromEntries(entries);
 }
 
+function formatWhyLine(what: string, why: string, next: string): string {
+  return `what: ${what} | why: ${why} | next: ${next}`;
+}
+
+function getPendingWhy(job: Job, nowEpochSeconds: number, queueGraceSeconds: number, runningProjects: Set<string>) {
+  const project = getProject(job.project);
+  return buildJobWhy(job, {
+    nowEpochSeconds,
+    queueGraceSeconds,
+    projectBlocked: project?.status === 'blocked',
+    blockedReason: project?.blockedReason ?? null,
+    dependencyStatus: job.dependsOn ? getJob(job.dependsOn)?.status ?? null : null,
+    hasRunningJobForProject: runningProjects.has(job.project),
+  });
+}
+
+function formatPendingBadge(job: Job, nowEpochSeconds: number, queueGraceSeconds: number, runningProjects: Set<string>): string {
+  const pendingWhy = getPendingWhy(job, nowEpochSeconds, queueGraceSeconds, runningProjects);
+  if (pendingWhy.code === 'grace-wait' && typeof pendingWhy.remainingSeconds === 'number') {
+    return `${pendingWhy.badge}:${pendingWhy.remainingSeconds}s`;
+  }
+  return pendingWhy.badge;
+}
+
 async function statusCommand(opts: StatusOptions): Promise<void> {
   const queue = getQueue();
   const recent = getRecent(10);
+  const config = getConfig();
+  const queueGraceSeconds = config.queueGraceSeconds ?? 0;
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
+  const showWhy = opts.why ?? false;
 
   const active = queue.filter((j) => j.status === 'running');
   const pending = queue.filter((j) => j.status === 'pending');
+  const runningProjects = new Set(active.map((job) => job.project));
 
   // Status integrity: separate active jobs into healthy (session alive) and stale (session gone)
   const healthyActive = active.filter((j) => !isJobStale(j));
   const staleActive = active.filter((j) => isJobStale(j));
 
   const daemon = getDaemonStatus();
+
+  const whyEntries: ReadonlyArray<readonly [string, ReturnType<typeof buildJobWhy>]> = [
+    ...healthyActive.map((job) => [job.id, buildJobWhy(job)] as const),
+    ...staleActive.map((job) => [job.id, buildJobWhy(job)] as const),
+    ...pending.map((job) => [job.id, getPendingWhy(job, nowEpochSeconds, queueGraceSeconds, runningProjects)] as const),
+    ...recent.map((job) => [job.id, buildJobWhy(job)] as const),
+  ];
+  const why = Object.fromEntries(whyEntries);
 
   if (isJsonMode()) {
     const recovery = buildRecoveryMap([...healthyActive, ...staleActive, ...pending, ...recent]);
@@ -273,6 +283,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       queue: pending,
       recent,
       recovery,
+      why,
     });
     return;
   }
@@ -323,9 +334,14 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     outputHuman(`  ${bold('Queue')} (${pending.length})`);
     for (const job of pending) {
       const desc = sanitizeDesc(job.description);
+      const pendingBadge = formatPendingBadge(job, nowEpochSeconds, queueGraceSeconds, runningProjects);
+      const pendingWhy = why[job.id];
       outputHuman(
-        `  ${dim('○')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
+        `  ${dim('○')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim('pending')}  ${dim(`[${pendingBadge}]`)}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
       );
+      if (showWhy && pendingWhy.code !== 'launchable') {
+        outputHuman(`    ${dim(`└ ${formatWhyLine(pendingWhy.what, pendingWhy.why, pendingWhy.next)}`)}`);
+      }
     }
     outputHuman('');
   }
@@ -342,10 +358,20 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
             : dim('◌');
       const elapsed = job.completedAt ? formatRelativeTime(job.completedAt) : '';
       const desc = sanitizeDesc(job.description);
+      const statusWhy = why[job.id];
+      const statusBadge =
+        job.status === 'failed' || job.status === 'cancelled'
+          ? `${dim(`[${statusWhy.badge}]`)} `
+          : statusWhy.code === 'no-commit-delta'
+            ? `${dim('[no-op]')} `
+            : '';
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${dim(`[${formatRecoveryTag(job)}]`)}${failReason}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}${failReason}`,
       );
+      if (showWhy && (job.status === 'failed' || job.status === 'cancelled' || statusWhy.code === 'no-commit-delta')) {
+        outputHuman(`    ${dim(`└ ${formatWhyLine(statusWhy.what, statusWhy.why, statusWhy.next)}`)}`);
+      }
     }
     outputHuman('');
   }

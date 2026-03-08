@@ -66,9 +66,10 @@ program
   .command('status [project]')
   .alias('s')
   .description('One-shot dashboard to stdout')
+  .option('--why', 'Show concise reason/action guidance for queued and guarded jobs')
   .action(async (_project: string | undefined, opts: Record<string, unknown>) => {
     const { statusCommand } = await import('./commands/status.js');
-    await statusCommand({ ...program.opts(), ...opts } as { json?: boolean });
+    await statusCommand({ ...program.opts(), ...opts } as { json?: boolean; why?: boolean });
   });
 
 program
