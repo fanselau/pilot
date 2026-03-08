@@ -833,6 +833,7 @@ Read requirements/agents-md-integration.md for full spec.
 
 ### Phase 48: Fix New Project Setup Critical Bugs
 
+**Status:** complete (2/2 plans, verified ✓)
 **Goal:** Fix the critical bugs that make `pilot setup` produce non-functional configurations on new machines — update the pilot-gsd submodule to the working fork with the correct flat command layout, add command layout validation in setupProject(), and add test coverage for all changes.
 **Depends on:** Phase 47
 **Plans:** 2 plans
