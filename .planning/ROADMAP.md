@@ -752,8 +752,8 @@ Plans:
 - [x] 44-01-PLAN.md — Grace period config + schema foundation (`queueGraceSeconds`, `skipGracePeriod`)
 - [ ] 44-02-PLAN.md — Launch eligibility grace gate + `pilot add --start-immediately` queue-time UX
 - [ ] 44-03-PLAN.md — Shared introspection reason model + `pilot status --why` + `pilot retry --why`
-- [ ] 44-04-PLAN.md — Compact `pilot info <id>` triage view + `pilot log <id> --summary`
-- [ ] 44-05-PLAN.md — TUI queue/detail grace+reason visibility + regression verification
+- [x] 44-04-PLAN.md — Compact `pilot info <id>` triage view + `pilot log <id> --summary`
+- [x] 44-05-PLAN.md — TUI queue/detail grace+reason visibility + regression verification
 - [ ] 44-06-PLAN.md — Refusal/help copy hardening for dirty-worktree launch and guarded undo flows
 
 Wave structure:

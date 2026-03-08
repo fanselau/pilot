@@ -6,19 +6,19 @@
 ## Current Position
 
 Phase: 44 (QoL Introspection and Queue Grace Period)
-**Next Plan:** 44-04-PLAN.md
-Plan: 4 of 6 in current phase
-Status: In progress
-Last activity: 2026-03-08 - Completed 44-06-PLAN.md
+**Next Plan:** None (phase complete)
+Plan: 6 of 6 in current phase
+Status: Phase complete
+Last activity: 2026-03-08 - Completed 44-05-PLAN.md
 
-Progress: ████████░░ 16/21 plans (76%)
+Progress: █████████░ 18/21 plans (86%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 44 in progress — shared why-model and guardrail refusal copy hardening are complete; next work is compact info/log summary and TUI visibility surfaces.
+**Current focus:** Phase 44 complete — queue/detail TUI grace+reason visibility now matches shared CLI introspection signals; ready for phase transition.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -554,11 +554,17 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 44-03 | Shared `JobWhy` helpers now own pending/retry/undo/no-op reason copy and stable machine codes | Prevents wording drift across status/retry surfaces and enables reuse in later TUI/info/log work |
 | 44-03 | `pilot status --why` keeps default rows concise and moves richer guidance to one what/why/next line | Preserves scanability while still exposing actionable guard context on demand |
 | 44-03 | `pilot retry --why` is explain-only and never mutates queue state | Operators can evaluate retryability before taking side-effecting actions |
+| 44-04 | `pilot log --summary` uses deterministic metadata synthesis (job row + step/verdict + checkpoints), not transcript summarization | Keeps summaries stable, fast, and scriptable without model-dependent variance |
+| 44-04 | `pilot info` now starts with a compact triage block before deep diagnostics | Answers what happened and what to do next in the first screen while preserving detailed data below |
+| 44-04 | Summary JSON payloads add explicit `summary`/`triage` objects instead of replacing existing fields | Preserves backward compatibility for existing automation consumers |
+| 44-05 | Queue rows now derive grace/blocked/dependency badges from shared JobWhy helpers with grace remaining seconds | Keeps TUI queue labels aligned with status/retry reason contracts while preserving compact rows |
+| 44-05 | Dashboard passes blocked/running/dependency context into QueuePanel instead of doing extra DB reads in the component | Keeps badge logic deterministic and reactive to the same in-memory TUI state |
+| 44-05 | Detail header adds compact reason lines only for grace wait, needs-revision retry, and guarded/missing-checkpoint undo states | Improves triage clarity without turning the header into verbose multi-line diagnostics |
 | 44-06 | Dirty-start launch refusal copy now follows explicit what/why/next guidance with command-level next actions | Makes clean-start guardrails immediately actionable and frames `--force-dirty` as a deliberate tradeoff |
 | 44-06 | Undo safety refusals share one what/why/next contract across newer-work, diverged, dirty-start, and dirty-worktree cases | Keeps guardrail messaging consistent while preserving conservative undo safety policy |
 
 ## Session Continuity
 
-Last session: 2026-03-08T00:41:55Z
-Stopped at: Completed 44-06-PLAN.md
+Last session: 2026-03-08T00:48:48Z
+Stopped at: Completed 44-05-PLAN.md
 Resume file: None
