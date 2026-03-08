@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 46 (Dynamic Model Configuration)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-08 - Completed 46-01-PLAN.md (DB schema + seed + model-store CRUD)
+Last activity: 2026-03-08 - Completed 46-02-PLAN.md (DB-backed resolve functions with hardcoded fallback)
 
-Progress: █░░░░ 1/5 plans (20%)
+Progress: ██░░░ 2/5 plans (40%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 01 complete: DB schema + seed + model-store CRUD.
+**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 02 complete: resolve functions now read from DB with hardcoded fallback.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -110,7 +110,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (6/6 plans, verified ✓)
 
 ### Phase 46: Dynamic Model Configuration
-- **Status:** in progress (1/5 plans complete)
+- **Status:** in progress (2/5 plans complete)
 
 ### Quick Tasks Completed
 
@@ -584,9 +584,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 45-02 | buildJobObservability now emits one canonical requested/observed/tokens/cost snapshot with running-job partial semantics | Keeps CLI/TUI/export surfaces aligned on one observability contract |
 | 45-02 | Runner collectActualModels now resolves root session IDs and traverses recursive trees with normalized sorted dedupe | Preserves trustworthy terminal model provenance for mismatch and cost analysis |
 | 45-05 | Export defaults write to ~/.pilot/exports/job-<id>.md with explicit --output and --stdout controls | Predictable artifact location while preserving operator control for file and stream workflows |
+| 46-02 | DynamicProviderMode = string alias, ProviderMode union kept for AGENT_MODELS | Preserves type safety for hardcoded constant while enabling custom modes everywhere else |
+| 46-02 | Job.providerMode widened to string | Custom modes from provider_modes table need to round-trip through Job objects |
+| 46-02 | Config providerMode validation accepts any non-empty string | Actual validation at resolution time — DB may not be available during early config parse |
+| 46-02 | ESM circular dependency (models→model-store→models) safe via live bindings | AGENT_MODELS accessed inside functions at call time, not at import evaluation time |
+| 46-02 | Resolve functions: try DB → catch → fall through to AGENT_MODELS | Graceful degradation ensures pilot works even when DB is unavailable |
 
 ## Session Continuity
 
-Last session: 2026-03-08T08:42:00Z
-Stopped at: Completed 46-01-PLAN.md
+Last session: 2026-03-08T08:52:11Z
+Stopped at: Completed 46-02-PLAN.md
 Resume file: None
