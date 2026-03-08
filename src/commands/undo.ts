@@ -114,19 +114,19 @@ async function undoCommand(id: string, opts: UndoOptions): Promise<void> {
 
   if (!dryRun && worktreeDirty) {
     fail(
-      `Refusing undo for job ${id}: worktree is dirty. Commit, stash, or discard local changes first. --force does not bypass this guard.`,
+      `Refusing undo for job ${id}. What: undo was refused. Why: worktree is currently dirty, and \`git reset --hard\` would overwrite uncommitted changes. Next: commit (\`git commit\`), stash (\`git stash\`), or discard local changes, then retry. --force does not bypass this guard.`,
     );
   }
 
   if (relation === 'newer-work-exists' && !force) {
     fail(
-      `Refusing undo for job ${id}: newer commits exist after this checkpoint. Re-run with --force to discard newer work. Tip: undo newer jobs for this project first.`,
+      `Refusing undo for job ${id}. What: undo was blocked. Why: newer commits exist after this job checkpoint, so rollback would discard newer work. Next: undo newer jobs for this project first, or re-run with --force if you intentionally want to discard newer work.`,
     );
   }
 
   if (relation === 'diverged' && !force) {
     fail(
-      `Refusing undo for job ${id}: current HEAD diverged from this checkpoint. Re-run with --force only if you intentionally want to discard current history.`,
+      `Refusing undo for job ${id}. What: undo was blocked. Why: current HEAD diverged from this job checkpoint, so rollback would discard current history. Next: inspect history (\`git log --oneline --graph --decorate -20\`) and re-run with --force only if discarding current history is intentional.`,
     );
   }
 
@@ -136,7 +136,7 @@ async function undoCommand(id: string, opts: UndoOptions): Promise<void> {
 
   if (job.startedDirty && !force) {
     fail(
-      `Refusing undo for job ${id}: job started from a dirty worktree, so safe rollback cannot be guaranteed. Re-run with --force to override this guard.`,
+      `Refusing undo for job ${id}. What: undo was blocked. Why: this job started from a dirty worktree, so rollback cannot safely isolate job-only changes. Next: review local edits from that run and re-run with --force only if you accept that pre-existing edits may be discarded.`,
     );
   }
 

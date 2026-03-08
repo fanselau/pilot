@@ -202,6 +202,24 @@ describe('undoCommand', () => {
     mockListChangedFiles.mockResolvedValue(['src/index.ts']);
 
     await expectRefusal(undoCommand('ab12', {}), 'newer commits exist');
+    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => call[0]).join('');
+    expect(stderr).toContain('What: undo was blocked');
+    expect(stderr).toContain('Why: newer commits exist after this job checkpoint');
+    expect(stderr).toContain('Next: undo newer jobs for this project first');
+    expect(mockExeca).not.toHaveBeenCalled();
+  });
+
+  it('refuses diverged history rewinds without --force and provides guidance', async () => {
+    mockGetJob.mockReturnValue(makeJob({ gitBaseCommit: 'base123', gitHeadCommit: 'head123' }));
+    mockResolvedCommits({ current: 'current999', base: 'base123', head: 'head123' });
+    mockClassifyHeadRelation.mockResolvedValue('diverged');
+    mockListChangedFiles.mockResolvedValue(['src/index.ts']);
+
+    await expectRefusal(undoCommand('ab12', {}), 'current HEAD diverged from this job checkpoint');
+    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => call[0]).join('');
+    expect(stderr).toContain('What: undo was blocked');
+    expect(stderr).toContain('Why: current HEAD diverged from this job checkpoint');
+    expect(stderr).toContain('Next: inspect history (`git log --oneline --graph --decorate -20`)');
     expect(mockExeca).not.toHaveBeenCalled();
   });
 
@@ -264,6 +282,10 @@ describe('undoCommand', () => {
     mockListChangedFiles.mockResolvedValue(['src/index.ts']);
 
     await expectRefusal(undoCommand('ab12', {}), 'job started from a dirty worktree');
+    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => call[0]).join('');
+    expect(stderr).toContain('What: undo was blocked');
+    expect(stderr).toContain('Why: this job started from a dirty worktree');
+    expect(stderr).toContain('Next: review local edits from that run');
     expect(mockExeca).not.toHaveBeenCalled();
   });
 
@@ -305,7 +327,12 @@ describe('undoCommand', () => {
     mockListChangedFiles.mockResolvedValue(['src/index.ts']);
     mockIsWorktreeDirty.mockResolvedValue(true);
 
-    await expectRefusal(undoCommand('ab12', { force: true }), 'worktree is dirty');
+    await expectRefusal(undoCommand('ab12', { force: true }), 'worktree is currently dirty');
+    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => call[0]).join('');
+    expect(stderr).toContain('What: undo was refused');
+    expect(stderr).toContain('Why: worktree is currently dirty');
+    expect(stderr).toContain('Next: commit (`git commit`), stash (`git stash`), or discard local changes');
+    expect(stderr).toContain('--force does not bypass this guard');
     expect(mockExeca).not.toHaveBeenCalled();
   });
 
