@@ -361,6 +361,40 @@ skillsCmd
     await skillsRecommendCommand(projectDir ?? process.cwd(), opts as { tier?: string });
   });
 
+const modelsCmd = program
+  .command('models')
+  .description('View and edit model assignments');
+
+// Default action (no subcommand) = show
+modelsCmd.action(async () => {
+  const { modelsShowCommand } = await import('./commands/models.js');
+  await modelsShowCommand(program.opts() as { json?: boolean });
+});
+
+modelsCmd
+  .command('show [mode]')
+  .description('Show model mapping for a provider mode')
+  .action(async (mode: string | undefined) => {
+    const { modelsShowCommand } = await import('./commands/models.js');
+    await modelsShowCommand({ ...program.opts(), providerMode: mode } as { json?: boolean; providerMode?: string });
+  });
+
+modelsCmd
+  .command('edit')
+  .description('Interactive model reassignment')
+  .action(async () => {
+    const { modelsEditCommand } = await import('./commands/models.js');
+    await modelsEditCommand(program.opts() as { json?: boolean });
+  });
+
+modelsCmd
+  .command('reset [mode]')
+  .description('Reset model assignments to built-in defaults')
+  .action(async (mode: string | undefined) => {
+    const { modelsResetCommand } = await import('./commands/models.js');
+    await modelsResetCommand(mode, program.opts() as { json?: boolean });
+  });
+
 program
   .command('doctor')
   .description('Health check: opencode binary, DB access, disk, memory')
