@@ -538,7 +538,7 @@ class Runner {
 
       if (startedDirty && !job.allowDirtyStart) {
         throw new Error(
-          `Refusing to start job ${job.id}: repository has uncommitted changes. Please commit, stash, or discard your changes, then retry. If you intentionally accept weaker recovery guarantees, re-queue with \`pilot add ... --force-dirty\`.`,
+          `Refusing to start job ${job.id}. What: launch was refused. Why: worktree is dirty and clean-start safety is enabled. Next: commit (\`git commit\`), stash (\`git stash\`), or discard (\`git reset --hard && git clean -fd\`) local changes, then retry. Use \`pilot add ... --force-dirty\` only when faster start matters more than reliable undo/recovery checkpoints.`,
         );
       }
 

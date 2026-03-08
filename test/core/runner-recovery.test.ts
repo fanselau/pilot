@@ -224,9 +224,11 @@ describe('runner recovery preflight and checkpoint capture', () => {
     expect(mocks.delegate).not.toHaveBeenCalled();
     expect(mocks.markFailed).toHaveBeenCalledTimes(1);
     const message = String(mocks.markFailed.mock.calls[0][1]);
-    expect(message).toContain('commit, stash, or discard your changes');
+    expect(message).toContain('What: launch was refused');
+    expect(message).toContain('Why: worktree is dirty and clean-start safety is enabled');
+    expect(message).toContain('Next: commit (`git commit`), stash (`git stash`), or discard');
     expect(message).toContain('--force-dirty');
-    expect(message).toContain('weaker recovery guarantees');
+    expect(message).toContain('faster start matters more than reliable undo/recovery checkpoints');
     expect(mocks.updateJobRecoveryHead).toHaveBeenCalledWith('ab12', 'head123');
     expect(mocks.updateJobRecoveryHead.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.markFailed.mock.invocationCallOrder[0],
