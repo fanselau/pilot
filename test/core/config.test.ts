@@ -289,6 +289,16 @@ describe('config file loading', () => {
     expect(() => loadConfigFile()).toThrowError(/queueGraceSeconds/i);
   });
 
+  it('allows queueGraceSeconds = 0 (explicit disable)', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { queueGraceSeconds: 0 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const result = loadConfigFile();
+    expect(result).not.toBeNull();
+    expect(result!.runner?.queueGraceSeconds).toBe(0);
+  });
+
   it('allows maxParallel = null (auto-detect)', () => {
     tempConfigPath = writeTempConfig({
       runner: { maxParallel: null },
