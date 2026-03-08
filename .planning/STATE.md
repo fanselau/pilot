@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 46
+## Current Phase: 47
 
 ## Current Position
 
-Phase: 46 (Dynamic Model Configuration)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Completed 46-05-PLAN.md (Comprehensive test suite for all Phase 46 changes)
+Phase: 47 (AGENTS.md Integration — CLI Commands & Doctor Check)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 47-01-PLAN.md (Core agents-md module + setup AGENTS.md prompt)
 
-Progress: █████ 5/5 plans (100%)
+Progress: █ 1/3 plans (33%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 46 complete — model assignments moved from hardcoded AGENT_MODELS to SQLite database with full CRUD, CLI commands, and 60 new tests.
+**Current focus:** Phase 47 in progress — AGENTS.md integration with shared session spawning module and setup prompt (plan 01/03 complete).
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -111,6 +111,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 46: Dynamic Model Configuration
 - **Status:** complete (5/5 plans, verified ✓)
+
+### Phase 47: AGENTS.md Integration — CLI Commands & Doctor Check
+- **Status:** in progress (1/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -601,9 +604,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 46-05 | _getTestDb() directly for model-store tests — no vi.mock needed | model-store functions call getDb() which returns the cached DB from _getTestDb() |
 | 46-05 | Mock process.exit as throw for CLI error path testing | Verifies exit code paths without terminating the test runner |
 | 46-05 | Capture stdout.write for export command testing | modelsExportCommand always writes JSON to stdout regardless of --json flag |
+| 47-01 | judge/budget scope for AGENTS.md model resolution | Cheapest model sufficient — AGENTS.md operations don't need expensive AI |
+| 47-01 | extractLastAssistantContent private, not exported | Internal helper only needed by spawnAgentsMdSession |
+| 47-01 | Separate try/catch for AGENTS.md section in setup.ts | Isolates from skill bootstrap errors and config init |
 
 ## Session Continuity
 
-Last session: 2026-03-08T09:10:00Z
-Stopped at: Completed 46-05-PLAN.md — Phase 46 complete
+Last session: 2026-03-08T10:58:48Z
+Stopped at: Completed 47-01-PLAN.md
 Resume file: None

@@ -819,7 +819,7 @@ Read requirements/dynamic-model-config.md for full spec.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 47-01-PLAN.md — Core agents-md module + setup AGENTS.md prompt
+- [x] 47-01-PLAN.md — Core agents-md module + setup AGENTS.md prompt
 - [ ] 47-02-PLAN.md — Doctor AGENTS.md health check + pilot lessons command
 - [ ] 47-03-PLAN.md — Tests for all Phase 47 changes
 

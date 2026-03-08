@@ -47,7 +47,7 @@ async function isDir(filePath: string): Promise<boolean> {
 
 // ── Project health check ───────────────────────────────────────────────────
 
-async function projectHealthCheck(projectPath: string, smokeTest?: boolean): Promise<Check[]> {
+async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skipAgents?: boolean): Promise<Check[]> {
   const absPath = path.resolve(projectPath);
   const checks: Check[] = [];
 
@@ -254,6 +254,67 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean): Pro
     checks.push({ name: '.opencode/agents/ exists', status: 'warn', detail: 'No agents directory' });
   }
 
+  // ── AGENTS.md Health Check ──────────────────────────────────────────────
+
+  if (!skipAgents) {
+    try {
+      const { checkAgentsMdExists, spawnAgentsMdSession } = await import('../core/agents-md.js');
+      const agentsMdExists = await checkAgentsMdExists(absPath);
+
+      if (!agentsMdExists) {
+        checks.push({
+          name: 'AGENTS.md',
+          status: 'warn',
+          detail: `Not found — generate with: pilot setup ${projectPath}`,
+        });
+      } else {
+        // Spawn AI session for drift detection using haiku-tier (cheapest) model
+        // TODO: Replace 'gsd-setup-agents check' with actual health check command when available
+        // in pilot-gsd. The AI session should read AGENTS.md, package.json, and project structure
+        // to detect stale references, wrong versions, and deleted paths.
+        try {
+          const result = await spawnAgentsMdSession({
+            projectDir: absPath,
+            command: 'gsd-setup-agents check',
+            timeoutMs: 90_000,
+          });
+
+          if (result !== null && result.length > 0) {
+            // Parse AI findings — any non-empty response with "drift", "stale", "issue", "warning"
+            // keywords suggests problems; otherwise healthy
+            const lower = result.toLowerCase();
+            const hasDrift = /\b(drift|stale|outdated|mismatch|missing|deleted|wrong|issue|warning|error)\b/.test(lower);
+            const detail = result.length > 200 ? result.slice(0, 197) + '...' : result;
+            checks.push({
+              name: 'AGENTS.md health',
+              status: hasDrift ? 'warn' : 'pass',
+              detail,
+            });
+          } else {
+            checks.push({
+              name: 'AGENTS.md health',
+              status: 'warn',
+              detail: 'Health check timed out or failed — skipped',
+            });
+          }
+        } catch {
+          checks.push({
+            name: 'AGENTS.md health',
+            status: 'warn',
+            detail: 'Health check failed — skipped',
+          });
+        }
+      }
+    } catch (err) {
+      // Import failure or unexpected error — never crash doctor
+      checks.push({
+        name: 'AGENTS.md health',
+        status: 'warn',
+        detail: `Health check unavailable: ${errMsg(err).slice(0, 150)}`,
+      });
+    }
+  }
+
   // ── Smoke Test ─────────────────────────────────────────────────────────
 
   if (smokeTest) {
@@ -282,7 +343,7 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean): Pro
 
 // ── System health check (original behavior) ─────────────────────────────
 
-async function systemHealthCheck(): Promise<Check[]> {
+async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
   const config = getConfig();
   const checks: Check[] = [];
 
@@ -409,15 +470,41 @@ async function systemHealthCheck(): Promise<Check[]> {
     detail: `session cap: ${sessionMb}MB | reserved: ${reservedMb}MB | kill threshold: ${killMb}MB`,
   });
 
+  // ── AGENTS.md coverage across registered projects (file check only, no AI) ──
+
+  if (!skipAgents) {
+    try {
+      const { getAllProjects } = await import('../core/db.js');
+      const { checkAgentsMdExists } = await import('../core/agents-md.js');
+      const projects = getAllProjects();
+
+      if (projects.length > 0) {
+        let withAgentsMd = 0;
+        for (const proj of projects) {
+          if (await checkAgentsMdExists(proj.path)) {
+            withAgentsMd++;
+          }
+        }
+        checks.push({
+          name: 'AGENTS.md coverage',
+          status: withAgentsMd === projects.length ? 'pass' : 'warn',
+          detail: `${withAgentsMd}/${projects.length} projects have AGENTS.md`,
+        });
+      }
+    } catch {
+      // DB unavailable or import error — skip silently
+    }
+  }
+
   return checks;
 }
 
 // ── Main command ───────────────────────────────────────────────────────────
 
-async function doctorCommand(projectPath?: string, smokeTest?: boolean): Promise<void> {
+async function doctorCommand(projectPath?: string, smokeTest?: boolean, skipAgents?: boolean): Promise<void> {
   const checks = projectPath
-    ? await projectHealthCheck(projectPath, smokeTest)
-    : await systemHealthCheck();
+    ? await projectHealthCheck(projectPath, smokeTest, skipAgents)
+    : await systemHealthCheck(skipAgents);
 
   if (isJsonMode()) {
     outputJson({ checks });

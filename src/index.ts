@@ -442,9 +442,10 @@ program
   .description('Health check: opencode binary, DB access, disk, memory')
   .option('--project <path>', 'Check a specific project setup')
   .option('--smoke-test', 'Run a live smoke test (requires --project)')
+  .option('--skip-agents', 'Skip AI-powered AGENTS.md health check')
   .action(async (opts: Record<string, unknown>) => {
     const { doctorCommand } = await import('./commands/doctor.js');
-    await doctorCommand(opts.project as string | undefined, opts.smokeTest as boolean | undefined);
+    await doctorCommand(opts.project as string | undefined, opts.smokeTest as boolean | undefined, opts.skipAgents as boolean | undefined);
   });
 
 program
