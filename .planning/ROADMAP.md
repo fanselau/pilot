@@ -741,3 +741,26 @@ Wave structure:
 
 **Details:**
 Read requirements/job-undo-and-recovery-checkpoints.md for full spec.
+
+### Phase 44: QoL Introspection and Queue Grace Period
+
+**Goal:** Improve day-to-day operator legibility by adding concise job introspection surfaces (`status --why`, `info`, `log --summary`, `retry --why`) and enforcing a configurable queue grace period with clear per-job override semantics.
+**Depends on:** Phase 43
+**Plans:** 6 plans
+
+Plans:
+- [x] 44-01-PLAN.md — Grace period config + schema foundation (`queueGraceSeconds`, `skipGracePeriod`)
+- [ ] 44-02-PLAN.md — Launch eligibility grace gate + `pilot add --start-immediately` queue-time UX
+- [ ] 44-03-PLAN.md — Shared introspection reason model + `pilot status --why` + `pilot retry --why`
+- [ ] 44-04-PLAN.md — Compact `pilot info <id>` triage view + `pilot log <id> --summary`
+- [ ] 44-05-PLAN.md — TUI queue/detail grace+reason visibility + regression verification
+- [ ] 44-06-PLAN.md — Refusal/help copy hardening for dirty-worktree launch and guarded undo flows
+
+Wave structure:
+- Wave 1: 44-01 (config/schema primitives)
+- Wave 2: 44-02 (grace eligibility + add override wiring)
+- Wave 3: 44-03 (shared why-model + status/retry integration)
+- Wave 4: 44-04 + 44-05 + 44-06 in parallel (summaries + TUI polish + refusal copy hardening)
+
+**Details:**
+Read requirements/qol-introspection-and-queue-grace-period.md for full spec.

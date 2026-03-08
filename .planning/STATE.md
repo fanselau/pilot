@@ -1,24 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 43
+## Current Phase: 44
 
 ## Current Position
 
-Phase: 43 (Job Undo and Recovery Checkpoints)
-**Next Phase:** None (milestone complete)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-03-07 - Completed 43-04-PLAN.md
+Phase: 44 (QoL Introspection and Queue Grace Period)
+**Next Plan:** 44-02-PLAN.md
+Plan: 1 of 6 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 44-01-PLAN.md
 
-Progress: ████████░░ 12/15 plans (80%)
+Progress: ██████░░░░ 13/21 plans (62%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 43 verified and complete — recovery checkpoints, guarded undo, and recovery visibility are shipped across CLI/TUI/docs.
+**Current focus:** Phase 44 in progress — queue grace config/schema foundations are shipped for upcoming launch-eligibility and introspection QoL work.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -209,6 +209,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 41 added: OpenClaw Skill Rewrite and Bundle with Pilot
 - Phase 42 added: Release Hardening — Config Isolation, Install Story, and Changelog
 - Phase 43 added: Job Undo and Recovery Checkpoints
+- Phase 44 added: QoL Introspection and Queue Grace Period
 
 ## Decisions
 
@@ -544,9 +545,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 43-04 | status recovery visibility stays metadata-first, with newer-work tags shown only when known | Keeps `pilot status` cheap while still surfacing actionable guard states |
 | 43-04 | `pilot info` adds live per-job relation checks and emits a stable `recovery` JSON object | Enables explicit newer-work/diverged guidance without breaking existing JSON consumers |
 | 43-04 | TUI detail header uses concise single-line recovery labels (safe/guarded/unavailable + reason) | Preserves scanability in narrow terminals while exposing checkpoint safety context |
+| 44-01 | queue grace default is 120s with explicit 0 disable | Meets "minute or two" safety window while keeping fast opt-out semantics |
+| 44-01 | `skip_grace_period` stored as additive INTEGER column default 0 | Backward-compatible persistence for per-job immediate-start intent |
+| 44-01 | `runner.queueGraceSeconds` surfaced in config init/show/set/get | Operators can inspect and tune grace behavior without manual JSON editing |
 
 ## Session Continuity
 
-Last session: 2026-03-07T23:11:47Z
-Stopped at: Completed 43-04-PLAN.md
+Last session: 2026-03-08T00:13:32Z
+Stopped at: Completed 44-01-PLAN.md
 Resume file: None
