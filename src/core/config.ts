@@ -90,7 +90,13 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
       assertEnum('defaults.modelProfile', defaults.modelProfile, ['quality', 'balanced', 'budget']);
     }
     if (defaults.providerMode !== undefined) {
-      assertEnum('defaults.providerMode', defaults.providerMode, ['hybrid', 'claude-only', 'openai-only']);
+      // Accept any non-empty string — custom provider modes from provider_modes table are valid.
+      // Actual validation happens at resolution time (resolveAgentModel / resolveTopLevelModel).
+      if (typeof defaults.providerMode !== 'string' || defaults.providerMode.length === 0) {
+        throw new Error(
+          `Invalid config value in ${filePath}: defaults.providerMode must be a non-empty string, got ${JSON.stringify(defaults.providerMode)}`,
+        );
+      }
     }
     if (defaults.scope !== undefined && defaults.scope !== null) {
       assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'milestone']);

@@ -27,7 +27,7 @@ export interface ConfigFileSchema {
   };
   defaults?: {
     modelProfile?: 'quality' | 'balanced' | 'budget';
-    providerMode?: 'hybrid' | 'claude-only' | 'openai-only';
+    providerMode?: string;  // accepts built-in modes + custom user-defined modes from provider_modes table
     notifyTarget?: string | null;
     scope?: 'quick' | 'phase' | 'milestone' | null;
   };
@@ -49,7 +49,7 @@ export type ConfigSource = 'env' | 'config' | 'default' | 'auto-detect';
 /** Config-only defaults not in PilotConfig (accessed via getConfigFileDefaults). */
 export interface ConfigFileDefaults {
   modelProfile: 'quality' | 'balanced' | 'budget';
-  providerMode: 'hybrid' | 'claude-only' | 'openai-only';
+  providerMode: string;  // accepts built-in modes + custom user-defined modes
   scope: 'quick' | 'phase' | 'milestone' | null;
 }
 
@@ -79,6 +79,9 @@ export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancel
 export type ModelProfile = 'quality' | 'balanced' | 'budget';
 export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
 
+/** ProviderMode including custom user-defined modes from provider_modes table. */
+export type DynamicProviderMode = string;
+
 export interface ModelEntry {
   model: string;
   variant?: string;
@@ -105,7 +108,7 @@ export interface Job {
   currentStep: number;
   sessionTitles: string | null;   // JSON array of session titles
   modelProfile: ModelProfile;
-  providerMode: ProviderMode;
+  providerMode: string;         // ProviderMode or custom user-defined mode from provider_modes table
   judgeVerdict: string | null;  // JSON string of judge verdict
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
   callbackUrl: string | null;     // custom webhook URL for job completion notification
@@ -150,7 +153,7 @@ export interface JobCostEstimate {
 
 export interface JobObservabilityRequested {
   modelProfile: ModelProfile;
-  providerMode: ProviderMode;
+  providerMode: string;  // ProviderMode or custom user-defined mode
   scope: JobScope;
   intendedExecutorModel: string | null;
   notes: string[];

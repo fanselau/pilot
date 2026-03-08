@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { ModelEntry, ModelProfile, ProviderMode } from './types.js';
+import type { ModelEntry, ModelProfile, ProviderMode, DynamicProviderMode } from './types.js';
 
 // ── Flat AGENT_MODELS lookup table ────────────────────────────────────────
 //
@@ -84,10 +84,10 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
 function resolveAgentModel(
   agentName: string,
   profile: ModelProfile,
-  providerMode: ProviderMode,
+  providerMode: DynamicProviderMode,
 ): ModelEntry {
-  const providerTable = AGENT_MODELS[providerMode];
-  const agentProfiles = providerTable[agentName];
+  const providerTable = AGENT_MODELS[providerMode as ProviderMode];
+  const agentProfiles = providerTable?.[agentName];
   if (!agentProfiles) {
     throw new Error(`Unknown agent for model resolution: ${agentName}`);
   }
@@ -102,10 +102,11 @@ function resolveAgentModel(
 
 function resolveAllAgentModels(
   profile: ModelProfile,
-  providerMode: ProviderMode,
+  providerMode: DynamicProviderMode,
 ): Record<string, ModelEntry> {
   const models: Record<string, ModelEntry> = {};
-  const providerTable = AGENT_MODELS[providerMode];
+  const providerTable = AGENT_MODELS[providerMode as ProviderMode];
+  if (!providerTable) return models; // Custom mode with no hardcoded fallback
   for (const key of Object.keys(providerTable)) {
     if (key.startsWith('_top:')) continue; // Skip scope entries
     models[key] = resolveAgentModel(key, profile, providerMode);
@@ -125,14 +126,17 @@ function resolveAllAgentModels(
 function resolveTopLevelModel(
   scope: 'phase' | 'quick' | 'milestone' | 'judge',
   profile: ModelProfile,
-  providerMode: ProviderMode,
+  providerMode: DynamicProviderMode,
 ): ModelEntry {
-  const providerTable = AGENT_MODELS[providerMode];
+  const providerTable = AGENT_MODELS[providerMode as ProviderMode];
   const key = scope === 'milestone' ? '_top:phase' : `_top:${scope}`;
-  const scopeProfiles = providerTable[key];
+  const scopeProfiles = providerTable?.[key];
   if (!scopeProfiles) {
-    // Fallback: use _top:quick for unknown scopes
-    const fallback = providerTable['_top:quick'];
+    // Fallback: use _top:quick for known modes, throw for custom modes
+    const fallback = providerTable?.['_top:quick'];
+    if (!fallback) {
+      throw new Error(`No model mapping for scope ${scope} in provider mode ${providerMode}`);
+    }
     return fallback[profile];
   }
 

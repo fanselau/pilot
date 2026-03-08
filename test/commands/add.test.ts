@@ -344,7 +344,7 @@ describe('addCommand', () => {
 
     await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus', noNotify: true })).rejects.toThrow('exit');
 
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid provider'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown provider'));
     expect(exitSpy).toHaveBeenCalledWith(2);
 
     stderrSpy.mockRestore();

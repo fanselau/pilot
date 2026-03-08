@@ -265,9 +265,18 @@ describe('config file loading', () => {
     expect(() => loadConfigFile()).toThrowError(/modelProfile/i);
   });
 
-  it('throws on invalid providerMode', () => {
+  it('accepts custom providerMode strings (dynamic provider modes)', () => {
     tempConfigPath = writeTempConfig({
-      defaults: { providerMode: 'gpt-only' },
+      defaults: { providerMode: 'gemini-only' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const config = loadConfigFile();
+    expect(config?.defaults?.providerMode).toBe('gemini-only');
+  });
+
+  it('throws on empty providerMode string', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { providerMode: '' },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     expect(() => loadConfigFile()).toThrowError(/providerMode/i);

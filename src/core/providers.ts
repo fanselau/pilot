@@ -91,7 +91,7 @@ function getDefaultMode(detection: ProviderDetection): ProviderMode {
  * Check if the configured provider mode matches available providers.
  * Returns a warning string if there's a mismatch, null if all good.
  */
-async function checkProviderAvailability(mode: ProviderMode): Promise<ProviderAvailability> {
+async function checkProviderAvailability(mode: string): Promise<ProviderAvailability> {
   const detection = await detectProviders();
 
   // If detection failed entirely (no providers found), skip warnings

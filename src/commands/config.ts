@@ -142,7 +142,7 @@ const CONFIG_FIELD_SPECS: Record<string, FieldSpec> = {
   'memory.reservedMb': { type: 'number', path: ['memory', 'reservedMb'], min: 1 },
   'memory.killThresholdMb': { type: 'number', path: ['memory', 'killThresholdMb'], min: 1 },
   'defaults.modelProfile': { type: 'enum', path: ['defaults', 'modelProfile'], enum: ['quality', 'balanced', 'budget'] },
-  'defaults.providerMode': { type: 'enum', path: ['defaults', 'providerMode'], enum: ['hybrid', 'claude-only', 'openai-only'] },
+  'defaults.providerMode': { type: 'string', path: ['defaults', 'providerMode'] },
   'defaults.notifyTarget': { type: 'nullable-string', path: ['defaults', 'notifyTarget'] },
   'defaults.scope': { type: 'enum', path: ['defaults', 'scope'], enum: ['quick', 'phase', 'milestone'] },
   'notifications.openclawHooksUrl': { type: 'nullable-string', path: ['notifications', 'openclawHooksUrl'] },

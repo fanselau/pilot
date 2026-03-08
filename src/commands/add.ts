@@ -15,10 +15,11 @@ import { addJob, findDuplicateJob, updateJobCategories } from '../core/db.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
-import type { JobScope, ModelProfile, ProviderMode } from '../core/types.js';
+import { getProviderMode } from '../core/model-store.js';
+import type { JobScope, ModelProfile } from '../core/types.js';
 
 const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
-const VALID_PROVIDERS: readonly ProviderMode[] = ['hybrid', 'claude-only', 'openai-only'];
+const BUILTIN_PROVIDERS = ['hybrid', 'claude-only', 'openai-only'] as const;
 
 interface AddOptions {
   as?: JobScope;
@@ -165,7 +166,7 @@ async function addCommand(
     : configDefaults.modelProfile;
 
   // Resolve provider mode: flag > config file default
-  const providerMode: ProviderMode = opts.provider
+  const providerMode = opts.provider
     ? validateProvider(opts.provider)
     : configDefaults.providerMode;
 
@@ -393,12 +394,20 @@ function validateProfile(value: string): ModelProfile {
   return value as ModelProfile;
 }
 
-function validateProvider(value: string): ProviderMode {
-  if (!VALID_PROVIDERS.includes(value as ProviderMode)) {
-    process.stderr.write(`Error: Invalid provider "${value}". Must be one of: ${VALID_PROVIDERS.join(', ')}\n`);
-    process.exit(2);
+function validateProvider(value: string): string {
+  // Accept built-in modes directly
+  if ((BUILTIN_PROVIDERS as readonly string[]).includes(value)) return value;
+
+  // Check DB for custom provider modes (graceful fallback)
+  try {
+    if (getProviderMode(value)) return value;
+  } catch {
+    // DB unavailable — only accept built-in modes
   }
-  return value as ProviderMode;
+
+  // If not found in built-in or DB, reject
+  process.stderr.write(`Error: Unknown provider "${value}". Built-in modes: ${BUILTIN_PROVIDERS.join(', ')}. Create custom modes with: pilot models add-provider <name>\n`);
+  process.exit(2);
 }
 
 export { addCommand, detectScope };

@@ -1,25 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 45
+## Current Phase: 46
 
 ## Current Position
 
-Phase: 45 (Job Observability, Cost Tracking, and Export)
-**Next Phase:** Phase 46 (Dynamic Model Configuration)
-**Next Plan:** None (phase complete)
-Plan: 6 of 6 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Completed quick task 077: Update OpenClaw SKILL.md for phases 43-45
+Phase: 46 (Dynamic Model Configuration)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 46-01-PLAN.md (DB schema + seed + model-store CRUD)
 
-Progress: ██████████ 21/21 plans (100%)
+Progress: █░░░░ 1/5 plans (20%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 45 verified and complete — CLI/TUI observability now share one model/token/cost contract, export artifacts are first-class, and end-to-end regression is green.
+**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 01 complete: DB schema + seed + model-store CRUD.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -110,6 +108,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 45: Job Observability, Cost Tracking, and Export
 - **Status:** complete (6/6 plans, verified ✓)
+
+### Phase 46: Dynamic Model Configuration
+- **Status:** in progress (1/5 plans complete)
 
 ### Quick Tasks Completed
 
@@ -576,12 +577,16 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 45-01 | Per-model token aggregation groups by provider/model and coerces missing token fields to zero | Keeps breakdowns deterministic without inventing usage for absent fields |
 | 45-01 | Recursive total-token aggregation now uses visited-session tracking in addition to depth guard | Prevents duplicate counting on cyclic or malformed parent_id graphs |
 | 45-02 | Pricing assumptions moved to explicit PRICING_CATALOG with estimated/partial/unavailable statuses | Prevents fake blended cost precision and keeps caveats machine-readable |
+| 46-01 | seedModelTables checks provider_modes row count — empty means first run | Simplest idempotency check; any existing data means preserve customizations |
+| 46-01 | getDb and seedModelTables exported from db.ts | model-store.ts needs shared DB connection and re-seed capability for reset |
+| 46-01 | resetAllToDefaults clears all then re-runs seedModelTables | Clean re-seed avoids partial state; seedModelTables handles full population |
+| 46-01 | AGENT_MODELS cast to generic Record in model-store.ts | Avoids ProviderMode union constraint when indexing with dynamic strings |
 | 45-02 | buildJobObservability now emits one canonical requested/observed/tokens/cost snapshot with running-job partial semantics | Keeps CLI/TUI/export surfaces aligned on one observability contract |
 | 45-02 | Runner collectActualModels now resolves root session IDs and traverses recursive trees with normalized sorted dedupe | Preserves trustworthy terminal model provenance for mismatch and cost analysis |
 | 45-05 | Export defaults write to ~/.pilot/exports/job-<id>.md with explicit --output and --stdout controls | Predictable artifact location while preserving operator control for file and stream workflows |
 
 ## Session Continuity
 
-Last session: 2026-03-08T01:57:50Z
-Stopped at: Completed 45-05-PLAN.md
+Last session: 2026-03-08T08:42:00Z
+Stopped at: Completed 46-01-PLAN.md
 Resume file: None

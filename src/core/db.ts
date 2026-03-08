@@ -13,7 +13,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig, getConfigFileDefaults } from './config.js';
-import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow } from './types.js';
+import type { Job, JobStep, JobScope, ModelProfile, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow } from './types.js';
 import { AGENT_MODELS } from './models.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -366,7 +366,7 @@ function addJob(
   description: string,
   requirementPath?: string,
   modelProfile?: ModelProfile,
-  providerMode?: ProviderMode,
+  providerMode?: string,
   dependsOn?: string,
   parentJobId?: string,
   callbackSessionKey?: string,
