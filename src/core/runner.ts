@@ -420,7 +420,7 @@ class Runner {
         this.loggedLowMemory = false;
       }
       while (this.activeJobs.size < effectiveMaxParallel && !this.shuttingDown) {
-        const job = claimNextLaunchable();
+        const job = claimNextLaunchable(config.queueGraceSeconds ?? 0);
         if (!job) break; // No more eligible jobs
 
         // Same-project serialization guard: check if any CURRENTLY ACTIVE job has the same

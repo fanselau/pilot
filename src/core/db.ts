@@ -459,7 +459,7 @@ function getRunningJobsByProject(project: string): Job[] {
  * The transaction guarantees that no two callers can claim the same job concurrently,
  * and that a second job for the same project cannot be claimed while one is running.
  */
-function claimNextLaunchable(): Job | null {
+function claimNextLaunchable(queueGraceSeconds: number = 0): Job | null {
   const db = getDb();
 
   const claim = db.transaction((): Job | null => {
@@ -474,9 +474,14 @@ function claimNextLaunchable(): Job | null {
           SELECT path FROM projects WHERE status = 'blocked'
         )
         AND (depends_on IS NULL OR depends_on IN (SELECT id FROM jobs WHERE status = 'completed'))
+        AND (
+          skip_grace_period = 1
+          OR ? <= 0
+          OR (strftime('%s','now') - strftime('%s', created_at)) >= ?
+        )
       ORDER BY priority DESC, created_at ASC
       LIMIT 1
-    `).get() as JobRow | undefined;
+    `).get(queueGraceSeconds, queueGraceSeconds) as JobRow | undefined;
 
     if (!row) return null;
 
