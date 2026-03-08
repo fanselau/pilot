@@ -437,6 +437,15 @@ pilot export f91c --output docs/exports/job-f91c-failure.md
 
 Use `--stdout` to print markdown directly instead of writing a file.
 
+Release verification checklist for Phase 45 observability/export behavior:
+
+```bash
+npx vitest run test/core/opencode-db.test.ts test/core/job-observability.test.ts
+npx vitest run test/commands/info.test.ts test/commands/log.test.ts test/commands/status.test.ts test/commands/export.test.ts
+npx vitest run test/tui/completed-panel.test.ts test/tui/running-panel.test.ts test/tui/detail-header.test.ts
+npm test
+```
+
 ---
 
 ## 7. Recovery Safety Model
