@@ -46,6 +46,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: '2222222222222222222222222222222222222222',
     allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -313,6 +314,36 @@ describe('buildHeaderLines', () => {
       const job = makeJob({ status: 'completed', gitBaseCommit: null, gitHeadCommit: null });
       const lines = buildHeaderLines(job, 100);
       expect(lines[5]).toContain('Recovery: unavailable (missing-checkpoint)');
+    });
+  });
+
+  describe('compact reason lines', () => {
+    it('adds grace-wait reason line with remaining seconds', () => {
+      const job = makeJob({ status: 'pending', createdAt: '2026-03-08T00:00:00Z' });
+      const lines = buildHeaderLines(job, 100, {
+        nowEpochSeconds: Math.floor(new Date('2026-03-08T00:00:30Z').getTime() / 1000),
+        queueGraceSeconds: 120,
+      });
+      expect(lines.some((line) => line.includes('Wait: grace-wait:90s'))).toBe(true);
+    });
+
+    it('adds retry guidance line for needs-revision failures', () => {
+      const job = makeJob({
+        status: 'failed',
+        gitBaseCommit: 'abc123',
+        gitHeadCommit: 'abc123',
+      });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines.some((line) => line.includes('Retry: needs-revision'))).toBe(true);
+    });
+
+    it('adds undo guarded line for newer-work jobs', () => {
+      const job = makeJob({
+        status: 'completed',
+        error: 'Refusing undo for job ab12: newer commits exist after this checkpoint.',
+      });
+      const lines = buildHeaderLines(job, 100);
+      expect(lines.some((line) => line.includes('Undo: undo:guarded-newer-work'))).toBe(true);
     });
   });
 
