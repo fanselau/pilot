@@ -398,6 +398,45 @@ pilot log --last 1
 
 Add `--verbose` for full session transcript, or `--follow` to tail in real time.
 
+### 7. Triage observability and export artifacts
+
+Use these commands for high-signal observability without reading full transcripts:
+
+```bash
+# Queue-level observability (running/recent jobs)
+pilot status
+
+# Full per-job observability and failure context
+pilot info <job-id>
+
+# Compact summary of outcome + observability
+pilot log <job-id> --summary
+```
+
+Pilot uses consistent data labels:
+
+- `requested` - requested profile/provider/scope configuration
+- `observed` - model and token usage found in opencode session data
+- `estimated` - cost estimate from observed usage and maintained pricing assumptions
+- `unavailable` - data could not be resolved (missing session/pricing data)
+
+Cost is shown as an estimate for operator triage, not exact billing truth.
+
+Export a portable markdown artifact (success and failure jobs are both supported):
+
+```bash
+# Default output path: ~/.pilot/exports/job-ab12.md
+pilot export ab12
+
+# Successful job artifact
+pilot export ab12 --output docs/exports/job-ab12-success.md
+
+# Failed job artifact (includes failure context + retry guidance when available)
+pilot export f91c --output docs/exports/job-f91c-failure.md
+```
+
+Use `--stdout` to print markdown directly instead of writing a file.
+
 ---
 
 ## 7. Recovery Safety Model

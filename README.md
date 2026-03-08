@@ -237,6 +237,53 @@ After each `execute-phase` step, Pilot spawns a lightweight judge session that e
 
 The verdict, confidence score, and reason are included in completion notifications (webhooks and Telegram), so you know at a glance whether the AI is confident in its own work.
 
+### Job observability and export artifacts
+
+Pilot now uses explicit observability semantics across `status`, `info`, `log --summary`, TUI, and exports:
+
+- `requested` - what lane/profile/provider was requested for the run
+- `observed` - what models and tokens were actually found from opencode session data
+- `estimated` - cost estimate derived from observed token/model usage and maintained pricing assumptions
+- `unavailable` - data could not be resolved (missing session data, missing pricing, or no token rollup yet)
+
+Cost values are intentionally labeled as estimates. They are useful for operator triage, not exact provider billing truth.
+
+```bash
+# Compact queue-level observability signals (includes live/partial markers)
+pilot status
+
+# Full job-level observability and failure context
+pilot info ab12
+
+# High-signal summary view without transcript stream
+pilot log ab12 --summary
+```
+
+Export a portable markdown artifact for sharing, debugging, or attaching to PRs:
+
+```bash
+# Default output path: ~/.pilot/exports/job-ab12.md
+pilot export ab12
+
+# Custom output path
+pilot export ab12 --output docs/exports/ab12.md
+
+# Stream markdown to stdout (for pipes or redirects)
+pilot export ab12 --stdout
+```
+
+Success-case export example:
+
+```bash
+pilot export ab12 --output docs/exports/job-ab12-success.md
+```
+
+Failure-case export example (includes failure step/reason + retry context when available):
+
+```bash
+pilot export f91c --output docs/exports/job-f91c-failure.md
+```
+
 ### Model profiles and provider modes
 
 Control the cost/quality tradeoff per job:
@@ -321,9 +368,10 @@ All notifications include the AI judge verdict, confidence score, and reason whe
 | Command | Description |
 |---------|-------------|
 | `pilot add <project> <requirement>` | Queue work. Auto-detects scope. Flags: `--as <scope>`, `--next`, `--dry-run`, `--force-dirty`, `--profile`, `--provider`, `--notify <agentId>`, `--notify-url <url>`, `--no-notify`, `--timeout <minutes>`, `--categories <cats>` |
-| `pilot status [project]` | One-shot status dashboard (default command, alias: `s`) |
-| `pilot log [id]` | Session activity stream. Flags: `--follow`, `--last <n>`, `--verbose`, `--delegation`, `--flat`, `--task <n>` |
-| `pilot info <id>` | Full job metadata, token usage, and cost estimate |
+| `pilot status [project]` | One-shot status dashboard (default command, alias: `s`). Flag: `--why` |
+| `pilot log [id]` | Session activity stream. Flags: `--summary`, `--follow`, `--last <n>`, `--verbose`, `--delegation`, `--flat`, `--task <n>` |
+| `pilot info <id>` | Full job metadata, observability snapshot (requested/observed/estimated/unavailable), and failure insight |
+| `pilot export <id>` | Generate portable markdown artifact. Flags: `--output <path>`, `--stdout` |
 | `pilot queue` | Show job queue. Flag: `--history` for completed/failed (alias: `q`) |
 
 ### Queue management
