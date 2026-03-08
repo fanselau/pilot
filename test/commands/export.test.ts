@@ -273,6 +273,79 @@ describe('buildJobExportMarkdown', () => {
     expect(markdown).toContain('Retry context: Last run failed but appears retryable.');
     expect(markdown).toContain('Commit delta: no-op');
   });
+
+  it('shows explicit unavailable/partial caveats when observability data is missing', () => {
+    const markdown = buildJobExportMarkdown({
+      job: makeJob({
+        status: 'running',
+        startedAt: '2026-03-08T01:01:00Z',
+        completedAt: null,
+        gitBaseCommit: null,
+        gitHeadCommit: null,
+      }),
+      steps: [
+        makeStep({
+          stepIndex: 0,
+          command: 'execute-phase',
+          status: 'running',
+          verdictSource: null,
+          verdictReason: null,
+        }),
+      ],
+      observability: makeObservability({
+        jobStatus: 'running',
+        terminal: false,
+        observed: {
+          status: 'unavailable',
+          models: [],
+          notes: ['No session titles are recorded for this job yet.'],
+        },
+        tokens: {
+          status: 'partial',
+          totals: null,
+          byModel: {},
+          notes: ['Job is still running; token totals are live and may increase.'],
+        },
+        cost: {
+          status: 'unavailable',
+          currency: 'USD',
+          estimatedUsd: null,
+          byModel: [],
+          notes: ['No per-model token usage available.'],
+        },
+      }),
+      statusWhy: {
+        code: 'running',
+        badge: 'running',
+        what: 'Job is currently running.',
+        why: 'Runner claimed this job and started execution.',
+        next: 'Use pilot log <id> for live progress.',
+      },
+      retryWhy: {
+        code: 'retry-unavailable',
+        badge: 'retry-unavailable',
+        what: 'Job is running.',
+        why: 'Retry only applies to failed or cancelled jobs.',
+        next: 'Wait for terminal state.',
+      },
+      undoWhy: {
+        code: 'undo-unavailable',
+        badge: 'undo:unavailable',
+        what: 'Undo checkpoints are not actionable yet.',
+        why: 'Undo is only safe to evaluate after terminal status.',
+        next: 'Wait for completion/failure, then run pilot undo --dry-run.',
+      },
+    });
+
+    expect(markdown).toContain('Actual models (`observed` = unavailable): unavailable');
+    expect(markdown).toContain('Token status (`observed`): partial');
+    expect(markdown).toContain('Token totals (`observed`): unavailable');
+    expect(markdown).toContain('Cost estimate status (`estimated`): unavailable');
+    expect(markdown).toContain('Estimated cost (`estimated`): unavailable');
+    expect(markdown).toContain('No session titles are recorded for this job yet.');
+    expect(markdown).toContain('No per-model token usage available.');
+    expect(markdown).toContain('Commit delta: unknown');
+  });
 });
 
 describe('exportCommand', () => {
