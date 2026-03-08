@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 47
+## Current Phase: 48
 
 ## Current Position
 
-Phase: 47 (AGENTS.md Integration — CLI Commands & Doctor Check)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Completed 47-03-PLAN.md (Tests for all Phase 47 changes)
+Phase: 48 (Fix New Project Setup Critical Bugs)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 48-01-PLAN.md (Submodule update + command layout validation)
 
-Progress: ███ 3/3 plans (100%)
+Progress: █░ 1/2 plans (50%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 47 complete — AGENTS.md integration with setup, doctor, and lessons commands fully tested (799 tests).
+**Current focus:** Phase 48 in progress — pilot-gsd submodule updated to working fork, setupProject() validates command layout (799 tests passing).
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -114,6 +114,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 47: AGENTS.md Integration — CLI Commands & Doctor Check
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 48: Fix New Project Setup Critical Bugs
+- **Status:** in progress (1/2 plans complete)
 
 ### Quick Tasks Completed
 
@@ -613,9 +616,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 47-02 | Project-level doctor: AI drift detection only in --project mode | Bounded time — single project with 90s timeout |
 | 47-02 | Lessons command defaults to process.cwd() | Matches requirements — "or current directory" |
 | 47-02 | Lessons continues without AGENTS.md (informational warning) | Lessons can still be extracted and printed for manual review |
+| 48-01 | gsd-delegate.md as sentinel file for command layout validation | Pilot-specific command only in correct flat layout; simple existence check |
+| 48-01 | existsSync for sentinel check (not async access()) | Single file existence; simpler code, no need for async |
+| 48-01 | Validation returns error in result.errors (not throws) | Consistent with setupProject() error handling pattern |
 
 ## Session Continuity
 
-Last session: 2026-03-08T11:06:46Z
-Stopped at: Completed 47-02-PLAN.md
+Last session: 2026-03-08T14:04:17Z
+Stopped at: Completed 48-01-PLAN.md
 Resume file: None
