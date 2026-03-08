@@ -14,6 +14,7 @@ import {
   getLastMessage,
   isSessionDone,
   getSessionTokens,
+  getSessionTokensRecursive,
   getSessionTokenUsageByModel,
   getSessionTokenUsageByModelRecursive,
   getSessionModels,
@@ -656,6 +657,34 @@ describe('per-model token usage queries', () => {
       },
     });
   });
+
+  it('does not double count recursive buckets when parent links form a cycle', () => {
+    insertSession(db, 'sess-a', 'session-a', 1000, 2000, 'sess-b');
+    insertSession(db, 'sess-b', 'session-b', 1100, 2100, 'sess-a');
+
+    insertMessage(db, 'm-a', 'sess-a', 1200, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 10, output: 2, reasoning: 1, cache_read: 0, cache_write: 0 },
+    });
+    insertMessage(db, 'm-b', 'sess-b', 1300, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 5, output: 3, reasoning: 2, cache_read: 1, cache_write: 1 },
+    });
+
+    expect(getSessionTokenUsageByModelRecursive('sess-a')).toEqual({
+      'openai/gpt-5': {
+        input: 15,
+        output: 5,
+        reasoning: 3,
+        cacheRead: 1,
+        cacheWrite: 1,
+      },
+    });
+  });
 });
 
 // ── getSessionModels / getSessionModelsById / getSessionModelsRecursive ────
@@ -758,6 +787,31 @@ describe('model usage queries', () => {
     ]);
   });
 
+  it('enforces recursion depth guard for very deep session trees', () => {
+    const ids = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10'];
+    for (let i = 0; i < ids.length; i += 1) {
+      const parentId = i === 0 ? null : ids[i - 1];
+      insertSession(db, ids[i], `session-${i}`, 1000 + i, 2000 + i, parentId);
+      insertMessage(db, `m-${i}`, ids[i], 3000 + i, {
+        role: 'assistant',
+        providerID: 'openai',
+        modelID: `gpt-${i}`,
+      });
+    }
+
+    expect(getSessionModelsRecursive('s0')).toEqual([
+      'openai/gpt-0',
+      'openai/gpt-1',
+      'openai/gpt-2',
+      'openai/gpt-3',
+      'openai/gpt-4',
+      'openai/gpt-5',
+      'openai/gpt-6',
+      'openai/gpt-7',
+      'openai/gpt-8',
+    ]);
+  });
+
   it('keeps title-based helper backward compatible via latest matching session', () => {
     insertSession(db, 'root', 'job-session', 1000, 4000);
     insertSession(db, 'child', 'job-session-child', 2000, 3000, 'root');
@@ -776,6 +830,32 @@ describe('model usage queries', () => {
       'anthropic/claude-sonnet-4-5',
       'openai/gpt-5',
     ]);
+  });
+});
+
+// ── recursive observability edge contracts ──────────────────────────────────
+
+describe('recursive observability edge contracts', () => {
+  it('avoids duplicate total-token aggregation on cyclic parent links', () => {
+    insertSession(db, 'sess-a', 'session-a', 1000, 2000, 'sess-b');
+    insertSession(db, 'sess-b', 'session-b', 1100, 2100, 'sess-a');
+
+    insertMessage(db, 'm-a', 'sess-a', 1200, {
+      role: 'assistant',
+      tokens: { input: 10, output: 1, reasoning: 2, cache_read: 1, cache_write: 0 },
+    });
+    insertMessage(db, 'm-b', 'sess-b', 1300, {
+      role: 'assistant',
+      tokens: { input: 5, output: 3, reasoning: 4, cache_read: 0, cache_write: 1 },
+    });
+
+    expect(getSessionTokensRecursive('sess-a')).toEqual({
+      input: 15,
+      output: 4,
+      reasoning: 6,
+      cacheRead: 1,
+      cacheWrite: 1,
+    });
   });
 });
 
@@ -851,6 +931,22 @@ describe('safe defaults when DB unavailable', () => {
     const tokens = getSessionTokens('any');
     expect(tokens.input).toBe(0);
     expect(tokens.output).toBe(0);
+  });
+
+  it('getSessionTokenUsageByModel returns empty object', () => {
+    expect(getSessionTokenUsageByModel('any')).toEqual({});
+  });
+
+  it('getSessionTokenUsageByModelRecursive returns empty object', () => {
+    expect(getSessionTokenUsageByModelRecursive('any')).toEqual({});
+  });
+
+  it('getSessionModelsById returns empty array', () => {
+    expect(getSessionModelsById('any')).toEqual([]);
+  });
+
+  it('getSessionModelsRecursive returns empty array', () => {
+    expect(getSessionModelsRecursive('any')).toEqual([]);
   });
 
   it('getAssistantMessageCount returns 0', () => {

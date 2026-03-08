@@ -784,11 +784,14 @@ function getSessionTokenUsageByModelRecursive(
 function getSessionTokensRecursive(
   sessionId: string,
   depth: number = 0,
+  visited: Set<string> = new Set(),
 ): { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number } {
   const ZERO = { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 };
 
   // Depth guard to prevent infinite loops from malformed data
-  if (depth > 3) return ZERO;
+  if (depth > MAX_SESSION_TREE_DEPTH || visited.has(sessionId)) return ZERO;
+
+  visited.add(sessionId);
 
   // Get root session tokens
   const root = getSessionTokens(sessionId);
@@ -797,7 +800,7 @@ function getSessionTokensRecursive(
   // Recurse into child sessions
   const children = getChildSessions(sessionId);
   for (const child of children) {
-    const childTokens = getSessionTokensRecursive(child.id, depth + 1);
+    const childTokens = getSessionTokensRecursive(child.id, depth + 1, visited);
     total = {
       input: total.input + childTokens.input,
       output: total.output + childTokens.output,
