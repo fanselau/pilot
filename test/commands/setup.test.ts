@@ -68,6 +68,16 @@ vi.mock('node:fs', async () => {
   };
 });
 
+// ── Mock agents-md (dynamic import from setup.ts) ──────────────────────
+
+const mockCheckAgentsMdExists = vi.fn();
+const mockSpawnAgentsMdSession = vi.fn();
+
+vi.mock('../../src/core/agents-md.js', () => ({
+  checkAgentsMdExists: (...args: unknown[]) => mockCheckAgentsMdExists(...args),
+  spawnAgentsMdSession: (...args: unknown[]) => mockSpawnAgentsMdSession(...args),
+}));
+
 // ── Mock init command (dynamic import from setup.ts: import('./init.js')) ──
 
 vi.mock('../../src/commands/init.js', () => ({
@@ -128,6 +138,10 @@ beforeEach(() => {
     detectedStack: { items: ['react'], signals: {} },
     errors: [],
   });
+
+  // Default: AGENTS.md exists (skip the prompt)
+  mockCheckAgentsMdExists.mockResolvedValue(true);
+  mockSpawnAgentsMdSession.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -243,5 +257,60 @@ describe('setup skill offer', () => {
 
     const joined = outputLines.join('\n');
     expect(joined).not.toContain('recommended skills available');
+  });
+});
+
+// ── Tests: setup AGENTS.md prompt ───────────────────────────────────────
+
+describe('setup AGENTS.md prompt', () => {
+  it('when AGENTS.md exists, no AGENTS.md prompt shown', async () => {
+    (process.stdin as StdinWithTTY).isTTY = false;
+    mockCheckAgentsMdExists.mockResolvedValue(true);
+
+    await setupCommand('/tmp/my-project', {});
+
+    // Should NOT have spawned an AGENTS.md session
+    expect(mockSpawnAgentsMdSession).not.toHaveBeenCalled();
+    // No AGENTS.md prompt text
+    const joined = outputLines.join('\n');
+    expect(joined).not.toContain('No AGENTS.md found');
+  });
+
+  it('when AGENTS.md missing and non-TTY, shows hint without prompting', async () => {
+    (process.stdin as StdinWithTTY).isTTY = false;
+    mockCheckAgentsMdExists.mockResolvedValue(false);
+
+    await setupCommand('/tmp/my-project', {});
+
+    const joined = outputLines.join('\n');
+    expect(joined).toContain('No AGENTS.md found');
+    // Should NOT have tried to spawn (no TTY for prompt)
+    expect(mockSpawnAgentsMdSession).not.toHaveBeenCalled();
+  });
+
+  it('in JSON mode, no AGENTS.md prompt shown', async () => {
+    jsonMode = true;
+    mockCheckAgentsMdExists.mockResolvedValue(false);
+
+    await setupCommand('/tmp/my-project', {});
+
+    // No AGENTS.md prompt in JSON mode
+    expect(mockSpawnAgentsMdSession).not.toHaveBeenCalled();
+    const joined = outputLines.join('\n');
+    expect(joined).not.toContain('No AGENTS.md found');
+  });
+
+  it('when spawn fails, setup still succeeds', async () => {
+    (process.stdin as StdinWithTTY).isTTY = false;
+    // agents-md check throws to simulate import failure
+    mockCheckAgentsMdExists.mockRejectedValue(new Error('Module load error'));
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    // Should NOT throw — setup already succeeded
+    await setupCommand('/tmp/my-project', {});
+    expect(process.exit).not.toHaveBeenCalled();
+
+    stderrSpy.mockRestore();
   });
 });

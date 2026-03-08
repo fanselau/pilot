@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 47 (AGENTS.md Integration — CLI Commands & Doctor Check)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-08 - Completed 47-01-PLAN.md (Core agents-md module + setup AGENTS.md prompt)
+Last activity: 2026-03-08 - Completed 47-02-PLAN.md (Doctor AGENTS.md health check + pilot lessons command)
 
-Progress: █ 1/3 plans (33%)
+Progress: ██ 2/3 plans (67%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 47 in progress — AGENTS.md integration with shared session spawning module and setup prompt (plan 01/03 complete).
+**Current focus:** Phase 47 in progress — Doctor AGENTS.md health check + pilot lessons command complete (plan 02/03 complete).
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -113,7 +113,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 47: AGENTS.md Integration — CLI Commands & Doctor Check
-- **Status:** in progress (1/3 plans complete)
+- **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -607,9 +607,14 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 47-01 | judge/budget scope for AGENTS.md model resolution | Cheapest model sufficient — AGENTS.md operations don't need expensive AI |
 | 47-01 | extractLastAssistantContent private, not exported | Internal helper only needed by spawnAgentsMdSession |
 | 47-01 | Separate try/catch for AGENTS.md section in setup.ts | Isolates from skill bootstrap errors and config init |
+| 47-02 | AGENTS.md checks use warn/pass only — never fail | Doctor exit code unaffected by AGENTS.md status |
+| 47-02 | System-level doctor: file-existence check only (no AI) | Prevents system doctor from becoming slow with AI spawns |
+| 47-02 | Project-level doctor: AI drift detection only in --project mode | Bounded time — single project with 90s timeout |
+| 47-02 | Lessons command defaults to process.cwd() | Matches requirements — "or current directory" |
+| 47-02 | Lessons continues without AGENTS.md (informational warning) | Lessons can still be extracted and printed for manual review |
 
 ## Session Continuity
 
-Last session: 2026-03-08T10:58:48Z
-Stopped at: Completed 47-01-PLAN.md
+Last session: 2026-03-08T11:06:46Z
+Stopped at: Completed 47-02-PLAN.md
 Resume file: None
