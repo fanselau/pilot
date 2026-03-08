@@ -34,6 +34,7 @@ interface AddOptions {
   noNotify?: boolean; // Explicitly skip completion notification
   dryRun?: boolean;   // Show what would happen without queuing
   categories?: string; // Skill categories for this job (comma-separated string from CLI)
+  startImmediately?: boolean; // Bypass queue grace wait for this job
 }
 
 function parseCategoriesInput(raw: string | undefined): string[] | null {
@@ -315,17 +316,36 @@ async function addCommand(
     return;
   }
 
-  const job = addJob(
-    resolvedProject, scope, description,
-    requirementPath ?? undefined,
-    modelProfile, providerMode,
-    undefined,             // dependsOn (not used in add command)
-    undefined,             // parentJobId (not used in add command)
-    resolvedNotifyKey,     // callbackSessionKey (resolved)
-    opts.notifyUrl,        // callbackUrl
-    opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-    opts.forceDirty ?? false,
-  );
+  const job = opts.startImmediately
+    ? addJob(
+      resolvedProject,
+      scope,
+      description,
+      requirementPath ?? undefined,
+      modelProfile,
+      providerMode,
+      undefined,             // dependsOn (not used in add command)
+      undefined,             // parentJobId (not used in add command)
+      resolvedNotifyKey,     // callbackSessionKey (resolved)
+      opts.notifyUrl,        // callbackUrl
+      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+      opts.forceDirty ?? false,
+      true,
+    )
+    : addJob(
+      resolvedProject,
+      scope,
+      description,
+      requirementPath ?? undefined,
+      modelProfile,
+      providerMode,
+      undefined,             // dependsOn (not used in add command)
+      undefined,             // parentJobId (not used in add command)
+      resolvedNotifyKey,     // callbackSessionKey (resolved)
+      opts.notifyUrl,        // callbackUrl
+      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+      opts.forceDirty ?? false,
+    );
 
   // Store categories on the job record if provided
   if (categories && categories.length > 0) {
@@ -353,6 +373,11 @@ async function addCommand(
   }
   if (opts.forceDirty) {
     outputHuman(`  ${yellow('⚠')} Starting with dirty worktree (--force-dirty). Recovery guarantees are weaker for this job.`);
+  }
+  if (opts.startImmediately) {
+    outputHuman(`  ${yellow('⚠')} Start mode: immediate (--start-immediately) — faster start, less review/cancel time.`);
+  } else {
+    outputHuman('  Start mode: waits for queue grace window before launch.');
   }
   if (resolvedNotifyKey) {
     outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);

@@ -14,7 +14,7 @@ import path from 'node:path';
 
 // Mock the db module
 vi.mock('../../src/core/db.js', () => ({
-  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _allowDirtyStart?: boolean) => ({
+  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _allowDirtyStart?: boolean, _skipGracePeriod?: boolean) => ({
     id: 'ab12',
     project: _proj,
     scope: _scope,
@@ -45,6 +45,7 @@ vi.mock('../../src/core/db.js', () => ({
     gitHeadCommit: null,
     allowDirtyStart: _allowDirtyStart ?? false,
     startedDirty: false,
+    skipGracePeriod: _skipGracePeriod ?? false,
   })),
   findDuplicateJob: vi.fn(() => null),
   getProject: vi.fn(() => null),
@@ -293,6 +294,37 @@ describe('addCommand', () => {
     expect(output).toContain('Recovery guarantees are weaker for this job');
   });
 
+  it('shows default grace-window queue message', async () => {
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Start mode: waits for queue grace window before launch.');
+  });
+
+  it('persists --start-immediately and prints speed-vs-safety copy', async () => {
+    await addCommand('my-project', 'fix stuff', { noNotify: true, startImmediately: true });
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      'balanced',
+      'claude-only',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      0,
+      false,
+      true,
+    );
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('--start-immediately');
+    expect(output).toContain('faster start, less review/cancel time');
+  });
+
   it('exits 2 for invalid profile', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
@@ -517,6 +549,7 @@ describe('duplicate detection', () => {
     gitHeadCommit: null,
     allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
   };
 
   // Use the existingTestsDir-level setup but create a fresh configured project
