@@ -839,7 +839,7 @@ Read requirements/agents-md-integration.md for full spec.
 
 Plans:
 - [x] 48-01-PLAN.md — Update pilot-gsd submodule to fanselau/pilot-gsd fork + add gsd-delegate.md validation in setupProject()
-- [ ] 48-02-PLAN.md — Tests for command layout validation + path normalization regression tests
+- [x] 48-02-PLAN.md — Tests for command layout validation + path normalization regression tests
 
 Wave structure:
 - Wave 1: 48-01 (submodule update + validation logic)
