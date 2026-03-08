@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { patchAgentFrontmatter, resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, AGENT_MODELS } from '../../src/core/models.js';
+import { _getTestDb } from '../../src/core/db.js';
+import { setModelEntry, addProviderMode } from '../../src/core/model-store.js';
 import type { ModelProfile, ProviderMode } from '../../src/core/types.js';
 
 const isScopeKey = (key: string) => key.startsWith('_top:');
@@ -321,5 +323,70 @@ describe('patchAgentFrontmatter', () => {
 
     expect(content).toContain('variant: "high"');
     expect(content).not.toContain('variant: "low"');
+  });
+});
+
+// ── DB-backed resolution tests ────────────────────────────────────────────
+// These tests initialize a test DB so resolve functions read from the
+// seeded model_profiles table instead of only AGENT_MODELS.
+
+describe('DB-backed resolveAgentModel', () => {
+  beforeEach(() => {
+    _getTestDb();
+  });
+
+  it('resolveAgentModel returns seeded DB value matching AGENT_MODELS', () => {
+    const result = resolveAgentModel('gsd-executor', 'balanced', 'claude-only');
+    expect(result.model).toBe(AGENT_MODELS['claude-only']['gsd-executor']['balanced'].model);
+  });
+
+  it('resolveAgentModel returns updated value after DB change', () => {
+    setModelEntry('claude-only', 'gsd-executor', 'balanced', 'custom/test-model', 'xhigh');
+
+    const result = resolveAgentModel('gsd-executor', 'balanced', 'claude-only');
+    expect(result.model).toBe('custom/test-model');
+    expect(result.variant).toBe('xhigh');
+  });
+
+  it('resolveAllAgentModels returns agents without scope entries', () => {
+    const models = resolveAllAgentModels('balanced', 'claude-only');
+
+    // No _top: keys should be present
+    for (const key of Object.keys(models)) {
+      expect(key.startsWith('_top:')).toBe(false);
+    }
+
+    // Should have 11 agents
+    expect(Object.keys(models)).toHaveLength(11);
+  });
+
+  it('resolveTopLevelModel returns DB value for scopes', () => {
+    const result = resolveTopLevelModel('phase', 'balanced', 'claude-only');
+    expect(result.model).toBe(AGENT_MODELS['claude-only']['_top:phase']['balanced'].model);
+  });
+
+  it('resolveTopLevelModel maps milestone to _top:phase', () => {
+    // Customize _top:phase
+    setModelEntry('claude-only', '_top:phase', 'balanced', 'custom/milestone-model');
+
+    // milestone should resolve to the same customized value
+    const result = resolveTopLevelModel('milestone', 'balanced', 'claude-only');
+    expect(result.model).toBe('custom/milestone-model');
+  });
+
+  it('resolve with custom provider mode', () => {
+    addProviderMode('my-test-mode', 'Test mode', false);
+    setModelEntry('my-test-mode', 'gsd-executor', 'balanced', 'custom/executor-v2', 'high');
+
+    const result = resolveAgentModel('gsd-executor', 'balanced', 'my-test-mode');
+    expect(result.model).toBe('custom/executor-v2');
+    expect(result.variant).toBe('high');
+  });
+
+  it('resolveAllAgentModels returns empty for custom mode with no entries', () => {
+    addProviderMode('empty-mode', 'Empty mode', false);
+
+    const models = resolveAllAgentModels('balanced', 'empty-mode');
+    expect(Object.keys(models)).toHaveLength(0);
   });
 });
