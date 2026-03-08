@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseStepInfo,
   buildHeaderLines,
+  buildTriageHeaderLines,
   buildTokenHeaderLine,
   buildActualHeaderLine,
   buildEstimatedCostHeaderLine,
@@ -216,5 +217,43 @@ describe('buildHeaderLines observability contract', () => {
     );
 
     expect(lines.some((line) => line.includes('Wait: grace-wait:90s'))).toBe(true);
+  });
+
+  it('includes dedicated Status/Verdict/Retry/Undo lines for phase jobs', () => {
+    const lines = buildHeaderLines(
+      makeJob({
+        status: 'failed',
+        error: 'Requirements not met',
+        judgeVerdict: JSON.stringify({ verdict: 'failed', confidence: 95, reason: 'Two must-haves are missing from output.' }),
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '1111111111111111111111111111111111111111',
+      }),
+      120,
+      {},
+      null,
+    );
+
+    expect(lines.some((line) => line.startsWith('Status: failed [needs-revision]'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('Verdict: judge:fail 95%'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('Retry: needs-revision'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('Undo: undo:safe'))).toBe(true);
+  });
+
+  it('marks zero-confidence and unusable verdicts as judge:inconclusive', () => {
+    const zeroConfidence = buildTriageHeaderLines(
+      makeJob({
+        status: 'completed',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 0, reason: 'Judge timeout fallback.' }),
+      }),
+    );
+    const malformed = buildTriageHeaderLines(
+      makeJob({
+        status: 'completed',
+        judgeVerdict: 'not-json',
+      }),
+    );
+
+    expect(zeroConfidence.some((line) => line.startsWith('Verdict: judge:inconclusive'))).toBe(true);
+    expect(malformed.some((line) => line.startsWith('Verdict: judge:inconclusive'))).toBe(true);
   });
 });

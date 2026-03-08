@@ -15,13 +15,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   computeRowBg,
   statusIcon,
+  buildCompletedRowBadges,
   flashBg,
   formatDuration,
   formatRelativeTime,
 } from '../../src/tui/components/completed-panel.js';
 import { buildObservabilityCues, formatObservabilityLine } from '../../src/tui/components/running-panel.js';
 import { theme, statusColors } from '../../src/tui/theme.js';
-import type { JobObservabilitySnapshot, JobStatus, TokenUsageBreakdown } from '../../src/core/types.js';
+import type { Job, JobObservabilitySnapshot, JobStatus, TokenUsageBreakdown } from '../../src/core/types.js';
 
 function totals(overrides: Partial<TokenUsageBreakdown> = {}): TokenUsageBreakdown {
   return {
@@ -67,6 +68,43 @@ function makeSnapshot(overrides: Partial<JobObservabilitySnapshot> = {}): JobObs
       byModel: [],
       notes: [],
     },
+    ...overrides,
+  };
+}
+
+function makeJob(overrides: Partial<Job> = {}): Job {
+  return {
+    id: 'cmp1',
+    project: 'proj',
+    scope: 'phase',
+    description: 'Implement phase status badges',
+    requirementPath: null,
+    status: 'completed',
+    priority: 0,
+    dependsOn: null,
+    parentJobId: null,
+    createdAt: '2026-03-08T10:00:00Z',
+    startedAt: '2026-03-08T10:01:00Z',
+    completedAt: '2026-03-08T10:02:00Z',
+    error: null,
+    resumeHint: null,
+    attempts: 1,
+    timeout: 0,
+    delegationPlan: null,
+    currentStep: 0,
+    sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'hybrid',
+    judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 92, reason: 'All acceptance criteria passed.' }),
+    actualModels: null,
+    callbackUrl: null,
+    callbackSessionKey: null,
+    categories: null,
+    gitBaseCommit: '1111111111111111111111111111111111111111',
+    gitHeadCommit: '2222222222222222222222222222222222222222',
+    allowDirtyStart: false,
+    startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -177,6 +215,47 @@ describe('statusIcon', () => {
     const { icon: runIcon, color: runColor } = statusIcon({ status: 'running' as JobStatus });
     expect(runIcon).toBe(' ');
     expect(runColor).toBe(theme.muted);
+  });
+});
+
+describe('buildCompletedRowBadges', () => {
+  it('builds judge + undo badges for completed phase pass rows', () => {
+    const labels = buildCompletedRowBadges(makeJob()).map((badge) => badge.label);
+    expect(labels).toEqual(['[judge:pass 92%]', '[undo:safe]']);
+  });
+
+  it('renders judge:doubt badge for doubting verdicts', () => {
+    const labels = buildCompletedRowBadges(
+      makeJob({ judgeVerdict: JSON.stringify({ verdict: 'doubting', confidence: 61, reason: 'Mixed evidence.' }) }),
+    ).map((badge) => badge.label);
+    expect(labels).toEqual(['[judge:doubt 61%]', '[undo:safe]']);
+  });
+
+  it('renders judge:inconclusive when confidence is zero', () => {
+    const labels = buildCompletedRowBadges(
+      makeJob({ judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 0, reason: 'Benefit of doubt.' }) }),
+    ).map((badge) => badge.label);
+    expect(labels).toEqual(['[judge:inconclusive]', '[undo:safe]']);
+  });
+
+  it('composes judge + retry + undo badges for failed phase rows', () => {
+    const labels = buildCompletedRowBadges(
+      makeJob({
+        status: 'failed',
+        error: 'Requirements not met',
+        judgeVerdict: JSON.stringify({ verdict: 'failed', confidence: 95, reason: 'Two must-haves missing.' }),
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '1111111111111111111111111111111111111111',
+      }),
+    ).map((badge) => badge.label);
+    expect(labels).toEqual(['[judge:fail 95%]', '[needs-revision]', '[undo:safe]']);
+  });
+
+  it('marks malformed verdicts as inconclusive and keeps operational badges', () => {
+    const labels = buildCompletedRowBadges(
+      makeJob({ status: 'cancelled', judgeVerdict: 'not-json', gitBaseCommit: null, gitHeadCommit: null }),
+    ).map((badge) => badge.label);
+    expect(labels).toEqual(['[judge:inconclusive]', '[retryable]', '[undo:unavailable]']);
   });
 });
 
