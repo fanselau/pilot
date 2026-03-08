@@ -449,6 +449,15 @@ program
   });
 
 program
+  .command('lessons [project]')
+  .description('Extract lessons from recent builds into AGENTS.md candidates')
+  .option('--approve', 'Interactive picker to promote candidates (coming soon)')
+  .action(async (project: string | undefined, opts: Record<string, unknown>) => {
+    const { lessonsCommand } = await import('./commands/lessons.js');
+    await lessonsCommand(project, opts as { approve?: boolean });
+  });
+
+program
   .command('service <action>')
   .description('Daemon management: install, start, stop, status')
   .action(async (action: string) => {
