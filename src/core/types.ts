@@ -118,6 +118,66 @@ export interface Job {
   skipGracePeriod: boolean;
 }
 
+// ── Job Observability + Cost Estimation ───────────────────────────────────
+
+export type ObservabilityDataStatus = 'available' | 'partial' | 'unavailable';
+export type CostEstimateStatus = 'estimated' | 'partial' | 'unavailable';
+
+export interface TokenUsageBreakdown {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+}
+
+export interface JobCostEstimateByModel {
+  model: string;
+  status: CostEstimateStatus;
+  estimatedUsd: number | null;
+  tokens: TokenUsageBreakdown;
+  notes: string[];
+}
+
+export interface JobCostEstimate {
+  status: CostEstimateStatus;
+  currency: 'USD';
+  estimatedUsd: number | null;
+  byModel: JobCostEstimateByModel[];
+  notes: string[];
+}
+
+export interface JobObservabilityRequested {
+  modelProfile: ModelProfile;
+  providerMode: ProviderMode;
+  scope: JobScope;
+  intendedExecutorModel: string | null;
+}
+
+export interface JobObservabilityObserved {
+  status: ObservabilityDataStatus;
+  models: string[];
+  notes: string[];
+}
+
+export interface JobObservabilityTokens {
+  status: ObservabilityDataStatus;
+  totals: TokenUsageBreakdown | null;
+  byModel: Record<string, TokenUsageBreakdown>;
+  notes: string[];
+}
+
+export interface JobObservabilitySnapshot {
+  jobId: string;
+  jobStatus: JobStatus;
+  terminal: boolean;
+  requested: JobObservabilityRequested;
+  observed: JobObservabilityObserved;
+  tokens: JobObservabilityTokens;
+  cost: JobCostEstimate;
+}
+
 // ── Delegation AI ─────────────────────────────────────────────────────────
 
 export interface DelegationStep {
