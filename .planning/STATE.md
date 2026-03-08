@@ -10,7 +10,7 @@ Phase: 45 (Job Observability, Cost Tracking, and Export)
 **Next Plan:** None (phase complete)
 Plan: 6 of 6 in current phase
 Status: Phase complete
-Last activity: 2026-03-08 - Verified Phase 45 (45-VERIFICATION.md)
+Last activity: 2026-03-08 - Completed quick task 077: Update OpenClaw SKILL.md for phases 43-45
 
 Progress: ██████████ 21/21 plans (100%)
 
@@ -177,6 +177,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 074 | Rename scope keys to _top: prefix, add openai-only xhigh variant differentiation, update resolveTopLevelModel scope-to-key mapping | 2026-03-06 | 427e0df | [074-replace-tier-system-with-explicit-agent-](./quick/074-replace-tier-system-with-explicit-agent-/) |
 | 075 | Hybrid Role-Based Model Routing | 2026-03-06 | 898222b | [075-hybrid-role-based-model-routing](./quick/075-hybrid-role-based-model-routing/) |
 | 076 | Add /hooks/wake comment to callback.ts | 2026-03-06 | e4a8d0c | [076-add-a-comment-to-the-top-of-src-core-cal](./quick/076-add-a-comment-to-the-top-of-src-core-cal/) |
+| 077 | Update OpenClaw SKILL.md — Recovery, Grace Period, Observability, Quick Reference cross-check for phases 43-45 | 2026-03-08 | 76aa779 | [077-update-the-openclaw-skill-md-at-openclaw](./quick/077-update-the-openclaw-skill-md-at-openclaw/) |
 
 ## Accumulated Context
 
