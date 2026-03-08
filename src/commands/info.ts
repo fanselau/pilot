@@ -16,11 +16,12 @@ import {
   isWorktreeDirty,
   resolveCommitOrNull,
 } from '../core/git-recovery.js';
+import { buildJobWhy, buildRetryWhy, buildUndoWhy } from '../core/job-introspection.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
-import type { DelegationPlan } from '../core/types.js';
+import type { DelegationPlan, Job, JobStep } from '../core/types.js';
 import type { HeadRelation } from '../core/git-recovery.js';
 
 // ── Cost estimation ────────────────────────────────────────────────────────
@@ -88,6 +89,31 @@ interface RecoveryInfo {
   projectIsGit: boolean;
 }
 
+interface InfoTriage {
+  whatIs: string;
+  whatHappened: string;
+  whatNext: string;
+  providerProfile: string;
+  attempts: number;
+  step: {
+    kind: 'current' | 'final';
+    index: number;
+    total: number;
+    command: string;
+    status: JobStep['status'];
+    verdictSource: string | null;
+    verdictReason: string | null;
+  } | null;
+  checkpoints: {
+    baseCommit: string | null;
+    headCommit: string | null;
+    delta: 'changed' | 'no-op' | 'unknown';
+  };
+  retry: ReturnType<typeof buildRetryWhy>;
+  undo: ReturnType<typeof buildUndoWhy>;
+  recoveryTag: string;
+}
+
 function shortCommit(commit: string | null): string | null {
   return commit ? commit.slice(0, 12) : null;
 }
@@ -97,6 +123,70 @@ function formatCommitDisplay(commit: string | null): string {
     return '—';
   }
   return `${commit.slice(0, 12)} (${commit})`;
+}
+
+function normalizeSingleLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function resolveCompactStep(steps: JobStep[]): InfoTriage['step'] {
+  if (steps.length === 0) return null;
+  const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
+  const running = ordered.find((step) => step.status === 'running');
+  const chosen = running ?? ordered[ordered.length - 1];
+  return {
+    kind: running ? 'current' : 'final',
+    index: chosen.stepIndex + 1,
+    total: ordered.length,
+    command: chosen.command,
+    status: chosen.status,
+    verdictSource: chosen.verdictSource,
+    verdictReason: chosen.verdictReason,
+  };
+}
+
+function buildInfoTriage(job: Job, steps: JobStep[], recovery: RecoveryInfo): InfoTriage {
+  const statusWhy = buildJobWhy(job);
+  const retry = buildRetryWhy(job);
+  const undo = buildUndoWhy(job);
+
+  const whatIs = `${job.scope} job in ${job.project}: ${normalizeSingleLine(job.description)}`;
+
+  const happenedParts = [statusWhy.what];
+  if (job.status === 'failed' && job.error) {
+    happenedParts.push(`Last failure: ${normalizeSingleLine(job.error)}`);
+  }
+  const whatHappened = normalizeSingleLine(happenedParts.join(' '));
+
+  let whatNext = statusWhy.next;
+  if (job.status === 'failed' || job.status === 'cancelled') {
+    whatNext = retry.next;
+  } else if (job.status === 'completed') {
+    whatNext = undo.next;
+  }
+
+  const delta = recovery.producedCommitDelta === null
+    ? 'unknown'
+    : recovery.producedCommitDelta
+      ? 'changed'
+      : 'no-op';
+
+  return {
+    whatIs,
+    whatHappened,
+    whatNext,
+    providerProfile: `${job.modelProfile}/${job.providerMode}`,
+    attempts: job.attempts,
+    step: resolveCompactStep(steps),
+    checkpoints: {
+      baseCommit: recovery.baseCommit,
+      headCommit: recovery.headCommit,
+      delta,
+    },
+    retry,
+    undo,
+    recoveryTag: recovery.tag,
+  };
 }
 
 function inferRecoveryFromMetadata(
@@ -354,6 +444,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   const totalTokens = totalInput + totalOutput;
   const estimatedCostUsd = estimateCost(totalInput, totalOutput);
   const recovery = await buildRecoveryInfo(job);
+  const triage = buildInfoTriage(job, steps, recovery);
 
   // ── JSON output ────────────────────────────────────────────────────────
 
@@ -362,6 +453,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   if (isJsonMode()) {
     outputJson({
       job,
+      triage,
       delegationPlan,
       steps,
       sessions: sessionTokens,
@@ -383,6 +475,30 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   outputHuman('');
   outputHuman(`  ${bold(`Job #${job.id}`)}`);
   outputHuman(`  ${hr()}`);
+  outputHuman('');
+
+  outputHuman(`  ${bold('Triage')}`);
+  outputHuman(`  ${hr()}`);
+  outputHuman(`  ${dim('What this is:')} ${triage.whatIs}`);
+  outputHuman(`  ${dim('What happened:')} ${triage.whatHappened}`);
+  outputHuman(`  ${dim('What next:')} ${triage.whatNext}`);
+  outputHuman(`  ${dim('Run profile:')} ${triage.providerProfile} · attempts ${triage.attempts}`);
+  if (triage.step) {
+    outputHuman(`  ${dim('Current/final step:')} ${triage.step.kind} ${triage.step.index}/${triage.step.total} ${triage.step.command} [${triage.step.status}]`);
+    if (triage.step.verdictSource || triage.step.verdictReason) {
+      const verdictParts = [triage.step.verdictSource, triage.step.verdictReason]
+        .filter((part): part is string => Boolean(part));
+      outputHuman(`  ${dim('Step verdict:')} ${normalizeSingleLine(verdictParts.join(': '))}`);
+    }
+  } else {
+    outputHuman(`  ${dim('Current/final step:')} no recorded step metadata`);
+  }
+  outputHuman(
+    `  ${dim('Checkpoints:')} ${formatCommitDisplay(triage.checkpoints.baseCommit)} -> ${formatCommitDisplay(triage.checkpoints.headCommit)} (${triage.checkpoints.delta})`,
+  );
+  outputHuman(`  ${dim('Retryability:')} ${triage.retry.badge} (${triage.retry.code})`);
+  outputHuman(`  ${dim('Undo safety:')} ${triage.undo.badge} (${triage.undo.code})`);
+  outputHuman(`  ${dim('Recovery tag:')} ${triage.recoveryTag}`);
   outputHuman('');
 
   // Core fields

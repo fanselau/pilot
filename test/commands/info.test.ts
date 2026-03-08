@@ -94,6 +94,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: '2222222222222222222222222222222222222222',
     allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -131,10 +132,17 @@ describe('infoCommand recovery visibility', () => {
     });
   });
 
-  it('renders a Recovery block with safe undo metadata', async () => {
+  it('renders compact triage block before deep recovery details', async () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Triage');
+    expect(output).toContain('What this is: quick job in my-project: test job');
+    expect(output).toContain('What happened: Undo checkpoints look compatible.');
+    expect(output).toContain('What next: Run pilot undo ab12 --dry-run to preview rollback.');
+    expect(output).toContain('Run profile: balanced/hybrid · attempts 1');
+    expect(output).toContain('Retryability: retry-unavailable (retry-unavailable)');
+    expect(output).toContain('Undo safety: undo:safe (undo-safe)');
     expect(output).toContain('Recovery');
     expect(output).toContain('undo:safe');
     expect(output).toContain('Base:');
@@ -145,7 +153,7 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('pilot undo <id> --dry-run');
   });
 
-  it('returns recovery object in JSON output with newer-work guard state', async () => {
+  it('returns triage+recovery objects in JSON output with newer-work guard state', async () => {
     mockJsonMode = true;
     mockClassifyHeadRelation.mockResolvedValue('newer-work-exists');
 
@@ -157,7 +165,21 @@ describe('infoCommand recovery visibility', () => {
     expect(payload).toHaveProperty('steps');
     expect(payload).toHaveProperty('sessions');
     expect(payload).toHaveProperty('tokenUsage');
+    expect(payload).toHaveProperty('triage');
     expect(payload).toHaveProperty('recovery');
+    expect(payload.triage).toMatchObject({
+      providerProfile: 'balanced/hybrid',
+      attempts: 1,
+      checkpoints: {
+        delta: 'changed',
+      },
+      retry: {
+        code: 'retry-unavailable',
+      },
+      undo: {
+        code: 'undo-safe',
+      },
+    });
     expect(payload.recovery).toMatchObject({
       state: 'guarded',
       tag: 'undo:guarded-newer-work',
