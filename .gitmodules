@@ -1,3 +1,4 @@
 [submodule "pilot-gsd"]
 	path = pilot-gsd
-	url = https://github.com/lucafanselau/pilot-gsd.git
+	url = https://github.com/fanselau/pilot-gsd.git
+	branch = dev

@@ -833,12 +833,17 @@ Read requirements/agents-md-integration.md for full spec.
 
 ### Phase 48: Fix New Project Setup Critical Bugs
 
-**Goal:** [To be planned]
+**Goal:** Fix the critical bugs that make `pilot setup` produce non-functional configurations on new machines — update the pilot-gsd submodule to the working fork with the correct flat command layout, add command layout validation in setupProject(), and add test coverage for all changes.
 **Depends on:** Phase 47
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 48 to break down)
+- [ ] 48-01-PLAN.md — Update pilot-gsd submodule to fanselau/pilot-gsd fork + add gsd-delegate.md validation in setupProject()
+- [ ] 48-02-PLAN.md — Tests for command layout validation + path normalization regression tests
+
+Wave structure:
+- Wave 1: 48-01 (submodule update + validation logic)
+- Wave 2: 48-02 (tests, depends on 48-01)
 
 **Details:**
-[To be added during planning]
+Read requirements/fix-new-project-setup.md for full spec.
