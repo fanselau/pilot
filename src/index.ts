@@ -75,6 +75,7 @@ program
 program
   .command('log [id]')
   .description('Session activity stream')
+  .option('--summary', 'Show compact metadata summary instead of full transcript stream')
   .option('--follow', 'Live tail new activity')
   .option('--last <n>', 'Show last N parts', parseInt)
   .option('-v, --verbose', 'Show reasoning and full tool output')
