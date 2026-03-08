@@ -792,12 +792,22 @@ Read requirements/job-observability-cost-tracking-and-export.md for full spec.
 
 ### Phase 46: Dynamic Model Configuration
 
-**Goal:** [To be planned]
+**Goal:** Move model assignments from hardcoded AGENT_MODELS constant to SQLite database as first-class data. Users can view, edit, reset, and create custom provider modes through `pilot models` CLI. The hardcoded table becomes seed data for first-run initialization. When a new model drops, `pilot models edit` lets you swap it in — no source code, no config files.
 **Depends on:** Phase 45
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 46 to break down)
+- [ ] 46-01-PLAN.md — DB schema (model_profiles + provider_modes tables), seed migration, model-store CRUD module
+- [ ] 46-02-PLAN.md — Rewire resolveAgentModel/resolveAllAgentModels/resolveTopLevelModel to read from DB with hardcoded fallback
+- [ ] 46-03-PLAN.md — pilot models show/edit/reset CLI commands with interactive editor
+- [ ] 46-04-PLAN.md — Provider mode management (add-provider/remove-provider), dynamic --provider flag, diff/export/import
+- [ ] 46-05-PLAN.md — Tests for all Phase 46 changes (model-store, resolve functions, CLI commands)
+
+Wave structure:
+- Wave 1: 46-01 (DB foundation + model-store module)
+- Wave 2: 46-02 (resolution rewire, depends on 46-01)
+- Wave 3: 46-03 + 46-04 in parallel (CLI commands + provider management, both depend on 46-01 + 46-02)
+- Wave 4: 46-05 (tests, depends on all above)
 
 **Details:**
-[To be added during planning]
+Read requirements/dynamic-model-config.md for full spec.

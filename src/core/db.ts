@@ -13,7 +13,8 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig, getConfigFileDefaults } from './config.js';
-import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus } from './types.js';
+import type { Job, JobStep, JobScope, ModelProfile, ProviderMode, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow } from './types.js';
+import { AGENT_MODELS } from './models.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -75,6 +76,26 @@ CREATE TABLE IF NOT EXISTS projects (
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'blocked')),
   blocked_reason TEXT,
   blocked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+const CREATE_MODEL_PROFILES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS model_profiles (
+  provider_mode TEXT NOT NULL,
+  agent_or_scope TEXT NOT NULL,
+  profile TEXT NOT NULL CHECK(profile IN ('quality', 'balanced', 'budget')),
+  model TEXT NOT NULL,
+  variant TEXT,
+  PRIMARY KEY (provider_mode, agent_or_scope, profile)
+);
+`;
+
+const CREATE_PROVIDER_MODES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS provider_modes (
+  name TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
+  is_builtin INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
@@ -243,6 +264,40 @@ function migrateSchema(db: DatabaseType): void {
   }
 }
 
+/**
+ * Seed model_profiles and provider_modes tables from AGENT_MODELS constant.
+ * Only seeds when provider_modes table is empty — preserves user customizations.
+ */
+function seedModelTables(db: DatabaseType): void {
+  const row = db.prepare('SELECT COUNT(*) as cnt FROM provider_modes').get() as { cnt: number };
+  if (row.cnt > 0) return; // User data exists — preserve customizations
+
+  // Seed built-in provider modes
+  const builtinModes: Array<{ name: string; description: string }> = [
+    { name: 'claude-only', description: 'Anthropic Claude models only' },
+    { name: 'openai-only', description: 'OpenAI models only' },
+    { name: 'hybrid', description: 'Claude for build, Codex for check' },
+  ];
+  const insertMode = db.prepare(
+    'INSERT INTO provider_modes (name, description, is_builtin) VALUES (?, ?, 1)',
+  );
+  for (const mode of builtinModes) {
+    insertMode.run(mode.name, mode.description);
+  }
+
+  // Seed model_profiles from AGENT_MODELS constant
+  const insertProfile = db.prepare(
+    'INSERT INTO model_profiles (provider_mode, agent_or_scope, profile, model, variant) VALUES (?, ?, ?, ?, ?)',
+  );
+  for (const [providerMode, agentMap] of Object.entries(AGENT_MODELS)) {
+    for (const [agentOrScope, profileMap] of Object.entries(agentMap)) {
+      for (const [profile, entry] of Object.entries(profileMap)) {
+        insertProfile.run(providerMode, agentOrScope, profile, entry.model, entry.variant ?? null);
+      }
+    }
+  }
+}
+
 function openPilotDb(): DatabaseType {
   if (cachedDb) return cachedDb;
 
@@ -254,7 +309,10 @@ function openPilotDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
+  seedModelTables(cachedDb!);
 
   // Restrict DB file permissions to owner-only (chmod 600)
   try {
@@ -280,7 +338,10 @@ function _getTestDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
+  seedModelTables(cachedDb!);
   return cachedDb!;
 }
 
@@ -1194,6 +1255,8 @@ export type { ProjectJobCounts, GcResult };
 
 export {
   _getTestDb,
+  getDb,
+  seedModelTables,
   registerProject,
   getProject,
   getAllProjects,

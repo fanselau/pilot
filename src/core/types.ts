@@ -274,6 +274,25 @@ export interface SkillManifest {
   skills: SkillEntry[];
 }
 
+// ── Model Profile Database Rows ───────────────────────────────────────────
+
+/** Row shape for the model_profiles table. */
+export interface ModelProfileRow {
+  provider_mode: string;
+  agent_or_scope: string;
+  profile: string;        // 'quality' | 'balanced' | 'budget'
+  model: string;          // e.g. 'anthropic/claude-opus-4-6'
+  variant: string | null; // e.g. 'xhigh', 'high', or null
+}
+
+/** Row shape for the provider_modes table. */
+export interface ProviderModeRow {
+  name: string;
+  description: string;
+  is_builtin: number;    // 1 = built-in, 0 = user-created
+  created_at: string;
+}
+
 // ── Status output ─────────────────────────────────────────────────────────
 
 export interface PilotStatusJson {
