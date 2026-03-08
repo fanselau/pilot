@@ -361,4 +361,49 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('Undo safety: undo:guarded-dirty-start (undo-guarded-dirty-start)');
     expect(output).toContain('Current/final step: no recorded step metadata');
   });
+
+  it('renders Verdict line with shared judge badge semantics and reason text', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        scope: 'phase',
+        status: 'completed',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 92, reason: 'all checks passed' }),
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Verdict:');
+    expect(output).toContain('judge:pass 92% — all checks passed');
+  });
+
+  it('falls back to summary and marks confidence-0 verdicts inconclusive', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        scope: 'phase',
+        status: 'completed',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 88, summary: 'legacy summary' }),
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const summaryOutput = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(summaryOutput).toContain('judge:pass 88% — legacy summary');
+
+    mockOutputHuman.mockClear();
+    mockGetJob.mockReturnValue(
+      makeJob({
+        scope: 'phase',
+        status: 'completed',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 0 }),
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const inconclusiveOutput = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(inconclusiveOutput).toContain('judge:inconclusive — benefit of doubt');
+  });
 });

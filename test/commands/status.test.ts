@@ -349,6 +349,56 @@ describe('statusCommand', () => {
     expect(output).toContain('✗');
   });
 
+  it('shows explicit judge badges for completed phase rows and keeps operational badges', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'ph11',
+        scope: 'phase',
+        status: 'completed',
+        project: 'phase-pass',
+        description: 'pass verdict',
+        completedAt: '2026-03-02T09:55:00',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 92, reason: 'looks good' }),
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+      makeJob({
+        id: 'ph12',
+        scope: 'phase',
+        status: 'completed',
+        project: 'phase-inc',
+        description: 'inconclusive verdict',
+        completedAt: '2026-03-02T09:56:00',
+        judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 0, reason: 'benefit of doubt' }),
+        gitBaseCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        gitHeadCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }),
+      makeJob({
+        id: 'qk11',
+        scope: 'quick',
+        status: 'completed',
+        project: 'quick-done',
+        description: 'quick complete',
+        completedAt: '2026-03-02T09:57:00',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const lines = mockOutputHuman.mock.calls.map((c: unknown[]) => String(c[0]));
+    const passLine = lines.find((line) => line.includes('ph11'));
+    const inconclusiveLine = lines.find((line) => line.includes('ph12'));
+    const quickLine = lines.find((line) => line.includes('qk11'));
+
+    expect(passLine).toContain('[judge:pass 92%]');
+    expect(passLine).toContain('[undo:safe]');
+    expect(inconclusiveLine).toContain('[judge:inconclusive]');
+    expect(inconclusiveLine).toContain('[no-op]');
+    expect(inconclusiveLine).toContain('[undo:safe]');
+    expect(quickLine).toBeDefined();
+    expect(quickLine).not.toContain('judge:');
+  });
+
   it('outputs JSON with correct structure', async () => {
     mockJsonMode = true;
     mockQueue = [
