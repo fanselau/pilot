@@ -15,6 +15,8 @@ import { For, createSignal, createEffect, on, onMount } from 'solid-js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
 import { buildObservabilityCues, formatObservabilityLine } from './running-panel.js';
+import { buildJudgeSignal, type JudgeSignalOutcome } from '../../core/judge-signal.js';
+import { buildRetryWhy, buildUndoWhy } from '../../core/job-introspection.js';
 import type { Job, JobObservabilitySnapshot, JobStatus } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -77,6 +79,74 @@ export function statusIcon(job: { status: JobStatus; scope?: string; judgeVerdic
     case 'cancelled': return { icon: '–', color: statusColors.cancelled };
     default: return { icon: ' ', color: theme.muted };
   }
+}
+
+const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled']);
+
+export interface CompletedRowBadge {
+  kind: 'judge' | 'retry' | 'undo';
+  label: string;
+  color: string;
+}
+
+function judgeBadgeColor(outcome: JudgeSignalOutcome): string {
+  switch (outcome) {
+    case 'pass':
+      return statusColors.done;
+    case 'fail':
+      return statusColors.failed;
+    case 'doubt':
+    case 'inconclusive':
+      return statusColors.warning;
+    default:
+      return theme.muted;
+  }
+}
+
+function retryBadgeColor(code: ReturnType<typeof buildRetryWhy>['code']): string {
+  if (code === 'needs-revision') return statusColors.failed;
+  if (code === 'retryable-failure') return statusColors.warning;
+  return theme.muted;
+}
+
+function undoBadgeColor(code: ReturnType<typeof buildUndoWhy>['code']): string {
+  if (code === 'undo-safe') return statusColors.done;
+  if (code === 'undo-unavailable') return theme.muted;
+  return statusColors.warning;
+}
+
+export function buildCompletedRowBadges(job: Job): CompletedRowBadge[] {
+  const badges: CompletedRowBadge[] = [];
+  const isTerminal = TERMINAL_STATUSES.has(job.status);
+
+  if (isTerminal && job.scope === 'phase') {
+    const judge = buildJudgeSignal(job);
+    badges.push({
+      kind: 'judge',
+      label: `[${judge.badge}]`,
+      color: judgeBadgeColor(judge.outcome),
+    });
+  }
+
+  if (job.status === 'failed' || job.status === 'cancelled') {
+    const retry = buildRetryWhy(job);
+    badges.push({
+      kind: 'retry',
+      label: `[${retry.badge}]`,
+      color: retryBadgeColor(retry.code),
+    });
+  }
+
+  if (isTerminal) {
+    const undo = buildUndoWhy(job);
+    badges.push({
+      kind: 'undo',
+      label: `[${undo.badge}]`,
+      color: undoBadgeColor(undo.code),
+    });
+  }
+
+  return badges;
 }
 
 // Subtle flash background per status — dark tint, not harsh inverse
@@ -168,6 +238,7 @@ export function CompletedPanel(props: {
             const { icon, color } = statusIcon(job);
             const duration = () => formatDuration(job.startedAt, job.completedAt);
             const relative = () => formatRelativeTime(job.completedAt);
+            const badges = () => buildCompletedRowBadges(job);
             const cues = () => {
               const snapshot = props.observabilitySnapshots.get(job.id) ?? null;
               return buildObservabilityCues(snapshot, false);
@@ -198,6 +269,14 @@ export function CompletedPanel(props: {
                   content={`"${truncate(job.description, 20)}"  `}
                   fg={selected() ? theme.fg : theme.muted}
                 />
+                <For each={badges()}>
+                  {(badge) => (
+                    <text
+                      content={`${badge.label} `}
+                      fg={selected() ? theme.fg : badge.color}
+                    />
+                  )}
+                </For>
                 {/* Metrics: muted */}
                 <text
                   content={metrics()}
