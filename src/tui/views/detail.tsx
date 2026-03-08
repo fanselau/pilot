@@ -23,7 +23,8 @@ import { statusColors, theme, subagentColors } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
 import { resolveAllAgentModels } from '../../core/models.js';
 import { getConfig } from '../../core/config.js';
-import { buildJobWhy, buildUndoWhy } from '../../core/job-introspection.js';
+import { buildJobWhy, buildRetryWhy, buildUndoWhy } from '../../core/job-introspection.js';
+import { buildJudgeSignal } from '../../core/judge-signal.js';
 import type { JobWhyContext } from '../../core/job-introspection.js';
 import type { PilotStateStore } from '../state.js';
 import type { Job, JobObservabilitySnapshot, SessionPart, DelegationPlan, JobStatus } from '../../core/types.js';
@@ -160,19 +161,29 @@ export function buildReasonHeaderLines(job: Job, reasonContext: JobWhyContext = 
     lines.push(`Wait: ${why.badge}${remaining} — ${why.what}`);
   }
 
-  if (why.code === 'needs-revision') {
-    lines.push(`Retry: ${why.badge} — ${why.what}`);
+  return lines;
+}
+
+export function buildTriageHeaderLines(
+  job: Job,
+  reasonContext: JobWhyContext = {},
+  verdictReasonMaxLen = 80,
+): string[] {
+  const lines: string[] = [];
+  const statusWhy = buildJobWhy(job, reasonContext);
+  const retryWhy = buildRetryWhy(job);
+  const undoWhy = buildUndoWhy(job);
+
+  lines.push(`Status: ${job.status} [${statusWhy.badge}]`);
+
+  if (job.scope === 'phase') {
+    const judge = buildJudgeSignal(job);
+    const preview = judge.reason ? ` — ${truncate(judge.reason, verdictReasonMaxLen)}` : '';
+    lines.push(`Verdict: ${judge.badge}${preview}`);
   }
 
-  const undoWhy = buildUndoWhy(job);
-  if (
-    undoWhy.code === 'undo-guarded-dirty-start'
-    || undoWhy.code === 'undo-guarded-newer-work'
-    || undoWhy.code === 'undo-guarded-diverged'
-    || (undoWhy.code === 'undo-unavailable' && job.status !== 'pending' && job.status !== 'running')
-  ) {
-    lines.push(`Undo: ${undoWhy.badge} — ${undoWhy.what}`);
-  }
+  lines.push(`Retry: ${retryWhy.badge} — ${retryWhy.what}`);
+  lines.push(`Undo: ${undoWhy.badge} — ${undoWhy.what}`);
 
   return lines;
 }
@@ -328,6 +339,7 @@ export function buildHeaderLines(
     buildRecoveryHeader(job).line,
   ];
 
+  lines.push(...buildTriageHeaderLines(job, reasonContext));
   lines.push(...buildReasonHeaderLines(job, reasonContext));
 
   return lines;
@@ -647,6 +659,25 @@ export function DetailView(props: { state: PilotStateStore }) {
     return buildReasonHeaderLines(current, reasonContext());
   };
 
+  const triageLines = () => {
+    const current = currentJob();
+    if (!current) return [];
+    return buildTriageHeaderLines(current, reasonContext());
+  };
+
+  function triageColor(line: string): string {
+    if (line.startsWith('Verdict: judge:pass')) return statusColors.done;
+    if (line.startsWith('Verdict: judge:fail')) return statusColors.failed;
+    if (line.startsWith('Verdict: judge:doubt') || line.startsWith('Verdict: judge:inconclusive')) {
+      return statusColors.warning;
+    }
+    if (line.startsWith('Retry: needs-revision')) return statusColors.failed;
+    if (line.startsWith('Retry: retryable')) return statusColors.warning;
+    if (line.startsWith('Undo: undo:safe')) return statusColors.done;
+    if (line.startsWith('Undo: undo:guarded')) return statusColors.warning;
+    return theme.muted;
+  }
+
   const elapsed = () => {
     void tick();
     const j = currentJob();
@@ -756,6 +787,9 @@ export function DetailView(props: { state: PilotStateStore }) {
               return theme.muted;
             })()}
           />
+          <For each={triageLines()}>
+            {(line) => <text content={line} fg={triageColor(line)} />}
+          </For>
           <For each={reasonLines()}>
             {(line) => <text content={line} fg={theme.muted} />}
           </For>
