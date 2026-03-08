@@ -221,6 +221,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 44 added: QoL Introspection and Queue Grace Period
 - Phase 45 added: Job Observability, Cost Tracking, and Export
 - Phase 46 added: Dynamic Model Configuration
+- Phase 47 added: AGENTS.md Integration — CLI Commands & Doctor Check
 
 ## Decisions
 
