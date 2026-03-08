@@ -765,3 +765,26 @@ Wave structure:
 
 **Details:**
 Read requirements/qol-introspection-and-queue-grace-period.md for full spec.
+
+### Phase 45: Job Observability, Cost Tracking, and Export
+
+**Goal:** Unify CLI and TUI observability around opencode-grounded model/token/cost data, failure-aware summaries, and a first-class `pilot export <job-id>` markdown artifact so every job is understandable and shareable without raw transcript dumps.
+**Depends on:** Phase 44
+**Plans:** 6 plans
+
+Plans:
+- [ ] 45-01-PLAN.md — Add recursive session-tree model/token observability primitives in `opencode-db`
+- [ ] 45-02-PLAN.md — Build shared pricing + job observability core and harden runner actual-model persistence
+- [ ] 45-03-PLAN.md — Wire observability into `pilot info`, `pilot log --summary`, and `pilot status`
+- [ ] 45-04-PLAN.md — Bring TUI running/completed/detail views to observability parity with CLI
+- [ ] 45-05-PLAN.md — Implement `pilot export <job-id>` markdown artifact command with output controls
+- [ ] 45-06-PLAN.md — Update docs and run full Phase 45 regression verification
+
+Wave structure:
+- Wave 1: 45-01 (opencode recursive model/token primitives)
+- Wave 2: 45-02 (shared observability + pricing core, runner persistence)
+- Wave 3: 45-03 + 45-04 + 45-05 in parallel (CLI parity, TUI parity, export command)
+- Wave 4: 45-06 (docs + full regression verification)
+
+**Details:**
+Read requirements/job-observability-cost-tracking-and-export.md for full spec.

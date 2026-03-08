@@ -1,17 +1,18 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 44
+## Current Phase: 45
 
 ## Current Position
 
-Phase: 44 (QoL Introspection and Queue Grace Period)
-**Next Plan:** None (phase complete)
-Plan: 6 of 6 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Verified Phase 44 (44-VERIFICATION.md)
+Phase: 45 (Job Observability, Cost Tracking, and Export)
+**Next Phase:** Phase 45 (Job Observability, Cost Tracking, and Export)
+**Next Plan:** 45-04-PLAN.md
+Plan: 4 of 6 in current phase
+Status: In progress
+Last activity: 2026-03-08 - Completed 45-05-PLAN.md
 
-Progress: █████████░ 18/21 plans (86%)
+Progress: ██████████ 21/21 plans (100%)
 
 ## Project Reference
 
@@ -213,6 +214,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 42 added: Release Hardening — Config Isolation, Install Story, and Changelog
 - Phase 43 added: Job Undo and Recovery Checkpoints
 - Phase 44 added: QoL Introspection and Queue Grace Period
+- Phase 45 added: Job Observability, Cost Tracking, and Export
 
 ## Decisions
 
@@ -565,9 +567,16 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 44-05 | Detail header adds compact reason lines only for grace wait, needs-revision retry, and guarded/missing-checkpoint undo states | Improves triage clarity without turning the header into verbose multi-line diagnostics |
 | 44-06 | Dirty-start launch refusal copy now follows explicit what/why/next guidance with command-level next actions | Makes clean-start guardrails immediately actionable and frames `--force-dirty` as a deliberate tradeoff |
 | 44-06 | Undo safety refusals share one what/why/next contract across newer-work, diverged, dirty-start, and dirty-worktree cases | Keeps guardrail messaging consistent while preserving conservative undo safety policy |
+| 45-01 | Session-title model helper now resolves latest session ID and delegates to recursive session-tree traversal | Preserves backward compatibility while making model aggregation child-session aware |
+| 45-01 | Per-model token aggregation groups by provider/model and coerces missing token fields to zero | Keeps breakdowns deterministic without inventing usage for absent fields |
+| 45-01 | Recursive total-token aggregation now uses visited-session tracking in addition to depth guard | Prevents duplicate counting on cyclic or malformed parent_id graphs |
+| 45-02 | Pricing assumptions moved to explicit PRICING_CATALOG with estimated/partial/unavailable statuses | Prevents fake blended cost precision and keeps caveats machine-readable |
+| 45-02 | buildJobObservability now emits one canonical requested/observed/tokens/cost snapshot with running-job partial semantics | Keeps CLI/TUI/export surfaces aligned on one observability contract |
+| 45-02 | Runner collectActualModels now resolves root session IDs and traverses recursive trees with normalized sorted dedupe | Preserves trustworthy terminal model provenance for mismatch and cost analysis |
+| 45-05 | Export defaults write to ~/.pilot/exports/job-<id>.md with explicit --output and --stdout controls | Predictable artifact location while preserving operator control for file and stream workflows |
 
 ## Session Continuity
 
-Last session: 2026-03-08T00:48:48Z
-Stopped at: Completed 44-05-PLAN.md
+Last session: 2026-03-08T01:57:50Z
+Stopped at: Completed 45-05-PLAN.md
 Resume file: None
