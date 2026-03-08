@@ -9,6 +9,7 @@
  */
 
 import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { execa } from 'execa';
 import { getConfig } from './config.js';
@@ -125,6 +126,21 @@ async function setupProject(dir: string): Promise<SetupResult> {
       result.errors.push(`Failed to create symlink .opencode/${link.name}/: ${msg}`);
     }
   }
+
+  // 3b. Validate that the linked command directory has the expected flat layout.
+  // gsd-delegate.md is a sentinel — if it's missing, the GSD installation is outdated.
+  const commandTarget = path.join(config.gsdDir, 'commands');
+  const delegatePath = path.join(commandTarget, 'gsd-delegate.md');
+  if (!existsSync(delegatePath)) {
+    result.errors.push(
+      `GSD delegate command not found. Your pilot-gsd installation may be outdated.\n` +
+      `  Expected: ${delegatePath}\n` +
+      `  Hint: Update pilot-gsd submodule or set gsdDir in ~/.pilot/config.json to a working fork.\n` +
+      `  The correct layout has flat gsd-*.md files in ${commandTarget}/`,
+    );
+    return result;
+  }
+  result.created.push(`Verified GSD command layout: ${commandTarget}`);
 
   // 4. Link project commands into .opencode/command/ (only for real dirs, not symlinks)
   const commandDir = path.join(opencodeDir, 'command');
