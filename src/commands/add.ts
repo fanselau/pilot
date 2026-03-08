@@ -15,7 +15,7 @@ import { addJob, findDuplicateJob, updateJobCategories } from '../core/db.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
-import { getProviderMode } from '../core/model-store.js';
+import { getProviderMode, getProviderModes } from '../core/model-store.js';
 import type { JobScope, ModelProfile } from '../core/types.js';
 
 const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
@@ -403,10 +403,22 @@ function validateProvider(value: string): string {
     if (getProviderMode(value)) return value;
   } catch {
     // DB unavailable — only accept built-in modes
+    process.stderr.write(`Error: Unknown provider "${value}". Built-in modes: ${BUILTIN_PROVIDERS.join(', ')}. DB unavailable for custom mode lookup.\n`);
+    process.exit(2);
   }
 
-  // If not found in built-in or DB, reject
-  process.stderr.write(`Error: Unknown provider "${value}". Built-in modes: ${BUILTIN_PROVIDERS.join(', ')}. Create custom modes with: pilot models add-provider <name>\n`);
+  // If not found in built-in or DB, list all available modes
+  let availableList = `Built-in: ${BUILTIN_PROVIDERS.join(', ')}`;
+  try {
+    const allModes = getProviderModes();
+    const customModes = allModes.filter((m) => m.is_builtin === 0).map((m) => m.name);
+    if (customModes.length > 0) {
+      availableList += `. Custom: ${customModes.join(', ')}`;
+    }
+  } catch {
+    // Ignore — already have built-in list
+  }
+  process.stderr.write(`Error: Unknown provider "${value}". ${availableList}. Create custom modes with: pilot models add-provider <name>\n`);
   process.exit(2);
 }
 

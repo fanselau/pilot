@@ -48,7 +48,7 @@ program
   .option('--next', 'Insert at front of queue')
   .option('--dry-run', 'Show what would happen without queuing')
   .option('--profile <profile>', 'Model profile: quality, balanced, or budget')
-  .option('--provider <provider>', 'Provider mode: hybrid, claude-only, or openai-only')
+  .option('--provider <provider>', 'Provider mode (run pilot models to see available modes)')
   .option('--force', 'Bypass project setup check')
   .option('--force-dirty', 'Allow queueing a job that may start on a dirty worktree (weaker recovery guarantees)')
   .option('--start-immediately', 'Bypass queue grace wait and launch as soon as eligible (less review/cancel time)')
