@@ -153,6 +153,7 @@ export interface JobObservabilityRequested {
   providerMode: ProviderMode;
   scope: JobScope;
   intendedExecutorModel: string | null;
+  notes: string[];
 }
 
 export interface JobObservabilityObserved {
