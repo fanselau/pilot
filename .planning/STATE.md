@@ -9,7 +9,7 @@ Phase: 44 (QoL Introspection and Queue Grace Period)
 **Next Plan:** None (phase complete)
 Plan: 6 of 6 in current phase
 Status: Phase complete
-Last activity: 2026-03-08 - Completed 44-05-PLAN.md
+Last activity: 2026-03-08 - Verified Phase 44 (44-VERIFICATION.md)
 
 Progress: █████████░ 18/21 plans (86%)
 
@@ -18,7 +18,7 @@ Progress: █████████░ 18/21 plans (86%)
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 44 complete — queue/detail TUI grace+reason visibility now matches shared CLI introspection signals; ready for phase transition.
+**Current focus:** Phase 44 verified and complete — queue grace semantics plus status/info/log/retry/TUI introspection are aligned and shipped.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -103,6 +103,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 43: Job Undo and Recovery Checkpoints
 - **Status:** complete (4/4 plans, verified ✓)
+
+### Phase 44: QoL Introspection and Queue Grace Period
+- **Status:** complete (6/6 plans, verified ✓)
 
 ### Quick Tasks Completed
 
