@@ -126,9 +126,10 @@ program
 program
   .command('retry <id>')
   .description('Retry a failed job')
-  .action(async (id: string) => {
+  .option('--why', 'Explain retry context without mutating job state')
+  .action(async (id: string, opts: Record<string, unknown>) => {
     const { retryCommand } = await import('./commands/retry.js');
-    await retryCommand(id);
+    await retryCommand(id, opts as { why?: boolean });
   });
 
 program

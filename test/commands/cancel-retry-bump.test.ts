@@ -43,6 +43,11 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    gitBaseCommit: null,
+    gitHeadCommit: null,
+    allowDirtyStart: false,
+    startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -204,6 +209,51 @@ describe('retryCommand', () => {
     await retryCommand('ab12');
 
     expect(mockOutputJson).toHaveBeenCalledWith({ retried: 'ab12', unblocked: 'test-proj' });
+  });
+
+  it('supports --why explain-only mode without mutating state', async () => {
+    mockJobs['ab12'] = makeJob({ id: 'ab12', status: 'failed', error: 'network timeout' });
+
+    await retryCommand('ab12', { why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Retry check: ab12');
+    expect(output).toContain('what: Last run failed but appears retryable.');
+    expect(output).toContain('next: Run pilot retry ab12.');
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
+  it('shows needs-revision guidance in --why mode for no-op failures', async () => {
+    mockJobs['ab12'] = makeJob({
+      id: 'ab12',
+      status: 'failed',
+      gitBaseCommit: 'abc',
+      gitHeadCommit: 'abc',
+    });
+
+    await retryCommand('ab12', { why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Retry alone is unlikely to fix this failure.');
+    expect(output).toContain('Revise the requirement and queue a follow-up job.');
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
+  it('returns structured JSON reason in --why mode', async () => {
+    mockJsonMode = true;
+    mockJobs['ab12'] = makeJob({ id: 'ab12', status: 'failed', error: 'judge failed' });
+
+    await retryCommand('ab12', { why: true });
+
+    expect(mockOutputJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'ab12',
+        status: 'failed',
+        retryable: true,
+        reason: expect.objectContaining({ code: 'retryable-failure' }),
+      }),
+    );
+    expect(mockRetry).not.toHaveBeenCalled();
   });
 
   it('exits 1 when job not found', async () => {
