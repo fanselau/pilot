@@ -23,8 +23,11 @@ import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme, subagentColors } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
 import { resolveAllAgentModels } from '../../core/models.js';
+import { getConfig } from '../../core/config.js';
+import { buildJobWhy, buildUndoWhy } from '../../core/job-introspection.js';
+import type { JobWhyContext } from '../../core/job-introspection.js';
 import type { PilotStateStore } from '../state.js';
-import type { Job, SessionPart, DelegationPlan } from '../../core/types.js';
+import type { Job, SessionPart, DelegationPlan, JobStatus } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -147,6 +150,32 @@ export function parseStepInfo(job: Job): { label: string; index: string } {
   } catch { return { label: '—', index: '—' }; }
 }
 
+export function buildReasonHeaderLines(job: Job, reasonContext: JobWhyContext = {}): string[] {
+  const lines: string[] = [];
+  const why = buildJobWhy(job, reasonContext);
+
+  if (why.code === 'grace-wait') {
+    const remaining = typeof why.remainingSeconds === 'number' ? `:${why.remainingSeconds}s` : '';
+    lines.push(`Wait: ${why.badge}${remaining} — ${why.what}`);
+  }
+
+  if (why.code === 'needs-revision') {
+    lines.push(`Retry: ${why.badge} — ${why.what}`);
+  }
+
+  const undoWhy = buildUndoWhy(job);
+  if (
+    undoWhy.code === 'undo-guarded-dirty-start'
+    || undoWhy.code === 'undo-guarded-newer-work'
+    || undoWhy.code === 'undo-guarded-diverged'
+    || (undoWhy.code === 'undo-unavailable' && job.status !== 'pending' && job.status !== 'running')
+  ) {
+    lines.push(`Undo: ${undoWhy.badge} — ${undoWhy.what}`);
+  }
+
+  return lines;
+}
+
 /**
  * Build an array of line strings representing the header for a job.
  * Used for testing header composition without a UI renderer.
@@ -154,7 +183,7 @@ export function parseStepInfo(job: Job): { label: string; index: string } {
  * @param job - The job to build header for
  * @param cols - Terminal width (default 80)
  */
-export function buildHeaderLines(job: Job, cols: number = 80): string[] {
+export function buildHeaderLines(job: Job, cols: number = 80, reasonContext: JobWhyContext = {}): string[] {
   const descWidth = Math.max(20, cols - 4);
   const stepInfo = parseStepInfo(job);
   const startedStr = job.startedAt
@@ -196,6 +225,8 @@ export function buildHeaderLines(job: Job, cols: number = 80): string[] {
     }
     lines.push(`Models: ${[...uniqueModels.keys()].join('  ')}`);
   }
+
+  lines.push(...buildReasonHeaderLines(job, reasonContext));
 
   return lines;
 }
@@ -288,6 +319,7 @@ export function DetailView(props: { state: PilotStateStore }) {
   const [sections, setSections] = createSignal<SessionSection[]>([]);
   const [totalTokens, setTotalTokens] = createSignal(0);
   const [tick, setTick] = createSignal(0);
+  const queueGraceSeconds = getConfig().queueGraceSeconds ?? 0;
 
   // Track last-seen timestamp per session for incremental fetches
   const lastSeenMap = new Map<string, number>();
@@ -495,6 +527,43 @@ export function DetailView(props: { state: PilotStateStore }) {
 
   const currentJob = () => job();
 
+  const reasonContext = (): JobWhyContext => {
+    const current = currentJob();
+    if (!current) return {};
+
+    const blockedProject = props.state.projects().find(
+      (project) => project.path === current.project && project.status === 'blocked',
+    );
+
+    const statusById = new Map<string, JobStatus>();
+    for (const entry of props.state.queue()) {
+      statusById.set(entry.id, entry.status);
+    }
+    for (const entry of props.state.running()) {
+      statusById.set(entry.id, entry.status);
+    }
+    for (const entry of props.state.completed()) {
+      statusById.set(entry.id, entry.status);
+    }
+
+    return {
+      nowEpochSeconds: Math.floor(Date.now() / 1000),
+      queueGraceSeconds,
+      projectBlocked: Boolean(blockedProject),
+      blockedReason: blockedProject?.blockedReason ?? null,
+      dependencyStatus: current.dependsOn ? statusById.get(current.dependsOn) ?? null : null,
+      hasRunningJobForProject: props.state.running().some(
+        (entry) => entry.project === current.project && entry.id !== current.id,
+      ),
+    };
+  };
+
+  const reasonLines = () => {
+    const current = currentJob();
+    if (!current) return [];
+    return buildReasonHeaderLines(current, reasonContext());
+  };
+
   const elapsed = () => {
     void tick();
     const j = currentJob();
@@ -560,6 +629,9 @@ export function DetailView(props: { state: PilotStateStore }) {
               return theme.muted;
             })()}
           />
+          <For each={reasonLines()}>
+            {(line) => <text content={line} fg={theme.muted} />}
+          </For>
           {/* Line 5b: actual model (when available, from opencode DB) */}
           <Show when={currentJob()!.actualModels !== null && (currentJob()!.actualModels?.length ?? 0) > 0}>
             <text
