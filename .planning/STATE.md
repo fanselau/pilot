@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 46 (Dynamic Model Configuration)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-08 - Completed 46-03-PLAN.md (Models CLI command group: show/edit/reset)
+Last activity: 2026-03-08 - Completed 46-04-PLAN.md (Provider management, diff/export/import, dynamic --provider)
 
-Progress: ███░░ 3/5 plans (60%)
+Progress: ████░ 4/5 plans (80%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 03 complete: `pilot models` CLI command group with show/edit/reset for user-facing model configuration.
+**Current focus:** Phase 46 in progress — moving model assignments from hardcoded AGENT_MODELS to SQLite database as first-class data. Plan 04 complete: custom provider mode CRUD, diff/export/import, dynamic --provider validation.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -110,7 +110,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (6/6 plans, verified ✓)
 
 ### Phase 46: Dynamic Model Configuration
-- **Status:** in progress (3/5 plans complete)
+- **Status:** in progress (4/5 plans complete)
 
 ### Quick Tasks Completed
 
@@ -593,9 +593,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 46-03 | Profile selection includes 'all' option in edit flow | Common case: user wants same model for all profiles of an agent |
 | 46-03 | Default confirm is 'n' in edit flow | Safety: accidental Enter doesn't apply unwanted changes |
 | 46-03 | Available modes listed when no specific mode requested | Discoverability: users see what other modes they can inspect |
+| 46-04 | Provider name regex: lowercase alphanumeric + hyphens, 2-50 chars | Consistent with DNS/slug naming; prevents whitespace/special char issues |
+| 46-04 | Import upserts: modes skip if exists, profiles always overwrite | Modes are identity (skip duplicates); profiles are config (latest wins) |
+| 46-04 | Export always uses raw JSON stdout (not outputJson) | Data portability format — pipe-friendly, always JSON regardless of --json flag |
+| 46-04 | validateProvider error lists custom modes from DB alongside built-in | Users can discover available custom modes from error message |
 
 ## Session Continuity
 
-Last session: 2026-03-08T08:57:00Z
-Stopped at: Completed 46-03-PLAN.md
+Last session: 2026-03-08T09:03:00Z
+Stopped at: Completed 46-04-PLAN.md
 Resume file: None
