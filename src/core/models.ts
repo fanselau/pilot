@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { getModelEntry, getAllEntriesForModeAndProfile } from './model-store.js';
 import type { ModelEntry, ModelProfile, ProviderMode, DynamicProviderMode } from './types.js';
 
 // ── Flat AGENT_MODELS lookup table ────────────────────────────────────────
@@ -86,10 +87,19 @@ function resolveAgentModel(
   profile: ModelProfile,
   providerMode: DynamicProviderMode,
 ): ModelEntry {
+  // Try DB first
+  try {
+    const row = getModelEntry(providerMode, agentName, profile);
+    if (row) return { model: row.model, variant: row.variant ?? undefined };
+  } catch {
+    // DB unavailable — fall through to hardcoded
+  }
+
+  // Fallback to AGENT_MODELS
   const providerTable = AGENT_MODELS[providerMode as ProviderMode];
   const agentProfiles = providerTable?.[agentName];
   if (!agentProfiles) {
-    throw new Error(`Unknown agent for model resolution: ${agentName}`);
+    throw new Error(`Unknown agent for model resolution: ${agentName} (${profile}/${providerMode})`);
   }
 
   const entry = agentProfiles[profile];
@@ -104,12 +114,30 @@ function resolveAllAgentModels(
   profile: ModelProfile,
   providerMode: DynamicProviderMode,
 ): Record<string, ModelEntry> {
+  // Try DB first
+  try {
+    const rows = getAllEntriesForModeAndProfile(providerMode, profile);
+    if (rows.length > 0) {
+      const models: Record<string, ModelEntry> = {};
+      for (const row of rows) {
+        if (row.agent_or_scope.startsWith('_top:')) continue; // Skip scope entries
+        models[row.agent_or_scope] = { model: row.model, variant: row.variant ?? undefined };
+      }
+      return models;
+    }
+  } catch {
+    // DB unavailable — fall through to hardcoded
+  }
+
+  // Fallback to AGENT_MODELS
   const models: Record<string, ModelEntry> = {};
   const providerTable = AGENT_MODELS[providerMode as ProviderMode];
   if (!providerTable) return models; // Custom mode with no hardcoded fallback
   for (const key of Object.keys(providerTable)) {
     if (key.startsWith('_top:')) continue; // Skip scope entries
-    models[key] = resolveAgentModel(key, profile, providerMode);
+    const agentProfiles = providerTable[key];
+    const entry = agentProfiles?.[profile];
+    if (entry) models[key] = entry;
   }
   return models;
 }
@@ -128,8 +156,18 @@ function resolveTopLevelModel(
   profile: ModelProfile,
   providerMode: DynamicProviderMode,
 ): ModelEntry {
-  const providerTable = AGENT_MODELS[providerMode as ProviderMode];
   const key = scope === 'milestone' ? '_top:phase' : `_top:${scope}`;
+
+  // Try DB first
+  try {
+    const row = getModelEntry(providerMode, key, profile);
+    if (row) return { model: row.model, variant: row.variant ?? undefined };
+  } catch {
+    // DB unavailable — fall through to hardcoded
+  }
+
+  // Fallback to AGENT_MODELS
+  const providerTable = AGENT_MODELS[providerMode as ProviderMode];
   const scopeProfiles = providerTable?.[key];
   if (!scopeProfiles) {
     // Fallback: use _top:quick for known modes, throw for custom modes
