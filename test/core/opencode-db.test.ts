@@ -14,6 +14,8 @@ import {
   getLastMessage,
   isSessionDone,
   getSessionTokens,
+  getSessionTokenUsageByModel,
+  getSessionTokenUsageByModelRecursive,
   getSessionModels,
   getSessionModelsById,
   getSessionModelsRecursive,
@@ -539,6 +541,120 @@ describe('getSessionTokens', () => {
     const tokens = getSessionTokens('sess1');
     expect(tokens.input).toBe(0);
     expect(tokens.output).toBe(0);
+  });
+});
+
+// ── getSessionTokenUsageByModel / getSessionTokenUsageByModelRecursive ─────
+
+describe('per-model token usage queries', () => {
+  it('aggregates one session into per-model token buckets', () => {
+    insertSession(db, 'sess1', 'root-session', 1000, 3000);
+    insertMessage(db, 'm1', 'sess1', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+      tokens: { input: 100, output: 40, reasoning: 7, cache_read: 3, cache_write: 2 },
+    });
+    insertMessage(db, 'm2', 'sess1', 1200, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+      tokens: { input: 10, output: 5, reasoning: 1, cache_read: 0, cache_write: 0 },
+    });
+    insertMessage(db, 'm3', 'sess1', 1300, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 25, output: 50, reasoning: 0, cache_read: 4, cache_write: 1 },
+    });
+
+    expect(getSessionTokenUsageByModel('sess1')).toEqual({
+      'anthropic/claude-sonnet-4-5': {
+        input: 110,
+        output: 45,
+        reasoning: 8,
+        cacheRead: 3,
+        cacheWrite: 2,
+      },
+      'openai/gpt-5': {
+        input: 25,
+        output: 50,
+        reasoning: 0,
+        cacheRead: 4,
+        cacheWrite: 1,
+      },
+    });
+  });
+
+  it('rolls up per-model token buckets recursively across child sessions', () => {
+    insertSession(db, 'root', 'root', 1000, 4000);
+    insertSession(db, 'child', 'child', 2000, 3500, 'root');
+
+    insertMessage(db, 'm-root', 'root', 1100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 60, output: 30, reasoning: 2, cache_read: 1, cache_write: 0 },
+    });
+    insertMessage(db, 'm-child', 'child', 2100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 40, output: 10, reasoning: 3, cache_read: 2, cache_write: 1 },
+    });
+    insertMessage(db, 'm-child-2', 'child', 2200, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-haiku-4-5',
+      tokens: { input: 20, output: 15, reasoning: 5, cache_read: 0, cache_write: 0 },
+    });
+
+    expect(getSessionTokenUsageByModelRecursive('root')).toEqual({
+      'openai/gpt-5': {
+        input: 100,
+        output: 40,
+        reasoning: 5,
+        cacheRead: 3,
+        cacheWrite: 1,
+      },
+      'anthropic/claude-haiku-4-5': {
+        input: 20,
+        output: 15,
+        reasoning: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+    });
+  });
+
+  it('degrades safely for missing token fields and missing model identity', () => {
+    insertSession(db, 'sess1', 'root', 1000, 3000);
+
+    insertMessage(db, 'm-no-model', 'sess1', 1100, {
+      role: 'assistant',
+      tokens: { input: 500, output: 300 },
+    });
+    insertMessage(db, 'm-partial', 'sess1', 1200, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { output: 20 },
+    });
+    insertMessage(db, 'm-empty', 'sess1', 1300, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+    });
+
+    expect(getSessionTokenUsageByModel('sess1')).toEqual({
+      'openai/gpt-5': {
+        input: 0,
+        output: 20,
+        reasoning: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+    });
   });
 });
 

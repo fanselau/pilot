@@ -660,6 +660,122 @@ function getSessionTokens(sessionId: string): { input: number; output: number; r
   }
 }
 
+function toSafeTokenCount(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+
+  return 0;
+}
+
+type TokenUsageBuckets = {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+
+type SessionTokenUsageByModel = Record<string, TokenUsageBuckets>;
+
+function createZeroBuckets(): TokenUsageBuckets {
+  return { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 };
+}
+
+/**
+ * Aggregate token usage for one session grouped by provider/model.
+ * Returns an object keyed by "provider/model".
+ */
+function getSessionTokenUsageByModel(sessionId: string): SessionTokenUsageByModel {
+  const db = openDb();
+  if (db === null) {
+    return {};
+  }
+
+  try {
+    const rows = db.prepare(
+      `SELECT
+         json_extract(data, '$.providerID') as provider_id,
+         json_extract(data, '$.modelID') as model_id,
+         COALESCE(SUM(json_extract(data, '$.tokens.input')), 0) as total_input,
+         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output,
+         COALESCE(SUM(json_extract(data, '$.tokens.reasoning')), 0) as total_reasoning,
+         COALESCE(SUM(json_extract(data, '$.tokens.cache_read')), 0) as total_cache_read,
+         COALESCE(SUM(json_extract(data, '$.tokens.cache_write')), 0) as total_cache_write
+       FROM message
+       WHERE session_id = ?
+         AND json_extract(data, '$.role') = 'assistant'
+       GROUP BY provider_id, model_id`,
+    ).all(sessionId) as Array<{
+      provider_id: unknown;
+      model_id: unknown;
+      total_input: unknown;
+      total_output: unknown;
+      total_reasoning: unknown;
+      total_cache_read: unknown;
+      total_cache_write: unknown;
+    }>;
+
+    const usage: SessionTokenUsageByModel = {};
+    for (const row of rows) {
+      const model = normalizeModelKey(row.provider_id, row.model_id);
+      if (!model) {
+        continue;
+      }
+
+      usage[model] = {
+        input: toSafeTokenCount(row.total_input),
+        output: toSafeTokenCount(row.total_output),
+        reasoning: toSafeTokenCount(row.total_reasoning),
+        cacheRead: toSafeTokenCount(row.total_cache_read),
+        cacheWrite: toSafeTokenCount(row.total_cache_write),
+      };
+    }
+
+    return usage;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Aggregate token usage grouped by provider/model for a session tree.
+ * Traverses child sessions recursively and merges per-model buckets.
+ */
+function getSessionTokenUsageByModelRecursive(
+  sessionId: string,
+  depth: number = 0,
+  visited: Set<string> = new Set(),
+): SessionTokenUsageByModel {
+  if (depth > MAX_SESSION_TREE_DEPTH || visited.has(sessionId)) {
+    return {};
+  }
+
+  visited.add(sessionId);
+  const usage: SessionTokenUsageByModel = { ...getSessionTokenUsageByModel(sessionId) };
+
+  for (const child of getChildSessions(sessionId)) {
+    const childUsage = getSessionTokenUsageByModelRecursive(child.id, depth + 1, visited);
+    for (const [model, bucket] of Object.entries(childUsage)) {
+      const current = usage[model] ?? createZeroBuckets();
+      usage[model] = {
+        input: current.input + bucket.input,
+        output: current.output + bucket.output,
+        reasoning: current.reasoning + bucket.reasoning,
+        cacheRead: current.cacheRead + bucket.cacheRead,
+        cacheWrite: current.cacheWrite + bucket.cacheWrite,
+      };
+    }
+  }
+
+  return usage;
+}
+
 /**
  * Aggregate token usage recursively across a session and all its child sessions.
  * Traverses the session tree via getChildSessions() up to max depth 3.
@@ -827,6 +943,8 @@ export {
   getAssistantMessageCount,
   isSessionDone,
   getSessionTokens,
+  getSessionTokenUsageByModel,
+  getSessionTokenUsageByModelRecursive,
   getSessionTokensRecursive,
   getSessionModelsById,
   getSessionModelsRecursive,
