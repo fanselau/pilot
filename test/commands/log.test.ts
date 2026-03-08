@@ -189,4 +189,41 @@ describe('logCommand --summary', () => {
     expect(payload.summary.failureReason).toContain('build failed and tests failed');
     expect(mockGetSessionParts).not.toHaveBeenCalled();
   });
+
+  it('shows actionable retry guidance for failed jobs in human summary', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        status: 'failed',
+        error: 'network timeout',
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+    );
+
+    await logCommand('ab12', { summary: true });
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('what: Last run failed but appears retryable.');
+    expect(output).toContain('next: Run pilot retry ab12.');
+  });
+
+  it('surfaces guarded undo/no-step fallback state without transcript reads', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        status: 'completed',
+        startedDirty: true,
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+    );
+    mockGetJobSteps.mockReturnValue([]);
+
+    await logCommand('ab12', { summary: true });
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('badge: undo:guarded-dirty-start');
+    expect(output).toContain('step: no step metadata recorded');
+    expect(output).toContain('commit delta: changed');
+    expect(mockGetSessionParts).not.toHaveBeenCalled();
+  });
 });

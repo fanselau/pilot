@@ -198,4 +198,40 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('undo:unavailable');
     expect(output).toContain('no recorded base/head checkpoints');
   });
+
+  it('shows actionable retry guidance for failed jobs in triage block', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        status: 'failed',
+        error: 'network timeout',
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('What happened: Last run failed but appears retryable. Last failure: network timeout');
+    expect(output).toContain('What next: Run pilot retry ab12.');
+    expect(output).toContain('Retryability: retryable (retryable-failure)');
+  });
+
+  it('shows no-op and guarded undo states in triage summary context', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        status: 'completed',
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '1111111111111111111111111111111111111111',
+        startedDirty: true,
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('What happened: Job produced no commit delta.');
+    expect(output).toContain('Checkpoints: 111111111111');
+    expect(output).toContain('(no-op)');
+    expect(output).toContain('Undo safety: undo:guarded-dirty-start (undo-guarded-dirty-start)');
+    expect(output).toContain('Current/final step: no recorded step metadata');
+  });
 });
