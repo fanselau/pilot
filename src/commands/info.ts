@@ -18,6 +18,7 @@ import {
 } from '../core/git-recovery.js';
 import { buildJobWhy, buildRetryWhy, buildUndoWhy } from '../core/job-introspection.js';
 import { buildJobObservability } from '../core/job-observability.js';
+import { buildJudgeSignal, formatJudgeReason } from '../core/judge-signal.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
@@ -575,22 +576,17 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     outputHuman(`  ${dim(pad('Error:'))}    ${red(job.error)}`);
   }
 
-  // Show judge verdict for completed phase jobs
-  if (job.status === 'completed' && job.scope === 'phase') {
-    if (!job.judgeVerdict) {
-      outputHuman(`  ${dim(pad('Verdict:'))}  ${yellow('⚠ no judge verdict')}`);
-    } else {
-      try {
-        const v = JSON.parse(job.judgeVerdict) as { verdict?: string; confidence?: number; summary?: string };
-        const isInc = typeof v.confidence === 'number' && v.confidence === 0;
-        const verdictStr = isInc
-          ? yellow(`⚠ inconclusive — ${v.summary ?? 'benefit of doubt'}`)
-          : green(`✓ ${v.verdict} (${v.confidence}%) — ${v.summary ?? ''}`);
-        outputHuman(`  ${dim(pad('Verdict:'))}  ${verdictStr}`);
-      } catch {
-        outputHuman(`  ${dim(pad('Verdict:'))}  ${yellow('⚠ unparseable verdict')}`);
-      }
-    }
+  if (job.scope === 'phase' && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
+    const judgeSignal = buildJudgeSignal(job);
+    const reason = formatJudgeReason(judgeSignal.reason, 'benefit of doubt');
+    const verdictStr =
+      judgeSignal.outcome === 'pass'
+        ? green(`✓ ${judgeSignal.badge} — ${reason}`)
+        : judgeSignal.outcome === 'fail'
+          ? red(`✗ ${judgeSignal.badge} — ${reason}`)
+          : yellow(`⚠ ${judgeSignal.badge} — ${reason}`);
+
+    outputHuman(`  ${dim(pad('Verdict:'))}  ${verdictStr}`);
   }
 
   outputHuman('');
