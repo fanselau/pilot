@@ -281,6 +281,14 @@ describe('config file loading', () => {
     expect(() => loadConfigFile()).toThrowError(/maxParallel/i);
   });
 
+  it('throws on queueGraceSeconds < 0', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { queueGraceSeconds: -1 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/queueGraceSeconds/i);
+  });
+
   it('allows maxParallel = null (auto-detect)', () => {
     tempConfigPath = writeTempConfig({
       runner: { maxParallel: null },
@@ -344,6 +352,7 @@ describe('config resolution order', () => {
     _resetConfigCache();
     delete process.env.PILOT_CONFIG_FILE;
     delete process.env.PILOT_LOG_LEVEL;
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
     delete process.env.PILOT_SESSION_MEMORY_MAX_MB;
     delete process.env.PILOT_RESERVED_MEMORY_MB;
     delete process.env.PILOT_MEMORY_KILL_THRESHOLD_MB;
@@ -385,6 +394,34 @@ describe('config resolution order', () => {
     const config = getConfig();
     // maxParallel auto-detects from RAM — just verify it's a positive number
     expect(config.maxParallel).toBeGreaterThan(0);
+  });
+
+  it('uses default queueGraceSeconds=120 when env and config are unset', () => {
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
+    const config = getConfig();
+    expect(config.queueGraceSeconds).toBe(120);
+  });
+
+  it('env var overrides config file queueGraceSeconds', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { queueGraceSeconds: 45 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    process.env.PILOT_QUEUE_GRACE_SECONDS = '0';
+    const config = getConfig();
+    expect(config.queueGraceSeconds).toBe(0);
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
+  });
+
+  it('config file queueGraceSeconds is used when env var missing', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { queueGraceSeconds: 30 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
+    const config = getConfig();
+    expect(config.queueGraceSeconds).toBe(30);
   });
 
   it('config file sets logLevel', () => {
@@ -544,6 +581,7 @@ describe('getConfigSource', () => {
     _resetConfigCache();
     delete process.env.PILOT_CONFIG_FILE;
     delete process.env.PILOT_MAX_PARALLEL;
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
     delete process.env.PILOT_LOG_LEVEL;
     if (tempConfigPath) {
       cleanupTempConfig(tempConfigPath);
@@ -584,6 +622,27 @@ describe('getConfigSource', () => {
     process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
     delete process.env.PILOT_MAX_PARALLEL;
     expect(getConfigSource('maxParallel')).toBe('auto-detect');
+  });
+
+  it('returns "default" for queueGraceSeconds when unset', () => {
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/path/config.json';
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
+    expect(getConfigSource('queueGraceSeconds')).toBe('default');
+  });
+
+  it('returns "config" for queueGraceSeconds from config file', () => {
+    tempConfigPath = writeTempConfig({
+      runner: { queueGraceSeconds: 60 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
+    expect(getConfigSource('queueGraceSeconds')).toBe('config');
+  });
+
+  it('returns "env" for queueGraceSeconds from env var', () => {
+    process.env.PILOT_QUEUE_GRACE_SECONDS = '15';
+    expect(getConfigSource('queueGraceSeconds')).toBe('env');
+    delete process.env.PILOT_QUEUE_GRACE_SECONDS;
   });
 
   it('returns "config" for logLevel from config file', () => {

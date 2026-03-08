@@ -17,6 +17,7 @@ export interface ConfigFileSchema {
   gsdDir?: string | null;
   runner?: {
     maxParallel?: number | null;  // null = auto-detect from RAM
+    queueGraceSeconds?: number;
     // pollInterval, defaultTimeout, stuckThreshold are REMOVED — internal constants
   };
   memory?: {

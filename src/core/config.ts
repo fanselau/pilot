@@ -103,6 +103,9 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
     if (runner.maxParallel !== undefined && runner.maxParallel !== null) {
       assertMinNumber('runner.maxParallel', runner.maxParallel, 1);
     }
+    if (runner.queueGraceSeconds !== undefined) {
+      assertMinNumber('runner.queueGraceSeconds', runner.queueGraceSeconds, 0);
+    }
   }
 
   // ── memory fields (positive numbers) ──
@@ -211,6 +214,12 @@ function getConfig(): PilotConfig {
     ? maxParallelRaw
     : fileConfig?.runner?.maxParallel ?? defaultMaxParallel;
 
+  // ── queueGraceSeconds: env > config > default (120)
+  const queueGraceSecondsRaw = parseInt(process.env.PILOT_QUEUE_GRACE_SECONDS ?? '', 10);
+  const queueGraceSeconds = !Number.isNaN(queueGraceSecondsRaw)
+    ? queueGraceSecondsRaw
+    : fileConfig?.runner?.queueGraceSeconds ?? 120;
+
   // ── sessionMemoryMaxMb: env > config > default (8192)
   const sessionMemoryMaxMbRaw = parseInt(process.env.PILOT_SESSION_MEMORY_MAX_MB ?? '', 10);
   const sessionMemoryMaxMb = !Number.isNaN(sessionMemoryMaxMbRaw)
@@ -273,6 +282,7 @@ function getConfig(): PilotConfig {
     projectDir,
     gsdDir,
     maxParallel,
+    queueGraceSeconds,
     sessionMemoryMaxMb,
     reservedMemoryMb,
     memoryKillThresholdMb,
@@ -309,6 +319,7 @@ const ENV_VAR_MAP: Record<string, string> = {
   projectDir: 'PILOT_PROJECT_DIR',
   gsdDir: 'PILOT_GSD_DIR',
   maxParallel: 'PILOT_MAX_PARALLEL',
+  queueGraceSeconds: 'PILOT_QUEUE_GRACE_SECONDS',
   sessionMemoryMaxMb: 'PILOT_SESSION_MEMORY_MAX_MB',
   reservedMemoryMb: 'PILOT_RESERVED_MEMORY_MB',
   memoryKillThresholdMb: 'PILOT_MEMORY_KILL_THRESHOLD_MB',
@@ -326,6 +337,7 @@ const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
   projectDir: (fc) => fc.projectDir,
   gsdDir: (fc) => fc.gsdDir,
   maxParallel: (fc) => fc.runner?.maxParallel,
+  queueGraceSeconds: (fc) => fc.runner?.queueGraceSeconds,
   sessionMemoryMaxMb: (fc) => fc.memory?.sessionMaxMb,
   reservedMemoryMb: (fc) => fc.memory?.reservedMb,
   memoryKillThresholdMb: (fc) => fc.memory?.killThresholdMb,
@@ -353,7 +365,7 @@ function getConfigSource(key: string): ConfigSource {
     if (envValue !== undefined) {
       // For numeric env vars, only count as "env" if the value is a valid number
       if (['maxParallel',
-        'sessionMemoryMaxMb', 'reservedMemoryMb', 'memoryKillThresholdMb'].includes(key)) {
+        'queueGraceSeconds', 'sessionMemoryMaxMb', 'reservedMemoryMb', 'memoryKillThresholdMb'].includes(key)) {
         if (!Number.isNaN(parseInt(envValue, 10))) {
           return 'env';
         }
