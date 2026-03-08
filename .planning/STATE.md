@@ -225,6 +225,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 45 added: Job Observability, Cost Tracking, and Export
 - Phase 46 added: Dynamic Model Configuration
 - Phase 47 added: AGENTS.md Integration — CLI Commands & Doctor Check
+- Phase 48 added: Fix New Project Setup Critical Bugs
 
 ## Decisions
 

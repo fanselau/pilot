@@ -830,3 +830,15 @@ Wave structure:
 
 **Details:**
 Read requirements/agents-md-integration.md for full spec.
+
+### Phase 48: Fix New Project Setup Critical Bugs
+
+**Goal:** [To be planned]
+**Depends on:** Phase 47
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 48 to break down)
+
+**Details:**
+[To be added during planning]
