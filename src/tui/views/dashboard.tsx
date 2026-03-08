@@ -77,6 +77,7 @@ export function Dashboard(props: { state: PilotStateStore }) {
           jobs={s.running()}
           selectedIndex={runningIndex()}
           focused={s.panelFocus() === 'running'}
+          observabilitySnapshots={s.observabilitySnapshots()}
           sessionTokens={s.sessionTokens()}
           lastMessages={s.lastMessages()}
         />
@@ -87,6 +88,7 @@ export function Dashboard(props: { state: PilotStateStore }) {
           jobs={s.completed()}
           selectedIndex={completedIndex()}
           focused={s.panelFocus() === 'completed'}
+          observabilitySnapshots={s.observabilitySnapshots()}
         />
         <ProjectsPanel
           projects={s.projects()}

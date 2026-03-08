@@ -14,9 +14,8 @@
 import { For, createSignal, createEffect, on, onMount } from 'solid-js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
-import { formatTokens } from './running-panel.js';
-import { fetchSessionEnrichment } from '../data/opencode-db.js';
-import type { Job, JobStatus } from '../../core/types.js';
+import { buildObservabilityCues, formatObservabilityLine } from './running-panel.js';
+import type { Job, JobObservabilitySnapshot, JobStatus } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -114,13 +113,11 @@ export function CompletedPanel(props: {
   jobs: Job[];
   selectedIndex: number;
   focused: boolean;
+  observabilitySnapshots: Map<string, JobObservabilitySnapshot>;
 }) {
   // Track flashing IDs for new completions
   const [flashingIds, setFlashingIds] = createSignal<Set<string>>(new Set());
   const [prevIds, setPrevIds] = createSignal<Set<string>>(new Set());
-
-  // Per-job token counts fetched from opencode DB
-  const [jobTokens, setJobTokens] = createSignal<Map<string, number>>(new Map());
 
   // Detect new completions by comparing current vs previous job IDs
   createEffect(on(() => props.jobs, (jobs) => {
@@ -154,34 +151,6 @@ export function CompletedPanel(props: {
     setPrevIds(currentIds);
   }));
 
-  // Fetch token counts for all completed jobs on mount and when jobs change
-  createEffect(on(() => props.jobs, (jobs) => {
-    if (jobs.length === 0) return;
-    try {
-      const tokenMap = new Map<string, number>();
-      for (const job of jobs) {
-        if (!job.sessionTitles) continue;
-        let titles: string[] = [];
-        try {
-          titles = JSON.parse(job.sessionTitles) as string[];
-        } catch { continue; }
-        if (titles.length === 0) continue;
-
-        const { tokens } = fetchSessionEnrichment(titles);
-        let total = 0;
-        for (const [, t] of tokens) {
-          total += t.input + t.output + (t.reasoning ?? 0);
-        }
-        if (total > 0) {
-          tokenMap.set(job.id, total);
-        }
-      }
-      setJobTokens(tokenMap);
-    } catch {
-      // ignore enrichment errors — completed data is best-effort
-    }
-  }));
-
   return (
     <box
       borderStyle="rounded"
@@ -199,13 +168,21 @@ export function CompletedPanel(props: {
             const { icon, color } = statusIcon(job);
             const duration = () => formatDuration(job.startedAt, job.completedAt);
             const relative = () => formatRelativeTime(job.completedAt);
-            const tokenCount = () => jobTokens().get(job.id) ?? 0;
+            const cues = () => {
+              const snapshot = props.observabilitySnapshots.get(job.id) ?? null;
+              return buildObservabilityCues(snapshot, false);
+            };
+            const metrics = () => `${duration()}  ${truncate(formatObservabilityLine(cues()), 54)}  ${relative()}`;
 
             // Selection always wins over flash — user always knows cursor position
             const rowBg = () => computeRowBg(selected(), flashing(), job.status);
 
             // Content text color: normal fg, slightly muted for metadata
             const contentFg = () => selected() ? theme.fg : theme.fg;
+            const metricsColor = () => {
+              if (selected()) return theme.fg;
+              return cues().flags.length > 0 ? statusColors.warning : theme.muted;
+            };
 
             return (
               <box flexDirection="row" backgroundColor={rowBg()}>
@@ -223,8 +200,8 @@ export function CompletedPanel(props: {
                 />
                 {/* Metrics: muted */}
                 <text
-                  content={`${duration()}  ${formatTokens(tokenCount())} tok  ${relative()}`}
-                  fg={selected() ? theme.fg : theme.muted}
+                  content={metrics()}
+                  fg={metricsColor()}
                 />
               </box>
             );

@@ -12,7 +12,7 @@ import { For, createSignal, onMount, onCleanup } from 'solid-js';
 import { PulseDot } from '../widgets/pulse-dot.js';
 import { Scrollable } from '../widgets/scrollable.js';
 import { statusColors, theme } from '../theme.js';
-import type { Job } from '../../core/types.js';
+import type { Job, JobObservabilitySnapshot } from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -25,6 +25,105 @@ export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
+}
+
+function formatUsd(usd: number): string {
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  if (usd >= 0.01) return `$${usd.toFixed(3)}`;
+  return '<$0.01';
+}
+
+function shortModel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed) return 'unknown';
+  const [, name] = trimmed.split('/');
+  return name ?? trimmed;
+}
+
+export function summarizeObservedModels(models: string[]): string {
+  if (models.length === 0) return 'n/a';
+  if (models.length === 1) return shortModel(models[0]);
+  return `${shortModel(models[0])} +${models.length - 1}`;
+}
+
+export interface ObservabilityCues {
+  tokenLabel: string;
+  costLabel: string;
+  modelLabel: string;
+  flags: string[];
+}
+
+export function buildObservabilityCues(
+  snapshot: JobObservabilitySnapshot | null,
+  liveFallback: boolean,
+): ObservabilityCues {
+  const live = snapshot ? !snapshot.terminal : liveFallback;
+
+  if (!snapshot) {
+    return {
+      tokenLabel: live ? 'tok live:n/a' : 'tok n/a',
+      costLabel: 'cost n/a',
+      modelLabel: live ? 'model live:n/a' : 'model n/a',
+      flags: [],
+    };
+  }
+
+  const total = snapshot.tokens.totals?.total ?? null;
+  const tokenPrefix = snapshot.tokens.status === 'available'
+    ? 'tok'
+    : live
+      ? 'tok live'
+      : 'tok partial';
+  const tokenLabel = total === null
+    ? (live ? 'tok live:n/a' : 'tok n/a')
+    : `${tokenPrefix}:${formatTokens(total)}`;
+
+  const modelSummary = summarizeObservedModels(snapshot.observed.models);
+  const modelPrefix = snapshot.observed.status === 'available'
+    ? 'model'
+    : live
+      ? 'model live'
+      : 'model partial';
+  const modelLabel = modelSummary === 'n/a'
+    ? (live ? 'model live:n/a' : 'model n/a')
+    : `${modelPrefix}:${modelSummary}`;
+
+  let costLabel = 'cost n/a';
+  if (snapshot.cost.estimatedUsd !== null) {
+    if (snapshot.cost.status === 'estimated') {
+      costLabel = `~${formatUsd(snapshot.cost.estimatedUsd)} est`;
+    } else if (snapshot.cost.status === 'partial') {
+      costLabel = `~${formatUsd(snapshot.cost.estimatedUsd)} est*`;
+    }
+  }
+
+  const flags: string[] = [];
+  const intended = snapshot.requested.intendedExecutorModel;
+  if (intended && snapshot.observed.models.length > 0 && !snapshot.observed.models.includes(intended)) {
+    flags.push('mismatch');
+  }
+  if (snapshot.observed.models.length > 1) {
+    flags.push('multi-model');
+  }
+  if (snapshot.cost.estimatedUsd !== null && snapshot.cost.estimatedUsd >= 1) {
+    flags.push('high-cost');
+  }
+  if (snapshot.tokens.totals && snapshot.tokens.totals.total >= 1_000_000) {
+    flags.push('high-tok');
+  }
+
+  return {
+    tokenLabel,
+    costLabel,
+    modelLabel,
+    flags,
+  };
+}
+
+export function formatObservabilityLine(cues: ObservabilityCues): string {
+  const base = `${cues.tokenLabel}  ${cues.costLabel}  ${cues.modelLabel}`;
+  if (cues.flags.length === 0) return base;
+  return `${base}  !${cues.flags.slice(0, 2).join(',')}`;
 }
 
 function formatElapsed(startedAt: string | null): string {
@@ -55,6 +154,7 @@ export function RunningPanel(props: {
   jobs: Job[];
   selectedIndex: number;
   focused: boolean;
+  observabilitySnapshots: Map<string, JobObservabilitySnapshot>;
   sessionTokens: Map<string, { input: number; output: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }>;
   lastMessages: Map<string, string>;
 }) {
@@ -102,6 +202,20 @@ export function RunningPanel(props: {
               return props.lastMessages.get(title) ?? null;
             };
 
+            const observabilityLine = () => {
+              const snapshot = props.observabilitySnapshots.get(job.id) ?? null;
+              const cues = buildObservabilityCues(snapshot, true);
+
+              if (!snapshot) {
+                const fallbackTotal = totalTokens();
+                if (fallbackTotal > 0) {
+                  cues.tokenLabel = `tok live:${formatTokens(fallbackTotal)}`;
+                }
+              }
+
+              return formatObservabilityLine(cues);
+            };
+
             // Use tick() to force reactivity on elapsed time
             const elapsed = () => {
               void tick();
@@ -129,7 +243,7 @@ export function RunningPanel(props: {
                 />
                 {/* Line 3: ⏱ elapsed  ◆ tokens */}
                 <text
-                  content={`  ⏱ ${elapsed()}  ◆ ${formatTokens(totalTokens())} tokens`}
+                  content={`  ⏱ ${elapsed()}  ◆ ${truncate(observabilityLine(), 68)}`}
                   fg={theme.muted}
                 />
                 {/* Line 4: session title */}

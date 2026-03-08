@@ -19,8 +19,57 @@ import {
   formatDuration,
   formatRelativeTime,
 } from '../../src/tui/components/completed-panel.js';
+import { buildObservabilityCues, formatObservabilityLine } from '../../src/tui/components/running-panel.js';
 import { theme, statusColors } from '../../src/tui/theme.js';
-import type { JobStatus } from '../../src/core/types.js';
+import type { JobObservabilitySnapshot, JobStatus, TokenUsageBreakdown } from '../../src/core/types.js';
+
+function totals(overrides: Partial<TokenUsageBreakdown> = {}): TokenUsageBreakdown {
+  return {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    total: 0,
+    ...overrides,
+  };
+}
+
+function makeSnapshot(overrides: Partial<JobObservabilitySnapshot> = {}): JobObservabilitySnapshot {
+  return {
+    jobId: 'cmp1',
+    jobStatus: 'completed',
+    terminal: true,
+    requested: {
+      modelProfile: 'balanced',
+      providerMode: 'hybrid',
+      scope: 'phase',
+      intendedExecutorModel: 'anthropic/claude-sonnet-4-6',
+      notes: [],
+    },
+    observed: {
+      status: 'available',
+      models: ['anthropic/claude-sonnet-4-6'],
+      notes: [],
+    },
+    tokens: {
+      status: 'available',
+      totals: totals({ input: 25_000, output: 10_000, total: 35_000 }),
+      byModel: {
+        'anthropic/claude-sonnet-4-6': totals({ input: 25_000, output: 10_000, total: 35_000 }),
+      },
+      notes: [],
+    },
+    cost: {
+      status: 'estimated',
+      currency: 'USD',
+      estimatedUsd: 0.21,
+      byModel: [],
+      notes: [],
+    },
+    ...overrides,
+  };
+}
 
 // ── computeRowBg ─────────────────────────────────────────────────────────────
 
@@ -314,5 +363,47 @@ describe('formatRelativeTime', () => {
     const base = new Date('2026-03-03T10:00:00Z');
     vi.setSystemTime(base.getTime() + 7 * 24 * 60 * 60_000);  // 7 days
     expect(formatRelativeTime('2026-03-03T10:00:00Z')).toBe('7d ago');
+  });
+});
+
+describe('completed panel observability cues', () => {
+  it('renders compact completed observability line with totals and estimate', () => {
+    const cues = buildObservabilityCues(makeSnapshot(), false);
+    const line = formatObservabilityLine(cues);
+
+    expect(line).toContain('tok:35.0k');
+    expect(line).toContain('~$0.210 est');
+    expect(line).toContain('model:claude-sonnet-4-6');
+  });
+
+  it('adds warning badges for unusual completed jobs', () => {
+    const cues = buildObservabilityCues(
+      makeSnapshot({
+        requested: {
+          modelProfile: 'balanced',
+          providerMode: 'hybrid',
+          scope: 'phase',
+          intendedExecutorModel: 'anthropic/claude-opus-4-6',
+          notes: [],
+        },
+        observed: {
+          status: 'available',
+          models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.3-codex'],
+          notes: [],
+        },
+        cost: {
+          status: 'estimated',
+          currency: 'USD',
+          estimatedUsd: 1.4,
+          byModel: [],
+          notes: [],
+        },
+      }),
+      false,
+    );
+
+    expect(cues.flags).toContain('mismatch');
+    expect(cues.flags).toContain('multi-model');
+    expect(cues.flags).toContain('high-cost');
   });
 });
