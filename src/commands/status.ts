@@ -11,6 +11,7 @@ import path from 'node:path';
 import { getQueue, getRecent, getProject, getJob } from '../core/db.js';
 import { getConfig } from '../core/config.js';
 import { buildJobObservability } from '../core/job-observability.js';
+import { buildJudgeSignal } from '../core/judge-signal.js';
 import {
   getLastMessage,
   findSessionByTitle,
@@ -27,24 +28,6 @@ interface RecoveryTag {
   state: 'safe' | 'guarded' | 'unavailable';
   reason: 'checkpoint-ready' | 'dirty-start' | 'newer-work' | 'diverged-history' | 'job-not-terminal' | 'checkpoint-missing';
   action: string;
-}
-
-/**
- * Determine if a completed phase job is "inconclusive" (judge failed or gave benefit of doubt).
- * Quick jobs skip the judge entirely — they always show ✓.
- * Phase jobs are inconclusive when:
- * - judgeVerdict is null (no verdict recorded)
- * - parsed verdict has confidence === 0 (benefit-of-doubt stored by runner)
- */
-function isInconclusive(job: Job): boolean {
-  if (job.status !== 'completed' || job.scope !== 'phase') return false;
-  if (!job.judgeVerdict) return true; // No verdict at all for a phase job
-  try {
-    const v = JSON.parse(job.judgeVerdict) as { confidence?: number };
-    return typeof v.confidence === 'number' && v.confidence === 0;
-  } catch {
-    return true; // Unparseable verdict = inconclusive
-  }
 }
 
 /**
@@ -405,14 +388,19 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
   if (recent.length > 0) {
     outputHuman(`  ${bold('Recent')}`);
     for (const job of recent) {
+      const judgeSignal = buildJudgeSignal(job);
       const icon =
         job.status === 'completed'
-          ? isInconclusive(job) ? yellow('⚠') : green('✓')
+          ? judgeSignal.outcome === 'inconclusive' ? yellow('⚠') : green('✓')
           : job.status === 'failed'
             ? red('✗')
             : dim('◌');
       const elapsed = job.completedAt ? formatRelativeTime(job.completedAt) : '';
       const desc = sanitizeDesc(job.description);
+      const judgeBadge =
+        job.status === 'completed' && job.scope === 'phase' && judgeSignal.badge
+          ? `${dim(`[${judgeSignal.badge}]`)} `
+          : '';
       const statusWhy = why[job.id];
       const statusBadge =
         job.status === 'failed' || job.status === 'cancelled'
@@ -422,7 +410,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
             : '';
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${judgeBadge}${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
       );
       if (showWhy && (job.status === 'failed' || job.status === 'cancelled' || statusWhy.code === 'no-commit-delta')) {
         outputHuman(`    ${dim(`└ ${formatWhyLine(statusWhy.what, statusWhy.why, statusWhy.next)}`)}`);
