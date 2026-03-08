@@ -814,12 +814,19 @@ Read requirements/dynamic-model-config.md for full spec.
 
 ### Phase 47: AGENTS.md Integration — CLI Commands & Doctor Check
 
-**Goal:** [To be planned]
+**Goal:** Integrate AGENTS.md management into the Pilot CLI — setup prompts to generate it, doctor validates health via AI session, and a new `pilot lessons` command extracts build learnings. All three features spawn opencode sessions using established patterns, with GSD commands stubbed until available.
 **Depends on:** Phase 46
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 47 to break down)
+- [ ] 47-01-PLAN.md — Core agents-md module + setup AGENTS.md prompt
+- [ ] 47-02-PLAN.md — Doctor AGENTS.md health check + pilot lessons command
+- [ ] 47-03-PLAN.md — Tests for all Phase 47 changes
+
+Wave structure:
+- Wave 1: 47-01 (core module + setup integration)
+- Wave 2: 47-02 (doctor + lessons, depends on 47-01)
+- Wave 3: 47-03 (tests, depends on 47-01 + 47-02)
 
 **Details:**
-[To be added during planning]
+Read requirements/agents-md-integration.md for full spec.
