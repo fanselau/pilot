@@ -7,7 +7,5 @@
     "bash": { "**": "allow" },
     "external_directory": { "**": "allow" }
   },
-  "instructions": [
-    "requirements/pilot-cli.md"
-  ]
+  "instructions": []
 }
