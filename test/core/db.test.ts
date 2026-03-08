@@ -579,6 +579,57 @@ describe('pilot.db', () => {
       const second = claimNextLaunchable();
       expect(second).toBeNull();
     });
+
+    it('does not claim a newly queued job younger than the grace window', () => {
+      const job = addJob('proj-grace', 'quick', 'fresh job');
+
+      const claimed = claimNextLaunchable(120);
+      expect(claimed).toBeNull();
+      expect(getJob(job.id)!.status).toBe('pending');
+    });
+
+    it('claims a pending job after the grace threshold age is reached', () => {
+      const db = _getTestDb();
+      const job = addJob('proj-grace', 'quick', 'aged job');
+      db.prepare("UPDATE jobs SET created_at = datetime('now', '-121 seconds') WHERE id = ?").run(job.id);
+
+      const claimed = claimNextLaunchable(120);
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(job.id);
+      expect(claimed!.status).toBe('running');
+    });
+
+    it('bypasses grace wait when skipGracePeriod=true on the job', () => {
+      const job = addJob(
+        'proj-grace',
+        'quick',
+        'urgent job',
+        undefined,
+        'balanced',
+        'claude-only',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        false,
+        true,
+      );
+
+      const claimed = claimNextLaunchable(300);
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(job.id);
+      expect(claimed!.status).toBe('running');
+    });
+
+    it('treats queueGraceSeconds=0 as globally disabled waiting', () => {
+      const job = addJob('proj-grace', 'quick', 'no grace global');
+
+      const claimed = claimNextLaunchable(0);
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(job.id);
+      expect(claimed!.status).toBe('running');
+    });
   });
 
   // ── forceQuitJob ──────────────────────────────────────────────────────

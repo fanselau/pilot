@@ -5,6 +5,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Mock node:fs so we can control /proc/meminfo content for getDynamicMaxParallel tests
 vi.mock('node:fs', async () => {
@@ -216,3 +219,112 @@ describe('judge verdict edge cases', () => {
   });
 });
 
+// ── runner dispatch wiring ─────────────────────────────────────────────────
+
+describe('runner dispatch wiring', () => {
+  it('passes queueGraceSeconds into claimNextLaunchable', async () => {
+    vi.resetModules();
+
+    const claimNextLaunchableMock = vi.fn(() => null);
+    const lockReleaseMock = vi.fn().mockResolvedValue(undefined);
+    const lockMock = vi.fn().mockResolvedValue(lockReleaseMock);
+    const pilotDir = path.join(tmpdir(), `pilot-runner-grace-${Date.now()}`);
+    mkdirSync(pilotDir, { recursive: true });
+    const pilotDbPath = path.join(pilotDir, 'pilot.db');
+    writeFileSync(pilotDbPath, '');
+
+    vi.doMock('proper-lockfile', () => ({
+      default: {
+        lock: lockMock,
+      },
+    }));
+
+    vi.doMock('../../src/core/db.js', () => ({
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+      markStale: vi.fn(),
+      cancel: vi.fn(),
+      updateDelegationPlan: vi.fn(),
+      advanceStep: vi.fn(),
+      getJob: vi.fn(() => null),
+      updateSessionTitles: vi.fn(),
+      recordStep: vi.fn(() => 1),
+      completeStep: vi.fn(),
+      skipRemainingSteps: vi.fn(),
+      claimNextLaunchable: claimNextLaunchableMock,
+      getAllRunningJobs: vi.fn(() => []),
+      getRunningJobsForProject: vi.fn(() => []),
+      resetToPending: vi.fn(),
+      updateJudgeVerdict: vi.fn(),
+      updateActualModels: vi.fn(),
+      getProject: vi.fn(() => null),
+      updateJobRecoveryStart: vi.fn(),
+      updateJobRecoveryHead: vi.fn(),
+    }));
+
+    vi.doMock('../../src/core/config.js', () => ({
+      getConfig: vi.fn(() => ({
+        pilotDir,
+        pilotDbPath,
+        projectDir: pilotDir,
+        gsdDir: pilotDir,
+        maxParallel: 1,
+        queueGraceSeconds: 42,
+        sessionMemoryMaxMb: 8192,
+        reservedMemoryMb: 4096,
+        memoryKillThresholdMb: 2048,
+        logLevel: 'INFO',
+        noColor: false,
+      })),
+      resolveProjectDir: vi.fn((p: string) => p),
+      getConfigFileDefaults: vi.fn(() => ({
+        modelProfile: 'balanced',
+        providerMode: 'claude-only',
+        scope: null,
+      })),
+    }));
+
+    vi.doMock('../../src/core/providers.js', () => ({
+      checkProviderAvailability: vi.fn(async () => ({ available: true, warning: null })),
+    }));
+
+    vi.doMock('../../src/core/delegate.js', () => ({
+      delegate: vi.fn(),
+      resolveOpencodeBinary: vi.fn(() => '/usr/local/bin/opencode'),
+    }));
+    vi.doMock('../../src/core/git-recovery.js', () => ({
+      isGitWorktree: vi.fn(async () => true),
+      isWorktreeDirty: vi.fn(async () => false),
+      resolveCommitOrNull: vi.fn(async () => null),
+    }));
+    vi.doMock('../../src/core/skills.js', () => ({
+      resolveSkillsForJob: vi.fn(() => []),
+      injectSkills: vi.fn(() => []),
+      cleanupInjectedSkills: vi.fn(),
+    }));
+    vi.doMock('../../src/core/callback.js', () => ({
+      notifyJobCompletion: vi.fn(async () => {}),
+    }));
+    vi.doMock('../../src/core/opencode-db.js', () => ({
+      findSessionByTitle: vi.fn(() => null),
+      exportSessionFromDb: vi.fn(() => ({ messages: [] })),
+      isSessionDone: vi.fn(() => false),
+      getLastMessage: vi.fn(() => null),
+      getSessionModels: vi.fn(() => []),
+      getAssistantMessageCount: vi.fn(() => 0),
+    }));
+    vi.doMock('../../src/core/models.js', () => ({
+      patchAgentFrontmatter: vi.fn(),
+      resolveAllAgentModels: vi.fn(() => ({})),
+      resolveTopLevelModel: vi.fn(() => ({ model: 'claude-sonnet-4-5' })),
+    }));
+
+    const { createRunner } = await import('../../src/core/runner.js');
+    const runner = createRunner({ once: true, pollInterval: 1 });
+    await runner.run();
+
+    expect(claimNextLaunchableMock).toHaveBeenCalledWith(42);
+
+    rmSync(pilotDir, { recursive: true, force: true });
+  });
+});
