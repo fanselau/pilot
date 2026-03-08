@@ -6,19 +6,19 @@
 ## Current Position
 
 Phase: 44 (QoL Introspection and Queue Grace Period)
-**Next Plan:** 44-03-PLAN.md
-Plan: 2 of 6 in current phase
+**Next Plan:** 44-04-PLAN.md
+Plan: 3 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-08 - Completed 44-02-PLAN.md
+Last activity: 2026-03-08 - Completed 44-03-PLAN.md
 
-Progress: ███████░░░ 14/21 plans (67%)
+Progress: ███████░░░ 15/21 plans (71%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 44 in progress — queue grace launch gating and per-job fast-start override are now wired; next work is shared introspection why-surfaces.
+**Current focus:** Phase 44 in progress — shared status/retry introspection why-surfaces are now wired on a canonical JobWhy model; next work is compact info/log summary surfaces.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -551,9 +551,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 44-02 | Grace eligibility enforced in claim SQL using sqlite epoch age math | Keeps launch gating deterministic and avoids JS timestamp parsing drift |
 | 44-02 | `pilot add` only passes skipGracePeriod when `--start-immediately` is set | Preserves default call paths while still persisting explicit fast-start intent |
 | 44-02 | Runner dispatch passes config `queueGraceSeconds` into claim path every cycle | Ensures grace affects real launch eligibility, not just queue labeling |
+| 44-03 | Shared `JobWhy` helpers now own pending/retry/undo/no-op reason copy and stable machine codes | Prevents wording drift across status/retry surfaces and enables reuse in later TUI/info/log work |
+| 44-03 | `pilot status --why` keeps default rows concise and moves richer guidance to one what/why/next line | Preserves scanability while still exposing actionable guard context on demand |
+| 44-03 | `pilot retry --why` is explain-only and never mutates queue state | Operators can evaluate retryability before taking side-effecting actions |
 
 ## Session Continuity
 
-Last session: 2026-03-08T00:23:02Z
-Stopped at: Completed 44-02-PLAN.md
+Last session: 2026-03-08T00:35:40Z
+Stopped at: Completed 44-03-PLAN.md
 Resume file: None
