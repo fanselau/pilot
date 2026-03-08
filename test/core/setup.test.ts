@@ -115,11 +115,12 @@ describe('setupProject — command layout validation', () => {
 // ── Tests: path normalization — trailing slash stripping ────────────────
 
 describe('path normalization — trailing slash stripping', () => {
-  it('resolveProjectDir returns absolute path as-is (including trailing slash)', () => {
-    // resolveProjectDir does NOT strip trailing slashes for absolute paths —
-    // it returns them as-is. Normalization happens in setupProject via path.resolve().
+  it('resolveProjectDir strips trailing slash from absolute path', () => {
+    // resolveProjectDir normalizes absolute paths via path.resolve(),
+    // which strips trailing slashes — consistent with setupProject behavior.
     const result = resolveProjectDir('/tmp/myproject/');
-    expect(result).toBe('/tmp/myproject/');
+    expect(result).toBe('/tmp/myproject');
+    expect(result.endsWith('/')).toBe(false);
   });
 
   it('path.resolve strips trailing slash (Node built-in behavior)', () => {

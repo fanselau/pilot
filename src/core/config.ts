@@ -414,9 +414,9 @@ function getConfigSource(key: string): ConfigSource {
  *   4. Otherwise     → shorthand name: path.join(config.projectDir, project)
  */
 function resolveProjectDir(project: string): string {
-  // 1. Absolute path
+  // 1. Absolute path — normalize to strip trailing slashes
   if (path.isAbsolute(project)) {
-    return project;
+    return path.resolve(project);
   }
 
   // 2. Tilde expansion
