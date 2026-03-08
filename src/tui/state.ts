@@ -9,7 +9,7 @@
  */
 
 import { createSignal, createMemo, batch } from 'solid-js';
-import type { Job, SessionMessage, Project } from '../core/types.js';
+import type { Job, JobObservabilitySnapshot, SessionMessage, Project } from '../core/types.js';
 
 // ── View types ────────────────────────────────────────────────────────────
 
@@ -55,6 +55,7 @@ export function createPilotState() {
   // ── Session enrichment signals ────────────────────────────────────────
   const [sessionTokens, setSessionTokens] = createSignal<Map<string, { input: number; output: number }>>(new Map());
   const [lastMessages, setLastMessages] = createSignal<Map<string, string>>(new Map());
+  const [observabilitySnapshots, setObservabilitySnapshots] = createSignal<Map<string, JobObservabilitySnapshot>>(new Map());
 
   // ── Derived state ─────────────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ export function createPilotState() {
     // Session enrichment
     sessionTokens, setSessionTokens,
     lastMessages, setLastMessages,
+    observabilitySnapshots, setObservabilitySnapshots,
 
     // Derived
     selectedJob,

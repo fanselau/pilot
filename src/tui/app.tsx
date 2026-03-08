@@ -14,6 +14,7 @@ import { createPilotState } from './state.js';
 import { createPoller } from './data/poller.js';
 import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject } from './data/pilot-db.js';
 import { fetchSessionEnrichment } from './data/opencode-db.js';
+import { buildJobObservability } from '../core/job-observability.js';
 import { StatusBar } from './components/status-bar.js';
 import { FooterBar } from './components/footer-bar.js';
 import { HelpOverlay } from './components/help-overlay.js';
@@ -68,6 +69,21 @@ export function App(_props: { interval?: number }) {
   const enrichmentPoller = createPoller(() => {
     try {
       const running = state.running();
+      const completed = state.completed();
+
+      const byJobId = new Map<string, Job>();
+      for (const job of running) byJobId.set(job.id, job);
+      for (const job of completed) {
+        if (!byJobId.has(job.id)) {
+          byJobId.set(job.id, job);
+        }
+      }
+
+      const observability = new Map<string, ReturnType<typeof buildJobObservability>>();
+      for (const job of byJobId.values()) {
+        observability.set(job.id, buildJobObservability(job));
+      }
+
       const titles: string[] = [];
       for (const job of running) {
         if (!job.sessionTitles) continue;
@@ -78,13 +94,20 @@ export function App(_props: { interval?: number }) {
           // skip malformed
         }
       }
+
+      let tokens = new Map<string, { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }>();
+      let lastMsgs = new Map<string, string>();
       if (titles.length > 0) {
-        const { tokens, lastMsgs } = fetchSessionEnrichment(titles);
-        batch(() => {
-          state.setSessionTokens(tokens);
-          state.setLastMessages(lastMsgs);
-        });
+        const enrichment = fetchSessionEnrichment(titles);
+        tokens = enrichment.tokens;
+        lastMsgs = enrichment.lastMsgs;
       }
+
+      batch(() => {
+        state.setObservabilitySnapshots(observability);
+        state.setSessionTokens(tokens);
+        state.setLastMessages(lastMsgs);
+      });
     } catch {
       // DB may not exist yet — ignore
     }
