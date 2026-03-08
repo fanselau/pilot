@@ -148,6 +148,46 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
     }
   }
 
+  // ── Optional: offer AGENTS.md generation ─────────────────────────────────
+  if (result.errors.length === 0 && !isJsonMode()) {
+    try {
+      const { checkAgentsMdExists, spawnAgentsMdSession } = await import('../core/agents-md.js');
+      const absDir = path.resolve(dir);
+      const hasAgentsMd = await checkAgentsMdExists(absDir);
+
+      if (!hasAgentsMd) {
+        if (process.stdin.isTTY) {
+          const readline = await import('node:readline');
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+          const agentsAnswer = await new Promise<string>(resolve => {
+            rl.question('  No AGENTS.md found. Generate one? [Y/n] ', resolve);
+          });
+          rl.close();
+
+          if (agentsAnswer.toLowerCase() !== 'n') {
+            outputHuman(`  ${dim('Generating AGENTS.md...')}`);
+            const agentsResult = await spawnAgentsMdSession({ projectDir: absDir, command: 'gsd-setup-agents' });
+
+            if (agentsResult !== null) {
+              outputHuman(`  ${green('✓')} AGENTS.md generated — review before committing`);
+              // Show truncated summary (first 200 chars)
+              const summary = agentsResult.length > 200 ? agentsResult.slice(0, 200) + '…' : agentsResult;
+              outputHuman(`  ${dim(summary)}`);
+            } else {
+              outputHuman(`  ${yellow('⚠')} AGENTS.md generation failed or timed out`);
+            }
+          }
+        } else {
+          outputHuman(`  ${dim('No AGENTS.md found. Generate with: pilot setup <project>')}`);
+        }
+      }
+    } catch (err) {
+      // Non-fatal: AGENTS.md generation failure must NEVER make setup fail
+      process.stderr.write(`Warning: AGENTS.md generation failed: ${err}\n`);
+    }
+  }
+
   // Trigger init if no config file exists
   const { existsSync } = await import('node:fs');
   const { join } = await import('node:path');
