@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Job } from '../../src/core/types.js';
 
 vi.mock('execa', () => ({
   execa: vi.fn(),
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   updateDelegationPlan: vi.fn(),
   advanceStep: vi.fn(),
-  getJob: vi.fn(() => null),
+  getJob: vi.fn<(id: string) => Job | null>(() => null),
   updateSessionTitles: vi.fn(),
   recordStep: vi.fn(() => 1),
   completeStep: vi.fn(),
@@ -33,6 +34,10 @@ const mocks = vi.hoisted(() => ({
   updateJobRecoveryStart: vi.fn(),
   updateJobRecoveryHead: vi.fn(),
   delegate: vi.fn(),
+  findSessionByTitle: vi.fn<(title: string) => string | null>(() => null),
+  getSessionModelsRecursive: vi.fn<(sessionId: string) => string[]>(() => []),
+  getSessionModels: vi.fn<(sessionTitle: string) => string[]>(() => []),
+  getAssistantMessageCount: vi.fn<(sessionId: string) => number>(() => 0),
 }));
 
 vi.mock('../../src/core/db.js', () => ({
@@ -74,12 +79,13 @@ vi.mock('../../src/core/callback.js', () => ({
 }));
 
 vi.mock('../../src/core/opencode-db.js', () => ({
-  findSessionByTitle: vi.fn(() => null),
+  findSessionByTitle: mocks.findSessionByTitle,
   exportSessionFromDb: vi.fn(() => ({ messages: [] })),
   isSessionDone: vi.fn(() => false),
   getLastMessage: vi.fn(() => null),
-  getSessionModels: vi.fn(() => []),
-  getAssistantMessageCount: vi.fn(() => 0),
+  getSessionModelsRecursive: mocks.getSessionModelsRecursive,
+  getSessionModels: mocks.getSessionModels,
+  getAssistantMessageCount: mocks.getAssistantMessageCount,
 }));
 
 vi.mock('../../src/core/models.js', () => ({
@@ -111,7 +117,6 @@ vi.mock('../../src/core/config.js', () => ({
 
 import { execa } from 'execa';
 import { createRunner } from '../../src/core/runner.js';
-import type { Job } from '../../src/core/types.js';
 
 const mockExeca = vi.mocked(execa);
 
@@ -190,6 +195,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: null,
     allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -291,6 +297,72 @@ describe('runner recovery preflight and checkpoint capture', () => {
 
     expect(mocks.updateJobRecoveryStart).toHaveBeenCalledWith('ab12', null, false);
     expect(mocks.updateJobRecoveryHead).toHaveBeenCalledWith('ab12', null);
+    expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('persists recursive normalized actual models before marking job completed', async () => {
+    mockRecoveryGit({
+      worktree: true,
+      dirty: false,
+      baseCommit: 'base-models',
+      headCommit: 'head-models',
+    });
+
+    mocks.getJob.mockImplementation((id: string) => {
+      if (id !== 'ab12') return null;
+      return makeJob({
+        sessionTitles: JSON.stringify(['root-session', 'child-session']),
+      });
+    });
+
+    mocks.findSessionByTitle.mockImplementation((title: string) => {
+      if (title === 'root-session') return 'sess-root';
+      if (title === 'child-session') return 'sess-child';
+      return null;
+    });
+
+    mocks.getSessionModelsRecursive.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return ['OpenAI/GPT-5.3-CODEX', 'anthropic/claude-sonnet-4-6'];
+      }
+      if (sessionId === 'sess-child') {
+        return ['openai/gpt-5.3-codex', ' anthropic/claude-sonnet-4-6 '];
+      }
+      return [];
+    });
+
+    await launchJob(makeJob());
+
+    expect(mocks.updateActualModels).toHaveBeenCalledWith('ab12', [
+      'anthropic/claude-sonnet-4-6',
+      'openai/gpt-5.3-codex',
+    ]);
+    expect(mocks.updateActualModels.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.markCompleted.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps completion best-effort when recursive actual-model lookup fails', async () => {
+    mockRecoveryGit({
+      worktree: true,
+      dirty: false,
+      baseCommit: 'base-fail-safe',
+      headCommit: 'head-fail-safe',
+    });
+
+    mocks.getJob.mockImplementation((id: string) => {
+      if (id !== 'ab12') return null;
+      return makeJob({ sessionTitles: JSON.stringify(['root-session']) });
+    });
+
+    mocks.findSessionByTitle.mockReturnValue('sess-root');
+    mocks.getSessionModelsRecursive.mockImplementation(() => {
+      throw new Error('opencode db read failed');
+    });
+
+    await expect(launchJob(makeJob())).resolves.toBeUndefined();
+
     expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
     expect(mocks.markFailed).not.toHaveBeenCalled();
   });

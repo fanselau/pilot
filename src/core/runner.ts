@@ -46,7 +46,14 @@ import { delegate, resolveOpencodeBinary } from './delegate.js';
 import { isGitWorktree, isWorktreeDirty, resolveCommitOrNull } from './git-recovery.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
-import { findSessionByTitle, exportSessionFromDb, isSessionDone, getLastMessage, getSessionModels, getAssistantMessageCount } from './opencode-db.js';
+import {
+  findSessionByTitle,
+  exportSessionFromDb,
+  isSessionDone,
+  getLastMessage,
+  getSessionModelsRecursive,
+  getAssistantMessageCount,
+} from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
 import { errMsg } from '../util/errors.js';
@@ -804,14 +811,41 @@ class Runner {
         return;
       }
 
+      const normalizeModel = (rawModel: string): string | null => {
+        const trimmed = rawModel.trim();
+        if (!trimmed.includes('/')) {
+          return null;
+        }
+
+        const parts = trimmed.split('/');
+        const provider = parts.shift()?.trim().toLowerCase();
+        const model = parts.join('/').trim().toLowerCase();
+        if (!provider || !model) {
+          return null;
+        }
+
+        return `${provider}/${model}`;
+      };
+
       const allActualModels = new Set<string>();
+      const visitedSessionIds = new Set<string>();
       for (const sessionTitle of sessionTitles) {
-        const models = getSessionModels(sessionTitle);
-        for (const m of models) allActualModels.add(m);
+        const rootSessionId = findSessionByTitle(sessionTitle);
+        if (!rootSessionId) {
+          continue;
+        }
+
+        const models = getSessionModelsRecursive(rootSessionId, 0, visitedSessionIds);
+        for (const model of models) {
+          const normalized = normalizeModel(model);
+          if (normalized) {
+            allActualModels.add(normalized);
+          }
+        }
       }
 
       if (allActualModels.size > 0) {
-        updateActualModels(jobId, [...allActualModels]);
+        updateActualModels(jobId, Array.from(allActualModels).sort());
       }
     } catch {
       // Best effort — don't fail the job due to model collection error
