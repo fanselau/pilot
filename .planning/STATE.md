@@ -8,7 +8,7 @@
 Phase: 50 (Setup Refresh Mode and Fast Skill Installation)
 Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-09 - Completed 50-01-PLAN.md (setupProject refresh mode + parallel bootstrapDefaultSkills)
+Last activity: 2026-03-09 - Completed quick task 078 (OpenAI defaults migration to gpt-5.4)
 
 Progress: █████████░ 38/40 plans (95%)
 **Next Plan:** 50-02-PLAN.md — CLI wiring (--refresh, --force, --skip-skills flags) + comprehensive tests
@@ -192,6 +192,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 075 | Hybrid Role-Based Model Routing | 2026-03-06 | 898222b | [075-hybrid-role-based-model-routing](./quick/075-hybrid-role-based-model-routing/) |
 | 076 | Add /hooks/wake comment to callback.ts | 2026-03-06 | e4a8d0c | [076-add-a-comment-to-the-top-of-src-core-cal](./quick/076-add-a-comment-to-the-top-of-src-core-cal/) |
 | 077 | Update OpenClaw SKILL.md — Recovery, Grace Period, Observability, Quick Reference cross-check for phases 43-45 | 2026-03-08 | 76aa779 | [077-update-the-openclaw-skill-md-at-openclaw](./quick/077-update-the-openclaw-skill-md-at-openclaw/) |
+| 078 | Upgrade OpenAI defaults to gpt-5.4 with high/medium remap across runtime, tests, and GSD agents | 2026-03-09 | 41b9832 | [078-upgrade-openai-models-from-gpt-5-3-codex](./quick/078-upgrade-openai-models-from-gpt-5-3-codex/) |
 
 ## Accumulated Context
 
@@ -633,9 +634,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 49-02 | info.ts Verdict line now uses buildJudgeSignal + formatJudgeReason | Unifies reason/confidence parsing semantics across status/info/TUI and keeps summary fallback compatibility |
 | 49-03 | completed-panel terminal rows compose [judge:*], retry, and undo badges from shared helpers | Keeps TUI badge semantics aligned with core judge/introspection logic and avoids ad-hoc parsing drift |
 | 49-03 | detail header adds explicit Status/Verdict/Retry/Undo lines; wait context stays in supplemental reason lines | Makes operator triage signals scan-friendly without losing existing contextual guidance |
+| quick-078 | OpenAI defaults standardized to gpt-5.4 with xhigh/high remapped to high/medium | Keeps runtime mappings, tests, and GSD agent defaults aligned with current OpenAI naming and intended thinking-level semantics |
 
 ## Session Continuity
 
-Last session: 2026-03-08T21:23:05Z
-Stopped at: Completed 49-03-PLAN.md
+Last session: 2026-03-09T16:03:53Z
+Stopped at: Completed quick task 078
 Resume file: None
