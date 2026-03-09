@@ -8,7 +8,7 @@
  * Pure core module — no UI dependencies.
  */
 
-import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath } from 'node:fs/promises';
+import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { execa } from 'execa';
@@ -17,13 +17,55 @@ import { errMsg } from '../util/errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+interface SetupOptions {
+  refresh?: boolean;
+  force?: boolean;
+}
+
 interface SetupResult {
   created: string[];
   skipped: string[];
   errors: string[];
 }
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
+export const OPENCODE_JSON_TEMPLATE = {
+  permission: {
+    read: { '**': 'allow' },
+    write: { '**': 'allow' },
+    edit: { '**': 'allow' },
+    bash: { '**': 'allow' },
+    external_directory: { '**': 'allow' },
+  },
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Deep-merge source into target.
+ * Template values fill in missing keys; existing user values are NEVER overwritten.
+ * Arrays are NOT merged — target arrays win if present.
+ */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    if (
+      source[key] !== null &&
+      typeof source[key] === 'object' &&
+      !Array.isArray(source[key]) &&
+      target[key] !== null &&
+      typeof target[key] === 'object' &&
+      !Array.isArray(target[key])
+    ) {
+      result[key] = deepMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
+    } else if (!(key in target)) {
+      result[key] = source[key];
+    }
+    // If key exists in target, target wins (existing user values preserved)
+  }
+  return result;
+}
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -55,9 +97,14 @@ async function isDirectory(filePath: string): Promise<boolean> {
  * 4. .gitignore entry for .opencode/
  * 5. git init (if not already a repo)
  *
- * Never overwrites existing opencode.json.
+ * With options.refresh=true: re-creates symlinks pointing to current gsdDir
+ * and deep-merges opencode.json template into existing config (adds missing
+ * fields without overwriting user values). With options.force=true alongside
+ * refresh, overwrites opencode.json entirely with template.
+ *
+ * Without options: never overwrites existing opencode.json (backward compatible).
  */
-async function setupProject(dir: string): Promise<SetupResult> {
+async function setupProject(dir: string, options?: SetupOptions): Promise<SetupResult> {
   const config = getConfig();
   const absDir = path.resolve(dir);
   const result: SetupResult = {
@@ -106,7 +153,19 @@ async function setupProject(dir: string): Promise<SetupResult> {
       try {
         const linkStats = await lstat(linkPath);
         if (linkStats.isSymbolicLink()) {
-          result.skipped.push(`.opencode/${link.name}/ (already exists)`);
+          if (options?.refresh) {
+            // Refresh mode: delete and re-create symlink pointing to current gsdDir
+            try {
+              await unlink(linkPath);
+              await symlink(link.target, linkPath);
+              result.created.push(`Refreshed .opencode/${link.name}/ → ${link.target}`);
+            } catch (err: unknown) {
+              const msg = errMsg(err);
+              result.errors.push(`Failed to refresh symlink .opencode/${link.name}/: ${msg}`);
+            }
+          } else {
+            result.skipped.push(`.opencode/${link.name}/ (already exists)`);
+          }
         } else {
           result.skipped.push(
             `.opencode/${link.name}/ exists as real directory (not symlink) — skipping to avoid data loss`,
@@ -178,21 +237,33 @@ async function setupProject(dir: string): Promise<SetupResult> {
   const configJsonPath = path.join(absDir, 'opencode.json');
   const legacyConfigPath = path.join(absDir, 'claude.json');
   if (await exists(configJsonPath)) {
-    result.skipped.push('opencode.json (already exists)');
+    if (options?.refresh) {
+      // Refresh mode: deep-merge template into existing config or force-overwrite
+      try {
+        if (options.force) {
+          // Force mode: overwrite entirely with template
+          await writeFile(configJsonPath, JSON.stringify(OPENCODE_JSON_TEMPLATE, null, 2) + '\n', 'utf8');
+          result.created.push('opencode.json (force-overwritten with template)');
+        } else {
+          // Merge mode: add missing fields from template, preserve existing values
+          const existingRaw = await readFile(configJsonPath, 'utf8');
+          const existingConfig = JSON.parse(existingRaw) as Record<string, unknown>;
+          const merged = deepMerge(existingConfig, OPENCODE_JSON_TEMPLATE as unknown as Record<string, unknown>);
+          await writeFile(configJsonPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+          result.created.push('Merged opencode.json (added missing fields)');
+        }
+      } catch (err: unknown) {
+        const msg = errMsg(err);
+        result.errors.push(`Failed to refresh opencode.json: ${msg}`);
+      }
+    } else {
+      result.skipped.push('opencode.json (already exists)');
+    }
   } else if (await exists(legacyConfigPath)) {
     result.skipped.push('opencode.json (legacy claude.json exists — not overwriting)');
   } else {
-    const opencodeConfig = {
-      permission: {
-        read: { '**': 'allow' },
-        write: { '**': 'allow' },
-        edit: { '**': 'allow' },
-        bash: { '**': 'allow' },
-        external_directory: { '**': 'allow' },
-      },
-    };
     try {
-      await writeFile(configJsonPath, JSON.stringify(opencodeConfig, null, 2) + '\n', 'utf8');
+      await writeFile(configJsonPath, JSON.stringify(OPENCODE_JSON_TEMPLATE, null, 2) + '\n', 'utf8');
       result.created.push('opencode.json');
     } catch (err: unknown) {
       const msg = errMsg(err);
@@ -403,4 +474,4 @@ async function verifySetup(dir: string): Promise<VerifySetupResult> {
 }
 
 export { setupProject, verifySetup };
-export type { SetupResult, VerifySetupResult, VerifyFinding };
+export type { SetupOptions, SetupResult, VerifySetupResult, VerifyFinding };
