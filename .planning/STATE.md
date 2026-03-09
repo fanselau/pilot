@@ -8,7 +8,7 @@
 Phase: 50 (Setup Refresh Mode and Fast Skill Installation)
 Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-09 - Completed quick task 078 (OpenAI defaults migration to gpt-5.4)
+Last activity: 2026-03-09 - Completed quick task 078: Upgrade OpenAI models from gpt-5.3-codex to gpt-5.4. Replace all occurrences of openai/gpt-5.3-codex with openai/gpt-5.4 (no codex suffix). Update variant mapping so xhigh becomes high and high becomes medium, while keeping none/minimal/low/medium/high support. Apply this to all relevant AGENT_MODELS tables: every openai-only entry and hybrid check-role agents (codebase-mapper, verifier, plan-checker, integration-checker, plus _top:judge scope). Update comments that still mention codex/xhigh-high to reference gpt-5.4 and high/medium. Update all tests that reference gpt-5.3-codex and adjust expected variants to match the new mapping. Run the full test suite. Also update GSD agent defaults so any agent with model openai/gpt-5.3-codex becomes openai/gpt-5.4, variant xhigh becomes high, and variant high becomes medium.
 
 Progress: █████████░ 38/40 plans (95%)
 **Next Plan:** 50-02-PLAN.md — CLI wiring (--refresh, --force, --skip-skills flags) + comprehensive tests
@@ -192,7 +192,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 075 | Hybrid Role-Based Model Routing | 2026-03-06 | 898222b | [075-hybrid-role-based-model-routing](./quick/075-hybrid-role-based-model-routing/) |
 | 076 | Add /hooks/wake comment to callback.ts | 2026-03-06 | e4a8d0c | [076-add-a-comment-to-the-top-of-src-core-cal](./quick/076-add-a-comment-to-the-top-of-src-core-cal/) |
 | 077 | Update OpenClaw SKILL.md — Recovery, Grace Period, Observability, Quick Reference cross-check for phases 43-45 | 2026-03-08 | 76aa779 | [077-update-the-openclaw-skill-md-at-openclaw](./quick/077-update-the-openclaw-skill-md-at-openclaw/) |
-| 078 | Upgrade OpenAI defaults to gpt-5.4 with high/medium remap across runtime, tests, and GSD agents | 2026-03-09 | 41b9832 | [078-upgrade-openai-models-from-gpt-5-3-codex](./quick/078-upgrade-openai-models-from-gpt-5-3-codex/) |
+| 078 | Upgrade OpenAI models from gpt-5.3-codex to gpt-5.4. Replace all occurrences of openai/gpt-5.3-codex with openai/gpt-5.4 (no codex suffix). Update variant mapping so xhigh becomes high and high becomes medium, while keeping none/minimal/low/medium/high support. Apply this to all relevant AGENT_MODELS tables: every openai-only entry and hybrid check-role agents (codebase-mapper, verifier, plan-checker, integration-checker, plus _top:judge scope). Update comments that still mention codex/xhigh-high to reference gpt-5.4 and high/medium. Update all tests that reference gpt-5.3-codex and adjust expected variants to match the new mapping. Run the full test suite. Also update GSD agent defaults so any agent with model openai/gpt-5.3-codex becomes openai/gpt-5.4, variant xhigh becomes high, and variant high becomes medium. | 2026-03-09 | c1ae6ea | [078-upgrade-openai-models-from-gpt-5-3-codex](./quick/078-upgrade-openai-models-from-gpt-5-3-codex/) |
 
 ## Accumulated Context
 
