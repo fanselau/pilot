@@ -14,7 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { execa } from 'execa';
-import { syncManifest, tagSkill } from './skills.js';
+import { loadManifest, syncManifest, tagSkill } from './skills.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -239,15 +239,46 @@ export function recommendDefaultSkills(
   return { skills, detectedStack };
 }
 
+// ── Concurrency Utility ───────────────────────────────────────────────────
+
+/**
+ * Run async tasks with a concurrency limit.
+ * Returns PromiseSettledResult[] preserving original index order.
+ */
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+): Promise<Array<PromiseSettledResult<T>>> {
+  const results: Array<PromiseSettledResult<T>> = [];
+  let index = 0;
+
+  async function next(): Promise<void> {
+    while (index < tasks.length) {
+      const i = index++;
+      try {
+        const value = await tasks[i]();
+        results[i] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => next());
+  await Promise.all(workers);
+  return results;
+}
+
 // ── Bootstrap Orchestrator ────────────────────────────────────────────────
 
 /**
  * Install recommended skills via `npx skills install`.
  * Non-fatal: continues on per-item failure.
  *
- * After each successful install, calls syncManifest() to discover the new SKILL.md,
- * then tagSkill() to apply categories.
- * Calls syncManifest() one final time after all installs.
+ * Runs installs concurrently (up to 5 parallel) for speed.
+ * Skips already-installed skills before attempting npx install.
+ * Calls syncManifest() ONCE after all installs complete (not per-install).
+ * Tags all successfully installed skills after the batch sync.
  */
 export async function bootstrapDefaultSkills(options: {
   projectDir: string;
@@ -267,37 +298,72 @@ export async function bootstrapDefaultSkills(options: {
     errors: [],
   };
 
-  for (const skill of recommendation.skills) {
-    try {
+  // Check which skills are already installed to skip them
+  const existingManifest = loadManifest();
+  const installedNames = new Set(existingManifest.skills.map(s => s.name));
+
+  // Build install tasks for non-skipped skills, track which indices to install
+  const skillsToInstall: Array<{ skill: typeof recommendation.skills[0]; index: number }> = [];
+  for (let i = 0; i < recommendation.skills.length; i++) {
+    const skill = recommendation.skills[i];
+    const parts = skill.install.split('/');
+    const shortName = parts[parts.length - 1] ?? '';
+    if (installedNames.has(shortName)) {
+      result.skipped++;
+      continue;
+    }
+    skillsToInstall.push({ skill, index: i });
+  }
+
+  // Update attempted to reflect actual install attempts (excluding skipped)
+  // Note: result.attempted stays as total recommended for API compatibility
+
+  // Build thunks for concurrent execution
+  const installTasks = skillsToInstall.map(({ skill }) => {
+    return async (): Promise<string> => {
       await execa('npx', ['skills', 'install', skill.install], {
         timeout: 60_000,
       });
+      return skill.install;
+    };
+  });
 
-      // Sync manifest to discover the newly installed skill
-      const manifest = syncManifest();
+  // Run all installs concurrently with limit of 5
+  if (installTasks.length > 0) {
+    const settled = await runWithConcurrency(installTasks, 5);
 
-      // Find the skill name from the manifest (the install ID may not match the SKILL.md name)
-      // Try to find by matching — the skill was just installed, so it should appear
+    // Count results
+    for (let i = 0; i < settled.length; i++) {
+      const outcome = settled[i];
+      const { skill } = skillsToInstall[i];
+      if (outcome.status === 'fulfilled') {
+        result.installed++;
+      } else {
+        result.failed++;
+        const errorMsg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+        result.errors.push({ skill: skill.install, error: errorMsg });
+      }
+    }
+
+    // Single syncManifest call after ALL installs complete
+    const manifest = syncManifest();
+
+    // Tag all successfully installed skills in one pass
+    for (let i = 0; i < settled.length; i++) {
+      if (settled[i].status !== 'fulfilled') continue;
+      const { skill } = skillsToInstall[i];
       const skillName = findSkillNameByInstall(manifest.skills.map(s => s.name), skill.install);
-
       if (skillName) {
         const tagged = tagSkill(skillName, skill.categories);
         if (tagged) {
           result.tagged++;
         }
       }
-
-      result.installed++;
-    } catch (err: unknown) {
-      result.failed++;
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      result.errors.push({ skill: skill.install, error: errorMsg });
-      // Continue — non-fatal
     }
+  } else {
+    // No installs needed — still sync manifest for consistency
+    syncManifest();
   }
-
-  // Final sync to ensure manifest is up-to-date
-  syncManifest();
 
   return result;
 }

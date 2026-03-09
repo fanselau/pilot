@@ -28,12 +28,14 @@ vi.mock('execa', () => ({
   execa: (...args: unknown[]) => mockExeca(...args),
 }));
 
-// ── Mock skills.ts (syncManifest, tagSkill) ─────────────────────────────
+// ── Mock skills.ts (loadManifest, syncManifest, tagSkill) ───────────────
 
+const mockLoadManifest = vi.fn();
 const mockSyncManifest = vi.fn();
 const mockTagSkill = vi.fn();
 
 vi.mock('../../src/core/skills.js', () => ({
+  loadManifest: (...args: unknown[]) => mockLoadManifest(...args),
   syncManifest: (...args: unknown[]) => mockSyncManifest(...args),
   tagSkill: (...args: unknown[]) => mockTagSkill(...args),
 }));
@@ -63,6 +65,8 @@ beforeEach(() => {
   projectDir = makeTmpDir();
   vi.clearAllMocks();
 
+  // Default: loadManifest returns empty manifest (no pre-installed skills)
+  mockLoadManifest.mockReturnValue({ version: 1, skills: [] });
   // Default: syncManifest returns empty manifest
   mockSyncManifest.mockReturnValue({ version: 1, skills: [] });
   mockTagSkill.mockReturnValue(null);
@@ -389,14 +393,14 @@ describe('bootstrapDefaultSkills', () => {
     }
   });
 
-  it('calls syncManifest after each successful install', async () => {
+  it('calls syncManifest once after all installs complete (batch sync)', async () => {
     mockExeca.mockResolvedValue({ stdout: '', stderr: '' });
     mockSyncManifest.mockReturnValue({ version: 1, skills: [] });
 
     await bootstrapDefaultSkills({ projectDir, yes: true });
 
-    // 5 installs + 1 final sync = 6 calls
-    expect(mockSyncManifest).toHaveBeenCalledTimes(6);
+    // Single syncManifest call after batch (not per-install)
+    expect(mockSyncManifest).toHaveBeenCalledTimes(1);
   });
 
   it('calls tagSkill with correct categories after successful install', async () => {
