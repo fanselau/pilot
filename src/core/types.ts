@@ -285,7 +285,7 @@ export interface ModelProfileRow {
   agent_or_scope: string;
   profile: string;        // 'quality' | 'balanced' | 'budget'
   model: string;          // e.g. 'anthropic/claude-opus-4-6'
-  variant: string | null; // e.g. 'xhigh', 'high', or null
+  variant: string | null; // e.g. 'none', 'minimal', 'low', 'medium', 'high', or null in storage
 }
 
 /** Row shape for the provider_modes table. */

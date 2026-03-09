@@ -35,26 +35,26 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
     '_top:judge': { quality: { model: 'anthropic/claude-haiku-4-5' },  balanced: { model: 'anthropic/claude-haiku-4-5' },  budget: { model: 'anthropic/claude-haiku-4-5' } },
   },
   'openai-only': {
-    // ── Agents (codex with xhigh/high variant differentiation per spec) ──
-    'gsd-planner':              { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-roadmapper':           { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-executor':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-debugger':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-phase-researcher':     { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-project-researcher':   { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-research-synthesizer': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-verifier':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    // ── Agents (gpt-5.4 with high/medium variant defaults per spec) ──
+    'gsd-planner':              { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'high' },   budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-roadmapper':           { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-executor':             { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-debugger':             { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-phase-researcher':     { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-project-researcher':   { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-research-synthesizer': { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-verifier':             { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
     // ── Scopes ──
-    '_top:phase': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    '_top:quick': { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' }, budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    '_top:phase': { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    '_top:quick': { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    '_top:judge': { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
   },
   // ── Hybrid: role-based separation ──
   // Build agents (planner, roadmapper, executor, debugger, researchers) → Claude (mirrors claude-only)
-  // Check agents (verifier, plan-checker, integration-checker, codebase-mapper, judge) → Codex (mirrors openai-only)
+  // Check agents (verifier, plan-checker, integration-checker, codebase-mapper, judge) → GPT-5.4 (mirrors openai-only)
   // Two different models = two different perspectives on the same code.
   hybrid: {
     // ── Build role: mirrors claude-only (sonnet substituted for haiku on budget researchers) ──
@@ -66,14 +66,14 @@ const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfil
     'gsd-project-researcher':   { quality: { model: 'anthropic/claude-opus-4-6' },   balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
     'gsd-research-synthesizer': { quality: { model: 'anthropic/claude-sonnet-4-6' }, balanced: { model: 'anthropic/claude-sonnet-4-6' }, budget: { model: 'anthropic/claude-sonnet-4-6' } },
     // ── Check role: mirrors openai-only exactly ──
-    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-verifier':             { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' }, balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.3-codex', variant: 'high' },  balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },  budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
-    // ── Scopes: phase/quick → Claude, judge → Codex ──
+    'gsd-codebase-mapper':      { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-verifier':             { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-plan-checker':         { quality: { model: 'openai/gpt-5.4', variant: 'high' },   balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    'gsd-integration-checker':  { quality: { model: 'openai/gpt-5.4', variant: 'medium' }, balanced: { model: 'openai/gpt-5.4', variant: 'medium' }, budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
+    // ── Scopes: phase/quick → Claude, judge → GPT-5.4 ──
     '_top:phase': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-opus-4-6' },                   budget: { model: 'anthropic/claude-sonnet-4-6' } },
     '_top:quick': { quality: { model: 'anthropic/claude-opus-4-6' },                   balanced: { model: 'anthropic/claude-sonnet-4-6' },                 budget: { model: 'anthropic/claude-sonnet-4-6' } },
-    '_top:judge': { quality: { model: 'openai/gpt-5.3-codex', variant: 'xhigh' },     balanced: { model: 'openai/gpt-5.3-codex', variant: 'high' },       budget: { model: 'openai/gpt-5.3-codex', variant: 'high' } },
+    '_top:judge': { quality: { model: 'openai/gpt-5.4', variant: 'high' },             balanced: { model: 'openai/gpt-5.4', variant: 'medium' },         budget: { model: 'openai/gpt-5.4', variant: 'medium' } },
   },
 };
 

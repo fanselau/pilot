@@ -29,11 +29,11 @@ const PRICING_CATALOG: Record<string, ModelPricing> = {
     outputPerMillionUsd: 75.0,
     assumptions: ['Approximate public Opus input/output pricing assumptions.'],
   },
-  'openai/gpt-5.3-codex': {
+  'openai/gpt-5.4': {
     inputPerMillionUsd: 5.0,
     outputPerMillionUsd: 20.0,
     assumptions: [
-      'Assumed GPT-5.3 Codex blended pricing for high/xhigh variants.',
+      'Assumed GPT-5.4 blended pricing for high/medium variants.',
       'Variant-specific prices are not distinguished yet.',
     ],
   },
