@@ -1,17 +1,17 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 49
+## Current Phase: 50
 
 ## Current Position
 
-Phase: 49 (Surface Judge Verdict and Status Badges in TUI / Status Views)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-08 - Completed 49-03-PLAN.md (TUI completed/detail badge visibility and dedicated status/verdict/retry/undo lines)
+Phase: 50 (Setup Refresh Mode and Fast Skill Installation)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-09 - Completed 50-01-PLAN.md (setupProject refresh mode + parallel bootstrapDefaultSkills)
 
-Progress: █████████░ 37/40 plans (93%)
-**Next Plan:** None - Phase 49 complete
+Progress: █████████░ 38/40 plans (95%)
+**Next Plan:** 50-02-PLAN.md — CLI wiring (--refresh, --force, --skip-skills flags) + comprehensive tests
 
 ## Project Reference
 
@@ -118,6 +118,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 48: Fix New Project Setup Critical Bugs
 - **Status:** complete (2/2 plans, verified ✓)
+
+### Phase 49: Surface Judge Verdict and Status Badges in TUI / Status Views
+- **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 50: Setup Refresh Mode and Fast Skill Installation
+- **Status:** in progress (1/2 plans complete)
 
 ### Quick Tasks Completed
 

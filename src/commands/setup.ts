@@ -16,8 +16,11 @@ import { green, red, yellow, dim, bold } from '../util/colors.js';
 
 interface SetupOptions {
   verify?: boolean;
-  owner?: string;    // agent ID to register as project owner
-  update?: boolean;  // if true, update owner of existing project
+  refresh?: boolean;     // re-link symlinks, merge opencode.json, re-offer skills/AGENTS.md
+  force?: boolean;       // with --refresh: overwrite opencode.json instead of merging
+  skipSkills?: boolean;  // with --refresh: skip skill re-offering
+  owner?: string;        // agent ID to register as project owner
+  update?: boolean;      // if true, update owner of existing project
 }
 
 async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
@@ -49,16 +52,38 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
     return;
   }
 
-  const result = await setupProject(dir);
+  // Pass refresh/force options to setupProject when --refresh is active
+  const setupOpts = opts.refresh ? { refresh: true, force: opts.force } : undefined;
+  const result = await setupProject(dir, setupOpts);
 
   if (isJsonMode()) {
     outputJson({ setup: result });
     return;
   }
 
-  for (const item of result.created) {
-    outputHuman(`  ${green('✓')} ${item}`);
+  // In refresh mode, show a structured summary of what changed
+  if (opts.refresh) {
+    const refreshed = result.created.filter(c => c.includes('Refreshed') || c.includes('Merged') || c.includes('force-overwritten'));
+    const other = result.created.filter(c => !c.includes('Refreshed') && !c.includes('Merged') && !c.includes('force-overwritten'));
+
+    if (refreshed.length > 0) {
+      outputHuman('');
+      outputHuman(`  ${bold('Refreshed:')}`);
+      for (const item of refreshed) {
+        outputHuman(`    ${green('✓')} ${item}`);
+      }
+    }
+    if (other.length > 0) {
+      for (const item of other) {
+        outputHuman(`  ${green('✓')} ${item}`);
+      }
+    }
+  } else {
+    for (const item of result.created) {
+      outputHuman(`  ${green('✓')} ${item}`);
+    }
   }
+
   for (const item of result.skipped) {
     outputHuman(`  ${dim('⊘')} ${item} ${dim('(skipped)')}`);
   }
@@ -96,7 +121,8 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   }
 
   // ── Optional: offer recommended skills ──────────────────────────────────
-  if (result.errors.length === 0 && !isJsonMode()) {
+  // --skip-skills skips this section entirely (only meaningful with --refresh)
+  if (result.errors.length === 0 && !isJsonMode() && !opts.skipSkills) {
     try {
       const { recommendDefaultSkills, bootstrapDefaultSkills } = await import('../core/default-skills.js');
       const absSkillDir = path.resolve(dir);
@@ -149,7 +175,8 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   }
 
   // ── Optional: offer AGENTS.md generation ─────────────────────────────────
-  if (result.errors.length === 0 && !isJsonMode()) {
+  // --skip-skills also skips AGENTS.md re-offering
+  if (result.errors.length === 0 && !isJsonMode() && !opts.skipSkills) {
     try {
       const { checkAgentsMdExists, spawnAgentsMdSession } = await import('../core/agents-md.js');
       const absDir = path.resolve(dir);

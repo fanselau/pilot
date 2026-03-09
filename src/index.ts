@@ -185,11 +185,14 @@ program
   .command('setup <dir>')
   .description('Set up project for Pilot (links pilot-gsd)')
   .option('--verify', 'Verify existing setup')
+  .option('--refresh', 'Refresh existing setup (re-link symlinks, merge config)')
+  .option('--force', 'With --refresh: overwrite opencode.json instead of merging')
+  .option('--skip-skills', 'With --refresh: skip skill re-offering')
   .option('--owner <agentId>', 'Register project owner (agent ID for notifications)')
   .option('--update', 'Update owner of existing registered project')
   .action(async (dir: string, opts: Record<string, unknown>) => {
     const { setupCommand } = await import('./commands/setup.js');
-    await setupCommand(dir, opts as { verify?: boolean; owner?: string; update?: boolean });
+    await setupCommand(dir, opts as { verify?: boolean; refresh?: boolean; force?: boolean; skipSkills?: boolean; owner?: string; update?: boolean });
   });
 
 program
