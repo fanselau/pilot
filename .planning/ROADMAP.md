@@ -870,12 +870,17 @@ Read requirements/surface-judge-verdict-and-badges-in-tui.md for full spec.
 
 ### Phase 50: Setup Refresh Mode and Fast Skill Installation
 
-**Goal:** [To be planned]
+**Goal:** Add `--refresh` flag to `pilot setup` that re-links symlinks, merges opencode.json with latest template, and re-offers skills/AGENTS.md. Parallelize skill installation to complete in under 10 seconds for typical projects.
 **Depends on:** Phase 49
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 50 to break down)
+- [ ] 50-01-PLAN.md — Core: setupProject refresh logic (symlink refresh, opencode.json deep-merge) + parallel bootstrapDefaultSkills
+- [ ] 50-02-PLAN.md — CLI wiring (--refresh, --force, --skip-skills flags) + comprehensive tests
+
+Wave structure:
+- Wave 1: 50-01 (core setup.ts + default-skills.ts changes)
+- Wave 2: 50-02 (CLI wiring + tests, depends on 50-01)
 
 **Details:**
-[To be added during planning]
+Read requirements/setup-refresh-and-fast-skills.md for full spec.
