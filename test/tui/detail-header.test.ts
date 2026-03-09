@@ -142,7 +142,7 @@ describe('detail observability header helpers', () => {
       makeSnapshot({
         observed: {
           status: 'available',
-          models: ['openai/gpt-5.3-codex'],
+          models: ['openai/gpt-5.4'],
           notes: [],
         },
         terminal: true,

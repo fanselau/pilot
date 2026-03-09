@@ -55,19 +55,19 @@ function makeJob(overrides: Partial<Job> = {}): Job {
 describe('pricing catalog + estimate semantics', () => {
   it('keeps pricing assumptions centralized in PRICING_CATALOG', () => {
     expect(PRICING_CATALOG['anthropic/claude-sonnet-4-6']).toBeDefined();
-    expect(PRICING_CATALOG['openai/gpt-5.3-codex']).toBeDefined();
+    expect(PRICING_CATALOG['openai/gpt-5.4']).toBeDefined();
   });
 
   it('estimates cost per model and rolls up multi-model totals', () => {
     const estimate = estimateCostByModel({
       'anthropic/claude-sonnet-4-6': tokens({ input: 1_000_000, output: 500_000, total: 1_500_000 }),
-      'openai/gpt-5.3-codex': tokens({ input: 500_000, output: 500_000, total: 1_000_000 }),
+      'openai/gpt-5.4': tokens({ input: 500_000, output: 500_000, total: 1_000_000 }),
     });
 
     expect(estimate.status).toBe('estimated');
     expect(estimate.byModel).toHaveLength(2);
     expect(estimate.byModel[0].model).toBe('anthropic/claude-sonnet-4-6');
-    expect(estimate.byModel[1].model).toBe('openai/gpt-5.3-codex');
+    expect(estimate.byModel[1].model).toBe('openai/gpt-5.4');
     expect(estimate.estimatedUsd).toBeCloseTo(23, 6);
   });
 
@@ -169,9 +169,9 @@ describe('buildJobObservability', () => {
       }),
       {
         findSessionByTitle: (title) => (title === 'phase-a' ? 'sess-a' : null),
-        getSessionModelsRecursive: () => ['openai/gpt-5.3-codex'],
+        getSessionModelsRecursive: () => ['openai/gpt-5.4'],
         getSessionTokenUsageByModelRecursive: () => ({
-          'openai/gpt-5.3-codex': {
+          'openai/gpt-5.4': {
             input: 10_000,
             output: 3_000,
             reasoning: 0,

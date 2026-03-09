@@ -37,9 +37,9 @@ describe('resolveAllAgentModels', () => {
     expect(models['gsd-planner'].model).toBe('anthropic/claude-opus-4-6');
     expect(models['gsd-executor'].model).toBe('anthropic/claude-sonnet-4-6');
     expect(models['gsd-phase-researcher'].model).toBe('anthropic/claude-sonnet-4-6');
-    expect(models['gsd-codebase-mapper'].model).toBe('openai/gpt-5.3-codex');
-    expect(models['gsd-codebase-mapper'].variant).toBe('high');
-    expect(models['gsd-verifier'].variant).toBe('high');
+    expect(models['gsd-codebase-mapper'].model).toBe('openai/gpt-5.4');
+    expect(models['gsd-codebase-mapper'].variant).toBe('medium');
+    expect(models['gsd-verifier'].variant).toBe('medium');
   });
 
   it('excludes scope keys from agent map', () => {
@@ -51,8 +51,8 @@ describe('resolveAllAgentModels', () => {
 
   it('includes variant for openai-only models', () => {
     const models = resolveAllAgentModels('balanced', 'openai-only');
-    expect(models['gsd-planner'].variant).toBe('xhigh');
-    expect(models['gsd-executor'].variant).toBe('high');
+    expect(models['gsd-planner'].variant).toBe('high');
+    expect(models['gsd-executor'].variant).toBe('medium');
   });
 
   it('has no variant for claude-only models', () => {
@@ -62,29 +62,29 @@ describe('resolveAllAgentModels', () => {
   });
 });
 
-describe('openai-only xhigh variant differentiation', () => {
-  it('uses xhigh variant for quality profile on planner', () => {
-    expect(resolveAgentModel('gsd-planner', 'quality', 'openai-only').variant).toBe('xhigh');
+describe('openai-only high/medium variant differentiation', () => {
+  it('uses high variant for quality profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'quality', 'openai-only').variant).toBe('high');
   });
 
-  it('uses xhigh variant for balanced profile on planner', () => {
-    expect(resolveAgentModel('gsd-planner', 'balanced', 'openai-only').variant).toBe('xhigh');
+  it('uses high variant for balanced profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'balanced', 'openai-only').variant).toBe('high');
   });
 
-  it('uses high variant for budget profile on planner', () => {
-    expect(resolveAgentModel('gsd-planner', 'budget', 'openai-only').variant).toBe('high');
+  it('uses medium variant for budget profile on planner', () => {
+    expect(resolveAgentModel('gsd-planner', 'budget', 'openai-only').variant).toBe('medium');
   });
 
-  it('uses high variant for quality profile on executor (stays high)', () => {
-    expect(resolveAgentModel('gsd-executor', 'quality', 'openai-only').variant).toBe('high');
+  it('uses medium variant for quality profile on executor (remapped from high)', () => {
+    expect(resolveAgentModel('gsd-executor', 'quality', 'openai-only').variant).toBe('medium');
   });
 });
 
 describe('resolveTopLevelModel with _top: keys', () => {
-  it('resolves phase scope in openai-only to xhigh quality', () => {
+  it('resolves phase scope in openai-only to high quality', () => {
     expect(resolveTopLevelModel('phase', 'quality', 'openai-only')).toEqual({
-      model: 'openai/gpt-5.3-codex',
-      variant: 'xhigh',
+      model: 'openai/gpt-5.4',
+      variant: 'high',
     });
   });
 
@@ -100,10 +100,10 @@ describe('resolveTopLevelModel with _top: keys', () => {
     });
   });
 
-  it('resolves judge scope in hybrid to xhigh quality codex', () => {
+  it('resolves judge scope in hybrid to high quality gpt-5.4', () => {
     expect(resolveTopLevelModel('judge', 'quality', 'hybrid')).toEqual({
-      model: 'openai/gpt-5.3-codex',
-      variant: 'xhigh',
+      model: 'openai/gpt-5.4',
+      variant: 'high',
     });
   });
 });
@@ -261,10 +261,10 @@ describe('patchAgentFrontmatter', () => {
       'utf8',
     );
 
-    patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.3-codex', variant: 'high' } });
+    patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' } });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('model: "openai/gpt-5.3-codex"');
+    expect(content).toContain('model: "openai/gpt-5.4"');
     expect(content).toContain('variant: "high"');
   });
 
@@ -280,7 +280,7 @@ describe('patchAgentFrontmatter', () => {
         '---',
         'name: gsd-executor',
         'description: Executor agent',
-        'model: "openai/gpt-5.3-codex"',
+        'model: "openai/gpt-5.4"',
         'variant: "high"',
         '---',
         '',
@@ -309,7 +309,7 @@ describe('patchAgentFrontmatter', () => {
         '---',
         'name: gsd-planner',
         'description: Planner agent',
-        'model: "openai/gpt-5.3-codex"',
+        'model: "openai/gpt-5.4"',
         'variant: "low"',
         '---',
         '',
@@ -318,7 +318,7 @@ describe('patchAgentFrontmatter', () => {
       'utf8',
     );
 
-    patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.3-codex', variant: 'high' } });
+    patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' } });
     const content = readFileSync(filePath, 'utf8');
 
     expect(content).toContain('variant: "high"');

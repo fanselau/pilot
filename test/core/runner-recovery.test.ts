@@ -324,10 +324,10 @@ describe('runner recovery preflight and checkpoint capture', () => {
 
     mocks.getSessionModelsRecursive.mockImplementation((sessionId: string) => {
       if (sessionId === 'sess-root') {
-        return ['OpenAI/GPT-5.3-CODEX', 'anthropic/claude-sonnet-4-6'];
+        return ['OpenAI/GPT-5.4', 'anthropic/claude-sonnet-4-6'];
       }
       if (sessionId === 'sess-child') {
-        return ['openai/gpt-5.3-codex', ' anthropic/claude-sonnet-4-6 '];
+        return ['openai/gpt-5.4', ' anthropic/claude-sonnet-4-6 '];
       }
       return [];
     });
@@ -336,7 +336,7 @@ describe('runner recovery preflight and checkpoint capture', () => {
 
     expect(mocks.updateActualModels).toHaveBeenCalledWith('ab12', [
       'anthropic/claude-sonnet-4-6',
-      'openai/gpt-5.3-codex',
+      'openai/gpt-5.4',
     ]);
     expect(mocks.updateActualModels.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.markCompleted.mock.invocationCallOrder[0],

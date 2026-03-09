@@ -87,7 +87,7 @@ describe('running-panel observability helpers', () => {
       expect(
         summarizeObservedModels([
           'anthropic/claude-sonnet-4-6',
-          'openai/gpt-5.3-codex',
+          'openai/gpt-5.4',
           'anthropic/claude-opus-4-6',
         ]),
       ).toBe('claude-sonnet-4-6 +2');
@@ -121,7 +121,7 @@ describe('running-panel observability helpers', () => {
           },
           observed: {
             status: 'available',
-            models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.3-codex'],
+            models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.4'],
             notes: [],
           },
           tokens: {

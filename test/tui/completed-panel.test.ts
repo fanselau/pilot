@@ -467,7 +467,7 @@ describe('completed panel observability cues', () => {
         },
         observed: {
           status: 'available',
-          models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.3-codex'],
+          models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.4'],
           notes: [],
         },
         cost: {
