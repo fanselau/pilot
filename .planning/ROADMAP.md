@@ -867,3 +867,15 @@ Wave structure:
 
 **Details:**
 Read requirements/surface-judge-verdict-and-badges-in-tui.md for full spec.
+
+### Phase 50: Setup Refresh Mode and Fast Skill Installation
+
+**Goal:** [To be planned]
+**Depends on:** Phase 49
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 50 to break down)
+
+**Details:**
+[To be added during planning]

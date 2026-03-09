@@ -231,6 +231,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 47 added: AGENTS.md Integration — CLI Commands & Doctor Check
 - Phase 48 added: Fix New Project Setup Critical Bugs
 - Phase 49 added: Surface Judge Verdict and Status Badges in TUI / Status Views
+- Phase 50 added: Setup Refresh Mode and Fast Skill Installation
 
 ## Decisions
 
