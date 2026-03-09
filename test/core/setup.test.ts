@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, readFile, readlink, symlink, lstat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -149,5 +150,162 @@ describe('path normalization — trailing slash stripping', () => {
 
     await rm(tmpDir2, { recursive: true, force: true });
     await rm(gsdDir2, { recursive: true, force: true });
+  });
+});
+
+// ── Tests: setupProject — refresh mode ──────────────────────────────────
+
+describe('setupProject — refresh mode', () => {
+  let tmpDir: string;
+  let gsdDir: string;
+  let oldGsdDir: string;
+
+  /**
+   * Helper: create a valid gsdDir with commands/agents/get-shit-done + gsd-delegate.md
+   */
+  async function createValidGsdDir(dir: string): Promise<void> {
+    const commandsDir = path.join(dir, 'commands');
+    await mkdir(commandsDir, { recursive: true });
+    await mkdir(path.join(dir, 'agents'), { recursive: true });
+    await mkdir(path.join(dir, 'get-shit-done'), { recursive: true });
+    await writeFile(path.join(commandsDir, 'gsd-delegate.md'), '# gsd-delegate\n', 'utf8');
+  }
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-refresh-'));
+    gsdDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-gsd-new-'));
+    oldGsdDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-gsd-old-'));
+    await createValidGsdDir(gsdDir);
+    await createValidGsdDir(oldGsdDir);
+    mockGsdDir = gsdDir;
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    await rm(gsdDir, { recursive: true, force: true });
+    await rm(oldGsdDir, { recursive: true, force: true });
+  });
+
+  it('refresh re-creates symlinks pointing to current gsdDir', async () => {
+    // Set up project with symlinks pointing to OLD gsdDir
+    mockGsdDir = oldGsdDir;
+    const initialResult = await setupProject(tmpDir);
+    expect(initialResult.errors).toHaveLength(0);
+
+    // Verify symlinks point to OLD gsdDir
+    const commandLink = path.join(tmpDir, '.opencode', 'command');
+    const oldTarget = await readlink(commandLink);
+    expect(oldTarget).toContain(oldGsdDir);
+
+    // Now refresh with NEW gsdDir
+    mockGsdDir = gsdDir;
+    const refreshResult = await setupProject(tmpDir, { refresh: true });
+    expect(refreshResult.errors).toHaveLength(0);
+
+    // Verify symlinks now point to NEW gsdDir
+    const newTarget = await readlink(commandLink);
+    expect(newTarget).toContain(gsdDir);
+    expect(newTarget).not.toContain(oldGsdDir);
+
+    // Result should contain "Refreshed" entries
+    expect(refreshResult.created.some(c => c.includes('Refreshed'))).toBe(true);
+  });
+
+  it('refresh merges missing fields into existing opencode.json', async () => {
+    // First setup to create initial files
+    const initialResult = await setupProject(tmpDir);
+    expect(initialResult.errors).toHaveLength(0);
+
+    // Overwrite opencode.json with custom content (missing permission fields)
+    const configPath = path.join(tmpDir, 'opencode.json');
+    await writeFile(configPath, JSON.stringify({ custom: 'value' }, null, 2) + '\n', 'utf8');
+
+    // Refresh — should merge template fields into existing config
+    const refreshResult = await setupProject(tmpDir, { refresh: true });
+    expect(refreshResult.errors).toHaveLength(0);
+
+    // Read opencode.json and verify merge
+    const content = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+    // User value preserved
+    expect(content.custom).toBe('value');
+    // Template fields added
+    const perm = content.permission as Record<string, unknown>;
+    expect(perm).toBeDefined();
+    const readPerm = perm.read as Record<string, unknown>;
+    expect(readPerm['**']).toBe('allow');
+
+    // Result should report merge
+    expect(refreshResult.created.some(c => c.includes('Merged'))).toBe(true);
+  });
+
+  it('refresh with force overwrites opencode.json entirely', async () => {
+    // First setup
+    const initialResult = await setupProject(tmpDir);
+    expect(initialResult.errors).toHaveLength(0);
+
+    // Add custom values to opencode.json
+    const configPath = path.join(tmpDir, 'opencode.json');
+    await writeFile(configPath, JSON.stringify({ custom: 'value', permission: { read: { '**': 'allow' } } }, null, 2) + '\n', 'utf8');
+
+    // Refresh with force — should overwrite entirely
+    const refreshResult = await setupProject(tmpDir, { refresh: true, force: true });
+    expect(refreshResult.errors).toHaveLength(0);
+
+    // Read opencode.json — should match template exactly, no 'custom' key
+    const content = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+    expect(content).not.toHaveProperty('custom');
+    expect(content).toHaveProperty('permission');
+
+    // Result should report force-overwrite
+    expect(refreshResult.created.some(c => c.includes('force-overwritten'))).toBe(true);
+  });
+
+  it('refresh skips real directories (not symlinks) — no data loss', async () => {
+    // First setup
+    const initialResult = await setupProject(tmpDir);
+    expect(initialResult.errors).toHaveLength(0);
+
+    // Replace symlink with a real directory
+    const commandLink = path.join(tmpDir, '.opencode', 'command');
+    // Remove the symlink and create a real directory with a file in it
+    const { unlink: unlinkFn } = await import('node:fs/promises');
+    await unlinkFn(commandLink);
+    await mkdir(commandLink, { recursive: true });
+    await writeFile(path.join(commandLink, 'user-data.txt'), 'important data', 'utf8');
+
+    // Refresh — should NOT delete the real directory
+    const refreshResult = await setupProject(tmpDir, { refresh: true });
+
+    // The real directory should still exist with its data
+    const stats = await lstat(commandLink);
+    expect(stats.isDirectory()).toBe(true);
+    expect(stats.isSymbolicLink()).toBe(false);
+    const userData = await readFile(path.join(commandLink, 'user-data.txt'), 'utf8');
+    expect(userData).toBe('important data');
+
+    // Result should contain a skip message about data loss
+    expect(refreshResult.skipped.some(s => s.includes('data loss') || s.includes('real directory'))).toBe(true);
+  });
+
+  it('without refresh, behavior unchanged — symlinks are skipped', async () => {
+    // First setup
+    const initialResult = await setupProject(tmpDir);
+    expect(initialResult.errors).toHaveLength(0);
+    expect(initialResult.created.some(c => c.includes('.opencode/command/'))).toBe(true);
+
+    // Second setup WITHOUT refresh — symlinks should be skipped (not re-created)
+    const secondResult = await setupProject(tmpDir);
+    expect(secondResult.errors).toHaveLength(0);
+
+    // Symlinks should be reported as skipped (already exists)
+    expect(secondResult.skipped.some(s => s.includes('already exists'))).toBe(true);
+
+    // No "Refreshed" entries should appear
+    expect(secondResult.created.some(c => c.includes('Refreshed'))).toBe(false);
+
+    // Symlinks should still point to original target
+    const commandLink = path.join(tmpDir, '.opencode', 'command');
+    const target = await readlink(commandLink);
+    expect(target).toContain(gsdDir);
   });
 });

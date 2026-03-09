@@ -559,3 +559,126 @@ describe('bootstrapDefaultSkills', () => {
     expect(mockSyncManifest).toHaveBeenCalled();
   });
 });
+
+// ── bootstrapDefaultSkills — parallel execution ─────────────────────────
+
+describe('bootstrapDefaultSkills — parallel execution', () => {
+  it('installs skills concurrently, not sequentially', async () => {
+    // Track call timestamps to detect overlap
+    const callTimes: Array<{ start: number; end: number }> = [];
+    mockExeca.mockImplementation(() => {
+      const start = Date.now();
+      return new Promise(resolve => {
+        setTimeout(() => {
+          callTimes.push({ start, end: Date.now() });
+          resolve({ stdout: '', stderr: '' });
+        }, 50); // 50ms delay per install
+      });
+    });
+    mockSyncManifest.mockReturnValue({ version: 1, skills: [] });
+
+    await bootstrapDefaultSkills({ projectDir, yes: true });
+
+    // With 5 skills at 50ms each:
+    // Sequential would take ~250ms
+    // Parallel with limit 5 should take ~50ms
+    // Verify overlap: multiple calls should start before the first one ends
+    expect(callTimes.length).toBe(5);
+    // Sort by start time
+    callTimes.sort((a, b) => a.start - b.start);
+    // The last call should start before the first call finishes
+    // (indicating parallel execution, not sequential)
+    expect(callTimes[callTimes.length - 1].start).toBeLessThanOrEqual(callTimes[0].end + 10);
+  });
+
+  it('calls syncManifest only once after all installs', async () => {
+    mockExeca.mockResolvedValue({ stdout: '', stderr: '' });
+    mockSyncManifest.mockReturnValue({ version: 1, skills: [] });
+
+    await bootstrapDefaultSkills({ projectDir, yes: true });
+
+    // Single syncManifest call — NOT one per install
+    expect(mockSyncManifest).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips already-installed skills', async () => {
+    // Mock loadManifest to return a manifest with one skill already present
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      skills: [{ name: 'coding-standards', categories: ['general'] }],
+    });
+    mockExeca.mockResolvedValue({ stdout: '', stderr: '' });
+    mockSyncManifest.mockReturnValue({ version: 1, skills: [] });
+
+    const result = await bootstrapDefaultSkills({ projectDir, yes: true });
+
+    // Should skip the already-installed skill
+    expect(result.skipped).toBeGreaterThanOrEqual(1);
+    // execa should NOT be called for the already-installed skill
+    // coding-standards is the first TIER1 skill — should be skipped
+    const execaCalls = mockExeca.mock.calls;
+    const installArgs = execaCalls.map(call => (call[1] as string[])[2]);
+    expect(installArgs).not.toContain('affaan-m/coding-standards');
+    // Should have called for 4 remaining skills
+    expect(execaCalls.length).toBe(4);
+  });
+
+  it('tags all successfully installed skills after batch sync', async () => {
+    mockExeca.mockResolvedValue({ stdout: '', stderr: '' });
+    mockSyncManifest.mockReturnValue({
+      version: 1,
+      skills: [
+        { name: 'coding-standards', categories: [] },
+        { name: 'code-reviewer', categories: [] },
+        { name: 'systematic-debugging', categories: [] },
+        { name: 'typescript', categories: [] },
+        { name: 'security-review', categories: [] },
+      ],
+    });
+    mockTagSkill.mockImplementation((name: string, categories: string[]) => ({
+      name, categories,
+    }));
+
+    await bootstrapDefaultSkills({ projectDir, yes: true });
+
+    // tagSkill should be called for each successfully installed skill
+    expect(mockTagSkill).toHaveBeenCalledTimes(5);
+
+    // All tagSkill calls should happen AFTER the single syncManifest call
+    // Verify ordering: syncManifest was called once, then tagSkill 5 times
+    const syncOrder = mockSyncManifest.mock.invocationCallOrder[0];
+    const tagOrders = mockTagSkill.mock.invocationCallOrder;
+    for (const tagOrder of tagOrders) {
+      expect(tagOrder).toBeGreaterThan(syncOrder);
+    }
+  });
+
+  it('handles per-skill failures without blocking others', async () => {
+    // First install fails, rest succeed
+    mockExeca
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValue({ stdout: '', stderr: '' });
+
+    mockSyncManifest.mockReturnValue({
+      version: 1,
+      skills: [
+        { name: 'code-reviewer', categories: [] },
+        { name: 'systematic-debugging', categories: [] },
+        { name: 'typescript', categories: [] },
+        { name: 'security-review', categories: [] },
+      ],
+    });
+    mockTagSkill.mockImplementation((name: string, categories: string[]) => ({
+      name, categories,
+    }));
+
+    const result = await bootstrapDefaultSkills({ projectDir, yes: true });
+
+    // Some installed, some failed
+    expect(result.installed).toBeGreaterThan(0);
+    expect(result.failed).toBeGreaterThan(0);
+    // Errors should contain the failed skill
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0].error).toContain('Network error');
+  });
+});
