@@ -11,12 +11,13 @@
 
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { addJob, findDuplicateJob, updateJobCategories } from '../core/db.js';
+import { addJob, findDuplicateJob, getProject, updateJobCategories } from '../core/db.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
+import { resolveNotifyRoute } from '../core/notify-route.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
 import { getProviderMode, getProviderModes } from '../core/model-store.js';
-import type { JobScope, ModelProfile } from '../core/types.js';
+import type { Job, JobScope, ModelProfile, OpenClawDeliverRoute } from '../core/types.js';
 
 const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
 const BUILTIN_PROVIDERS = ['hybrid', 'claude-only', 'openai-only'] as const;
@@ -260,6 +261,8 @@ async function addCommand(
     }
   }
 
+  const projectRecord = getProject(resolvedProject);
+
   // Resolve notify target:
   //   1. --no-notify → skip notification (callbackSessionKey = undefined)
   //   2. --notify <key> → use that key
@@ -279,9 +282,6 @@ async function addCommand(
     if (defaultKey) {
       resolvedNotifyKey = defaultKey;
     } else {
-      // Check project owner as fallback
-      const { getProject } = await import('../core/db.js');
-      const projectRecord = getProject(resolvedProject);
       if (projectRecord?.owner) {
         resolvedNotifyKey = projectRecord.owner;
       } else if (!opts.dryRun) {
@@ -296,14 +296,10 @@ async function addCommand(
   }
 
   // Warn if project is not registered (non-blocking — one-off jobs are valid)
-  {
-    const { getProject: checkProject } = await import('../core/db.js');
-    const projectRecord = checkProject(resolvedProject);
-    if (!projectRecord) {
-      process.stderr.write(
-        `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <agentId>\n`,
-      );
-    }
+  if (!projectRecord) {
+    process.stderr.write(
+      `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <agentId>\n`,
+    );
   }
 
   // --dry-run: preview only — do NOT write to DB
@@ -317,36 +313,100 @@ async function addCommand(
     return;
   }
 
-  const job = opts.startImmediately
-    ? addJob(
-      resolvedProject,
-      scope,
-      description,
-      requirementPath ?? undefined,
-      modelProfile,
-      providerMode,
-      undefined,             // dependsOn (not used in add command)
-      undefined,             // parentJobId (not used in add command)
-      resolvedNotifyKey,     // callbackSessionKey (resolved)
-      opts.notifyUrl,        // callbackUrl
-      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-      opts.forceDirty ?? false,
-      true,
-    )
-    : addJob(
-      resolvedProject,
-      scope,
-      description,
-      requirementPath ?? undefined,
-      modelProfile,
-      providerMode,
-      undefined,             // dependsOn (not used in add command)
-      undefined,             // parentJobId (not used in add command)
-      resolvedNotifyKey,     // callbackSessionKey (resolved)
-      opts.notifyUrl,        // callbackUrl
-      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-      opts.forceDirty ?? false,
+  let notifyRouteSnapshot: OpenClawDeliverRoute | null | undefined;
+  if (!opts.noNotify) {
+    const configuredRoute = projectRecord?.notifyOpenClawRoute;
+    if (opts.notify && configuredRoute && opts.notify !== configuredRoute.agentId) {
+      process.stderr.write(
+        `Error: --notify (${opts.notify}) conflicts with configured project route agent (${configuredRoute.agentId}). `
+        + `Use --notify ${configuredRoute.agentId}, remove --notify, or update the project route with `
+        + `pilot project "${resolvedProject}" --notify-openclaw ...\n`,
+      );
+      process.exit(2);
+    }
+
+    const routeResolution = resolveNotifyRoute(
+      {
+        callbackSessionKey: resolvedNotifyKey ?? null,
+        notifyRoute: null,
+      } as Job,
+      projectRecord,
     );
+    if (!routeResolution.ok) {
+      process.stderr.write(`Error: ${routeResolution.error.message}\n`);
+      process.stderr.write(
+        `Configure a structured route: pilot project "${resolvedProject}" --notify-openclaw --notify-agent <id> --notify-channel <channel> --notify-to <target> [--notify-account <id>]\n`,
+      );
+      process.exit(2);
+    }
+
+    notifyRouteSnapshot = routeResolution.route;
+  }
+
+  const job = opts.startImmediately
+    ? (notifyRouteSnapshot
+      ? addJob(
+        resolvedProject,
+        scope,
+        description,
+        requirementPath ?? undefined,
+        modelProfile,
+        providerMode,
+        undefined,             // dependsOn (not used in add command)
+        undefined,             // parentJobId (not used in add command)
+        resolvedNotifyKey,     // callbackSessionKey (resolved)
+        opts.notifyUrl,        // callbackUrl
+        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+        opts.forceDirty ?? false,
+        true,
+        notifyRouteSnapshot,
+      )
+      : addJob(
+        resolvedProject,
+        scope,
+        description,
+        requirementPath ?? undefined,
+        modelProfile,
+        providerMode,
+        undefined,             // dependsOn (not used in add command)
+        undefined,             // parentJobId (not used in add command)
+        resolvedNotifyKey,     // callbackSessionKey (resolved)
+        opts.notifyUrl,        // callbackUrl
+        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+        opts.forceDirty ?? false,
+        true,
+      ))
+    : (notifyRouteSnapshot
+      ? addJob(
+        resolvedProject,
+        scope,
+        description,
+        requirementPath ?? undefined,
+        modelProfile,
+        providerMode,
+        undefined,             // dependsOn (not used in add command)
+        undefined,             // parentJobId (not used in add command)
+        resolvedNotifyKey,     // callbackSessionKey (resolved)
+        opts.notifyUrl,        // callbackUrl
+        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+        opts.forceDirty ?? false,
+        undefined,
+        notifyRouteSnapshot,
+      )
+      : addJob(
+        resolvedProject,
+        scope,
+        description,
+        requirementPath ?? undefined,
+        modelProfile,
+        providerMode,
+        undefined,             // dependsOn (not used in add command)
+        undefined,             // parentJobId (not used in add command)
+        resolvedNotifyKey,     // callbackSessionKey (resolved)
+        opts.notifyUrl,        // callbackUrl
+        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+        opts.forceDirty ?? false,
+      ));
 
   // Store categories on the job record if provided
   if (categories && categories.length > 0) {

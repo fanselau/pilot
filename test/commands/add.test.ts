@@ -14,7 +14,7 @@ import path from 'node:path';
 
 // Mock the db module
 vi.mock('../../src/core/db.js', () => ({
-  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _allowDirtyStart?: boolean, _skipGracePeriod?: boolean) => ({
+  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _allowDirtyStart?: boolean, _skipGracePeriod?: boolean, _notifyRoute?: unknown) => ({
     id: 'ab12',
     project: _proj,
     scope: _scope,
@@ -40,6 +40,7 @@ vi.mock('../../src/core/db.js', () => ({
     actualModels: null,
     callbackUrl: _callbackUrl ?? null,
     callbackSessionKey: _callbackSessionKey ?? null,
+    notifyRoute: _notifyRoute ?? null,
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
@@ -544,6 +545,7 @@ describe('duplicate detection', () => {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    notifyRoute: null,
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
@@ -645,6 +647,8 @@ describe('duplicate detection', () => {
 
 describe('notify flag validation', () => {
   let notifyTestsDir: string;
+  const safeLegacyMain = 'agent:main:telegram:group:-5181925291';
+  const safeLegacyOverride = 'agent:override:telegram:group:-111';
 
   beforeAll(() => {
     notifyTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-notify-'));
@@ -667,11 +671,13 @@ describe('notify flag validation', () => {
     mockedProjectDir = notifyTestsDir;
     syncProjectDirEnv();
     vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
     delete process.env.PILOT_DEFAULT_NOTIFY;
   });
 
   afterEach(() => {
     delete process.env.PILOT_DEFAULT_NOTIFY;
+    vi.mocked(getProject).mockReturnValue(null);
   });
 
   it('errors when neither --notify nor --no-notify provided', async () => {
@@ -688,10 +694,9 @@ describe('notify flag validation', () => {
     exitSpy.mockRestore();
   });
 
-  it('--notify <agentId> passes agent ID to addJob as callbackSessionKey', async () => {
-    await addCommand('my-project', 'fix stuff', { notify: 'main' });
+  it('--notify with derivable legacy key snapshots notifyRoute on the job', async () => {
+    await addCommand('my-project', 'fix stuff', { notify: safeLegacyMain });
 
-    // 9th positional arg (index 8) is callbackSessionKey
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
       'quick',
@@ -701,10 +706,17 @@ describe('notify flag validation', () => {
       'claude-only',
       undefined,
       undefined,
-      'main',       // callbackSessionKey (plain agent ID)
-      undefined,    // callbackUrl
-      0,            // timeout
+      safeLegacyMain,
+      undefined,
+      0,
       false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
     );
   });
 
@@ -729,7 +741,7 @@ describe('notify flag validation', () => {
   });
 
   it('PILOT_DEFAULT_NOTIFY env var provides fallback session key', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'main';
+    process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
     await addCommand('my-project', 'fix stuff', {});
 
@@ -742,17 +754,24 @@ describe('notify flag validation', () => {
       'claude-only',
       undefined,
       undefined,
-      'main',  // callbackSessionKey from env var (plain agent ID)
+      safeLegacyMain,
       undefined,
-      0,       // timeout
+      0,
       false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
     );
   });
 
   it('--notify takes precedence over PILOT_DEFAULT_NOTIFY env var', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'main';
+    process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
-    await addCommand('my-project', 'fix stuff', { notify: 'override' });
+    await addCommand('my-project', 'fix stuff', { notify: safeLegacyOverride });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -763,15 +782,22 @@ describe('notify flag validation', () => {
       'claude-only',
       undefined,
       undefined,
-      'override',   // explicit --notify wins over env var
+      safeLegacyOverride,
       undefined,
-      0,            // timeout
+      0,
       false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'override',
+        channel: 'telegram',
+        to: 'telegram:-111',
+      },
     );
   });
 
   it('--no-notify overrides PILOT_DEFAULT_NOTIFY env var', async () => {
-    process.env.PILOT_DEFAULT_NOTIFY = 'main';
+    process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
     await addCommand('my-project', 'fix stuff', { noNotify: true });
 
@@ -788,6 +814,95 @@ describe('notify flag validation', () => {
       undefined,
       0,            // timeout
       false,
+    );
+  });
+
+  it('rejects mismatched --notify value when project route agent differs', async () => {
+    vi.mocked(getProject).mockReturnValue({
+      path: path.join(notifyTestsDir, 'my-project'),
+      owner: null,
+      notifyOpenClawRoute: {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
+      status: 'active',
+      blockedReason: null,
+      blockedAt: null,
+      createdAt: '2026-03-05T00:00:00Z',
+    });
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', { notify: safeLegacyMain })).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(addJob).not.toHaveBeenCalled();
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('conflicts with configured project route agent');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('rejects ambiguous notify values that cannot derive a complete route', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(addCommand('my-project', 'fix stuff', { notify: 'main' })).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(addJob).not.toHaveBeenCalled();
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('cannot be safely mapped to reply routing');
+    expect(stderrOutput).toContain('Configure a structured route');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('uses configured project route snapshot when route is present', async () => {
+    vi.mocked(getProject).mockReturnValue({
+      path: path.join(notifyTestsDir, 'my-project'),
+      owner: safeLegacyMain,
+      notifyOpenClawRoute: {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+        accountId: 'benefitu',
+      },
+      status: 'active',
+      blockedReason: null,
+      blockedAt: null,
+      createdAt: '2026-03-05T00:00:00Z',
+    });
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      'balanced',
+      'claude-only',
+      undefined,
+      undefined,
+      safeLegacyMain,
+      undefined,
+      0,
+      false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+        accountId: 'benefitu',
+      },
     );
   });
 
@@ -846,18 +961,19 @@ describe('project owner as fallback notify', () => {
     vi.mocked(getProject).mockReturnValue(null);
   });
 
-  it('uses project owner as callbackSessionKey when no --notify and no PILOT_DEFAULT_NOTIFY', async () => {
-    // Mock getProject to return a project with owner (plain agent ID)
+  it('uses derivable legacy project owner as fallback and snapshots route', async () => {
+    const ownerSessionKey = 'agent:main:telegram:group:-5181925291';
+
     vi.mocked(getProject).mockReturnValue({
       path: path.join(ownerTestsDir, 'my-project'),
-      owner: 'main',
+      owner: ownerSessionKey,
+      notifyOpenClawRoute: null,
       status: 'active',
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
     });
 
-    // No --notify, no PILOT_DEFAULT_NOTIFY — project owner is the fallback
     await addCommand('my-project', 'fix stuff', {});
 
     expect(addJob).toHaveBeenCalledWith(
@@ -869,10 +985,17 @@ describe('project owner as fallback notify', () => {
       'claude-only',
       undefined,
       undefined,
-      'main',  // project owner as callbackSessionKey (plain agent ID)
+      ownerSessionKey,
       undefined,
-      0,       // timeout
+      0,
       false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
     );
   });
 
@@ -986,6 +1109,7 @@ describe('unregistered project warning', () => {
     vi.mocked(getProject).mockReturnValue({
       path: path.join(unregTestsDir, 'my-project'),
       owner: 'main',
+      notifyOpenClawRoute: null,
       status: 'active',
       blockedReason: null,
       blockedAt: null,
