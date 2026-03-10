@@ -1,17 +1,18 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 50
+## Current Phase: 51
 
 ## Current Position
 
-Phase: 50 (Setup Refresh Mode and Fast Skill Installation)
-Plan: 1 of 2 in current phase
+Phase: 51 (Pilot notifications via `openclaw agent --deliver`)
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-09 - Completed quick task 078: Upgrade OpenAI models from gpt-5.3-codex to gpt-5.4. Replace all occurrences of openai/gpt-5.3-codex with openai/gpt-5.4 (no codex suffix). Update variant mapping so xhigh becomes high and high becomes medium, while keeping none/minimal/low/medium/high support. Apply this to all relevant AGENT_MODELS tables: every openai-only entry and hybrid check-role agents (codebase-mapper, verifier, plan-checker, integration-checker, plus _top:judge scope). Update comments that still mention codex/xhigh-high to reference gpt-5.4 and high/medium. Update all tests that reference gpt-5.3-codex and adjust expected variants to match the new mapping. Run the full test suite. Also update GSD agent defaults so any agent with model openai/gpt-5.3-codex becomes openai/gpt-5.4, variant xhigh becomes high, and variant high becomes medium.
+Last activity: 2026-03-10 - Completed 51-02-PLAN.md
 
-Progress: █████████░ 38/40 plans (95%)
-**Next Plan:** 50-02-PLAN.md — CLI wiring (--refresh, --force, --skip-skills flags) + comprehensive tests
+Progress: ██████████ 40/40 plans (100%)
+**Next Plan:** 51-03-PLAN.md — CLI route management and queue-time route snapshot wiring
+**Next Phase:** 51 (Pilot notifications via `openclaw agent --deliver`)
 
 ## Project Reference
 
@@ -124,6 +125,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 50: Setup Refresh Mode and Fast Skill Installation
 - **Status:** in progress (1/2 plans complete)
+
+### Phase 51: Pilot notifications via `openclaw agent --deliver`
+- **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -239,6 +243,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 48 added: Fix New Project Setup Critical Bugs
 - Phase 49 added: Surface Judge Verdict and Status Badges in TUI / Status Views
 - Phase 50 added: Setup Refresh Mode and Fast Skill Installation
+- Phase 51 added: Pilot notifications via `openclaw agent --deliver`
 
 ## Decisions
 
@@ -635,9 +640,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 49-03 | completed-panel terminal rows compose [judge:*], retry, and undo badges from shared helpers | Keeps TUI badge semantics aligned with core judge/introspection logic and avoids ad-hoc parsing drift |
 | 49-03 | detail header adds explicit Status/Verdict/Retry/Undo lines; wait context stays in supplemental reason lines | Makes operator triage signals scan-friendly without losing existing contextual guidance |
 | quick-078 | OpenAI defaults standardized to gpt-5.4 with xhigh/high remapped to high/medium | Keeps runtime mappings, tests, and GSD agent defaults aligned with current OpenAI naming and intended thinking-level semantics |
+| 51-01 | Persist structured OpenClaw delivery route on both projects and jobs as JSON text columns | Enables deterministic queue-time snapshots and project-level route management without breaking legacy callback fields |
+| 51-01 | Legacy route derivation only accepts strict `agent:<agentId>:<channel>:(group|channel|thread|topic):<target>` shapes | Prevents ambiguous owner/session-key values from causing wrong-chat notification delivery |
+| 51-02 | Callback notifications resolve route first and fail closed on invalid route data (no `/hooks/wake` fallback) | Ensures misconfiguration is actionable and prevents silent delivery to the wrong chat lane |
+| 51-02 | OpenClaw notifications are delivered via `openclaw agent --deliver` with explicit reply flags from canonical routes | Keeps group/DM delivery on one transport path with deterministic argument construction |
 
 ## Session Continuity
 
-Last session: 2026-03-09T16:03:53Z
-Stopped at: Completed quick task 078
+Last session: 2026-03-10T16:22:34Z
+Stopped at: Completed 51-02-PLAN.md
 Resume file: None

@@ -884,3 +884,22 @@ Wave structure:
 
 **Details:**
 Read requirements/setup-refresh-and-fast-skills.md for full spec.
+
+### Phase 51: Pilot notifications via `openclaw agent --deliver`
+
+**Goal:** Deliver completion/failure notifications to the correct OpenClaw agent chat (group or DM) by invoking `openclaw agent --deliver` with strict route resolution and no `/hooks/wake` fallback for configured deliver targets.
+**Depends on:** Phase 50
+**Requirements:** OAD-01, OAD-02, OAD-03, OAD-04, OAD-05, OAD-06, OAD-07, OAD-08, OAD-09
+**Plans:** 3 plans
+
+Plans:
+- [x] 51-01-PLAN.md — Route foundation: typed OpenClaw notify route model, DB persistence, strict structured-first resolver with safe legacy derive rules
+- [x] 51-02-PLAN.md — Runtime delivery rewrite: callback uses `openclaw agent --deliver` + structured prompt contract + group/DM/error tests
+- [ ] 51-03-PLAN.md — CLI route management and queue-time route snapshot wiring in project/add commands + regression tests
+
+Wave structure:
+- Wave 1: 51-01 (route types, DB columns, resolver foundation)
+- Wave 2: 51-02 + 51-03 in parallel (runtime callback transport + CLI/add wiring, both depend on 51-01)
+
+**Details:**
+Read `/home/luca/.openclaw/workspace/requirements/pilot-openclaw-agent-deliver-notifications.md` for full spec.
