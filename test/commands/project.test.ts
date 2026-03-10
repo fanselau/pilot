@@ -18,6 +18,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     path: '/test/project',
     owner: 'agent:main:main',
+    notifyOpenClawRoute: null,
     status: 'active' as const,
     blockedReason: null,
     blockedAt: null,
@@ -47,6 +48,7 @@ const mockGetProject = vi.fn();
 const mockBlockProject = vi.fn();
 const mockUnblockProject = vi.fn();
 const mockUpdateProjectOwner = vi.fn();
+const mockUpdateProjectNotifyOpenClawRoute = vi.fn();
 const mockGetProjectJobCounts = vi.fn();
 const mockGetAllProjects = vi.fn();
 
@@ -55,6 +57,7 @@ vi.mock('../../src/core/db.js', () => ({
   blockProject: (path: string, reason: string) => mockBlockProject(path, reason),
   unblockProject: (path: string) => mockUnblockProject(path),
   updateProjectOwner: (path: string, owner: string) => mockUpdateProjectOwner(path, owner),
+  updateProjectNotifyOpenClawRoute: (path: string, route: unknown) => mockUpdateProjectNotifyOpenClawRoute(path, route),
   getProjectJobCounts: (path: string) => mockGetProjectJobCounts(path),
   getAllProjects: () => mockGetAllProjects(),
 }));
@@ -251,6 +254,98 @@ describe('projectCommand', () => {
     const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
     expect(payload.updated).toBe(true);
     expect(payload.owner).toBe('agent:new:owner');
+  });
+
+  it('sets structured OpenClaw route with --notify-openclaw flags', async () => {
+    mockProject = makeProject({ status: 'active' });
+
+    await projectCommand('/test/project', {
+      notifyOpenclaw: true,
+      notifyAgent: 'benefitu',
+      notifyChannel: 'telegram',
+      notifyTo: 'telegram:-5181925291',
+      notifyAccount: 'benefitu',
+    });
+
+    expect(mockUpdateProjectNotifyOpenClawRoute).toHaveBeenCalledWith('/test/project', {
+      kind: 'openclaw-agent-deliver',
+      agentId: 'benefitu',
+      channel: 'telegram',
+      to: 'telegram:-5181925291',
+      accountId: 'benefitu',
+    });
+  });
+
+  it('clears structured OpenClaw route with --clear-notify-openclaw', async () => {
+    mockProject = makeProject({
+      status: 'active',
+      notifyOpenClawRoute: {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
+    });
+
+    await projectCommand('/test/project', { clearNotifyOpenclaw: true });
+
+    expect(mockUpdateProjectNotifyOpenClawRoute).toHaveBeenCalledWith('/test/project', null);
+  });
+
+  it('fails with exit 2 on partial notify route input', async () => {
+    mockProject = makeProject({ status: 'active' });
+
+    await expect(
+      projectCommand('/test/project', {
+        notifyOpenclaw: true,
+        notifyAgent: 'benefitu',
+      }),
+    ).rejects.toThrow('process.exit called');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    const stderr = stderrSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
+    expect(stderr).toContain('Missing route fields');
+  });
+
+  it('fails with exit 2 when route fields are passed without --notify-openclaw', async () => {
+    mockProject = makeProject({ status: 'active' });
+
+    await expect(
+      projectCommand('/test/project', {
+        notifyAgent: 'benefitu',
+      }),
+    ).rejects.toThrow('process.exit called');
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    const stderr = stderrSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
+    expect(stderr).toContain('Route fields require --notify-openclaw');
+  });
+
+  it('includes structured route in JSON output when configured', async () => {
+    mockJsonMode = true;
+    mockProject = makeProject({
+      status: 'active',
+      notifyOpenClawRoute: {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+        accountId: 'benefitu',
+      },
+    });
+
+    await projectCommand('/test/project', {});
+
+    expect(mockOutputJson).toHaveBeenCalledOnce();
+    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
+    const proj = payload['project'] as Record<string, unknown>;
+    expect(proj.notifyOpenclawRoute).toEqual({
+      kind: 'openclaw-agent-deliver',
+      agentId: 'benefitu',
+      channel: 'telegram',
+      to: 'telegram:-5181925291',
+      accountId: 'benefitu',
+    });
   });
 
   // Test: info shows blocked reason for blocked projects

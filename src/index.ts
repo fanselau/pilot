@@ -210,6 +210,12 @@ program
   .option('--block <reason>', 'Block project with reason')
   .option('--unblock', 'Unblock a blocked project')
   .option('--owner <agentId>', 'Change project owner')
+  .option('--notify-openclaw', 'Set a structured OpenClaw notify route on this project')
+  .option('--notify-agent <agentId>', 'Route field: target OpenClaw agent id')
+  .option('--notify-channel <channel>', 'Route field: reply channel (e.g. telegram)')
+  .option('--notify-to <target>', 'Route field: reply target (e.g. telegram:-123456)')
+  .option('--notify-account <accountId>', 'Route field: optional reply account id')
+  .option('--clear-notify-openclaw', 'Clear the structured OpenClaw notify route for this project')
   .option('--jobs', 'Show recent jobs for this project')
   .action(async (path: string, opts: Record<string, unknown>) => {
     const { projectCommand } = await import('./commands/project.js');
