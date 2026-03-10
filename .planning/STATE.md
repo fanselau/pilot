@@ -8,7 +8,7 @@
 Phase: 51 (Pilot notifications via `openclaw agent --deliver`)
 Plan: 3 of 3 in current phase
 Status: Phase complete
-Last activity: 2026-03-10 - Completed 51-03-PLAN.md
+Last activity: 2026-03-10 - Completed quick task 079
 
 Progress: ██████████ 41/41 plans (100%)
 **Next Plan:** None (phase complete)
@@ -197,6 +197,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 076 | Add /hooks/wake comment to callback.ts | 2026-03-06 | e4a8d0c | [076-add-a-comment-to-the-top-of-src-core-cal](./quick/076-add-a-comment-to-the-top-of-src-core-cal/) |
 | 077 | Update OpenClaw SKILL.md — Recovery, Grace Period, Observability, Quick Reference cross-check for phases 43-45 | 2026-03-08 | 76aa779 | [077-update-the-openclaw-skill-md-at-openclaw](./quick/077-update-the-openclaw-skill-md-at-openclaw/) |
 | 078 | Upgrade OpenAI models from gpt-5.3-codex to gpt-5.4. Replace all occurrences of openai/gpt-5.3-codex with openai/gpt-5.4 (no codex suffix). Update variant mapping so xhigh becomes high and high becomes medium, while keeping none/minimal/low/medium/high support. Apply this to all relevant AGENT_MODELS tables: every openai-only entry and hybrid check-role agents (codebase-mapper, verifier, plan-checker, integration-checker, plus _top:judge scope). Update comments that still mention codex/xhigh-high to reference gpt-5.4 and high/medium. Update all tests that reference gpt-5.3-codex and adjust expected variants to match the new mapping. Run the full test suite. Also update GSD agent defaults so any agent with model openai/gpt-5.3-codex becomes openai/gpt-5.4, variant xhigh becomes high, and variant high becomes medium. | 2026-03-09 | c1ae6ea | [078-upgrade-openai-models-from-gpt-5-3-codex](./quick/078-upgrade-openai-models-from-gpt-5-3-codex/) |
+| 079 | Provenance-aware dirty-start launch guard — persist per-project dirty baselines, allow continuation-safe Pilot dirt, and block manual/untracked drift, HEAD movement, and conflict states with explicit reasons | 2026-03-10 | 4b81ab4 | [079-provenance-aware-dirty-guard-for-pilot-p](./quick/079-provenance-aware-dirty-guard-for-pilot-p/) |
 
 ## Accumulated Context
 
@@ -646,9 +647,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 51-02 | OpenClaw notifications are delivered via `openclaw agent --deliver` with explicit reply flags from canonical routes | Keeps group/DM delivery on one transport path with deterministic argument construction |
 | 51-03 | Project notify route fields require `--notify-openclaw` and are managed via explicit set/clear semantics | Prevents partial/ambiguous route mutations and keeps operator intent explicit |
 | 51-03 | addCommand snapshots resolved notify routes at queue time and rejects explicit `--notify` agent mismatches | Keeps runtime delivery deterministic per job and blocks wrong-agent route drift early |
+| quick-079 | Dirty-start launch checks require exact branch/head/porcelain match against the latest per-project baseline | Allows safe same-project continuation while conservatively blocking ambiguous manual or unattributed dirt |
+| quick-079 | `project_dirty_baselines.job_id` is stored as required attribution text without foreign-key coupling | Baseline attribution must survive job lifecycle cleanup and synthetic test fixtures without write failures |
 
 ## Session Continuity
 
-Last session: 2026-03-10T16:23:51Z
-Stopped at: Completed 51-03-PLAN.md
+Last session: 2026-03-10T20:29:00Z
+Stopped at: Completed quick task 079
 Resume file: None
