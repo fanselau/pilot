@@ -41,9 +41,19 @@ import {
   getProject,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  getLatestProjectDirtyBaseline,
+  upsertProjectDirtyBaseline,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
-import { isGitWorktree, isWorktreeDirty, resolveCommitOrNull } from './git-recovery.js';
+import {
+  isGitWorktree,
+  isWorktreeDirty,
+  resolveCommitOrNull,
+  getBranchOrNull,
+  getPorcelainStatus,
+  detectGitConflictState,
+  classifyDirtyStart,
+} from './git-recovery.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import {
@@ -521,6 +531,7 @@ class Runner {
    */
   private async launch(job: Job): Promise<void> {
     const projectDir = resolveProjectDir(job.project);
+    let preflightPassed = false;
 
     // Warn when picking up a job for an unregistered project (non-blocking)
     const projectRecord = getProject(job.project);
@@ -543,17 +554,24 @@ class Runner {
       const startedDirty = await isWorktreeDirty(projectDir);
       updateJobRecoveryStart(job.id, gitBaseCommit, startedDirty);
 
-      if (startedDirty && !job.allowDirtyStart) {
+      const conflictState = await detectGitConflictState(projectDir);
+      if (conflictState.hasConflictState) {
         throw new Error(
-          `Refusing to start job ${job.id}. What: launch was refused. Why: worktree is dirty and clean-start safety is enabled. Next: commit (\`git commit\`), stash (\`git stash\`), or discard (\`git reset --hard && git clean -fd\`) local changes, then retry. Use \`pilot add ... --force-dirty\` only when faster start matters more than reliable undo/recovery checkpoints.`,
+          `Refusing to start job ${job.id}. blocked: merge/rebase/conflict state detected`,
         );
       }
 
-      if (startedDirty && job.allowDirtyStart) {
-        process.stderr.write(
-          `[runner] Warning: job ${job.id} is starting with a dirty worktree (--force-dirty). Recovery guarantees are weaker for this run.\n`,
-        );
+      if (startedDirty) {
+        const baseline = getLatestProjectDirtyBaseline(job.project);
+        const dirtyStart = await classifyDirtyStart(projectDir, baseline);
+        if (!dirtyStart.allowed) {
+          throw new Error(`Refusing to start job ${job.id}. ${dirtyStart.reason}`);
+        }
+
+        process.stderr.write(`[runner] ${dirtyStart.reason} (${job.id})\n`);
       }
+
+      preflightPassed = true;
 
       // Inject matching skills into project's .opencode/skills/ directory
       const resolvedSkills = resolveSkillsForJob(job.categories ?? null);
@@ -712,6 +730,9 @@ class Runner {
 
       if (allStepsCompleted) {
         await this.captureRecoveryHead(job.id, projectDir);
+        if (preflightPassed) {
+          await this.captureProjectDirtyBaseline(job.id, job.project, projectDir);
+        }
         this.collectActualModels(job.id);
 
         markCompleted(job.id);
@@ -728,6 +749,9 @@ class Runner {
     } catch (err) {
       const error = errMsg(err);
       await this.captureRecoveryHead(job.id, projectDir);
+      if (preflightPassed) {
+        await this.captureProjectDirtyBaseline(job.id, job.project, projectDir);
+      }
       this.collectActualModels(job.id);
       try {
         markFailed(job.id, error);
@@ -1207,6 +1231,33 @@ class Runner {
     } catch (err) {
       process.stderr.write(
         `[runner] Warning: failed to capture git head checkpoint for ${jobId}: ${errMsg(err)}\n`,
+      );
+    }
+  }
+
+  private async captureProjectDirtyBaseline(
+    jobId: string,
+    project: string,
+    projectDir: string,
+  ): Promise<void> {
+    try {
+      const [branch, headCommit, statusPorcelain] = await Promise.all([
+        getBranchOrNull(projectDir),
+        resolveCommitOrNull(projectDir, 'HEAD'),
+        getPorcelainStatus(projectDir),
+      ]);
+
+      upsertProjectDirtyBaseline({
+        project,
+        branch,
+        headCommit,
+        statusPorcelain,
+        recordedAt: new Date().toISOString(),
+        jobId,
+      });
+    } catch (err) {
+      process.stderr.write(
+        `[runner] Warning: failed to persist dirty baseline for ${jobId}: ${errMsg(err)}\n`,
       );
     }
   }
