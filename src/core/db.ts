@@ -13,7 +13,7 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig, getConfigFileDefaults } from './config.js';
-import type { Job, JobStep, JobScope, ModelProfile, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow } from './types.js';
+import type { Job, JobStep, JobScope, ModelProfile, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow, OpenClawDeliverRoute } from './types.js';
 import { AGENT_MODELS } from './models.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -157,6 +157,7 @@ interface JobRow {
   actual_models: string | null;
   callback_url: string | null;
   callback_session_key: string | null;
+  notify_route: string | null;
   categories: string | null;
   git_base_commit: string | null;
   git_head_commit: string | null;
@@ -168,16 +169,46 @@ interface JobRow {
 interface ProjectRow {
   path: string;
   owner: string | null;
+  notify_openclaw_route: string | null;
   status: string;
   blocked_reason: string | null;
   blocked_at: string | null;
   created_at: string;
 }
 
+function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDeliverRoute | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<OpenClawDeliverRoute>;
+    if (
+      parsed
+      && parsed.kind === 'openclaw-agent-deliver'
+      && typeof parsed.agentId === 'string'
+      && typeof parsed.channel === 'string'
+      && typeof parsed.to === 'string'
+      && (parsed.accountId === undefined || typeof parsed.accountId === 'string')
+    ) {
+      return {
+        kind: 'openclaw-agent-deliver',
+        agentId: parsed.agentId,
+        channel: parsed.channel,
+        to: parsed.to,
+        ...(parsed.accountId !== undefined ? { accountId: parsed.accountId } : {}),
+      };
+    }
+  } catch {
+    // Invalid JSON - treat as missing route
+  }
+
+  return null;
+}
+
 function rowToProject(row: ProjectRow): Project {
   return {
     path: row.path,
     owner: row.owner,
+    notifyOpenClawRoute: parseOpenClawDeliverRoute(row.notify_openclaw_route),
     status: row.status as ProjectStatus,
     blockedReason: row.blocked_reason,
     blockedAt: row.blocked_at,
@@ -215,6 +246,7 @@ function rowToJob(row: JobRow): Job {
     })(),
     callbackUrl: row.callback_url ?? null,
     callbackSessionKey: row.callback_session_key ?? null,
+    notifyRoute: parseOpenClawDeliverRoute(row.notify_route),
     categories: (() => {
       if (!row.categories) return null;
       try { return JSON.parse(row.categories) as string[]; } catch { return null; }
@@ -247,6 +279,7 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)",
     "ALTER TABLE jobs ADD COLUMN callback_url TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN callback_session_key TEXT DEFAULT NULL",
+    "ALTER TABLE jobs ADD COLUMN notify_route TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN categories TEXT DEFAULT NULL",
     "ALTER TABLE jobs ADD COLUMN timeout INTEGER DEFAULT 0",
     'ALTER TABLE jobs ADD COLUMN git_base_commit TEXT',
@@ -254,6 +287,7 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN allow_dirty_start INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE projects ADD COLUMN notify_openclaw_route TEXT DEFAULT NULL',
   ];
   for (const sql of migrations) {
     try {
@@ -374,6 +408,7 @@ function addJob(
   timeout?: number,
   allowDirtyStart?: boolean,
   skipGracePeriod?: boolean,
+  notifyRoute?: OpenClawDeliverRoute | null,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -382,9 +417,25 @@ function addJob(
   const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start, skip_grace_period)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, project, scope, description, requirementPath ?? null, profile, provider, dependsOn ?? null, parentJobId ?? null, callbackSessionKey ?? null, callbackUrl ?? null, timeout ?? 0, allowDirtyStart ? 1 : 0, skipGracePeriod ? 1 : 0);
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start, skip_grace_period, notify_route)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    project,
+    scope,
+    description,
+    requirementPath ?? null,
+    profile,
+    provider,
+    dependsOn ?? null,
+    parentJobId ?? null,
+    callbackSessionKey ?? null,
+    callbackUrl ?? null,
+    timeout ?? 0,
+    allowDirtyStart ? 1 : 0,
+    skipGracePeriod ? 1 : 0,
+    notifyRoute ? JSON.stringify(notifyRoute) : null,
+  );
 
   return getJob(id)!;
 }
@@ -1068,6 +1119,14 @@ function updateProjectOwner(path: string, owner: string): void {
   db.prepare('UPDATE projects SET owner = ? WHERE path = ?').run(owner, path);
 }
 
+function updateProjectNotifyOpenClawRoute(path: string, route: OpenClawDeliverRoute | null): void {
+  const db = getDb();
+  db.prepare('UPDATE projects SET notify_openclaw_route = ? WHERE path = ?').run(
+    route ? JSON.stringify(route) : null,
+    path,
+  );
+}
+
 /**
  * Block a project: set status='blocked', record reason and timestamp.
  */
@@ -1261,6 +1320,7 @@ export {
   getProject,
   getAllProjects,
   updateProjectOwner,
+  updateProjectNotifyOpenClawRoute,
   blockProject,
   unblockProject,
   getProjectJobCounts,

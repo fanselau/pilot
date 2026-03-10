@@ -87,6 +87,14 @@ export interface ModelEntry {
   variant?: string;
 }
 
+export interface OpenClawDeliverRoute {
+  kind: 'openclaw-agent-deliver';
+  agentId: string;
+  channel: string;
+  to: string;
+  accountId?: string;
+}
+
 export interface Job {
   id: string;                // 4 alphanumeric chars
   project: string;
@@ -113,6 +121,7 @@ export interface Job {
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
   callbackUrl: string | null;     // custom webhook URL for job completion notification
   callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
+  notifyRoute: OpenClawDeliverRoute | null; // queue-time snapshot of structured OpenClaw delivery route
   categories: string[] | null;    // user-assigned skill categories for the job
   gitBaseCommit: string | null;
   gitHeadCommit: string | null;
@@ -254,6 +263,7 @@ export type ProjectStatus = 'active' | 'blocked';
 export interface Project {
   path: string;              // absolute project path (primary key)
   owner: string | null;      // agent ID e.g. "main"
+  notifyOpenClawRoute: OpenClawDeliverRoute | null; // structured OpenClaw deliver route
   status: ProjectStatus;
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601

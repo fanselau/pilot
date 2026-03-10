@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { DelegationPlan } from '../../src/core/types.js';
+import type { DelegationPlan, OpenClawDeliverRoute } from '../../src/core/types.js';
 import { _resetConfigCache } from '../../src/core/config.js';
 
 // Import the module under test — will fail until db.ts is implemented
@@ -39,6 +39,7 @@ import {
   getProject,
   getAllProjects,
   updateProjectOwner,
+  updateProjectNotifyOpenClawRoute,
   blockProject,
   unblockProject,
 } from '../../src/core/db.js';
@@ -125,6 +126,47 @@ describe('pilot.db', () => {
       const job = addJob('proj', 'quick', 'plain task');
       expect(job.callbackSessionKey).toBeNull();
       expect(job.callbackUrl).toBeNull();
+      expect(job.notifyRoute).toBeNull();
+    });
+
+    it('stores notifyRoute snapshot and round-trips through getJob', () => {
+      const route: OpenClawDeliverRoute = {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'benefitu',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+        accountId: 'benefitu',
+      };
+
+      const job = addJob(
+        'proj',
+        'quick',
+        'notify route task',
+        undefined,
+        'balanced',
+        'claude-only',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        false,
+        false,
+        route,
+      );
+
+      expect(job.notifyRoute).toEqual(route);
+      expect(getJob(job.id)!.notifyRoute).toEqual(route);
+    });
+
+    it('maps malformed notify_route JSON to null without crashing', () => {
+      const db = _getTestDb();
+      const job = addJob('proj', 'quick', 'bad notify route');
+      db.prepare('UPDATE jobs SET notify_route = ? WHERE id = ?').run('{bad-json', job.id);
+
+      const fetched = getJob(job.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.notifyRoute).toBeNull();
     });
 
     it('stores allowDirtyStart=true when explicitly provided', () => {
@@ -1067,6 +1109,7 @@ describe('managed projects', () => {
       expect(p).not.toBeNull();
       expect(p!.path).toBe('/path/to/proj');
       expect(p!.owner).toBe('agent:main:main');
+      expect(p!.notifyOpenClawRoute).toBeNull();
       expect(p!.status).toBe('active');
     });
 
@@ -1087,6 +1130,45 @@ describe('managed projects', () => {
       registerProject('/path/to/proj', 'old-owner');
       updateProjectOwner('/path/to/proj', 'new-owner');
       expect(getProject('/path/to/proj')!.owner).toBe('new-owner');
+    });
+  });
+
+  describe('updateProjectNotifyOpenClawRoute', () => {
+    it('persists structured notify route and round-trips through getProject', () => {
+      registerProject('/path/to/proj', 'owner');
+      const route: OpenClawDeliverRoute = {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:6102973659',
+        accountId: 'gorb',
+      };
+
+      updateProjectNotifyOpenClawRoute('/path/to/proj', route);
+      expect(getProject('/path/to/proj')!.notifyOpenClawRoute).toEqual(route);
+    });
+
+    it('clears stored route when set to null', () => {
+      registerProject('/path/to/proj', 'owner');
+      updateProjectNotifyOpenClawRoute('/path/to/proj', {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:6102973659',
+      });
+
+      updateProjectNotifyOpenClawRoute('/path/to/proj', null);
+      expect(getProject('/path/to/proj')!.notifyOpenClawRoute).toBeNull();
+    });
+
+    it('maps malformed notify_openclaw_route JSON to null without crashing', () => {
+      const db = _getTestDb();
+      registerProject('/path/to/proj', 'owner');
+      db.prepare('UPDATE projects SET notify_openclaw_route = ? WHERE path = ?').run('{not-json', '/path/to/proj');
+
+      const project = getProject('/path/to/proj');
+      expect(project).not.toBeNull();
+      expect(project!.notifyOpenClawRoute).toBeNull();
     });
   });
 
