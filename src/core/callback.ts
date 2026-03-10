@@ -1,167 +1,56 @@
-// Uses: /hooks/wake
 /**
- * Job completion callback — OpenClaw /hooks/wake system event.
+ * Job completion callback — OpenClaw `agent --deliver` notification.
  *
  * Fire-and-forget notifications — NEVER throws. All failures are logged to stderr.
- * Used to wake the main agent session when a pilot job completes or fails.
- * The wake endpoint enqueues a system event and triggers an immediate heartbeat,
- * so the agent can act on it (run tests, review, create PRs, notify the user).
- *
- * Configuration:
- *   PILOT_OPENCLAW_HOOKS_URL   — base webhook URL (default: http://127.0.0.1:18789/hooks/agent)
- *                                 /agent suffix is replaced with /wake at runtime
- *   PILOT_OPENCLAW_HOOKS_TOKEN — auth token for the hooks endpoint
- *
- * Pure core module — no UI dependencies.
+ * Uses route-first resolution (job route -> project route -> strict legacy derive)
+ * and delivers via OpenClaw CLI with explicit reply routing.
  */
 
-import { getConfig } from './config.js';
+import { getProject } from './db.js';
 import { errMsg } from '../util/errors.js';
+import { resolveNotifyRoute } from './notify-route.js';
+import { executeOpenClawDeliver } from './openclaw-deliver.js';
 import type { Job } from './types.js';
 
-/**
- * Private IP patterns to reject for custom callback URLs.
- * Prevents SSRF attacks against internal services.
- */
-const PRIVATE_IP_PATTERNS = [
-  /^https?:\/\/10\./,
-  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./,
-  /^https?:\/\/192\.168\./,
-  /^https?:\/\/127\./,
-  /^https?:\/\/localhost([:\/]|$)/i,
-  /^https?:\/\/0\.0\.0\.0([:\/]|$)/,
-  /^https?:\/\/\[::1\]/,
-];
-
-/**
- * Validate that a custom callback URL is safe to call.
- * Returns null if valid, or an error message string if rejected.
- */
-function validateCallbackUrl(url: string): string | null {
-  if (!url.startsWith('https://')) {
-    return 'non-HTTPS callback URL';
-  }
-  for (const pattern of PRIVATE_IP_PATTERNS) {
-    if (pattern.test(url)) {
-      return 'private IP callback URL';
-    }
-  }
-  return null;
+interface ParsedJudgeVerdict {
+  verdict: string;
+  confidence: number;
+  reason?: string;
 }
 
-/**
- * Notify the originating OpenClaw session that a job has completed or failed.
- *
- * Fire-and-forget: returns true on success, false on failure. NEVER throws.
- *
- * Sends POST to job.callbackUrl (or falls back to PILOT_OPENCLAW_HOOKS_URL).
- * If neither is configured, returns false silently.
- *
- * For milestone coordinator jobs (scope === 'milestone'), skips notification
- * since they just spawn children — the children carry the real work.
- *
- * @param job - The completed/failed job (must have completedAt set)
- * @returns true if webhook was sent successfully, false otherwise
- */
-async function notifyJobCompletion(job: Job): Promise<boolean> {
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+function parseJudgeVerdict(value: string | null): ParsedJudgeVerdict | null {
+  if (!value) return null;
+
   try {
-    // Don't notify for milestone coordinator jobs
-    if (job.scope === 'milestone') return false;
-
-    const config = getConfig();
-    const url = job.callbackUrl ?? config.openclawHooksUrl;
-    const token = config.openclawHooksToken;
-
-    // No URL configured — silent skip
-    if (!url) return false;
-
-    // Determine if this is a trusted URL (matches configured openclawHooksUrl)
-    const isTrustedUrl = url === config.openclawHooksUrl;
-
-    // Validate custom (non-trusted) callback URLs
-    if (!isTrustedUrl) {
-      const validationError = validateCallbackUrl(url);
-      if (validationError) {
-        process.stderr.write(`[callback] Rejecting ${validationError}: ${url}\n`);
-        return false;
-      }
+    const parsed = JSON.parse(value) as Partial<ParsedJudgeVerdict>;
+    if (typeof parsed.verdict !== 'string' || typeof parsed.confidence !== 'number') {
+      return null;
     }
-
-    // Calculate duration
-    const duration = formatDuration(job.startedAt, job.completedAt);
-
-    // Extract judge verdict if available
-    let verdict: { verdict: string; confidence: number; reason: string } | null = null;
-    if (job.judgeVerdict) {
-      try {
-        verdict = JSON.parse(job.judgeVerdict) as { verdict: string; confidence: number; reason: string };
-      } catch { /* ignore parse errors */ }
-    }
-
-    // callbackSessionKey now stores just the agent ID (e.g. "main")
-    const agentId = job.callbackSessionKey;
-    if (!agentId) return false;
-
-    // Build message
-    const lines = [
-      `🏗️ Pilot job ${job.id} (${job.scope}) ${job.status}.`,
-      `Project: ${job.project}`,
-      `Description: ${job.description.length > 100 ? job.description.slice(0, 100) + '…' : job.description}`,
-      `Duration: ${duration}`,
-    ];
-    if (job.error) {
-      lines.push(`Error: ${job.error.slice(0, 200)}`);
-    }
-    if (verdict?.reason) {
-      lines.push(`Verdict: ${verdict.verdict} (confidence: ${verdict.confidence}%)`);
-      lines.push(`Reason: ${verdict.reason.slice(0, 300)}`);
-    }
-    // Use /hooks/wake to enqueue a system event in the main session.
-    // This triggers an immediate heartbeat so the main agent can act on it
-    // (run tests, review, create PRs, notify the user).
-    const wakeUrl = isTrustedUrl ? url.replace(/\/agent$/, '/wake') : url;
-
-    const body = {
-      text: lines.join('\n'),
-      mode: 'now',
+    return {
+      verdict: parsed.verdict,
+      confidence: parsed.confidence,
+      ...(typeof parsed.reason === 'string' ? { reason: parsed.reason } : {}),
     };
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    // Only send auth token to trusted openclawHooksUrl — never to custom URLs
-    if (token && isTrustedUrl) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const resp = await fetch(wakeUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000), // 10s timeout
-    });
-
-    return resp.ok;
-  } catch (err) {
-    process.stderr.write(
-      `[callback] notifyJobCompletion failed for job ${job.id}: ${errMsg(err)}\n`,
-    );
-    return false;
+  } catch {
+    return null;
   }
 }
 
-/**
- * Format duration from startedAt to completedAt as human-readable string.
- * Returns "unknown" if either timestamp is missing.
- */
 function formatDuration(startedAt: string | null, completedAt: string | null): string {
   if (!startedAt || !completedAt) return 'unknown';
+
   try {
     const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
     if (ms < 0 || Number.isNaN(ms)) return 'unknown';
+
     const totalMinutes = Math.round(ms / 60_000);
     if (totalMinutes < 1) return '<1m';
     if (totalMinutes < 60) return `${totalMinutes}m`;
+
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
@@ -170,4 +59,72 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   }
 }
 
-export { notifyJobCompletion };
+function nextStepGuidance(job: Job): string {
+  if (job.status === 'completed') {
+    return 'Acknowledge completion and continue with the next planned item.';
+  }
+  return `Share the failure clearly and suggest follow-up (e.g. pilot retry ${job.id} after fixing root cause).`;
+}
+
+function buildDeliveryPrompt(job: Job): string {
+  const verdict = parseJudgeVerdict(job.judgeVerdict);
+  const lines: string[] = [
+    'Pilot job update:',
+    `job_id: ${job.id}`,
+    `project: ${job.project}`,
+    `description: ${truncate(job.description, 180)}`,
+    `status: ${job.status}`,
+    `duration: ${formatDuration(job.startedAt, job.completedAt)}`,
+  ];
+
+  if (verdict) {
+    lines.push(`verdict: ${verdict.verdict}`);
+    lines.push(`confidence: ${verdict.confidence}%`);
+    if (verdict.reason) {
+      lines.push(`verdict_reason: ${truncate(verdict.reason, 300)}`);
+    }
+  }
+
+  if (job.error) {
+    lines.push(`error: ${truncate(job.error, 300)}`);
+  }
+
+  lines.push(`next_step: ${nextStepGuidance(job)}`);
+  lines.push('Reply naturally in your target chat with a concise, helpful update.');
+
+  return lines.join('\n');
+}
+
+async function notifyJobCompletion(job: Job): Promise<boolean> {
+  try {
+    if (job.scope === 'milestone') return false;
+
+    const project = getProject(job.project);
+    const routeResult = resolveNotifyRoute(job, project);
+    if (!routeResult.ok) {
+      process.stderr.write(
+        `[callback] OpenClaw notify route error for job ${job.id} (${routeResult.error.code}): ${routeResult.error.message}\n`,
+      );
+      return false;
+    }
+
+    const prompt = buildDeliveryPrompt(job);
+    const delivery = await executeOpenClawDeliver(routeResult.route, prompt);
+
+    if (!delivery.ok) {
+      process.stderr.write(
+        `[callback] OpenClaw delivery failed for job ${job.id}: ${delivery.error ?? 'unknown error'}\n`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    process.stderr.write(
+      `[callback] notifyJobCompletion failed for job ${job.id}: ${errMsg(error)}\n`,
+    );
+    return false;
+  }
+}
+
+export { buildDeliveryPrompt, notifyJobCompletion };
