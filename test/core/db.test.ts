@@ -26,6 +26,8 @@ import {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  upsertProjectDirtyBaseline,
+  getLatestProjectDirtyBaseline,
   _getTestDb,
   claimNextLaunchable,
   forceQuitJob,
@@ -251,6 +253,70 @@ describe('pilot.db', () => {
       expect(updated!.gitBaseCommit).toBe('base-two');
       expect(updated!.gitHeadCommit).toBe('head-two');
       expect(updated!.startedDirty).toBe(false);
+    });
+  });
+
+  describe('project dirty baseline persistence', () => {
+    it('round-trips all baseline metadata fields', () => {
+      const baseline = {
+        project: '/repo',
+        branch: 'main',
+        headCommit: 'abc1234',
+        statusPorcelain: ' M src/core/runner.ts\n?? notes.txt',
+        recordedAt: '2026-03-10T12:34:56.000Z',
+        jobId: 'ab12',
+      };
+
+      upsertProjectDirtyBaseline(baseline);
+
+      expect(getLatestProjectDirtyBaseline('/repo')).toEqual(baseline);
+    });
+
+    it('replaces the previous baseline for the same project', () => {
+      upsertProjectDirtyBaseline({
+        project: '/repo',
+        branch: 'main',
+        headCommit: 'oldhead',
+        statusPorcelain: ' M old-file.ts',
+        recordedAt: '2026-03-10T01:00:00.000Z',
+        jobId: 'old1',
+      });
+
+      upsertProjectDirtyBaseline({
+        project: '/repo',
+        branch: 'feature/provenance',
+        headCommit: 'newhead',
+        statusPorcelain: ' M src/core/git-recovery.ts',
+        recordedAt: '2026-03-10T02:00:00.000Z',
+        jobId: 'new2',
+      });
+
+      expect(getLatestProjectDirtyBaseline('/repo')).toEqual({
+        project: '/repo',
+        branch: 'feature/provenance',
+        headCommit: 'newhead',
+        statusPorcelain: ' M src/core/git-recovery.ts',
+        recordedAt: '2026-03-10T02:00:00.000Z',
+        jobId: 'new2',
+      });
+    });
+
+    it('preserves job id, timestamp, and porcelain payload exactly for attribution', () => {
+      const payload = ' M tracked.ts\nA  added.ts\n?? scratch.log';
+      upsertProjectDirtyBaseline({
+        project: '/repo',
+        branch: null,
+        headCommit: null,
+        statusPorcelain: payload,
+        recordedAt: '2026-03-10T03:00:00.321Z',
+        jobId: 'z9y8',
+      });
+
+      const stored = getLatestProjectDirtyBaseline('/repo');
+      expect(stored).not.toBeNull();
+      expect(stored!.jobId).toBe('z9y8');
+      expect(stored!.recordedAt).toBe('2026-03-10T03:00:00.321Z');
+      expect(stored!.statusPorcelain).toBe(payload);
     });
   });
 

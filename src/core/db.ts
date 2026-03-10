@@ -13,7 +13,19 @@ import type { Database as DatabaseType } from './sqlite.js';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getConfig, getConfigFileDefaults } from './config.js';
-import type { Job, JobStep, JobScope, ModelProfile, DelegationPlan, Project, ProjectStatus, ModelProfileRow, ProviderModeRow, OpenClawDeliverRoute } from './types.js';
+import type {
+  Job,
+  JobStep,
+  JobScope,
+  ModelProfile,
+  DelegationPlan,
+  Project,
+  ProjectStatus,
+  ModelProfileRow,
+  ProviderModeRow,
+  OpenClawDeliverRoute,
+  ProjectDirtyBaseline,
+} from './types.js';
 import { AGENT_MODELS } from './models.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -77,6 +89,17 @@ CREATE TABLE IF NOT EXISTS projects (
   blocked_reason TEXT,
   blocked_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+const CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS project_dirty_baselines (
+  project TEXT PRIMARY KEY,
+  branch TEXT,
+  head_commit TEXT,
+  status_porcelain TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  job_id TEXT NOT NULL
 );
 `;
 
@@ -176,6 +199,15 @@ interface ProjectRow {
   created_at: string;
 }
 
+interface ProjectDirtyBaselineRow {
+  project: string;
+  branch: string | null;
+  head_commit: string | null;
+  status_porcelain: string;
+  recorded_at: string;
+  job_id: string;
+}
+
 function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDeliverRoute | null {
   if (!value) return null;
 
@@ -213,6 +245,17 @@ function rowToProject(row: ProjectRow): Project {
     blockedReason: row.blocked_reason,
     blockedAt: row.blocked_at,
     createdAt: row.created_at,
+  };
+}
+
+function rowToProjectDirtyBaseline(row: ProjectDirtyBaselineRow): ProjectDirtyBaseline {
+  return {
+    project: row.project,
+    branch: row.branch,
+    headCommit: row.head_commit,
+    statusPorcelain: row.status_porcelain,
+    recordedAt: row.recorded_at,
+    jobId: row.job_id,
   };
 }
 
@@ -343,6 +386,7 @@ function openPilotDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
@@ -372,6 +416,7 @@ function _getTestDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
@@ -767,6 +812,43 @@ function updateJobRecoveryStart(
 function updateJobRecoveryHead(id: string, gitHeadCommit: string | null): void {
   const db = getDb();
   db.prepare('UPDATE jobs SET git_head_commit = ? WHERE id = ?').run(gitHeadCommit, id);
+}
+
+function upsertProjectDirtyBaseline(baseline: ProjectDirtyBaseline): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO project_dirty_baselines (
+      project,
+      branch,
+      head_commit,
+      status_porcelain,
+      recorded_at,
+      job_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(project) DO UPDATE SET
+      branch = excluded.branch,
+      head_commit = excluded.head_commit,
+      status_porcelain = excluded.status_porcelain,
+      recorded_at = excluded.recorded_at,
+      job_id = excluded.job_id
+  `).run(
+    baseline.project,
+    baseline.branch,
+    baseline.headCommit,
+    baseline.statusPorcelain,
+    baseline.recordedAt,
+    baseline.jobId,
+  );
+}
+
+function getLatestProjectDirtyBaseline(project: string): ProjectDirtyBaseline | null {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT * FROM project_dirty_baselines WHERE project = ?',
+  ).get(project) as ProjectDirtyBaselineRow | undefined;
+
+  return row ? rowToProjectDirtyBaseline(row) : null;
 }
 
 // ── Force Quit ────────────────────────────────────────────────────────
@@ -1344,6 +1426,8 @@ export {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  upsertProjectDirtyBaseline,
+  getLatestProjectDirtyBaseline,
   claimNextLaunchable,
   forceQuitJob,
   recordStep,

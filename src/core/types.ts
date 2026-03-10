@@ -270,6 +270,15 @@ export interface Project {
   createdAt: string;
 }
 
+export interface ProjectDirtyBaseline {
+  project: string;
+  branch: string | null;
+  headCommit: string | null;
+  statusPorcelain: string;
+  recordedAt: string;
+  jobId: string;
+}
+
 // ── Skills System ──────────────────────────────────────────────────────────
 
 /** A single installed skill entry in the manifest. */
