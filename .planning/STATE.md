@@ -6,13 +6,13 @@
 ## Current Position
 
 Phase: 51 (Pilot notifications via `openclaw agent --deliver`)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-10 - Completed 51-02-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-10 - Completed 51-03-PLAN.md
 
-Progress: ██████████ 40/40 plans (100%)
-**Next Plan:** 51-03-PLAN.md — CLI route management and queue-time route snapshot wiring
-**Next Phase:** 51 (Pilot notifications via `openclaw agent --deliver`)
+Progress: ██████████ 41/41 plans (100%)
+**Next Plan:** None (phase complete)
+**Next Phase:** TBD (next roadmap phase)
 
 ## Project Reference
 
@@ -644,9 +644,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 51-01 | Legacy route derivation only accepts strict `agent:<agentId>:<channel>:(group|channel|thread|topic):<target>` shapes | Prevents ambiguous owner/session-key values from causing wrong-chat notification delivery |
 | 51-02 | Callback notifications resolve route first and fail closed on invalid route data (no `/hooks/wake` fallback) | Ensures misconfiguration is actionable and prevents silent delivery to the wrong chat lane |
 | 51-02 | OpenClaw notifications are delivered via `openclaw agent --deliver` with explicit reply flags from canonical routes | Keeps group/DM delivery on one transport path with deterministic argument construction |
+| 51-03 | Project notify route fields require `--notify-openclaw` and are managed via explicit set/clear semantics | Prevents partial/ambiguous route mutations and keeps operator intent explicit |
+| 51-03 | addCommand snapshots resolved notify routes at queue time and rejects explicit `--notify` agent mismatches | Keeps runtime delivery deterministic per job and blocks wrong-agent route drift early |
 
 ## Session Continuity
 
-Last session: 2026-03-10T16:22:34Z
-Stopped at: Completed 51-02-PLAN.md
+Last session: 2026-03-10T16:23:51Z
+Stopped at: Completed 51-03-PLAN.md
 Resume file: None
