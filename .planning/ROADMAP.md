@@ -934,3 +934,15 @@ Plans:
 
 **Details:**
 resolvePilotBinary() uses import.meta.url → which pilot → throw chain, never process.argv[1].
+
+### Phase 54: Pilot project-agent notifications should trigger useful replies
+
+**Goal:** Rewrite the notification prompt in `buildDeliveryPrompt()` so project agents reliably produce useful replies instead of choosing NO_REPLY. The transport/routing is working — this is purely prompt design to make agents respond with concise, natural-language updates when jobs complete or fail.
+**Depends on:** Phase 53
+**Plans:** 1 plan
+
+Plans:
+- [ ] 54-01-PLAN.md — Rewrite notification prompt for explicit reply behavior + comprehensive prompt regression tests
+
+**Details:**
+Read `/home/luca/.openclaw/workspace/requirements/pilot-project-agent-notify-prompts-should-trigger-useful-replies.md` for full spec.

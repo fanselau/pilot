@@ -68,8 +68,12 @@ function nextStepGuidance(job: Job): string {
 
 function buildDeliveryPrompt(job: Job): string {
   const verdict = parseJudgeVerdict(job.judgeVerdict);
+  const failed = job.status === 'failed';
+
   const lines: string[] = [
-    'Pilot job update:',
+    `A Pilot job just ${failed ? 'failed' : 'completed'}. Reply in your target chat with a concise, natural-language update for the team.`,
+    '',
+    'Job details:',
     `job_id: ${job.id}`,
     `project: ${job.project}`,
     `description: ${truncate(job.description, 180)}`,
@@ -90,7 +94,14 @@ function buildDeliveryPrompt(job: Job): string {
   }
 
   lines.push(`next_step: ${nextStepGuidance(job)}`);
-  lines.push('Reply naturally in your target chat with a concise, helpful update.');
+  lines.push('');
+
+  if (failed) {
+    lines.push('Flag the failure clearly, include error context, and suggest a concrete follow-up action.');
+  } else {
+    lines.push('Acknowledge success, mention the project and what was done, and note the natural next action.');
+  }
+  lines.push('Do NOT choose NO_REPLY — this is a real event the team needs to know about.');
 
   return lines.join('\n');
 }
