@@ -246,6 +246,34 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
     checks.push({ name: 'git repository', status: 'fail', detail: 'Not a git repo — run: git init' });
   }
 
+  // ── Notify status (informational) ────────────────────────────────────────
+
+  try {
+    const { getProject } = await import('../core/db.js');
+    const projectRecord = getProject(absPath);
+    if (projectRecord?.notifyOpenClawRoute) {
+      checks.push({
+        name: 'Notify route',
+        status: 'pass',
+        detail: `Structured route configured (agent: ${projectRecord.notifyOpenClawRoute.agentId})`,
+      });
+    } else if (projectRecord?.owner) {
+      checks.push({
+        name: 'Notify route',
+        status: 'warn',
+        detail: `Owner '${projectRecord.owner}' set but no structured route. Run: pilot project "${absPath}" --notify-openclaw --notify-agent ${projectRecord.owner} --notify-channel <channel> --notify-to <target>`,
+      });
+    } else {
+      checks.push({
+        name: 'Notify route',
+        status: 'warn',
+        detail: 'No notify configured (optional). To enable: pilot setup <dir> --owner <agent-id>',
+      });
+    }
+  } catch {
+    // DB unavailable — skip notify check silently
+  }
+
   // ── Agent Checks ───────────────────────────────────────────────────────
 
   const agentsDir = path.join(absPath, '.opencode', 'agents');

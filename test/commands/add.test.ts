@@ -1116,3 +1116,119 @@ describe('unregistered project warning', () => {
     stderrSpy.mockRestore();
   });
 });
+
+// ── optional notify (no-notify-configured happy path) ──────────────────────
+
+describe('optional notify behavior', () => {
+  let optionalNotifyDir: string;
+
+  beforeAll(() => {
+    optionalNotifyDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-optional-notify-'));
+    mockedProjectDir = optionalNotifyDir;
+    syncProjectDirEnv();
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(optionalNotifyDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(optionalNotifyDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = optionalNotifyDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+    vi.mocked(getProject).mockReturnValue(null);
+  });
+
+  it('succeeds with no notify config at all — no error, no exit', async () => {
+    // No --notify, no --no-notify, no env var, no project owner
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalled();
+    // notifyRoute should NOT be passed (undefined)
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const callbackSessionKey = callArgs[8]; // 9th arg = callbackSessionKey
+    expect(callbackSessionKey).toBeUndefined();
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Notifications not configured');
+    expect(output).toContain('Queued');
+  });
+
+  it('does not show notify hint in JSON mode', async () => {
+    mockJsonMode = true;
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalled();
+    // In JSON mode, the informational hint should NOT appear
+    expect(mockOutputHuman).not.toHaveBeenCalled();
+  });
+
+  it('--no-notify still works as explicit opt-out', async () => {
+    await addCommand('my-project', 'fix stuff', { noNotify: true });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const callbackSessionKey = callArgs[8];
+    expect(callbackSessionKey).toBeUndefined();
+
+    // Should NOT print the "not configured" hint when --no-notify is used
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).not.toContain('Notifications not configured');
+  });
+
+  it('--notify with valid structured project route still works', async () => {
+    const safeLegacyKey = 'agent:main:telegram:group:-5181925291';
+    vi.mocked(getProject).mockReturnValue({
+      path: path.join(optionalNotifyDir, 'my-project'),
+      owner: safeLegacyKey,
+      notifyOpenClawRoute: {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
+      status: 'active',
+      blockedReason: null,
+      blockedAt: null,
+      createdAt: '2026-03-05T00:00:00Z',
+    });
+
+    await addCommand('my-project', 'fix stuff', {});
+
+    expect(addJob).toHaveBeenCalledWith(
+      expect.stringContaining('my-project'),
+      'quick',
+      'fix stuff',
+      undefined,
+      'balanced',
+      'claude-only',
+      undefined,
+      undefined,
+      safeLegacyKey,
+      undefined,
+      0,
+      false,
+      undefined,
+      {
+        kind: 'openclaw-agent-deliver',
+        agentId: 'main',
+        channel: 'telegram',
+        to: 'telegram:-5181925291',
+      },
+    );
+  });
+});

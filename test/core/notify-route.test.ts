@@ -53,6 +53,9 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   };
 }
 
+// NOTE: resolveNotifyRoute is only called from add.ts when a notify intent exists
+// (--notify flag, PILOT_DEFAULT_NOTIFY env var, or project owner set).
+// When no notify is configured, add.ts skips route resolution entirely.
 describe('notify-route', () => {
   it('resolves a valid structured job route', () => {
     const route: OpenClawDeliverRoute = {
