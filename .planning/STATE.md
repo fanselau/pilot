@@ -267,6 +267,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 55 added: Shell/Runtime Toolchain Exposure
 - Phase 56 added: Pilot existing-install shell exposure must be applyable on real machines
 - Phase 57 added: Pilot notify setup must be optional and operator-friendly
+- Phase 58 added: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
 
 ## Decisions
 

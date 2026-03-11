@@ -994,3 +994,15 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-existing-install-shell-e
 Plans:
 - [x] 57-01-PLAN.md — Make add.ts tolerate missing notify, add doctor notify check, update setup messaging
 - [x] 57-02-PLAN.md — Update GETTING-STARTED.md, README.md, SKILL.md, and CLI help text for optional-notify consistency
+
+### Phase 58: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
+
+**Goal:** [To be planned]
+**Depends on:** Phase 57
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 58 to break down)
+
+**Details:**
+[To be added during planning]
