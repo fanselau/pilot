@@ -937,12 +937,30 @@ resolvePilotBinary() uses import.meta.url → which pilot → throw chain, never
 
 ### Phase 54: Pilot project-agent notifications should trigger useful replies
 
+**Status:** Complete ✓ (2026-03-11)
 **Goal:** Rewrite the notification prompt in `buildDeliveryPrompt()` so project agents reliably produce useful replies instead of choosing NO_REPLY. The transport/routing is working — this is purely prompt design to make agents respond with concise, natural-language updates when jobs complete or fail.
 **Depends on:** Phase 53
 **Plans:** 1 plan
 
 Plans:
-- [ ] 54-01-PLAN.md — Rewrite notification prompt for explicit reply behavior + comprehensive prompt regression tests
+- [x] 54-01-PLAN.md — Rewrite notification prompt for explicit reply behavior + comprehensive prompt regression tests
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-project-agent-notify-prompts-should-trigger-useful-replies.md` for full spec.
+
+### Phase 55: Shell/Runtime Toolchain Exposure (bash/fnm/pnpm)
+
+**Goal:** Make pilot, node, and pnpm resolve from plain non-interactive Bash/sh shells via stable canonical paths in ~/.local/bin. Add doctor health checks for shell exposure and wire launcher maintenance into pilot setup.
+**Depends on:** Phase 54
+**Plans:** 2 plans
+
+Plans:
+- [ ] 55-01-PLAN.md — Shell-exposure module: create/verify stable launchers in ~/.local/bin for pilot, node, pnpm
+- [ ] 55-02-PLAN.md — Wire into pilot doctor (health checks) + pilot setup (launcher creation/refresh)
+
+Wave structure:
+- Wave 1: 55-01 (core shell-exposure module + tests)
+- Wave 2: 55-02 (doctor + setup integration, depends on 55-01)
+
+**Details:**
+Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-runtime-toolchain-exposure-bash-fnm-pnpm.md` for full spec.
