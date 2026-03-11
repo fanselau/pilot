@@ -281,17 +281,14 @@ async function addCommand(
     const defaultKey = getConfig().defaultNotifySessionKey;
     if (defaultKey) {
       resolvedNotifyKey = defaultKey;
+    } else if (projectRecord?.owner) {
+      resolvedNotifyKey = projectRecord.owner;
     } else {
-      if (projectRecord?.owner) {
-        resolvedNotifyKey = projectRecord.owner;
-      } else if (!opts.dryRun) {
-        // No notify intent and not a dry run — require explicit declaration
-        process.stderr.write(
-          'Missing --notify <agentId>. Use --no-notify to explicitly skip notification,\nor register a project owner: pilot setup <dir> --owner <agentId>\n',
-        );
-        process.exit(2);
+      // No notify intent — resolvedNotifyKey stays undefined (notifications disabled)
+      // Print informational hint in human mode (not an error)
+      if (!opts.dryRun && !isJsonMode()) {
+        outputHuman(`  ${dim('ℹ Notifications not configured. See: pilot add --help')}`);
       }
-      // dry-run case: resolvedNotifyKey stays undefined — no error
     }
   }
 
@@ -314,7 +311,7 @@ async function addCommand(
   }
 
   let notifyRouteSnapshot: OpenClawDeliverRoute | null | undefined;
-  if (!opts.noNotify) {
+  if (!opts.noNotify && resolvedNotifyKey !== undefined) {
     const configuredRoute = projectRecord?.notifyOpenClawRoute;
     if (opts.notify && configuredRoute && opts.notify !== configuredRoute.agentId) {
       process.stderr.write(

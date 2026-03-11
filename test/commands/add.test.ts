@@ -680,18 +680,14 @@ describe('notify flag validation', () => {
     vi.mocked(getProject).mockReturnValue(null);
   });
 
-  it('errors when neither --notify nor --no-notify provided', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+  it('succeeds without --notify or --no-notify (notify is optional)', async () => {
+    // No --notify, no --no-notify, no PILOT_DEFAULT_NOTIFY, no project owner
+    // Should succeed (not exit) and show informational hint
+    await addCommand('my-project', 'fix stuff', {});
 
-    await expect(addCommand('my-project', 'fix stuff', {})).rejects.toThrow('exit');
-
-    expect(exitSpy).toHaveBeenCalledWith(2);
-    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
-    expect(stderrOutput).toContain('Missing --notify');
-
-    stderrSpy.mockRestore();
-    exitSpy.mockRestore();
+    expect(addJob).toHaveBeenCalled();
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Notifications not configured');
   });
 
   it('--notify with derivable legacy key snapshots notifyRoute on the job', async () => {
@@ -999,21 +995,16 @@ describe('project owner as fallback notify', () => {
     );
   });
 
-  it('still errors when no --notify, no PILOT_DEFAULT_NOTIFY, and no project owner', async () => {
+  it('succeeds without --notify, PILOT_DEFAULT_NOTIFY, or project owner (notify optional)', async () => {
     // getProject returns null (unregistered project) — no owner fallback
     vi.mocked(getProject).mockReturnValue(null);
 
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    // Should succeed (not exit) — notify is optional
+    await addCommand('my-project', 'fix stuff', {});
 
-    await expect(addCommand('my-project', 'fix stuff', {})).rejects.toThrow('exit');
-
-    expect(exitSpy).toHaveBeenCalledWith(2);
-    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
-    expect(stderrOutput).toContain('Missing --notify');
-
-    stderrSpy.mockRestore();
-    exitSpy.mockRestore();
+    expect(addJob).toHaveBeenCalled();
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('Notifications not configured');
   });
 });
 

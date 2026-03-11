@@ -98,8 +98,9 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   // After setup completes successfully, handle owner registration
   if (!opts.owner && !isJsonMode()) {
     outputHuman('');
-    outputHuman(`  ${dim('Hint: Register this project with an owner to enable notifications:')}`);
-    outputHuman(`  ${dim('pilot setup')} ${dir} ${dim('--owner <agent-id>')}`);
+    outputHuman(`  ${dim('ℹ Notifications are optional.')} To enable:`);
+    outputHuman(`    pilot setup ${dir} --owner <agent-id>`);
+    outputHuman(`    ${dim('Then jobs notify the owner on completion/failure.')}`);
     outputHuman('');
   }
 
