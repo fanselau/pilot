@@ -6,8 +6,9 @@
  *   - Pilot binary path is realpathSync'd
  *   - PATH is minimal and stable
  *   - Service subcommands pass through to systemctl
+ *   - resolvePilotBinary uses import.meta.url → which → throw chain (never argv)
  *
- * Mocks: node:fs, node:fs/promises, execa, config, output, colors.
+ * Mocks: node:fs, node:fs/promises, node:child_process, execa, config, output, colors.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,6 +20,12 @@ let mockRealpathResult = '/home/user/.bun/bin/pilot';
 const mockExecaCalls: Array<{ cmd: string; args: string[] }> = [];
 const mockHomedir = '/home/testuser';
 
+/** Paths that accessSync considers valid (X_OK) */
+let mockAccessiblePaths: Set<string> = new Set();
+
+/** Result for execSync('which pilot', ...) — null means throw */
+let mockWhichPilotResult: string | null = null;
+
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock('node:fs', async () => {
@@ -26,6 +33,13 @@ vi.mock('node:fs', async () => {
   return {
     ...actual,
     realpathSync: vi.fn((_p: string) => mockRealpathResult),
+    accessSync: vi.fn((filePath: string, _mode?: number) => {
+      if (mockAccessiblePaths.has(filePath)) return undefined;
+      const err = new Error(`ENOENT: no such file or directory, access '${filePath}'`);
+      (err as NodeJS.ErrnoException).code = 'ENOENT';
+      throw err;
+    }),
+    constants: actual.constants,
   };
 });
 
@@ -34,6 +48,22 @@ vi.mock('node:fs/promises', async () => {
     mkdir: vi.fn(async () => {}),
     writeFile: vi.fn(async (_path: string, content: string) => {
       capturedUnitContent = content;
+    }),
+  };
+});
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    execSync: vi.fn((cmd: string, _opts?: unknown) => {
+      if (typeof cmd === 'string' && cmd.startsWith('which pilot')) {
+        if (mockWhichPilotResult !== null) {
+          return mockWhichPilotResult;
+        }
+        throw new Error('which: pilot not found');
+      }
+      return actual.execSync(cmd, _opts as Parameters<typeof actual.execSync>[1]);
     }),
   };
 });
@@ -80,7 +110,9 @@ vi.mock('../../src/util/colors.js', () => ({
 
 // ── Import after mocks ────────────────────────────────────────────────────
 
-import { serviceCommand } from '../../src/commands/service.js';
+import { serviceCommand, resolvePilotBinary } from '../../src/commands/service.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -91,15 +123,22 @@ beforeEach(() => {
   capturedUnitContent = '';
   mockExecaCalls.length = 0;
   mockRealpathResult = '/home/testuser/.bun/bin/pilot';
+  mockAccessiblePaths = new Set();
+  mockWhichPilotResult = null;
   originalArgv1 = process.argv[1];
-  process.argv[1] = '/home/testuser/.bun/bin/pilot';
+
+  // By default, make the dist/index.js path accessible so install tests work
+  const thisFile = fileURLToPath(import.meta.url);
+  const packageRoot = path.resolve(path.dirname(thisFile), '..', '..');
+  const distEntry = path.join(packageRoot, 'dist', 'index.js');
+  mockAccessiblePaths.add(distEntry);
 });
 
 afterEach(() => {
   process.argv[1] = originalArgv1;
 });
 
-// ── Tests ──────────────────────────────────────────────────────────────────
+// ── Tests: serviceCommand install ──────────────────────────────────────────
 
 describe('serviceCommand install', () => {
   it('ExecStart uses /usr/bin/env bun, not absolute interpreter path', async () => {
@@ -111,15 +150,13 @@ describe('serviceCommand install', () => {
     expect(capturedUnitContent).not.toMatch(/ExecStart=\/usr\/local\/bin\/bun\s/);
   });
 
-  it('pilot binary path is realpathSync\'d, not raw argv', async () => {
+  it('pilot binary path is realpathSync\'d', async () => {
     mockRealpathResult = '/opt/pilot/bin/pilot';
-    process.argv[1] = '/usr/local/bin/pilot';
 
     await serviceCommand('install');
 
-    // The unit file should use the realpathSync result, not raw argv
+    // The unit file should use the realpathSync result
     expect(capturedUnitContent).toContain('/opt/pilot/bin/pilot');
-    expect(capturedUnitContent).not.toContain('/usr/local/bin/pilot run --daemon');
   });
 
   it('PATH is minimal and stable, not full current PATH', async () => {
@@ -177,6 +214,8 @@ describe('serviceCommand install', () => {
   });
 });
 
+// ── Tests: serviceCommand subcommands ──────────────────────────────────────
+
 describe('serviceCommand subcommands', () => {
   it('start calls systemctl --user start pilot-runner', async () => {
     await serviceCommand('start');
@@ -191,5 +230,53 @@ describe('serviceCommand subcommands', () => {
   it('status calls systemctl --user status pilot-runner', async () => {
     await serviceCommand('status');
     expect(mockExecaCalls).toContainEqual({ cmd: 'systemctl', args: ['--user', 'status', 'pilot-runner'] });
+  });
+});
+
+// ── Tests: resolvePilotBinary ──────────────────────────────────────────────
+
+describe('resolvePilotBinary', () => {
+  it('resolves via package root dist/index.js when exists and executable', () => {
+    // The expected path based on import.meta.url of service.ts
+    // service.ts is at src/commands/service.ts, so package root is ../../
+    // In test context, import.meta.url of service.ts points through dist or src,
+    // but the mock accessSync will match whatever path is in mockAccessiblePaths.
+    const result = resolvePilotBinary();
+
+    expect(result).toMatch(/dist\/index\.js$/);
+  });
+
+  it('falls back to which pilot when dist/index.js not found', () => {
+    // Clear all accessible paths — dist/index.js will fail accessSync
+    mockAccessiblePaths = new Set();
+    // Make `which pilot` succeed
+    mockWhichPilotResult = '/usr/local/bin/pilot\n';
+
+    const result = resolvePilotBinary();
+
+    expect(result).toBe('/usr/local/bin/pilot');
+  });
+
+  it('throws when nothing resolves', () => {
+    // No dist/index.js accessible
+    mockAccessiblePaths = new Set();
+    // which pilot fails (null = throw)
+    mockWhichPilotResult = null;
+
+    expect(() => resolvePilotBinary()).toThrow('Cannot resolve pilot binary');
+  });
+
+  it('process.argv is never used in service generation', async () => {
+    // Set argv to a fake path — it must NOT appear in the generated unit
+    process.argv[1] = '/tmp/fake-argv-pilot';
+
+    await serviceCommand('install');
+
+    // The unit content must NOT contain the fake argv path
+    expect(capturedUnitContent).not.toContain('/tmp/fake-argv-pilot');
+
+    // resolvePilotBinary itself should never return argv
+    const resolved = resolvePilotBinary();
+    expect(resolved).not.toBe('/tmp/fake-argv-pilot');
   });
 });
