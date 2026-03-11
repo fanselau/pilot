@@ -12,7 +12,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid'
 import { Show, Switch, Match, onMount, onCleanup, batch } from 'solid-js';
 import { createPilotState } from './state.js';
 import { createPoller } from './data/poller.js';
-import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject } from './data/pilot-db.js';
+import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject, cancel, retry } from './data/pilot-db.js';
 import { fetchSessionEnrichment } from './data/opencode-db.js';
 import { buildJobObservability } from '../core/job-observability.js';
 import { StatusBar } from './components/status-bar.js';
@@ -264,6 +264,48 @@ export function App(_props: { interval?: number }) {
           state.setProjects(fetchProjectData());
         } catch (err) {
           process.stderr.write(`[tui] unblock error: ${String(err)}\n`);
+        }
+      }
+      return;
+    }
+
+    // r — retry failed/cancelled job (works from any view where selectedJob() returns a job)
+    if (key.sequence === 'r') {
+      const job = state.selectedJob();
+      if (job && (job.status === 'failed' || job.status === 'cancelled')) {
+        try {
+          retry(job.id);
+          // Also unblock the project if it was blocked by this failure
+          try { unblockProject(job.project); } catch { /* project may not be blocked */ }
+          // Force immediate queue refresh
+          const { pending, running } = fetchQueueData();
+          const recent = fetchRecentData();
+          batch(() => {
+            state.setQueue(pending);
+            state.setRunning(running);
+            state.setCompleted(recent);
+          });
+        } catch (err) {
+          process.stderr.write(`[tui] retry error: ${String(err)}\n`);
+        }
+      }
+      return;
+    }
+
+    // x — cancel pending job (works from any view where selectedJob() returns a job)
+    if (key.sequence === 'x') {
+      const job = state.selectedJob();
+      if (job && job.status === 'pending') {
+        try {
+          cancel(job.id);
+          // Force immediate queue refresh
+          const { pending, running } = fetchQueueData();
+          batch(() => {
+            state.setQueue(pending);
+            state.setRunning(running);
+          });
+        } catch (err) {
+          process.stderr.write(`[tui] cancel error: ${String(err)}\n`);
         }
       }
       return;
