@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 54
+## Current Phase: 55
 
 ## Current Position
 
-Phase: 54 (Pilot project-agent notifications should trigger useful replies)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-03-11 - Completed 54-01-PLAN.md (phase 54 complete)
+Phase: 55 (Shell/Runtime Toolchain Exposure)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-11 - Completed 55-01-PLAN.md
 
-Progress: ██████████████ 46/46 plans (100%)
+Progress: ██████████████ 47/48 plans (98%)
 
 ## Project Reference
 
@@ -135,6 +135,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 54: Pilot project-agent notifications should trigger useful replies
 - **Status:** complete (1/1 plans, verified ✓)
+
+### Phase 55: Shell/Runtime Toolchain Exposure
+- **Status:** in progress (1/2 plans complete)
 
 ### Quick Tasks Completed
 
@@ -664,9 +667,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 52-01 | Stable minimal PATH in service unit includes ~/.opencode/bin + standard dirs | Prevents PATH snapshot staleness from shell environment |
 | 52-01 | Doctor service check parses ExecStart to validate pilot binary path | Detects stale service units proactively |
 | 53-01 | resolvePilotBinary() uses import.meta.url → which pilot → throw chain, never argv | Canonical path survives rebuilds/relinks; no stale argv in service units |
+| 55-01 | realpathSync resolves pilot binary through all symlinks to actual file | Stable symlink points to real binary, not another symlink chain |
+| 55-01 | fnm explicitly not exposed in plain shells — node/pnpm are the interface | fnm is an interactive-shell convenience, not a runtime dependency |
+| 55-01 | Real files at target paths are never overwritten — only symlinks are managed | Prevents accidental data loss when ~/.local/bin has manually placed binaries |
 
 ## Session Continuity
 
-Last session: 2026-03-11T17:02:39Z
-Stopped at: Completed 54-01-PLAN.md (phase 54 complete)
+Last session: 2026-03-11T17:29:43Z
+Stopped at: Completed 55-01-PLAN.md
 Resume file: None
