@@ -258,6 +258,8 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 52 added: Shell-Agnostic CLI and TUI Shortcuts
 - Phase 53 added: Stable service wrapper + real r/x handler wiring
 - Phase 54 added: Pilot project-agent notifications should trigger useful replies
+- Phase 55 added: Shell/Runtime Toolchain Exposure
+- Phase 56 added: Pilot existing-install shell exposure must be applyable on real machines
 
 ## Decisions
 

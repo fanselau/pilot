@@ -948,10 +948,12 @@ Plans:
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-project-agent-notify-prompts-should-trigger-useful-replies.md` for full spec.
 
-### Phase 55: Shell/Runtime Toolchain Exposure (bash/fnm/pnpm)
+### Phase 55: Shell/Runtime Toolchain Exposure (bash/fnm/pnpm) ✓
 
 **Goal:** Make pilot, node, and pnpm resolve from plain non-interactive Bash/sh shells via stable canonical paths in ~/.local/bin. Add doctor health checks for shell exposure and wire launcher maintenance into pilot setup.
 **Depends on:** Phase 54
+**Status:** complete (2/2 plans, verified ✓)
+**Completed:** 2026-03-11
 **Plans:** 2 plans
 
 Plans:
@@ -964,3 +966,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-runtime-toolchain-exposure-bash-fnm-pnpm.md` for full spec.
+
+### Phase 56: Pilot existing-install shell exposure must be applyable on real machines
+
+**Goal:** [To be planned]
+**Depends on:** Phase 55
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 56 to break down)
+
+**Details:**
+[To be added during planning]
