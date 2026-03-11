@@ -306,6 +306,25 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     result.skipped.push('git repository (already initialized)');
   }
 
+  // 8. Ensure shell exposure (stable launchers in ~/.local/bin)
+  try {
+    const { ensureShellExposure } = await import('./shell-exposure.js');
+    const exposure = await ensureShellExposure();
+    for (const finding of exposure.findings) {
+      if (finding.status === 'created') {
+        result.created.push(`Shell launcher: ${finding.stablePath} → ${finding.resolvedTarget}`);
+      } else if (finding.status === 'refreshed') {
+        result.created.push(`Shell launcher refreshed: ${finding.stablePath} → ${finding.resolvedTarget}`);
+      } else if (finding.status === 'fail') {
+        result.errors.push(`Shell exposure: ${finding.tool} — ${finding.detail}`);
+      }
+      // 'pass' = already correct, skip silently
+    }
+  } catch (err) {
+    // Shell exposure is best-effort — never fail setup over it
+    result.errors.push(`Shell exposure: ${errMsg(err)}`);
+  }
+
   return result;
 }
 

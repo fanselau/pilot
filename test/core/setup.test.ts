@@ -47,6 +47,19 @@ vi.mock('execa', () => ({
   execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
 }));
 
+// ── Mock shell-exposure (best-effort in setup — don't pollute test env) ──
+
+vi.mock('../../src/core/shell-exposure.js', () => ({
+  ensureShellExposure: vi.fn(async () => ({
+    findings: [
+      { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/usr/bin/pilot', detail: 'OK' },
+      { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'OK' },
+      { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
+    ],
+    fnmNote: 'fnm is not exposed in plain shells.',
+  })),
+}));
+
 // Must import AFTER vi.mock
 import { setupProject } from '../../src/core/setup.js';
 import { resolveProjectDir } from '../../src/core/config.js';
