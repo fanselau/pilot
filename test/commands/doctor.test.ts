@@ -31,6 +31,14 @@ let mockShellExposureResult: {
   ],
   fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
 };
+let mockEnsureShellExposureResult: typeof mockShellExposureResult = {
+  findings: [
+    { tool: 'pilot', status: 'created', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'Created: ...' },
+    { tool: 'node', status: 'created', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'Created: ...' },
+    { tool: 'pnpm', status: 'created', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'Created: ...' },
+  ],
+  fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+};
 let mockShellExposureError: Error | null = null;
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -43,6 +51,10 @@ vi.mock('../../src/core/shell-exposure.js', () => ({
   verifyShellExposure: async () => {
     if (mockShellExposureError) throw mockShellExposureError;
     return mockShellExposureResult;
+  },
+  ensureShellExposure: async () => {
+    if (mockShellExposureError) throw mockShellExposureError;
+    return mockEnsureShellExposureResult;
   },
 }));
 
@@ -167,6 +179,14 @@ beforeEach(() => {
       { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
       { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/node', detail: 'OK' },
       { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/pnpm', detail: 'OK' },
+    ],
+    fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+  };
+  mockEnsureShellExposureResult = {
+    findings: [
+      { tool: 'pilot', status: 'created', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'Created: ...' },
+      { tool: 'node', status: 'created', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'Created: ...' },
+      { tool: 'pnpm', status: 'created', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'Created: ...' },
     ],
     fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
   };
@@ -327,11 +347,11 @@ describe('doctor system health — shell exposure checks', () => {
     expect(fnmCheck!.detail).toContain('fnm is not exposed');
   });
 
-  it('shows warn with "pilot setup --refresh" hint when a tool fails', async () => {
+  it('shows warn with "pilot doctor --fix" hint when a tool fails', async () => {
     mockShellExposureResult = {
       findings: [
         { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
-        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found — run: pilot setup --refresh' },
+        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found — run: pilot doctor --fix' },
         { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
       ],
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
@@ -345,7 +365,7 @@ describe('doctor system health — shell exposure checks', () => {
     const nodeCheck = findCheck('shell: node');
     expect(nodeCheck).toBeDefined();
     expect(nodeCheck!.status).toBe('warn');
-    expect(nodeCheck!.detail).toContain('pilot setup --refresh');
+    expect(nodeCheck!.detail).toContain('pilot doctor --fix');
   });
 
   it('shows warn for all tools when multiple fail', async () => {
@@ -365,7 +385,7 @@ describe('doctor system health — shell exposure checks', () => {
 
     const pilotCheck = findCheck('shell: pilot');
     expect(pilotCheck!.status).toBe('warn');
-    expect(pilotCheck!.detail).toContain('pilot setup --refresh');
+    expect(pilotCheck!.detail).toContain('pilot doctor --fix');
 
     const nodeCheck = findCheck('shell: node');
     expect(nodeCheck!.status).toBe('warn');
@@ -411,5 +431,107 @@ describe('doctor system health — shell exposure checks', () => {
     expect(fnmCheck).toBeDefined();
     expect(fnmCheck!.status).toBe('pass');
     expect(fnmCheck!.detail).toBe('fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.');
+  });
+});
+
+// ── --fix shell exposure repair ───────────────────────────────────────────
+
+describe('doctor system health — --fix shell exposure repair', () => {
+  it('calls ensureShellExposure and shows Fixed status when --fix and issues exist', async () => {
+    // Verify returns failures
+    mockShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'fail', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '', detail: 'Not found' },
+        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+    // Ensure returns created
+    mockEnsureShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'created', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'Created' },
+        { tool: 'node', status: 'created', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'Created' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'Already correct' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true, true); // fix=true
+
+    const pilotCheck = findCheck('shell: pilot');
+    expect(pilotCheck).toBeDefined();
+    expect(pilotCheck!.status).toBe('pass');
+    expect(pilotCheck!.detail).toContain('Fixed');
+
+    const nodeCheck = findCheck('shell: node');
+    expect(nodeCheck!.status).toBe('pass');
+    expect(nodeCheck!.detail).toContain('Fixed');
+
+    // pnpm was already pass in ensure result
+    const pnpmCheck = findCheck('shell: pnpm');
+    expect(pnpmCheck!.status).toBe('pass');
+    expect(pnpmCheck!.detail).toContain('OK');
+  });
+
+  it('does not call ensureShellExposure when --fix but no issues exist', async () => {
+    // All pass — no fix needed
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true, true); // fix=true
+
+    // Should show normal pass status (not Fixed)
+    const pilotCheck = findCheck('shell: pilot');
+    expect(pilotCheck!.status).toBe('pass');
+    expect(pilotCheck!.detail).not.toContain('Fixed');
+  });
+
+  it('shows warn when --fix but ensureShellExposure still fails for a tool', async () => {
+    mockShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'fail', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '', detail: 'Not found' },
+        { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'OK' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+    mockEnsureShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'fail', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '', detail: 'Cannot resolve pilot' },
+        { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/usr/bin/node', detail: 'Already correct' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'Already correct' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true, true);
+
+    const pilotCheck = findCheck('shell: pilot');
+    expect(pilotCheck!.status).toBe('warn');
+    expect(pilotCheck!.detail).toContain('Failed to fix');
+  });
+
+  it('without --fix, shows "pilot doctor --fix" as repair hint', async () => {
+    mockShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
+        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found — run: pilot doctor --fix' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true); // no fix
+
+    const nodeCheck = findCheck('shell: node');
+    expect(nodeCheck!.status).toBe('warn');
+    expect(nodeCheck!.detail).toContain('pilot doctor --fix');
   });
 });

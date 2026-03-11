@@ -282,7 +282,7 @@ describe('shell-exposure', () => {
       for (const finding of result.findings) {
         expect(finding.status).toBe('fail');
         expect(finding.detail).toContain('Not found');
-        expect(finding.detail).toContain('pilot setup --refresh');
+        expect(finding.detail).toContain('pilot doctor --fix');
       }
     });
 
