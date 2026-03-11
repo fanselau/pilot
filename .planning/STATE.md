@@ -1,17 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 52
+## Current Phase: 53
 
 ## Current Position
 
-Phase: 52 (Shell-Agnostic CLI and TUI Shortcuts)
-Plan: 3 of 3 in current phase
+Phase: 53 (Stable service wrapper + real r/x handler wiring)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-11 - Completed 52-03-PLAN.md (phase 52 complete)
+Last activity: 2026-03-11 - Completed 53-01-PLAN.md (phase 53 complete)
 
-Progress: ██████████ 44/44 plans (100%)
-**Next Phase:** Phase 53 (Stable service wrapper + real r/x handler wiring)
+Progress: █████████████ 45/45 plans (100%)
 
 ## Project Reference
 
@@ -130,6 +129,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
 - **Status:** complete (3/3 plans, verified ✓)
+
+### Phase 53: Stable service wrapper + real r/x handler wiring
+- **Status:** complete (1/1 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -657,9 +659,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 52-01 | Service unit uses /usr/bin/env bun instead of absolute interpreter path | Survives bun/node upgrades without re-install |
 | 52-01 | Stable minimal PATH in service unit includes ~/.opencode/bin + standard dirs | Prevents PATH snapshot staleness from shell environment |
 | 52-01 | Doctor service check parses ExecStart to validate pilot binary path | Detects stale service units proactively |
+| 53-01 | resolvePilotBinary() uses import.meta.url → which pilot → throw chain, never argv | Canonical path survives rebuilds/relinks; no stale argv in service units |
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:03:00Z
-Stopped at: Completed 52-01-PLAN.md (wave 1 complete)
+Last session: 2026-03-11T14:48:38Z
+Stopped at: Completed 53-01-PLAN.md (phase 53 complete)
 Resume file: None

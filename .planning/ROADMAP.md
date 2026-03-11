@@ -924,12 +924,13 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-agnostic-cli-and-t
 
 ### Phase 53: Stable service wrapper + real r/x handler wiring
 
-**Goal:** [To be planned]
+**Status:** complete (1/1 plans, verified ✓)
+**Goal:** Replace argv-derived service ExecStart with stable canonical pilot binary resolution that survives rebuilds and relinks.
 **Depends on:** Phase 52
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 53 to break down)
+- [x] 53-01-PLAN.md — Stable canonical binary resolution for service unit + regression tests
 
 **Details:**
-[To be added during planning]
+resolvePilotBinary() uses import.meta.url → which pilot → throw chain, never process.argv[1].
