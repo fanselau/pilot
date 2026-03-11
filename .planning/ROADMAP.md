@@ -921,3 +921,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-agnostic-cli-and-tui-shortcuts.md` for full spec.
+
+### Phase 53: Stable service wrapper + real r/x handler wiring
+
+**Goal:** [To be planned]
+**Depends on:** Phase 52
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 53 to break down)
+
+**Details:**
+[To be added during planning]

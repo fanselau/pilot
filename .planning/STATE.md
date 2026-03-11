@@ -11,7 +11,7 @@ Status: Phase complete
 Last activity: 2026-03-11 - Completed 52-03-PLAN.md (phase 52 complete)
 
 Progress: ██████████ 44/44 plans (100%)
-**Next Phase:** None (last phase)
+**Next Phase:** Phase 53 (Stable service wrapper + real r/x handler wiring)
 
 ## Project Reference
 
@@ -248,6 +248,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 50 added: Setup Refresh Mode and Fast Skill Installation
 - Phase 51 added: Pilot notifications via `openclaw agent --deliver`
 - Phase 52 added: Shell-Agnostic CLI and TUI Shortcuts
+- Phase 53 added: Stable service wrapper + real r/x handler wiring
 
 ## Decisions
 
