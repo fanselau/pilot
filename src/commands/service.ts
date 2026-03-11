@@ -9,7 +9,9 @@
  */
 
 import { execa } from 'execa';
-import { realpathSync } from 'node:fs';
+import { accessSync, constants, realpathSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -17,6 +19,38 @@ import { getConfig } from '../core/config.js';
 import { outputHuman } from '../util/output.js';
 import { errMsg } from '../util/errors.js';
 import { green, dim } from '../util/colors.js';
+
+/**
+ * Resolve the pilot binary through a deterministic chain (never uses argv).
+ *
+ * Resolution order:
+ *   1. Package root dist/index.js — derived from import.meta.url
+ *   2. `which pilot` — PATH lookup fallback
+ *   3. Throw — clear error if nothing resolves
+ *
+ * This ensures the service unit always points to a canonical binary path
+ * that survives rebuilds and relinks.
+ */
+function resolvePilotBinary(): string {
+  // 1. Package root dist/index.js — service.ts is at src/commands/service.ts
+  //    so package root is ../../ from this file's directory
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    const packageRoot = path.resolve(path.dirname(thisFile), '..', '..');
+    const distEntry = path.join(packageRoot, 'dist', 'index.js');
+    accessSync(distEntry, constants.X_OK);
+    return distEntry;
+  } catch { /* fall through */ }
+
+  // 2. PATH lookup via `which pilot`
+  try {
+    const resolved = execSync('which pilot', { encoding: 'utf8', timeout: 5_000 }).trim();
+    if (resolved) return resolved;
+  } catch { /* fall through */ }
+
+  // 3. Nothing resolved — throw
+  throw new Error('Cannot resolve pilot binary. Ensure pilot is built (npm run build) or linked (bun link).');
+}
 
 async function serviceCommand(action: string): Promise<void> {
   const unit = 'pilot-runner';
@@ -30,9 +64,9 @@ async function serviceCommand(action: string): Promise<void> {
       // Resolve pilot binary to its real path (follows symlinks)
       let realPilotBin: string;
       try {
-        realPilotBin = realpathSync(process.argv[1]);
+        realPilotBin = realpathSync(resolvePilotBinary());
       } catch {
-        realPilotBin = process.argv[1];
+        realPilotBin = resolvePilotBinary();
       }
 
       // Build a stable minimal PATH that survives bun/node upgrades
@@ -126,4 +160,4 @@ WantedBy=default.target
   }
 }
 
-export { serviceCommand };
+export { serviceCommand, resolvePilotBinary };
