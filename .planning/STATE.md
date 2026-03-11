@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 56
+## Current Phase: 57
 
 ## Current Position
 
-Phase: 56 (Pilot Existing Install Shell Exposure Must Be Applyable on Real Machines)
-Plan: 1 of 1 in current phase
+Phase: 57 (Pilot Notify Setup Must Be Optional and Operator-Friendly)
+Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-11 - Completed 56-01-PLAN.md
+Last activity: 2026-03-11 - Completed 57-01-PLAN.md (execution)
 
-Progress: ██████████████ 49/49 plans (100%)
+Progress: ██████████████ 51/51 plans (100%)
 
 ## Project Reference
 
@@ -141,6 +141,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 56: Pilot Existing Install Shell Exposure Must Be Applyable on Real Machines
 - **Status:** complete (1/1 plans, verified ✓)
+
+### Phase 57: Pilot Notify Setup Must Be Optional and Operator-Friendly
+- **Status:** complete (2/2 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -678,9 +681,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 55-01 | Real files at target paths are never overwritten — only symlinks are managed | Prevents accidental data loss when ~/.local/bin has manually placed binaries |
 | 56-01 | --fix only runs ensureShellExposure when verify detects non-pass findings | Idempotent by design — second run verifies all pass, skips ensure |
 | 56-01 | Repair hints in doctor/shell-exposure changed to 'pilot doctor --fix' | System-level repair is doctor's job; setup.ts hints left for project-scoped concerns |
+| 57-01 | Notify is informational-only in doctor (warn, never fail) | Missing notify should never block project health |
+| 57-01 | Route resolution guarded by resolvedNotifyKey !== undefined | Prevents calling resolveNotifyRoute when no notify intent exists |
+| 57-01 | Setup messaging uses "Notifications are optional." phrasing | Makes clear this is not a missing step but an add-on |
 
 ## Session Continuity
 
-Last session: 2026-03-11T23:08:52Z
-Stopped at: Completed 56-01-PLAN.md
+Last session: 2026-03-11T23:42:32Z
+Stopped at: Completed 57-01-PLAN.md (execution)
 Resume file: None

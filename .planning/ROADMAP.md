@@ -984,18 +984,13 @@ Wave structure:
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-existing-install-shell-exposure-apply-path.md` for full spec.
 
-### Phase 57: Pilot notify setup must be optional and operator-friendly
+### Phase 57: Pilot notify setup must be optional and operator-friendly — ✅ Complete
 
 **Goal:** Make notify easy to understand, optional by default, and clearly documented in setup/help/CLI output. `pilot add` no longer hard-errors when notify is unconfigured. Doctor shows informational notify status. All docs consistently frame notify as optional.
 **Depends on:** Phase 56
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
+**Completed:** 2026-03-11
 
 Plans:
-- [ ] 57-01-PLAN.md — Make add.ts tolerate missing notify, add doctor notify check, update setup messaging
-- [ ] 57-02-PLAN.md — Update GETTING-STARTED.md, README.md, SKILL.md, and CLI help text for optional-notify consistency
-
-Wave structure:
-- Wave 1: 57-01 + 57-02 (independent — code changes and docs have no file overlap)
-
-**Details:**
-Read `/home/luca/.openclaw/workspace/requirements/pilot-notify-setup-must-be-optional-and-operator-friendly.md` for full spec.
+- [x] 57-01-PLAN.md — Make add.ts tolerate missing notify, add doctor notify check, update setup messaging
+- [x] 57-02-PLAN.md — Update GETTING-STARTED.md, README.md, SKILL.md, and CLI help text for optional-notify consistency
