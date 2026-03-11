@@ -23,22 +23,18 @@ const HELP_TEXT = `
   j / ↓        Move cursor down
   k / ↑        Move cursor up
   Enter        Open job detail
-  a            Add new job
   r            Retry failed job
-   x            Cancel pending job
-   K            Force-quit running job
-   g            Jump to top
+  x            Cancel pending job
+  K            Force-quit running job
+  u            Unblock project (projects panel)
+  g            Jump to top
   G            Jump to bottom
 
  ── Detail ──────────────────────────
-  Esc          Back to dashboard
-  f            Toggle follow mode
-  j / k        Scroll log
-  g / G        Top / bottom of log
-  /            Search in log
-   r            Retry this job
-   x            Cancel pending job
-   K            Force-quit running job
+  Esc / q      Back to dashboard
+  K            Force-quit running job
+  r            Retry failed job
+  x            Cancel pending job
 `.trim();
 
 export function HelpOverlay() {

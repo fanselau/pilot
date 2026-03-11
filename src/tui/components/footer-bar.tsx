@@ -11,8 +11,8 @@ import { theme } from '../theme.js';
 import type { ViewType } from '../state.js';
 
 const HINTS: Record<ViewType, string> = {
-  dashboard: ' j/k navigate │ enter detail │ tab panel │ K kill │ / filter │ ? help │ q quit',
-  detail: ' esc/q back │ ? help',
+  dashboard: ' j/k navigate │ enter detail │ tab panel │ r retry │ x cancel │ K kill │ / filter │ ? help │ q quit',
+  detail: ' r retry │ x cancel │ K kill │ ? help │ esc back',
   split: ' esc back │ ? help │ q quit',
 };
 
