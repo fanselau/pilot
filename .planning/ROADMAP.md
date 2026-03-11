@@ -956,7 +956,7 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-project-agent-notify-pro
 
 Plans:
 - [x] 55-01-PLAN.md — Shell-exposure module: create/verify stable launchers in ~/.local/bin for pilot, node, pnpm
-- [ ] 55-02-PLAN.md — Wire into pilot doctor (health checks) + pilot setup (launcher creation/refresh)
+- [x] 55-02-PLAN.md — Wire into pilot doctor (health checks) + pilot setup (launcher creation/refresh)
 
 Wave structure:
 - Wave 1: 55-01 (core shell-exposure module + tests)
