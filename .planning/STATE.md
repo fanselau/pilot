@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 55
+## Current Phase: 56
 
 ## Current Position
 
-Phase: 55 (Shell/Runtime Toolchain Exposure)
-Plan: 2 of 2 in current phase
+Phase: 56 (Pilot Existing Install Shell Exposure Must Be Applyable on Real Machines)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-11 - Completed 55-02-PLAN.md
+Last activity: 2026-03-11 - Completed 56-01-PLAN.md
 
-Progress: ██████████████ 48/48 plans (100%)
+Progress: ██████████████ 49/49 plans (100%)
 
 ## Project Reference
 
@@ -139,6 +139,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 55: Shell/Runtime Toolchain Exposure
 - **Status:** complete (2/2 plans, verified ✓)
 
+### Phase 56: Pilot Existing Install Shell Exposure Must Be Applyable on Real Machines
+- **Status:** complete (1/1 plans, verified ✓)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -260,6 +263,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 54 added: Pilot project-agent notifications should trigger useful replies
 - Phase 55 added: Shell/Runtime Toolchain Exposure
 - Phase 56 added: Pilot existing-install shell exposure must be applyable on real machines
+- Phase 57 added: Pilot notify setup must be optional and operator-friendly
 
 ## Decisions
 
@@ -672,9 +676,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 55-01 | realpathSync resolves pilot binary through all symlinks to actual file | Stable symlink points to real binary, not another symlink chain |
 | 55-01 | fnm explicitly not exposed in plain shells — node/pnpm are the interface | fnm is an interactive-shell convenience, not a runtime dependency |
 | 55-01 | Real files at target paths are never overwritten — only symlinks are managed | Prevents accidental data loss when ~/.local/bin has manually placed binaries |
+| 56-01 | --fix only runs ensureShellExposure when verify detects non-pass findings | Idempotent by design — second run verifies all pass, skips ensure |
+| 56-01 | Repair hints in doctor/shell-exposure changed to 'pilot doctor --fix' | System-level repair is doctor's job; setup.ts hints left for project-scoped concerns |
 
 ## Session Continuity
 
-Last session: 2026-03-11T17:29:43Z
-Stopped at: Completed 55-01-PLAN.md
+Last session: 2026-03-11T23:08:52Z
+Stopped at: Completed 56-01-PLAN.md
 Resume file: None

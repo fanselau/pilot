@@ -969,15 +969,29 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-runtime-toolchain-
 
 ### Phase 56: Pilot existing-install shell exposure must be applyable on real machines
 
+**Status:** complete (1/1 plans, verified ✓)
 **Goal:** Add `pilot doctor --fix` to repair shell exposure on existing installations — creating/refreshing stable launchers in ~/.local/bin without requiring a project directory. Update doctor messaging to point to the new repair command.
 **Depends on:** Phase 55
+**Completed:** 2026-03-11
 **Plans:** 1 plan
 
 Plans:
-- [ ] 56-01-PLAN.md — Add --fix flag to doctor command for shell exposure repair + tests
+- [x] 56-01-PLAN.md — Add --fix flag to doctor command for shell exposure repair + tests
 
 Wave structure:
 - Wave 1: 56-01 (single plan — implementation + tests)
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-existing-install-shell-exposure-apply-path.md` for full spec.
+
+### Phase 57: Pilot notify setup must be optional and operator-friendly
+
+**Goal:** [To be planned]
+**Depends on:** Phase 56
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 57 to break down)
+
+**Details:**
+[To be added during planning]
