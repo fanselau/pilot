@@ -6,12 +6,11 @@
 ## Current Position
 
 Phase: 52 (Shell-Agnostic CLI and TUI Shortcuts)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-11 - Completed 52-01-PLAN.md (wave 1 complete: 52-01 + 52-02)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-11 - Completed 52-03-PLAN.md (phase 52 complete)
 
-Progress: ██████████ 42/44 plans (95%)
-**Next Plan:** 52-03-PLAN.md (wave 2: tests)
+Progress: ██████████ 44/44 plans (100%)
 **Next Phase:** None (last phase)
 
 ## Project Reference
@@ -130,7 +129,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** in progress (2/3 plans complete)
 
 ### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
-- **Status:** in progress (2/3 plans complete)
+- **Status:** complete (3/3 plans, verified ✓)
 
 ### Quick Tasks Completed
 

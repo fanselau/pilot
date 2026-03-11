@@ -911,9 +911,9 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-openclaw-agent-deliver-n
 **Plans:** 3 plans
 
 Plans:
-- [ ] 52-01-PLAN.md — Binary resolution fallback chain + service unit hardening + doctor service check
-- [ ] 52-02-PLAN.md — Wire TUI retry/cancel shortcuts + update help overlay and footer bar accuracy
-- [ ] 52-03-PLAN.md — Tests for binary resolution, service generation, doctor checks, and TUI shortcuts
+- [x] 52-01-PLAN.md — Binary resolution fallback chain + service unit hardening + doctor service check
+- [x] 52-02-PLAN.md — Wire TUI retry/cancel shortcuts + update help overlay and footer bar accuracy
+- [x] 52-03-PLAN.md — Tests for binary resolution, service generation, doctor checks, and TUI shortcuts
 
 Wave structure:
 - Wave 1: 52-01 + 52-02 (independent, no file overlap)
