@@ -906,12 +906,18 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-openclaw-agent-deliver-n
 
 ### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
 
-**Goal:** [To be planned]
+**Goal:** Make Pilot reliably invocable from any shell (agent Bash, Fish, systemd) by fixing binary resolution fallback, hardening service unit generation with stable paths, and wire broken TUI shortcuts (retry, cancel) with accurate help overlay.
 **Depends on:** Phase 51
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 52 to break down)
+- [ ] 52-01-PLAN.md — Binary resolution fallback chain + service unit hardening + doctor service check
+- [ ] 52-02-PLAN.md — Wire TUI retry/cancel shortcuts + update help overlay and footer bar accuracy
+- [ ] 52-03-PLAN.md — Tests for binary resolution, service generation, doctor checks, and TUI shortcuts
+
+Wave structure:
+- Wave 1: 52-01 + 52-02 (independent, no file overlap)
+- Wave 2: 52-03 (tests, depends on 52-01 + 52-02)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-shell-agnostic-cli-and-tui-shortcuts.md` for full spec.

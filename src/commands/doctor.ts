@@ -15,6 +15,7 @@ import { execaSync, execa } from 'execa';
 import path from 'node:path';
 import os from 'node:os';
 import { getConfig } from '../core/config.js';
+import { resolveOpencodeBinary } from '../core/delegate.js';
 import { errMsg } from '../util/errors.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, yellow, dim, bold } from '../util/colors.js';
@@ -347,13 +348,23 @@ async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
   const config = getConfig();
   const checks: Check[] = [];
 
-  // Check opencode binary
-  const opencodePath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
-  try {
-    accessSync(opencodePath);
-    checks.push({ name: 'opencode binary', status: 'pass', detail: opencodePath });
-  } catch {
-    checks.push({ name: 'opencode binary', status: 'fail', detail: 'Not found — install opencode' });
+  // Check opencode binary via the same resolution chain used at runtime
+  const resolvedBinary = resolveOpencodeBinary();
+  if (resolvedBinary !== 'opencode') {
+    // Resolved to an actual path (absolute or PATH-resolved)
+    checks.push({ name: 'opencode binary', status: 'pass', detail: resolvedBinary });
+  } else {
+    // Fell through to bare 'opencode' fallback — try PATH as last resort
+    try {
+      const whichResult = execaSync('which', ['opencode'], { reject: false });
+      if (whichResult.stdout?.trim()) {
+        checks.push({ name: 'opencode binary', status: 'pass', detail: whichResult.stdout.trim() });
+      } else {
+        checks.push({ name: 'opencode binary', status: 'fail', detail: 'Not found — install opencode' });
+      }
+    } catch {
+      checks.push({ name: 'opencode binary', status: 'fail', detail: 'Not found — install opencode' });
+    }
   }
 
   // Check pilot-gsd directory

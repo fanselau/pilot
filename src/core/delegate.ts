@@ -10,7 +10,8 @@
  */
 
 import { execa } from 'execa';
-import { readFileSync, readdirSync } from 'node:fs';
+import { accessSync, constants, readFileSync, readdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
@@ -238,6 +239,16 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
 
 /**
  * Resolve the opencode binary path.
+ *
+ * Candidates are checked in order:
+ *   1. ~/.opencode/bin/opencode (standard install location)
+ *   2. 'opencode' via PATH lookup
+ *
+ * For absolute/relative paths, uses accessSync(X_OK) to verify existence and
+ * executability. For bare command names, uses `which` to check PATH resolution.
+ *
+ * Returns the first candidate that resolves. Falls back to bare 'opencode'
+ * (will produce a clear ENOENT at spawn time if truly missing).
  */
 function resolveOpencodeBinary(): string {
   const home = process.env['HOME'] || process.env['USERPROFILE'] || '';
@@ -245,7 +256,22 @@ function resolveOpencodeBinary(): string {
     path.join(home, '.opencode', 'bin', 'opencode'),
     'opencode',
   ];
-  return candidates[0];
+  for (const candidate of candidates) {
+    if (candidate.includes(path.sep) || candidate.startsWith('.')) {
+      // Absolute or relative path — check filesystem
+      try {
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      } catch { continue; }
+    } else {
+      // Bare command name — check PATH via which
+      try {
+        const resolved = execSync(`which ${candidate}`, { encoding: 'utf8', timeout: 5_000 }).trim();
+        if (resolved) return resolved;
+      } catch { continue; }
+    }
+  }
+  return 'opencode'; // fallback — will ENOENT with clear message
 }
 
 /**
