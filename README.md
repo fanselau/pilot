@@ -310,12 +310,14 @@ pilot add my-project "Fix typos in docs" --profile budget --provider hybrid
 
 ### Managed projects and owner notifications
 
-Register projects with an owner agent ID. When a job completes (or fails), Pilot fires a webhook to wake the owner's session:
+Optionally register projects with an owner. When configured, Pilot notifies the owner on job completion or failure:
 
 ```bash
 pilot setup ~/dev/my-project --owner main
-pilot add my-project "Add feature X" --notify main
+pilot project ~/dev/my-project --notify-openclaw --notify-agent main --notify-channel <ch> --notify-to <target>
 ```
+
+Without owner setup, Pilot still runs all jobs — you just check results manually via `pilot status` or `pilot tui`.
 
 If a job fails after exhausting retries, the project is automatically blocked. No new jobs run until you review and unblock:
 
@@ -352,12 +354,12 @@ The daemon auto-detects how many parallel jobs to run based on available RAM, en
 
 ### Notifications
 
-Pilot notifies on job completion via:
-- **Webhook** — any URL via `--notify-url` or `PILOT_OPENCLAW_HOOKS_URL`
-- **Agent routing** — sends to a specific agent session via `--notify <agentId>`
+Pilot optionally notifies on job completion via:
+- **Agent routing** — sends to a specific OpenClaw agent via owner-based or `--notify <agentId>` routing
+- **Webhook** — any URL via `--notify-url`
 - **Telegram** — via `PILOT_TELEGRAM_BOT_TOKEN` + `PILOT_TELEGRAM_CHAT_ID`
 
-All notifications include the AI judge verdict, confidence score, and reason when available.
+Notifications are optional. Without configuration, check job results via `pilot status`, `pilot log`, or `pilot tui`.
 
 ---
 

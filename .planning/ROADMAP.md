@@ -986,12 +986,16 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-existing-install-shell-e
 
 ### Phase 57: Pilot notify setup must be optional and operator-friendly
 
-**Goal:** [To be planned]
+**Goal:** Make notify easy to understand, optional by default, and clearly documented in setup/help/CLI output. `pilot add` no longer hard-errors when notify is unconfigured. Doctor shows informational notify status. All docs consistently frame notify as optional.
 **Depends on:** Phase 56
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 57 to break down)
+- [ ] 57-01-PLAN.md — Make add.ts tolerate missing notify, add doctor notify check, update setup messaging
+- [ ] 57-02-PLAN.md — Update GETTING-STARTED.md, README.md, SKILL.md, and CLI help text for optional-notify consistency
+
+Wave structure:
+- Wave 1: 57-01 + 57-02 (independent — code changes and docs have no file overlap)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-notify-setup-must-be-optional-and-operator-friendly.md` for full spec.

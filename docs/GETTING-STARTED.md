@@ -528,42 +528,65 @@ The judge always uses the cheapest tier (Haiku) regardless of profile — it onl
 
 ## 9. Notifications (Optional)
 
-### OpenClaw Webhooks
+Pilot works perfectly without notifications. Jobs run, complete, and their results are available via `pilot status`, `pilot log`, and the TUI.
 
-For [OpenClaw](https://github.com/openclaw/openclaw)-based agent orchestration. When a job completes or fails, Pilot sends a POST to the hooks endpoint to wake a dormant OpenClaw session.
+When you're ready, you can enable notifications so Pilot tells you (or your agent) when jobs finish.
 
-**Setup:**
+### Quick Setup (Owner-Based)
+
+The simplest path — register a project owner:
+
+```bash
+pilot setup ~/dev/my-project --owner main
+```
+
+Then configure a structured notify route for the project:
+
+```bash
+pilot project ~/dev/my-project \
+  --notify-openclaw \
+  --notify-agent main \
+  --notify-channel <channel-name> \
+  --notify-to <target>
+```
+
+Once configured, every job for that project automatically notifies the owner on completion or failure. No `--notify` flag needed on each `pilot add`.
+
+### Per-Job Override
+
+Override or skip notifications for individual jobs:
+
+```bash
+pilot add my-project "task" --notify other-agent  # different agent
+pilot add my-project "task" --no-notify            # skip notification
+```
+
+### Default Notify (All Projects)
+
+Set a default notify target for all projects that don't have their own:
+
+```bash
+export PILOT_DEFAULT_NOTIFY=main
+# or
+pilot config set defaults.notifyTarget main
+```
+
+### OpenClaw Webhook Setup
+
+For OpenClaw-based agent delivery (used by `--notify` and owner-based routing):
 
 ```bash
 export PILOT_OPENCLAW_HOOKS_URL=http://127.0.0.1:18789/hooks/agent
 export PILOT_OPENCLAW_HOOKS_TOKEN=your-token-here
 ```
 
-**Usage:**
-
-```bash
-pilot add my-project "Fix the auth bug" --notify main
-```
-
-The `--notify main` flag tells Pilot to wake the `main` agent session on completion. The callback payload includes:
-
-- Job ID, scope, and status (completed/failed)
-- Project name and description
-- Duration
-- Error message (if failed)
-
-If you set `PILOT_DEFAULT_NOTIFY=main`, every job will notify `main` by default. Use `--no-notify` to suppress.
-
 ### Telegram
 
-Send notifications to a Telegram chat when jobs complete or fail.
+Send notifications to a Telegram chat:
 
-**Setup:**
-
-1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
-2. Save the bot token
-3. Get your chat ID (send a message to your bot, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`)
-4. Set the environment variables:
+1. Create a bot via [@BotFather](https://t.me/BotFather)
+2. Get your chat ID
+3. Set the environment variables:
 
 ```bash
 export PILOT_TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
