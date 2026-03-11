@@ -9,7 +9,7 @@
  * which did PID/log scanning. This checks opencode binary, DB access, disk, memory.
  */
 
-import { accessSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, readFileSync, statSync } from 'node:fs';
 import { access, readFile, readdir, lstat, stat } from 'node:fs/promises';
 import { execaSync, execa } from 'execa';
 import path from 'node:path';
@@ -480,6 +480,66 @@ async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
     status: 'pass',
     detail: `session cap: ${sessionMb}MB | reserved: ${reservedMb}MB | kill threshold: ${killMb}MB`,
   });
+
+  // ── Service unit health check ──────────────────────────────────────────────
+
+  const unitPath = path.join(os.homedir(), '.config', 'systemd', 'user', 'pilot-runner.service');
+  try {
+    const unitContent = readFileSync(unitPath, 'utf8');
+    // Parse ExecStart line
+    const execStartMatch = unitContent.match(/^ExecStart=(.+)$/m);
+    if (execStartMatch) {
+      const execStartLine = execStartMatch[1].trim();
+      // Extract the binary path from ExecStart (e.g. "/usr/bin/env bun /path/to/pilot run --daemon")
+      // The actual pilot binary is after the interpreter part
+      const parts = execStartLine.split(/\s+/);
+      // Find the pilot binary: skip /usr/bin/env and bun/node, the next path-like arg is the binary
+      let pilotBinaryPath: string | null = null;
+      for (const part of parts) {
+        if (part.startsWith('/') && !part.startsWith('/usr/bin/env') && part !== 'bun' && part !== 'node') {
+          // Skip the interpreter binary if it's an absolute path to bun/node
+          if (part.endsWith('/bun') || part.endsWith('/node')) continue;
+          pilotBinaryPath = part;
+          break;
+        }
+      }
+
+      if (pilotBinaryPath) {
+        try {
+          accessSync(pilotBinaryPath, fsConstants.X_OK);
+          checks.push({
+            name: 'service unit',
+            status: 'pass',
+            detail: `ExecStart binary: ${pilotBinaryPath}`,
+          });
+        } catch {
+          checks.push({
+            name: 'service unit',
+            status: 'fail',
+            detail: `ExecStart points to missing binary: ${pilotBinaryPath} — run: pilot service install`,
+          });
+        }
+      } else {
+        checks.push({
+          name: 'service unit',
+          status: 'warn',
+          detail: `Could not parse binary path from ExecStart: ${execStartLine.slice(0, 100)}`,
+        });
+      }
+    } else {
+      checks.push({
+        name: 'service unit',
+        status: 'warn',
+        detail: 'No ExecStart found in unit file',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'service unit',
+      status: 'warn',
+      detail: 'Service not installed — run: pilot service install',
+    });
+  }
 
   // ── AGENTS.md coverage across registered projects (file check only, no AI) ──
 
