@@ -53,7 +53,7 @@ program
   .option('--force-dirty', 'Allow queueing a job that may start on a dirty worktree (weaker recovery guarantees)')
   .option('--start-immediately', 'Bypass queue grace wait and launch as soon as eligible (less review/cancel time)')
   .option('--timeout <minutes>', 'Per-job timeout in minutes (default: 0 = infinite)', (v: string) => parseInt(v, 10))
-  .option('--notify <agentId>', 'Agent ID to notify on completion (e.g. main)')
+  .option('--notify <agentId>', 'Agent ID to notify on completion (optional, e.g. main)')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
   .option('--categories <cats>', 'Skill categories for this job (comma-separated): frontend,testing')

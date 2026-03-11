@@ -283,24 +283,32 @@ Check status first: `pilot service status`
 
 ### How It Works
 
-When you queue a job with `--notify`, the runner sends a webhook to your OpenClaw session when the job completes or fails:
+Notifications are optional. Pilot works without any notify configuration — you check results via `pilot status`, `pilot log`, or `pilot tui`.
+
+When configured, Pilot notifies the project owner (or a specified agent) when jobs complete or fail:
 
 ```bash
-pilot add ~/dev/myapp requirements/feat.md --notify main
-```
+# With owner-based automatic notifications
+pilot add ~/dev/myapp requirements/feat.md
 
-The `--notify` flag takes an **agent ID** — a plain identifier like `main`, not a full session key.
+# With explicit agent notification
+pilot add ~/dev/myapp requirements/feat.md --notify main
+
+# Explicit opt-out
+pilot add ~/dev/myapp requirements/feat.md --no-notify
+```
 
 ### Owner-Based Default
 
-If a project has an owner registered via `pilot setup --owner`, notifications go to the owner automatically. You don't need `--notify` on every `pilot add`:
+If a project has an owner and structured notify route configured, notifications go to the owner automatically:
 
 ```bash
-# Project owner is 'main' — notification is automatic
-pilot add ~/dev/myapp requirements/feat.md
+# One-time setup
+pilot setup ~/dev/myapp --owner main
+pilot project ~/dev/myapp --notify-openclaw --notify-agent main --notify-channel <ch> --notify-to <target>
 
-# Explicit opt-out if you don't want notification
-pilot add ~/dev/myapp requirements/feat.md --no-notify
+# Then just add jobs — notify is automatic
+pilot add ~/dev/myapp requirements/feat.md
 ```
 
 ### What You Receive
