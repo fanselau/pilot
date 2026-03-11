@@ -12,7 +12,7 @@ Last activity: 2026-03-10 - Completed quick task 079
 
 Progress: ██████████ 41/41 plans (100%)
 **Next Plan:** None (phase complete)
-**Next Phase:** TBD (next roadmap phase)
+**Next Phase:** Phase 52 (Shell-Agnostic CLI and TUI Shortcuts)
 
 ## Project Reference
 
@@ -245,6 +245,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 49 added: Surface Judge Verdict and Status Badges in TUI / Status Views
 - Phase 50 added: Setup Refresh Mode and Fast Skill Installation
 - Phase 51 added: Pilot notifications via `openclaw agent --deliver`
+- Phase 52 added: Shell-Agnostic CLI and TUI Shortcuts
 
 ## Decisions
 

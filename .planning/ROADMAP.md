@@ -903,3 +903,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-openclaw-agent-deliver-notifications.md` for full spec.
+
+### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
+
+**Goal:** [To be planned]
+**Depends on:** Phase 51
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 52 to break down)
+
+**Details:**
+[To be added during planning]
