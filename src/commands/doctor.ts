@@ -344,7 +344,7 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
 
 // ── System health check (original behavior) ─────────────────────────────
 
-async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
+async function systemHealthCheck(skipAgents?: boolean, fix?: boolean): Promise<Check[]> {
   const config = getConfig();
   const checks: Check[] = [];
 
@@ -546,19 +546,37 @@ async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
     const { verifyShellExposure } = await import('../core/shell-exposure.js');
     const exposure = await verifyShellExposure();
 
-    for (const finding of exposure.findings) {
-      if (finding.status === 'pass') {
+    // If --fix requested and any findings are non-pass, run ensureShellExposure
+    const hasShellIssues = exposure.findings.some(f => f.status !== 'pass');
+    if (fix && hasShellIssues) {
+      const { ensureShellExposure } = await import('../core/shell-exposure.js');
+      const fixResult = await ensureShellExposure();
+      for (const finding of fixResult.findings) {
+        const fixStatus = finding.status === 'fail' ? 'warn' : 'pass';
+        const fixAction = finding.status === 'created' ? 'Fixed (created)' :
+                          finding.status === 'refreshed' ? 'Fixed (refreshed)' :
+                          finding.status === 'pass' ? 'OK' : 'Failed to fix';
         checks.push({
           name: `shell: ${finding.tool}`,
-          status: 'pass',
-          detail: `${finding.stablePath} → ${finding.resolvedTarget}`,
+          status: fixStatus,
+          detail: `${fixAction}: ${finding.stablePath} → ${finding.resolvedTarget}`,
         });
-      } else {
-        checks.push({
-          name: `shell: ${finding.tool}`,
-          status: 'warn',
-          detail: `${finding.detail} — run: pilot setup --refresh`,
-        });
+      }
+    } else {
+      for (const finding of exposure.findings) {
+        if (finding.status === 'pass') {
+          checks.push({
+            name: `shell: ${finding.tool}`,
+            status: 'pass',
+            detail: `${finding.stablePath} → ${finding.resolvedTarget}`,
+          });
+        } else {
+          checks.push({
+            name: `shell: ${finding.tool}`,
+            status: 'warn',
+            detail: `${finding.detail} — run: pilot doctor --fix`,
+          });
+        }
       }
     }
 
@@ -607,10 +625,10 @@ async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
 
 // ── Main command ───────────────────────────────────────────────────────────
 
-async function doctorCommand(projectPath?: string, smokeTest?: boolean, skipAgents?: boolean): Promise<void> {
+async function doctorCommand(projectPath?: string, smokeTest?: boolean, skipAgents?: boolean, fix?: boolean): Promise<void> {
   const checks = projectPath
     ? await projectHealthCheck(projectPath, smokeTest, skipAgents)
-    : await systemHealthCheck(skipAgents);
+    : await systemHealthCheck(skipAgents, fix);
 
   if (isJsonMode()) {
     outputJson({ checks });
@@ -630,6 +648,14 @@ async function doctorCommand(projectPath?: string, smokeTest?: boolean, skipAgen
     outputHuman(`  ${icon} ${c.name.padEnd(26)} ${dim(c.detail)}`);
   }
   outputHuman('');
+
+  if (fix) {
+    const shellFixed = checks.filter(c => c.name.startsWith('shell:') && c.detail.startsWith('Fixed'));
+    if (shellFixed.length > 0) {
+      outputHuman(`  ${green('✓')} Shell exposure repaired (${shellFixed.length} launcher(s))`);
+      outputHuman('');
+    }
+  }
 
   const hasFail = checks.some(c => c.status === 'fail');
   if (hasFail) {

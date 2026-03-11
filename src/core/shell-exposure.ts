@@ -249,7 +249,7 @@ async function verifyShellExposure(): Promise<ShellExposureResult> {
         status: 'fail',
         stablePath,
         resolvedTarget: '',
-        detail: 'Not found — run: pilot setup --refresh',
+        detail: 'Not found — run: pilot doctor --fix',
       });
     }
   }

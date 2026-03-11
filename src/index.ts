@@ -452,9 +452,10 @@ program
   .option('--project <path>', 'Check a specific project setup')
   .option('--smoke-test', 'Run a live smoke test (requires --project)')
   .option('--skip-agents', 'Skip AI-powered AGENTS.md health check')
+  .option('--fix', 'Auto-repair shell exposure (create stable launchers in ~/.local/bin)')
   .action(async (opts: Record<string, unknown>) => {
     const { doctorCommand } = await import('./commands/doctor.js');
-    await doctorCommand(opts.project as string | undefined, opts.smokeTest as boolean | undefined, opts.skipAgents as boolean | undefined);
+    await doctorCommand(opts.project as string | undefined, opts.smokeTest as boolean | undefined, opts.skipAgents as boolean | undefined, opts.fix as boolean | undefined);
   });
 
 program
