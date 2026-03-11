@@ -541,6 +541,41 @@ async function systemHealthCheck(skipAgents?: boolean): Promise<Check[]> {
     });
   }
 
+  // ── Shell exposure health check ──────────────────────────────────────────
+  try {
+    const { verifyShellExposure } = await import('../core/shell-exposure.js');
+    const exposure = await verifyShellExposure();
+
+    for (const finding of exposure.findings) {
+      if (finding.status === 'pass') {
+        checks.push({
+          name: `shell: ${finding.tool}`,
+          status: 'pass',
+          detail: `${finding.stablePath} → ${finding.resolvedTarget}`,
+        });
+      } else {
+        checks.push({
+          name: `shell: ${finding.tool}`,
+          status: 'warn',
+          detail: `${finding.detail} — run: pilot setup --refresh`,
+        });
+      }
+    }
+
+    // Surface fnm exclusion as informational note
+    checks.push({
+      name: 'shell: fnm',
+      status: 'pass',
+      detail: exposure.fnmNote,
+    });
+  } catch (err) {
+    checks.push({
+      name: 'shell exposure',
+      status: 'warn',
+      detail: `Check failed: ${errMsg(err).slice(0, 150)}`,
+    });
+  }
+
   // ── AGENTS.md coverage across registered projects (file check only, no AI) ──
 
   if (!skipAgents) {

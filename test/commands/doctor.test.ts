@@ -19,10 +19,31 @@ let mockUnitContent: string | null = null; // null = file doesn't exist (ENOENT)
 let mockAccessiblePaths: Set<string> = new Set();
 const mockHomedir = '/home/testuser';
 
+// Shell exposure mock state
+let mockShellExposureResult: {
+  findings: Array<{ tool: string; status: string; stablePath: string; resolvedTarget: string; detail: string }>;
+  fnmNote: string;
+} = {
+  findings: [
+    { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
+    { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/node', detail: 'OK' },
+    { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/pnpm', detail: 'OK' },
+  ],
+  fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+};
+let mockShellExposureError: Error | null = null;
+
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock('../../src/core/delegate.js', () => ({
   resolveOpencodeBinary: () => mockResolvedBinary,
+}));
+
+vi.mock('../../src/core/shell-exposure.js', () => ({
+  verifyShellExposure: async () => {
+    if (mockShellExposureError) throw mockShellExposureError;
+    return mockShellExposureResult;
+  },
 }));
 
 vi.mock('node:fs', async () => {
@@ -140,6 +161,15 @@ beforeEach(() => {
   mockUnitContent = null;
   mockAccessiblePaths = new Set();
   mockJsonMode = true; // Use JSON mode for structured assertions
+  mockShellExposureError = null;
+  mockShellExposureResult = {
+    findings: [
+      { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
+      { tool: 'node', status: 'pass', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/node', detail: 'OK' },
+      { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/home/testuser/.local/share/fnm/node-versions/v22.0.0/installation/bin/pnpm', detail: 'OK' },
+    ],
+    fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+  };
   exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
     throw new Error('process.exit called');
   }) as never);
@@ -263,5 +293,123 @@ describe('doctor system health — opencode binary check', () => {
     expect(check).toBeDefined();
     expect(check!.status).toBe('fail');
     expect(check!.detail).toContain('Not found');
+  });
+});
+
+// ── Shell exposure health checks ──────────────────────────────────────────
+
+describe('doctor system health — shell exposure checks', () => {
+  it('includes shell: pilot, shell: node, shell: pnpm, shell: fnm checks when all pass', async () => {
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const pilotCheck = findCheck('shell: pilot');
+    expect(pilotCheck).toBeDefined();
+    expect(pilotCheck!.status).toBe('pass');
+    expect(pilotCheck!.detail).toContain('/home/testuser/.local/bin/pilot');
+    expect(pilotCheck!.detail).toContain('/home/testuser/dev/pilot/dist/index.js');
+
+    const nodeCheck = findCheck('shell: node');
+    expect(nodeCheck).toBeDefined();
+    expect(nodeCheck!.status).toBe('pass');
+    expect(nodeCheck!.detail).toContain('/home/testuser/.local/bin/node');
+
+    const pnpmCheck = findCheck('shell: pnpm');
+    expect(pnpmCheck).toBeDefined();
+    expect(pnpmCheck!.status).toBe('pass');
+    expect(pnpmCheck!.detail).toContain('/home/testuser/.local/bin/pnpm');
+
+    const fnmCheck = findCheck('shell: fnm');
+    expect(fnmCheck).toBeDefined();
+    expect(fnmCheck!.status).toBe('pass');
+    expect(fnmCheck!.detail).toContain('fnm is not exposed');
+  });
+
+  it('shows warn with "pilot setup --refresh" hint when a tool fails', async () => {
+    mockShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'pass', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '/home/testuser/dev/pilot/dist/index.js', detail: 'OK' },
+        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found — run: pilot setup --refresh' },
+        { tool: 'pnpm', status: 'pass', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '/usr/bin/pnpm', detail: 'OK' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const nodeCheck = findCheck('shell: node');
+    expect(nodeCheck).toBeDefined();
+    expect(nodeCheck!.status).toBe('warn');
+    expect(nodeCheck!.detail).toContain('pilot setup --refresh');
+  });
+
+  it('shows warn for all tools when multiple fail', async () => {
+    mockShellExposureResult = {
+      findings: [
+        { tool: 'pilot', status: 'fail', stablePath: '/home/testuser/.local/bin/pilot', resolvedTarget: '', detail: 'Broken symlink — target does not exist' },
+        { tool: 'node', status: 'fail', stablePath: '/home/testuser/.local/bin/node', resolvedTarget: '', detail: 'Not found' },
+        { tool: 'pnpm', status: 'fail', stablePath: '/home/testuser/.local/bin/pnpm', resolvedTarget: '', detail: 'Not found' },
+      ],
+      fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
+    };
+
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const pilotCheck = findCheck('shell: pilot');
+    expect(pilotCheck!.status).toBe('warn');
+    expect(pilotCheck!.detail).toContain('pilot setup --refresh');
+
+    const nodeCheck = findCheck('shell: node');
+    expect(nodeCheck!.status).toBe('warn');
+
+    const pnpmCheck = findCheck('shell: pnpm');
+    expect(pnpmCheck!.status).toBe('warn');
+
+    // fnm note still shown
+    const fnmCheck = findCheck('shell: fnm');
+    expect(fnmCheck).toBeDefined();
+    expect(fnmCheck!.status).toBe('pass');
+  });
+
+  it('shows single warn when shell-exposure module throws', async () => {
+    mockShellExposureError = new Error('Module not available');
+
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    // Individual shell: checks should NOT be present
+    expect(findCheck('shell: pilot')).toBeUndefined();
+    expect(findCheck('shell: node')).toBeUndefined();
+    expect(findCheck('shell: pnpm')).toBeUndefined();
+    expect(findCheck('shell: fnm')).toBeUndefined();
+
+    // Instead we get a single fallback warn
+    const exposureCheck = findCheck('shell exposure');
+    expect(exposureCheck).toBeDefined();
+    expect(exposureCheck!.status).toBe('warn');
+    expect(exposureCheck!.detail).toContain('Check failed');
+    expect(exposureCheck!.detail).toContain('Module not available');
+  });
+
+  it('fnm exclusion note is surfaced as pass with correct message', async () => {
+    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const fnmCheck = findCheck('shell: fnm');
+    expect(fnmCheck).toBeDefined();
+    expect(fnmCheck!.status).toBe('pass');
+    expect(fnmCheck!.detail).toBe('fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.');
   });
 });
