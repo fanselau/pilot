@@ -152,7 +152,7 @@ describe('notifyJobCompletion', () => {
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('notify-route-legacy-ambiguous'));
   });
 
-  it('builds prompt with required context and natural-response instruction', () => {
+  it('builds prompt with required context and explicit reply instruction', () => {
     const prompt = buildDeliveryPrompt(makeJob({
       status: 'failed',
       error: 'TypeError: boom',
@@ -163,14 +163,112 @@ describe('notifyJobCompletion', () => {
       }),
     }));
 
+    // Explicit reply instruction (not passive "context" framing)
+    expect(prompt).toContain('Reply in your target chat');
+    expect(prompt).not.toContain('treat as context');
+
+    // All required metadata fields present
     expect(prompt).toContain('job_id: ab12');
     expect(prompt).toContain('project: test-project');
     expect(prompt).toContain('description: Implement feature X');
     expect(prompt).toContain('status: failed');
     expect(prompt).toContain('verdict: failed');
     expect(prompt).toContain('confidence: 88%');
+    expect(prompt).toContain('verdict_reason: Tests did not pass');
+    expect(prompt).toContain('error: TypeError: boom');
     expect(prompt).toContain('next_step:');
-    expect(prompt).toContain('Reply naturally in your target chat');
+
+    // Anti-silence instruction
+    expect(prompt).toContain('Do NOT choose NO_REPLY');
+  });
+
+  it('completed job prompt has success-oriented guidance', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'completed',
+      judgeVerdict: JSON.stringify({
+        verdict: 'succeeded',
+        confidence: 95,
+        reason: 'All tests pass',
+      }),
+    }));
+
+    // Success-oriented opening and guidance
+    expect(prompt).toContain('just completed');
+    expect(prompt).toContain('Acknowledge success');
+    expect(prompt).not.toContain('Flag the failure');
+
+    // All standard metadata fields
+    expect(prompt).toContain('job_id: ab12');
+    expect(prompt).toContain('project: test-project');
+    expect(prompt).toContain('description: Implement feature X');
+    expect(prompt).toContain('status: completed');
+    expect(prompt).toContain('duration:');
+    expect(prompt).toContain('verdict: succeeded');
+    expect(prompt).toContain('confidence: 95%');
+    expect(prompt).toContain('next_step:');
+    expect(prompt).toContain('Do NOT choose NO_REPLY');
+  });
+
+  it('failed job prompt has failure-oriented guidance with follow-up', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Build failed: TypeScript compilation errors',
+      judgeVerdict: JSON.stringify({
+        verdict: 'failed',
+        confidence: 92,
+        reason: 'Build did not succeed',
+      }),
+    }));
+
+    // Failure-oriented opening and guidance
+    expect(prompt).toContain('just failed');
+    expect(prompt).toContain('Flag the failure');
+    expect(prompt).not.toContain('Acknowledge success');
+
+    // Error and verdict fields present
+    expect(prompt).toContain('error: Build failed: TypeScript compilation errors');
+    expect(prompt).toContain('verdict: failed');
+
+    // Follow-up suggestion in next_step
+    expect(prompt).toContain('pilot retry');
+    expect(prompt).toContain('Do NOT choose NO_REPLY');
+  });
+
+  it('prompt without verdict still works', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'completed',
+      judgeVerdict: null,
+    }));
+
+    // Reply instruction still present
+    expect(prompt).toContain('Reply in your target chat');
+    expect(prompt).toContain('Do NOT choose NO_REPLY');
+
+    // No verdict/confidence lines
+    expect(prompt).not.toContain('verdict:');
+    expect(prompt).not.toContain('confidence:');
+
+    // Still has next_step
+    expect(prompt).toContain('next_step:');
+  });
+
+  it('prompt truncates long description and error', () => {
+    const longDesc = 'A'.repeat(300);
+    const longError = 'E'.repeat(500);
+
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      description: longDesc,
+      error: longError,
+    }));
+
+    // Description truncated at 180 chars
+    expect(prompt).toContain('description: ' + 'A'.repeat(180) + '...');
+    expect(prompt).not.toContain('A'.repeat(181));
+
+    // Error truncated at 300 chars
+    expect(prompt).toContain('error: ' + 'E'.repeat(300) + '...');
+    expect(prompt).not.toContain('E'.repeat(301));
   });
 
   it('returns false and logs when delivery reports runtime failure', async () => {
