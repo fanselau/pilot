@@ -9,7 +9,7 @@
 
 import { theme, statusColors } from '../theme.js';
 
-const HELP_TEXT = `
+export const HELP_TEXT = `
  ── Global ──────────────────────────
   q / Ctrl+C   Quit
   ?            Toggle help

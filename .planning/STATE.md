@@ -1,18 +1,18 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 51
+## Current Phase: 52
 
 ## Current Position
 
-Phase: 51 (Pilot notifications via `openclaw agent --deliver`)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-10 - Completed quick task 079
+Phase: 52 (Shell-Agnostic CLI and TUI Shortcuts)
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-11 - Completed 52-01-PLAN.md (wave 1 complete: 52-01 + 52-02)
 
-Progress: ██████████ 41/41 plans (100%)
-**Next Plan:** None (phase complete)
-**Next Phase:** Phase 52 (Shell-Agnostic CLI and TUI Shortcuts)
+Progress: ██████████ 42/44 plans (95%)
+**Next Plan:** 52-03-PLAN.md (wave 2: tests)
+**Next Phase:** None (last phase)
 
 ## Project Reference
 
@@ -127,6 +127,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** in progress (1/2 plans complete)
 
 ### Phase 51: Pilot notifications via `openclaw agent --deliver`
+- **Status:** in progress (2/3 plans complete)
+
+### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
 - **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
@@ -650,9 +653,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 51-03 | addCommand snapshots resolved notify routes at queue time and rejects explicit `--notify` agent mismatches | Keeps runtime delivery deterministic per job and blocks wrong-agent route drift early |
 | quick-079 | Dirty-start launch checks require exact branch/head/porcelain match against the latest per-project baseline | Allows safe same-project continuation while conservatively blocking ambiguous manual or unattributed dirt |
 | quick-079 | `project_dirty_baselines.job_id` is stored as required attribution text without foreign-key coupling | Baseline attribution must survive job lifecycle cleanup and synthetic test fixtures without write failures |
+| 52-01 | resolveOpencodeBinary() uses accessSync(X_OK) for absolute paths, execSync('which') for bare commands | Proper filesystem validation instead of always returning first candidate |
+| 52-01 | Service unit uses /usr/bin/env bun instead of absolute interpreter path | Survives bun/node upgrades without re-install |
+| 52-01 | Stable minimal PATH in service unit includes ~/.opencode/bin + standard dirs | Prevents PATH snapshot staleness from shell environment |
+| 52-01 | Doctor service check parses ExecStart to validate pilot binary path | Detects stale service units proactively |
 
 ## Session Continuity
 
-Last session: 2026-03-10T20:29:00Z
-Stopped at: Completed quick task 079
+Last session: 2026-03-11T14:03:00Z
+Stopped at: Completed 52-01-PLAN.md (wave 1 complete)
 Resume file: None

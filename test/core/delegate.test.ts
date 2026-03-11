@@ -20,6 +20,8 @@ let mockRequirementFileContent: Record<string, string> = {};
 // Key: the phase dir path suffix (e.g., '01-setup'), value: array of files
 let mockPhaseSubdirFiles: Record<string, string[]> = {};
 
+
+
 // ── Mock node:fs ───────────────────────────────────────────────────────────
 
 vi.mock('node:fs', async () => {
@@ -129,7 +131,13 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackSessionKey: null,
     callbackUrl: null,
+    notifyRoute: null,
     categories: null,
+    gitBaseCommit: null,
+    gitHeadCommit: null,
+    allowDirtyStart: false,
+    startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -619,3 +627,5 @@ describe('attemptDelegation model enforcement', () => {
     expect(entry.variant).toBe('medium');
   });
 });
+
+
