@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 57
+## Current Phase: 58
 
 ## Current Position
 
-Phase: 57 (Pilot Notify Setup Must Be Optional and Operator-Friendly)
-Plan: 2 of 2 in current phase
+Phase: 58 (Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-11 - Completed 57-01-PLAN.md (execution)
+Last activity: 2026-03-12 - Completed 58-01-PLAN.md (execution)
 
-Progress: ██████████████ 51/51 plans (100%)
+Progress: ██████████████ 52/52 plans (100%)
 
 ## Project Reference
 
@@ -144,6 +144,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 57: Pilot Notify Setup Must Be Optional and Operator-Friendly
 - **Status:** complete (2/2 plans, verified ✓)
+
+### Phase 58: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
+- **Status:** complete (1/1 plans, verified ✓)
 
 ### Quick Tasks Completed
 
