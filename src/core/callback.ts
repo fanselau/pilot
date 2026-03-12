@@ -63,7 +63,7 @@ function nextStepGuidance(job: Job): string {
   if (job.status === 'completed') {
     return 'Acknowledge completion and continue with the next planned item.';
   }
-  return `Share the failure clearly and suggest follow-up (e.g. pilot retry ${job.id} after fixing root cause).`;
+  return `The project is now blocked. Run: pilot log ${job.id} to read the full build transcript, then pilot retry ${job.id} to retry (also unblocks the project).`;
 }
 
 function buildDeliveryPrompt(job: Job): string {
@@ -97,7 +97,8 @@ function buildDeliveryPrompt(job: Job): string {
   lines.push('');
 
   if (failed) {
-    lines.push('Flag the failure clearly, include error context, and suggest a concrete follow-up action.');
+    lines.push(`Flag the failure clearly. The project is now blocked — no further jobs will run until someone retries or unblocks.`);
+    lines.push(`Tell the team to run pilot log ${job.id} to inspect the transcript, then pilot retry ${job.id} to fix and retry.`);
   } else {
     lines.push('Acknowledge success, mention the project and what was done, and note the natural next action.');
   }

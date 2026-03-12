@@ -997,12 +997,15 @@ Plans:
 
 ### Phase 58: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
 
-**Goal:** [To be planned]
+**Goal:** Make failure notifications teach the receiving agent the right next actions: state the project is blocked, tell the agent to use `pilot log <id>` to inspect the transcript, and guide toward `pilot retry <id>` recovery. Focused prompt quality improvement — no transport or structural changes.
 **Depends on:** Phase 57
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 58 to break down)
+- [ ] 58-01-PLAN.md — Update failure notification prompt with blocked-awareness, log guidance, recovery steps + tests
+
+Wave structure:
+- Wave 1: 58-01 (single plan — prompt update + tests)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-failure-notifications-should-guide-agents-to-unblock-and-read-logs.md` for full spec.
