@@ -1,6 +1,6 @@
 /**
  * Tests for TUI keyboard shortcut wiring, help overlay accuracy,
- * and footer bar hint correctness.
+ * footer bar hint correctness, and real keyboard handler branching.
  *
  * Pure unit tests — no SolidJS rendering needed.
  *
@@ -9,9 +9,10 @@
  *   - Cancel validates pending status
  *   - Retry validates failed/cancelled status
  *   - Footer HINTS keys match per view
+ *   - handleKeyPress correctly routes by job status with flash feedback
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Mocks for TUI component imports ────────────────────────────────────────
 
@@ -36,10 +37,34 @@ vi.mock('solid-js', () => ({
   onCleanup: vi.fn(),
 }));
 
+// Mock external dependencies used by handleKeyPress
+vi.mock('../../src/tui/data/pilot-db.js', () => ({
+  retry: vi.fn(),
+  cancel: vi.fn(),
+  unblockProject: vi.fn(),
+  deregisterProject: vi.fn(),
+  fetchQueueData: vi.fn(() => ({ pending: [], running: [] })),
+  fetchRecentData: vi.fn(() => []),
+  fetchProjectData: vi.fn(() => []),
+}));
+
+vi.mock('../../src/core/db.js', () => ({
+  forceQuitJob: vi.fn(),
+}));
+
+vi.mock('../../src/core/runner.js', () => ({
+  killJobSession: vi.fn(async () => {}),
+}));
+
 // ── Import HELP_TEXT and HINTS ─────────────────────────────────────────────
 
 import { HELP_TEXT } from '../../src/tui/components/help-overlay.js';
 import { HINTS, getFooterHint } from '../../src/tui/components/footer-bar.js';
+import { handleKeyPress } from '../../src/tui/app.js';
+import type { TuiKeyEvent } from '../../src/tui/app.js';
+import { retry } from '../../src/tui/data/pilot-db.js';
+import type { Job, JobStatus } from '../../src/core/types.js';
+import type { PilotStateStore } from '../../src/tui/state.js';
 
 // ── Implemented shortcut keys ──────────────────────────────────────────────
 // This is the authoritative set of keys handled in app.tsx's useKeyboard callback.
@@ -335,5 +360,271 @@ describe('Context-aware footer hints', () => {
       const hint = getFooterHint('dashboard', panel);
       expect(hint).toContain('j/k navigate');
     }
+  });
+});
+
+// ── Keyboard handler branching (real handler) ──────────────────────────────
+
+function makeKey(seq: string, opts?: Partial<TuiKeyEvent>): TuiKeyEvent {
+  return {
+    name: seq,
+    sequence: seq,
+    ctrl: false,
+    meta: false,
+    shift: false,
+    ...opts,
+  };
+}
+
+function mockJob(overrides?: Partial<Job>): Job {
+  return {
+    id: 'aaaa',
+    project: '/tmp/test-project',
+    scope: 'quick',
+    description: 'test job',
+    requirementPath: null,
+    status: 'pending',
+    priority: 0,
+    dependsOn: null,
+    parentJobId: null,
+    createdAt: '2026-01-01T00:00:00Z',
+    startedAt: null,
+    completedAt: null,
+    error: null,
+    resumeHint: null,
+    attempts: 0,
+    timeout: 60,
+    delegationPlan: null,
+    currentStep: 0,
+    sessionTitles: null,
+    modelProfile: 'balanced',
+    providerMode: 'hybrid',
+    judgeVerdict: null,
+    actualModels: null,
+    callbackUrl: null,
+    callbackSessionKey: null,
+    notifyRoute: null,
+    categories: null,
+    gitBaseCommit: null,
+    gitHeadCommit: null,
+    allowDirtyStart: false,
+    startedDirty: false,
+    skipGracePeriod: false,
+    ...overrides,
+  };
+}
+
+/** Create a minimal mock PilotStateStore with signal-like getters/setters. */
+function createMockState(overrides?: {
+  queue?: Job[];
+  running?: Job[];
+  completed?: Job[];
+  panelFocus?: string;
+  selectedIndex?: number;
+  view?: string;
+  projects?: Array<{ path: string; status: string }>;
+}): PilotStateStore {
+  let _queue = overrides?.queue ?? [];
+  let _running = overrides?.running ?? [];
+  let _completed = overrides?.completed ?? [];
+  let _panelFocus = overrides?.panelFocus ?? 'queue';
+  let _selectedIndex = overrides?.selectedIndex ?? 0;
+  let _view = overrides?.view ?? 'dashboard';
+  let _flashMessage = '';
+  let _showConfirm = false;
+  let _showFilter = false;
+  let _showHelp = false;
+  let _confirmMessage = '';
+  let _pendingConfirmAction: (() => Promise<void>) | null = null;
+  let _projects = overrides?.projects ?? [];
+
+  // Compute selectedJob based on panelFocus and index
+  const selectedJob = () => {
+    if (_panelFocus === 'queue') return _queue[_selectedIndex] ?? null;
+    if (_panelFocus === 'running') return _running[_selectedIndex] ?? null;
+    if (_panelFocus === 'completed') return _completed[_selectedIndex] ?? null;
+    return null;
+  };
+
+  return {
+    queue: () => _queue,
+    setQueue: (v: any) => { _queue = typeof v === 'function' ? v(_queue) : v; },
+    running: () => _running,
+    setRunning: (v: any) => { _running = typeof v === 'function' ? v(_running) : v; },
+    completed: () => _completed,
+    setCompleted: (v: any) => { _completed = typeof v === 'function' ? v(_completed) : v; },
+    projects: () => _projects as any,
+    setProjects: (v: any) => { _projects = typeof v === 'function' ? v(_projects) : v; },
+    view: () => _view as any,
+    setView: (v: any) => { _view = typeof v === 'function' ? v(_view) : v; },
+    selectedIndex: () => _selectedIndex,
+    setSelectedIndex: (v: any) => { _selectedIndex = typeof v === 'function' ? v(_selectedIndex) : v; },
+    panelFocus: () => _panelFocus as any,
+    setPanelFocus: (v: any) => { _panelFocus = typeof v === 'function' ? v(_panelFocus) : v; },
+    detailJobId: () => null,
+    setDetailJobId: vi.fn(),
+    showHelp: () => _showHelp,
+    setShowHelp: (v: any) => { _showHelp = typeof v === 'function' ? v(_showHelp) : v; },
+    showFilter: () => _showFilter,
+    setShowFilter: (v: any) => { _showFilter = typeof v === 'function' ? v(_showFilter) : v; },
+    filter: () => ({}),
+    setFilter: vi.fn(),
+    showConfirm: () => _showConfirm,
+    setShowConfirm: (v: any) => { _showConfirm = typeof v === 'function' ? v(_showConfirm) : v; },
+    pendingConfirmAction: () => _pendingConfirmAction,
+    setPendingConfirmAction: (v: any) => { _pendingConfirmAction = typeof v === 'function' ? v(_pendingConfirmAction) : v; },
+    confirmMessage: () => _confirmMessage,
+    setConfirmMessage: (v: any) => { _confirmMessage = typeof v === 'function' ? v(_confirmMessage) : v; },
+    flashMessage: () => _flashMessage,
+    setFlashMessage: (v: any) => { _flashMessage = typeof v === 'function' ? v(_flashMessage) : v; },
+    followLog: () => true,
+    setFollowLog: vi.fn(),
+    logMessages: () => [],
+    setLogMessages: vi.fn(),
+    logSearchQuery: () => '',
+    setLogSearchQuery: vi.fn(),
+    sessionTokens: () => new Map(),
+    setSessionTokens: vi.fn(),
+    lastMessages: () => new Map(),
+    setLastMessages: vi.fn(),
+    observabilitySnapshots: () => new Map(),
+    setObservabilitySnapshots: vi.fn(),
+    selectedJob,
+    filteredQueue: () => _queue,
+    navigateToDetail: vi.fn(),
+    navigateBack: vi.fn(),
+    toggleSplit: vi.fn(),
+    cyclePanelFocus: vi.fn(),
+  } as unknown as PilotStateStore;
+}
+
+describe('Keyboard handler branching (real handler)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('r on a running job → sets flashMessage, does NOT call retry', () => {
+    const state = createMockState({
+      running: [mockJob({ status: 'running' })],
+      panelFocus: 'running',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('r'), state, renderer);
+
+    expect(state.flashMessage()).toContain('retry: not available');
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it('x on a completed job → sets flashMessage', () => {
+    const state = createMockState({
+      completed: [mockJob({ status: 'completed' })],
+      panelFocus: 'completed',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('x'), state, renderer);
+
+    expect(state.flashMessage()).toContain('cancel: not available');
+  });
+
+  it('K on a pending job → sets flashMessage', () => {
+    const state = createMockState({
+      queue: [mockJob({ status: 'pending' })],
+      panelFocus: 'queue',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('K'), state, renderer);
+
+    expect(state.flashMessage()).toContain('kill: not available');
+  });
+
+  it('r on a failed job → calls retry (no flash)', () => {
+    const state = createMockState({
+      completed: [mockJob({ status: 'failed' })],
+      panelFocus: 'completed',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('r'), state, renderer);
+
+    expect(state.flashMessage()).toBe('');
+    expect(retry).toHaveBeenCalledWith('aaaa');
+  });
+
+  it('r on a cancelled job → calls retry (no flash)', () => {
+    const state = createMockState({
+      completed: [mockJob({ status: 'cancelled' })],
+      panelFocus: 'completed',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('r'), state, renderer);
+
+    expect(state.flashMessage()).toBe('');
+    expect(retry).toHaveBeenCalledWith('aaaa');
+  });
+
+  it('q on dashboard → calls renderer.destroy', () => {
+    const state = createMockState({ view: 'dashboard' });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('q'), state, renderer);
+
+    expect(renderer.destroy).toHaveBeenCalled();
+  });
+
+  it('r with no job selected → flash "no job selected"', () => {
+    const state = createMockState({
+      queue: [],
+      panelFocus: 'queue',
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('r'), state, renderer);
+
+    expect(state.flashMessage()).toContain('retry: no job selected');
+  });
+
+  it('flash message auto-clears after 2 seconds', () => {
+    const state = createMockState({
+      running: [mockJob({ status: 'running' })],
+      panelFocus: 'running',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('r'), state, renderer);
+
+    expect(state.flashMessage()).toContain('retry: not available');
+
+    vi.advanceTimersByTime(2000);
+    expect(state.flashMessage()).toBe('');
+  });
+
+  it('K on a running job → opens confirm overlay (no flash)', () => {
+    const state = createMockState({
+      running: [mockJob({ status: 'running' })],
+      panelFocus: 'running',
+      selectedIndex: 0,
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('K'), state, renderer);
+
+    expect(state.flashMessage()).toBe('');
+    expect(state.showConfirm()).toBe(true);
+    expect(state.confirmMessage()).toContain('Kill job');
   });
 });

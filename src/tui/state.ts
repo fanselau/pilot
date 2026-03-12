@@ -49,6 +49,9 @@ export function createPilotState() {
   // confirmMessage stores the context-specific message for the ConfirmOverlay
   const [confirmMessage, setConfirmMessage] = createSignal<string>('');
 
+  // ── Flash message signal (brief status feedback for inapplicable shortcuts) ──
+  const [flashMessage, setFlashMessage] = createSignal<string>('');
+
   // ── Log state signals ─────────────────────────────────────────────────
   const [followLog, setFollowLog] = createSignal(true);
   const [logMessages, setLogMessages] = createSignal<SessionMessage[]>([]);
@@ -110,6 +113,7 @@ export function createPilotState() {
     showConfirm, setShowConfirm,
     pendingConfirmAction, setPendingConfirmAction,
     confirmMessage, setConfirmMessage,
+    flashMessage, setFlashMessage,
 
     // Log
     followLog, setFollowLog,
