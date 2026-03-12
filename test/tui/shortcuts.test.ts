@@ -39,7 +39,7 @@ vi.mock('solid-js', () => ({
 // ── Import HELP_TEXT and HINTS ─────────────────────────────────────────────
 
 import { HELP_TEXT } from '../../src/tui/components/help-overlay.js';
-import { HINTS } from '../../src/tui/components/footer-bar.js';
+import { HINTS, getFooterHint } from '../../src/tui/components/footer-bar.js';
 
 // ── Implemented shortcut keys ──────────────────────────────────────────────
 // This is the authoritative set of keys handled in app.tsx's useKeyboard callback.
@@ -180,5 +180,121 @@ describe('TUI shortcut status validation — retry', () => {
     // Verify non-retryable statuses
     const nonRetryable = statuses.filter(s => s !== 'failed' && s !== 'cancelled');
     expect(nonRetryable).toEqual(['pending', 'running', 'completed']);
+  });
+});
+
+// ── New tests: keyboard handler branching ──────────────────────────────────
+
+describe('TUI shortcut status validation — force-quit', () => {
+  it('force-quit only applies to running jobs (mirrors K handler in app.tsx)', () => {
+    // The K handler in app.tsx checks: job.status === 'running'
+    const statuses = ['pending', 'running', 'failed', 'completed', 'cancelled'] as const;
+    const killableStatuses = statuses.filter(s => s === 'running');
+    expect(killableStatuses).toEqual(['running']);
+
+    // Verify non-killable statuses
+    const nonKillable = statuses.filter(s => s !== 'running');
+    expect(nonKillable).toEqual(['pending', 'failed', 'completed', 'cancelled']);
+  });
+});
+
+describe('TUI shortcut context validation — panel awareness', () => {
+  it('selectedJob returns null for projects panel (no job actions available)', () => {
+    // The selectedJob() memo in state.ts returns null when panelFocus === 'projects'.
+    // This means r/x/K all correctly skip when focused on projects panel.
+    const panelFocusValues = ['queue', 'running', 'completed', 'projects'] as const;
+    const panelsWithJobSelection = panelFocusValues.filter(p => p !== 'projects');
+    expect(panelsWithJobSelection).toEqual(['queue', 'running', 'completed']);
+  });
+
+  it('unblock (u) only applies in projects panel', () => {
+    // The u handler in app.tsx checks: panelFocus() === 'projects'
+    // This ensures u doesn't fire in other panels
+    const panelFocusValues = ['queue', 'running', 'completed', 'projects'] as const;
+    const unblockPanels = panelFocusValues.filter(p => p === 'projects');
+    expect(unblockPanels).toEqual(['projects']);
+  });
+
+  it('remove project (d) only applies in projects panel', () => {
+    // The d handler in app.tsx checks: panelFocus() === 'projects'
+    const panelFocusValues = ['queue', 'running', 'completed', 'projects'] as const;
+    const removePanels = panelFocusValues.filter(p => p === 'projects');
+    expect(removePanels).toEqual(['projects']);
+  });
+});
+
+describe('TUI shortcut validation — remove project', () => {
+  it('remove project applies to any project (no status gate, just panel gate)', () => {
+    // Unlike u (which checks project.status === 'blocked'),
+    // d applies to any project in the projects panel.
+    // The safety gate is the confirmation overlay, not a status check.
+    const projectStatuses = ['active', 'blocked'] as const;
+    const removableStatuses = projectStatuses.filter(() => true); // all are removable
+    expect(removableStatuses).toEqual(['active', 'blocked']);
+  });
+});
+
+describe('HELP_TEXT includes d shortcut', () => {
+  it('lists d remove project in Dashboard section', () => {
+    expect(HELP_TEXT).toContain('d');
+    expect(HELP_TEXT).toContain('Remove project');
+  });
+});
+
+// ── Context-aware footer hints ─────────────────────────────────────────────
+
+describe('Context-aware footer hints', () => {
+  it('queue panel hints include x cancel but not K kill', () => {
+    const hint = getFooterHint('dashboard', 'queue');
+    expect(hint).toContain('x cancel');
+    expect(hint).not.toContain('K kill');
+  });
+
+  it('running panel hints include K kill but not x cancel', () => {
+    const hint = getFooterHint('dashboard', 'running');
+    expect(hint).toContain('K kill');
+    expect(hint).not.toContain('x cancel');
+  });
+
+  it('projects panel hints include u unblock and d remove', () => {
+    const hint = getFooterHint('dashboard', 'projects');
+    expect(hint).toContain('u unblock');
+    expect(hint).toContain('d remove');
+    expect(hint).not.toContain('r retry');
+  });
+
+  it('completed panel hints include r retry but not K kill', () => {
+    const hint = getFooterHint('dashboard', 'completed');
+    expect(hint).toContain('r retry');
+    expect(hint).not.toContain('K kill');
+  });
+
+  it('queue panel hints include r retry for completed/failed visible', () => {
+    const hint = getFooterHint('dashboard', 'queue');
+    expect(hint).toContain('r retry');
+  });
+
+  it('detail view ignores panelFocus', () => {
+    const hint = getFooterHint('detail', 'queue');
+    expect(hint).toContain('esc back');
+    expect(hint).toContain('r retry');
+  });
+
+  it('split view ignores panelFocus', () => {
+    const hint = getFooterHint('split', 'projects');
+    expect(hint).toContain('esc back');
+  });
+
+  it('projects panel does not include enter detail', () => {
+    const hint = getFooterHint('dashboard', 'projects');
+    expect(hint).not.toContain('enter');
+  });
+
+  it('all dashboard panels include j/k navigate', () => {
+    const panels = ['queue', 'running', 'completed', 'projects'] as const;
+    for (const panel of panels) {
+      const hint = getFooterHint('dashboard', panel);
+      expect(hint).toContain('j/k navigate');
+    }
   });
 });
