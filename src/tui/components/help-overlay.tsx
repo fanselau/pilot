@@ -25,9 +25,10 @@ export const HELP_TEXT = `
   Enter        Open job detail
   r            Retry failed job
   x            Cancel pending job
-  K            Force-quit running job
-  u            Unblock project (projects panel)
-  g            Jump to top
+   K            Force-quit running job
+   u            Unblock project (projects panel)
+   d            Remove project (projects panel)
+   g            Jump to top
   G            Jump to bottom
 
  ── Detail ──────────────────────────

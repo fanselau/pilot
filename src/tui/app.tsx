@@ -437,7 +437,7 @@ export function App(_props: { interval?: number }) {
           }}
         />
       </Show>
-      <FooterBar view={state.view()} />
+      <FooterBar view={state.view()} panelFocus={state.panelFocus()} />
     </box>
   );
 }

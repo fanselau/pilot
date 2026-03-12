@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 58
+## Current Phase: 59
 
 ## Current Position
 
-Phase: 58 (Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-03-12 - Completed 58-01-PLAN.md (execution)
+Phase: 59 (Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-12 - Completed 59-01-PLAN.md
 
-Progress: ██████████████ 52/52 plans (100%)
+Progress: █████████████░ 53/54 plans (98%)
 
 ## Project Reference
 
@@ -147,6 +147,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 58: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
 - **Status:** complete (1/1 plans, verified ✓)
+
+### Phase 59: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
+- **Status:** in progress (1/2 plans complete)
 
 ### Quick Tasks Completed
 
@@ -689,9 +692,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 57-01 | Notify is informational-only in doctor (warn, never fail) | Missing notify should never block project health |
 | 57-01 | Route resolution guarded by resolvedNotifyKey !== undefined | Prevents calling resolveNotifyRoute when no notify intent exists |
 | 57-01 | Setup messaging uses "Notifications are optional." phrasing | Makes clear this is not a missing step but an add-on |
+| 59-01 | deregisterProject uses DELETE, does not cascade to jobs | Associated jobs remain for historical reference |
+| 59-01 | confirmMessage signal decouples overlay text from action type | Enables context-specific messages for both kill and remove actions |
 
 ## Session Continuity
 
-Last session: 2026-03-11T23:42:32Z
-Stopped at: Completed 57-01-PLAN.md (execution)
+Last session: 2026-03-12T09:31:40Z
+Stopped at: Completed 59-01-PLAN.md
 Resume file: None

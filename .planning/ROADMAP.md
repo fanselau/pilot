@@ -1018,7 +1018,7 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-failure-notifications-sh
 **Plans:** 2 plans
 
 Plans:
-- [ ] 59-01-PLAN.md — Fix shortcut reliability + add deregisterProject DB function + wire remove-project TUI action with confirmation
+- [x] 59-01-PLAN.md — Fix shortcut reliability + add deregisterProject DB function + wire remove-project TUI action with confirmation
 - [ ] 59-02-PLAN.md — Context-aware footer bar + updated help overlay + comprehensive keyboard handler tests
 
 Wave structure:

@@ -47,7 +47,7 @@ import { HINTS } from '../../src/tui/components/footer-bar.js';
 const IMPLEMENTED_KEYS = new Set([
   'q', '?', '/', 'Esc', 'Tab', 's',
   '1', '2', '3',
-  'u',
+  'u', 'd',
   'K',
   'r', 'x',
   'j', 'k', '↓', '↑',
@@ -112,7 +112,6 @@ describe('HELP_TEXT accuracy — no phantom shortcuts', () => {
     // These are examples of shortcuts that might have been listed in older versions
     // but should NOT appear in the current HELP_TEXT:
     // - Ctrl+R (was never implemented in app.tsx)
-    // - d (was not in the keyboard handler)
     // The key assertion is that the HELP_TEXT matches the actual handlers.
     // Since we verified all extracted keys are in IMPLEMENTED_KEYS above,
     // any phantom would have caused that test to fail.
