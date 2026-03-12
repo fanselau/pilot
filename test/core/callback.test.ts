@@ -178,6 +178,11 @@ describe('notifyJobCompletion', () => {
     expect(prompt).toContain('error: TypeError: boom');
     expect(prompt).toContain('next_step:');
 
+    // Blocked-awareness and recovery guidance in failure prompt
+    expect(prompt).toContain('blocked');
+    expect(prompt).toContain('pilot log ab12');
+    expect(prompt).toContain('pilot retry ab12');
+
     // Anti-silence instruction
     expect(prompt).toContain('Do NOT choose NO_REPLY');
   });
@@ -229,8 +234,14 @@ describe('notifyJobCompletion', () => {
     expect(prompt).toContain('error: Build failed: TypeScript compilation errors');
     expect(prompt).toContain('verdict: failed');
 
-    // Follow-up suggestion in next_step
-    expect(prompt).toContain('pilot retry');
+    // Blocked-project awareness
+    expect(prompt).toContain('The project is now blocked');
+    expect(prompt).toContain('blocked');
+
+    // Log and retry guidance
+    expect(prompt).toContain('pilot log ab12');
+    expect(prompt).toContain('pilot retry ab12');
+
     expect(prompt).toContain('Do NOT choose NO_REPLY');
   });
 
@@ -289,5 +300,36 @@ describe('notifyJobCompletion', () => {
 
     await expect(notifyJobCompletion(makeJob())).resolves.toBe(false);
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('notifyJobCompletion failed'));
+  });
+
+  it('failure prompt explicitly states project is blocked', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Build failed',
+    }));
+    expect(prompt).toContain('project is now blocked');
+    expect(prompt).toContain('no further jobs will run');
+  });
+
+  it('failure prompt includes pilot log guidance', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Tests failed',
+    }));
+    expect(prompt).toContain('pilot log ab12');
+    expect(prompt).toContain('inspect the transcript');
+  });
+
+  it('failure prompt guides toward retry/unblock recovery', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Compilation error',
+    }));
+    expect(prompt).toContain('pilot retry ab12');
+    // Verify retry guidance is in next_step line
+    expect(prompt).toContain('next_step:');
+    const nextStepLine = prompt.split('\n').find(l => l.startsWith('next_step:'));
+    expect(nextStepLine).toContain('pilot log ab12');
+    expect(nextStepLine).toContain('pilot retry ab12');
   });
 });
