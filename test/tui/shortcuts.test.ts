@@ -269,15 +269,54 @@ describe('Context-aware footer hints', () => {
     expect(hint).not.toContain('K kill');
   });
 
-  it('queue panel hints include r retry for completed/failed visible', () => {
+  it('queue panel hints do NOT include r retry (queue items are pending)', () => {
     const hint = getFooterHint('dashboard', 'queue');
-    expect(hint).toContain('r retry');
+    expect(hint).not.toContain('r retry');
   });
 
-  it('detail view ignores panelFocus', () => {
+  it('detail view without jobStatus falls back to static HINTS.detail', () => {
     const hint = getFooterHint('detail', 'queue');
     expect(hint).toContain('esc back');
     expect(hint).toContain('r retry');
+  });
+
+  it('detail view with running jobStatus shows only K kill', () => {
+    const hint = getFooterHint('detail', undefined, 'running');
+    expect(hint).toContain('K kill');
+    expect(hint).not.toContain('r retry');
+    expect(hint).not.toContain('x cancel');
+    expect(hint).toContain('? help');
+    expect(hint).toContain('esc back');
+  });
+
+  it('detail view with pending jobStatus shows only x cancel', () => {
+    const hint = getFooterHint('detail', undefined, 'pending');
+    expect(hint).toContain('x cancel');
+    expect(hint).not.toContain('r retry');
+    expect(hint).not.toContain('K kill');
+  });
+
+  it('detail view with failed jobStatus shows only r retry', () => {
+    const hint = getFooterHint('detail', undefined, 'failed');
+    expect(hint).toContain('r retry');
+    expect(hint).not.toContain('x cancel');
+    expect(hint).not.toContain('K kill');
+  });
+
+  it('detail view with cancelled jobStatus shows only r retry', () => {
+    const hint = getFooterHint('detail', undefined, 'cancelled');
+    expect(hint).toContain('r retry');
+    expect(hint).not.toContain('x cancel');
+    expect(hint).not.toContain('K kill');
+  });
+
+  it('detail view with completed jobStatus shows no action shortcuts', () => {
+    const hint = getFooterHint('detail', undefined, 'completed');
+    expect(hint).not.toContain('r retry');
+    expect(hint).not.toContain('x cancel');
+    expect(hint).not.toContain('K kill');
+    expect(hint).toContain('? help');
+    expect(hint).toContain('esc back');
   });
 
   it('split view ignores panelFocus', () => {

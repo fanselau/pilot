@@ -135,6 +135,17 @@ export function App(_props: { interval?: number }) {
     projectsPoller.stop();
   });
 
+  // ── Helper: resolve detail view job status ─────────────────────────────
+
+  function detailJobStatus() {
+    if (state.view() !== 'detail') return undefined;
+    const id = state.detailJobId();
+    if (!id) return undefined;
+    const allJobs = [...state.queue(), ...state.running(), ...state.completed()];
+    const job = allJobs.find(j => j.id === id);
+    return job?.status;
+  }
+
   // ── Helper: get item count for focused panel ──────────────────────────
 
   function focusedPanelLength(): number {
@@ -437,7 +448,7 @@ export function App(_props: { interval?: number }) {
           }}
         />
       </Show>
-      <FooterBar view={state.view()} panelFocus={state.panelFocus()} />
+      <FooterBar view={state.view()} panelFocus={state.panelFocus()} jobStatus={detailJobStatus()} />
     </box>
   );
 }
