@@ -1010,3 +1010,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-failure-notifications-should-guide-agents-to-unblock-and-read-logs.md` for full spec.
+
+### Phase 59: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
+
+**Goal:** [To be planned]
+**Depends on:** Phase 58
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 59 to break down)
+
+**Details:**
+[To be added during planning]
