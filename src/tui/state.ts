@@ -46,6 +46,8 @@ export function createPilotState() {
   const [showConfirm, setShowConfirm] = createSignal(false);
   // pendingConfirmAction stores what to execute when user confirms
   const [pendingConfirmAction, setPendingConfirmAction] = createSignal<(() => Promise<void>) | null>(null);
+  // confirmMessage stores the context-specific message for the ConfirmOverlay
+  const [confirmMessage, setConfirmMessage] = createSignal<string>('');
 
   // ── Log state signals ─────────────────────────────────────────────────
   const [followLog, setFollowLog] = createSignal(true);
@@ -107,6 +109,7 @@ export function createPilotState() {
     filter, setFilter,
     showConfirm, setShowConfirm,
     pendingConfirmAction, setPendingConfirmAction,
+    confirmMessage, setConfirmMessage,
 
     // Log
     followLog, setFollowLog,

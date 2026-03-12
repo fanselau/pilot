@@ -1013,12 +1013,17 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-failure-notifications-sh
 
 ### Phase 59: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
 
-**Goal:** [To be planned]
+**Goal:** Make TUI keyboard interaction reliable and useful in real usage — fix shortcut reliability by making action feedback context-aware, add project-management actions (remove project with confirmation), and ensure footer/help text accurately reflects available actions per panel.
 **Depends on:** Phase 58
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 59 to break down)
+- [ ] 59-01-PLAN.md — Fix shortcut reliability + add deregisterProject DB function + wire remove-project TUI action with confirmation
+- [ ] 59-02-PLAN.md — Context-aware footer bar + updated help overlay + comprehensive keyboard handler tests
+
+Wave structure:
+- Wave 1: 59-01 (core shortcut fixes + project management action)
+- Wave 2: 59-02 (help/footer accuracy + tests, depends on 59-01)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-tui-shortcuts-and-project-management-actions-must-work-in-real-usage.md` for full spec.

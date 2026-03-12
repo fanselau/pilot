@@ -8,7 +8,7 @@
  * All reads are synchronous (better-sqlite3). Fast (<1ms) — no async needed.
  */
 
-import { getQueue, getRecent, getJob, cancel, retry, bump, getAllProjects, unblockProject } from '../../core/db.js';
+import { getQueue, getRecent, getJob, cancel, retry, bump, getAllProjects, unblockProject, deregisterProject } from '../../core/db.js';
 import type { Job, Project } from '../../core/types.js';
 
 // ── Read wrappers ─────────────────────────────────────────────────────────
@@ -43,4 +43,4 @@ export function fetchProjectData(): Project[] {
 
 // ── Re-export mutations for queue management actions ──────────────────────
 
-export { cancel, retry, bump, getJob, unblockProject };
+export { cancel, retry, bump, getJob, unblockProject, deregisterProject };

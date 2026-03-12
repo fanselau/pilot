@@ -1233,6 +1233,15 @@ function unblockProject(path: string): void {
   `).run(path);
 }
 
+/**
+ * Remove a project from management (DELETE from projects table).
+ * Does NOT delete associated jobs — they remain for historical reference.
+ */
+function deregisterProject(path: string): void {
+  const db = getDb();
+  db.prepare('DELETE FROM projects WHERE path = ?').run(path);
+}
+
 // ── Project Job Counts ────────────────────────────────────────────────────
 
 interface ProjectJobCounts {
@@ -1405,6 +1414,7 @@ export {
   updateProjectNotifyOpenClawRoute,
   blockProject,
   unblockProject,
+  deregisterProject,
   getProjectJobCounts,
   addJob,
   getJob,
