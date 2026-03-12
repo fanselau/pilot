@@ -12,7 +12,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid'
 import { Show, Switch, Match, onMount, onCleanup, batch } from 'solid-js';
 import { createPilotState } from './state.js';
 import { createPoller } from './data/poller.js';
-import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject, cancel, retry } from './data/pilot-db.js';
+import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject, cancel, retry, deregisterProject } from './data/pilot-db.js';
 import { fetchSessionEnrichment } from './data/opencode-db.js';
 import { buildJobObservability } from '../core/job-observability.js';
 import { StatusBar } from './components/status-bar.js';
@@ -253,6 +253,21 @@ export function App(_props: { interval?: number }) {
       return;
     }
 
+    // d — remove project from management (projects panel only)
+    if (key.sequence === 'd' && state.panelFocus() === 'projects') {
+      const idx = state.selectedIndex();
+      const project = state.projects()[idx];
+      if (project) {
+        state.setConfirmMessage(`Remove project ${project.path.replace(process.env['HOME'] ?? '', '~')} from management?`);
+        state.setPendingConfirmAction(() => async () => {
+          deregisterProject(project.path);
+          state.setProjects(fetchProjectData());
+        });
+        state.setShowConfirm(true);
+      }
+      return;
+    }
+
     // u — unblock selected blocked project (projects panel only)
     if (key.sequence === 'u' && state.panelFocus() === 'projects') {
       const idx = state.selectedIndex();
@@ -315,6 +330,7 @@ export function App(_props: { interval?: number }) {
     if (key.sequence === 'K') {
       const job = state.selectedJob();
       if (job && job.status === 'running') {
+        state.setConfirmMessage(`Kill job ${job.id} (${job.project.replace(process.env['HOME'] ?? '', '~')})?`);
         state.setPendingConfirmAction(() => async () => {
           // Kill process first, then update DB
           await killJobSession(job);
@@ -406,7 +422,7 @@ export function App(_props: { interval?: number }) {
       </Show>
       <Show when={state.showConfirm()}>
         <ConfirmOverlay
-          message={`Kill job ${state.selectedJob()?.id ?? ''} (${state.selectedJob()?.project ?? ''})?`}
+          message={state.confirmMessage()}
           onConfirm={() => {
             const action = state.pendingConfirmAction();
             if (action) {
