@@ -62,8 +62,7 @@ export function buildQueueBadges(job: Job, context: QueueRowContext = {}): strin
   const badges: string[] = [why.badge];
   const undoWhy = buildUndoWhy(job);
   if (
-    undoWhy.code === 'undo-guarded-dirty-start'
-    || undoWhy.code === 'undo-guarded-newer-work'
+    undoWhy.code === 'undo-guarded-newer-work'
     || undoWhy.code === 'undo-guarded-diverged'
   ) {
     badges.push(undoWhy.badge);

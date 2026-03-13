@@ -26,7 +26,7 @@ import type { Job, JobObservabilitySnapshot } from '../core/types.js';
 interface RecoveryTag {
   tag: string;
   state: 'safe' | 'guarded' | 'unavailable';
-  reason: 'checkpoint-ready' | 'dirty-start' | 'newer-work' | 'diverged-history' | 'job-not-terminal' | 'checkpoint-missing';
+  reason: 'checkpoint-ready' | 'newer-work' | 'diverged-history' | 'job-not-terminal' | 'checkpoint-missing';
   action: string;
 }
 
@@ -210,15 +210,6 @@ function getRecoveryTag(job: Job): RecoveryTag {
       tag: undo.badge,
       state: 'safe',
       reason: 'checkpoint-ready',
-      action: undo.next,
-    };
-  }
-
-  if (undo.code === 'undo-guarded-dirty-start') {
-    return {
-      tag: undo.badge,
-      state: 'guarded',
-      reason: 'dirty-start',
       action: undo.next,
     };
   }

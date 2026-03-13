@@ -134,14 +134,8 @@ async function undoCommand(id: string, opts: UndoOptions): Promise<void> {
     warnings.push('Force override enabled: this undo will discard history after the job checkpoint.');
   }
 
-  if (job.startedDirty && !force) {
-    fail(
-      `Refusing undo for job ${id}. What: undo was blocked. Why: this job started from a dirty worktree, so rollback cannot safely isolate job-only changes. Next: review local edits from that run and re-run with --force only if you accept that pre-existing edits may be discarded.`,
-    );
-  }
-
-  if (job.startedDirty && force) {
-    warnings.push('Force override enabled: job started dirty, so undo may discard pre-existing local edits from that run.');
+  if (job.startedDirty) {
+    warnings.push('Note: this job started on a dirty worktree. Undo rollback includes all changes from that state.');
   }
 
   if (dryRun) {

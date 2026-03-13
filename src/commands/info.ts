@@ -82,7 +82,6 @@ interface RecoveryInfo {
   reason:
     | 'checkpoint-ready'
     | 'no-commit-delta'
-    | 'dirty-start'
     | 'newer-work'
     | 'diverged-history'
     | 'worktree-dirty-now'
@@ -389,13 +388,6 @@ async function buildRecoveryInfo(job: {
   if (!producedCommitDelta) {
     reason = 'no-commit-delta';
     guidance = 'This job recorded no commit delta between base/head checkpoints (nothing to undo).';
-  }
-
-  if (job.startedDirty) {
-    state = 'guarded';
-    reason = 'dirty-start';
-    tag = 'undo:guarded-dirty-start';
-    guidance = 'Undo guarded: job started from a dirty worktree; override requires --force and may discard pre-existing edits.';
   }
 
   if (blockedByNewerWork) {

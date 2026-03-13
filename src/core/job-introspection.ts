@@ -10,7 +10,6 @@ export type JobWhyCode =
   | 'needs-revision'
   | 'retry-unavailable'
   | 'undo-safe'
-  | 'undo-guarded-dirty-start'
   | 'undo-guarded-newer-work'
   | 'undo-guarded-diverged'
   | 'undo-unavailable'
@@ -253,16 +252,6 @@ function buildUndoWhy(job: Job): JobWhy {
       what: 'Undo is guarded by history divergence.',
       why: 'Current git history diverged from recorded checkpoints.',
       next: 'Inspect git history before using --force.',
-    };
-  }
-
-  if (job.startedDirty) {
-    return {
-      code: 'undo-guarded-dirty-start',
-      badge: 'undo:guarded-dirty-start',
-      what: 'Undo is guarded by dirty-start state.',
-      why: 'Job started with uncommitted changes in the worktree.',
-      next: 'Use --force only when you intentionally accept risk.',
     };
   }
 
