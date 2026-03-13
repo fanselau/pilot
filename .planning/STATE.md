@@ -8,7 +8,7 @@
 Phase: 62 (Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity)
 Plan: 5 of 5 in current phase
 Status: Phase complete
-Last activity: 2026-03-13 - Completed 62-05-PLAN.md (timeline query + action model tests)
+Last activity: 2026-03-13 - Completed quick task 082: Phase 62 toast feedback + paused-state action predicate coverage
 
 Progress: ████████████████████ 64/64 plans (100%)
 
@@ -230,6 +230,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 078 | Upgrade OpenAI models from gpt-5.3-codex to gpt-5.4. Replace all occurrences of openai/gpt-5.3-codex with openai/gpt-5.4 (no codex suffix). Update variant mapping so xhigh becomes high and high becomes medium, while keeping none/minimal/low/medium/high support. Apply this to all relevant AGENT_MODELS tables: every openai-only entry and hybrid check-role agents (codebase-mapper, verifier, plan-checker, integration-checker, plus _top:judge scope). Update comments that still mention codex/xhigh-high to reference gpt-5.4 and high/medium. Update all tests that reference gpt-5.3-codex and adjust expected variants to match the new mapping. Run the full test suite. Also update GSD agent defaults so any agent with model openai/gpt-5.3-codex becomes openai/gpt-5.4, variant xhigh becomes high, and variant high becomes medium. | 2026-03-09 | c1ae6ea | [078-upgrade-openai-models-from-gpt-5-3-codex](./quick/078-upgrade-openai-models-from-gpt-5-3-codex/) |
 | 079 | Provenance-aware dirty-start launch guard — persist per-project dirty baselines, allow continuation-safe Pilot dirt, and block manual/untracked drift, HEAD movement, and conflict states with explicit reasons | 2026-03-10 | 4b81ab4 | [079-provenance-aware-dirty-guard-for-pilot-p](./quick/079-provenance-aware-dirty-guard-for-pilot-p/) |
 | 080 | TUI feedback follow-up — truthful footer hints, flash feedback for inapplicable shortcuts, extracted keyboard handler with 9 real-path branching tests | 2026-03-12 | 48e7bef | [080-quick-follow-up-phase-59-tui-feedback-fo](./quick/080-quick-follow-up-phase-59-tui-feedback-fo/) |
+| 082 | Phase 62 follow-up — toast feedback for action execute handlers + paused-state predicate tests (11/13 → 13/13) | 2026-03-13 | dbd4a1d | [082-quick-follow-up-phase-62-toast-feedback-](./quick/082-quick-follow-up-phase-62-toast-feedback-/) |
 
 ## Accumulated Context
 
