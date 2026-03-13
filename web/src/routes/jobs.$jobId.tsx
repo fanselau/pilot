@@ -1,9 +1,9 @@
-import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '~/components/ui/button'
-import { Skeleton } from '~/components/ui/skeleton'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
 import { JobDetail } from '~/components/job-detail'
+import { CommandPalette } from '~/components/command-palette'
 import { getJobDetailFn } from '~/lib/server-fns'
 
 export const Route = createFileRoute('/jobs/$jobId')({
@@ -14,6 +14,7 @@ export const Route = createFileRoute('/jobs/$jobId')({
 function JobDetailPage() {
   const loaderData = Route.useLoaderData()
   const { jobId } = Route.useParams()
+  const navigate = useNavigate()
 
   // Auto-refresh the detail view every 3 seconds for active jobs
   const isActive =
@@ -64,6 +65,19 @@ function JobDetailPage() {
         <JobDetail snapshot={snapshot} />
         <Outlet />
       </div>
+
+      {/* Command palette with job context */}
+      <CommandPalette
+        ctx={{
+          job: {
+            id: snapshot.job.id,
+            status: snapshot.job.status,
+            project: snapshot.job.project,
+          },
+          projectPath: snapshot.job.project,
+          navigate: (to) => navigate({ to }),
+        }}
+      />
     </div>
   )
 }

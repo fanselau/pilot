@@ -1,10 +1,15 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '~/components/ui/badge'
-import { Button } from '~/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Skeleton } from '~/components/ui/skeleton'
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '~/components/ui/breadcrumb'
 import { SessionActivity } from '~/components/session-activity'
 import { SubagentCard } from '~/components/subagent-card'
 import { getSessionChildrenFn } from '~/lib/server-fns'
@@ -24,12 +29,32 @@ function SessionDrillIn() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to="/jobs/$jobId" params={{ jobId }}>
-          <Button variant="ghost" size="sm">
-            &larr; Back to Job
-          </Button>
-        </Link>
+      {/* Breadcrumb navigation */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link to="/" />}>
+              Dashboard
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink
+              render={<Link to="/jobs/$jobId" params={{ jobId }} />}
+            >
+              Job {jobId}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>
+              Session {sessionId.slice(0, 8)}
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold">Session Activity</h2>
         <Badge variant="outline" size="sm" className="font-mono">
           {sessionId.slice(0, 8)}
