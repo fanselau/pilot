@@ -20,9 +20,18 @@ const mockIsSessionDone = vi.fn<(sessionId: string) => boolean>();
 const mockGetSessionTokensRecursive = vi.fn<(sessionId: string) => { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }>();
 const mockGetSessionModelsRecursive = vi.fn<(sessionId: string) => string[]>();
 
+const mockRetry = vi.fn<(id: string) => void>();
+const mockCancel = vi.fn<(id: string) => void>();
+const mockForceQuitJob = vi.fn<(id: string, source: string, reason?: string) => void>();
+const mockUnblockProject = vi.fn<(path: string) => void>();
+
 vi.mock('../../src/core/db.js', () => ({
   getJob: (...args: unknown[]) => mockGetJob(args[0] as string),
   getJobSteps: (...args: unknown[]) => mockGetJobSteps(args[0] as string),
+  retry: (...args: unknown[]) => mockRetry(args[0] as string),
+  cancel: (...args: unknown[]) => mockCancel(args[0] as string),
+  forceQuitJob: (...args: unknown[]) => mockForceQuitJob(args[0] as string, args[1] as string, args[2] as string | undefined),
+  unblockProject: (...args: unknown[]) => mockUnblockProject(args[0] as string),
 }));
 
 vi.mock('../../src/core/opencode-db.js', () => ({
@@ -42,6 +51,11 @@ import {
   getSessionActivity,
   getSessionChildSummaries,
   getJobDetailEvents,
+  getJobTimeline,
+  retryJobAction,
+  cancelJobAction,
+  forceQuitJobAction,
+  unblockProjectAction,
 } from '../../src/core/job-detail-query.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -511,5 +525,313 @@ describe('getJobDetailEvents', () => {
     // cursor should be recent (within last second)
     const cursorMs = Number(response.cursor);
     expect(cursorMs).toBeGreaterThan(Date.now() - 2000);
+  });
+});
+
+// ── getJobTimeline Tests ──────────────────────────────────────────────────
+
+describe('getJobTimeline', () => {
+  it('returns items sorted chronologically across multiple root sessions', () => {
+    // Job with 2 root sessions
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['session-A', 'session-B']) }),
+    );
+    mockFindSessionByTitle.mockImplementation((title: string) => {
+      if (title === 'session-A') return 'sess-A';
+      if (title === 'session-B') return 'sess-B';
+      return null;
+    });
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-A') {
+        return [
+          makePart({ id: 'a1', type: 'text', text: 'From A first', createdAt: 1000 }),
+          makePart({ id: 'a2', type: 'text', text: 'From A third', createdAt: 3000 }),
+        ];
+      }
+      if (sessionId === 'sess-B') {
+        return [
+          makePart({ id: 'b1', type: 'text', text: 'From B second', createdAt: 2000 }),
+          makePart({ id: 'b2', type: 'text', text: 'From B fourth', createdAt: 4000 }),
+        ];
+      }
+      return [];
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page).not.toBeNull();
+    expect(page.items).toHaveLength(4);
+    // Verify chronological ordering across sessions
+    const timestamps = page.items.map((i) => i.createdAt);
+    expect(timestamps).toEqual([1000, 2000, 3000, 4000]);
+    // Verify items from both sessions interleaved
+    expect(page.items[0].kind).toBe('activity');
+    expect((page.items[0] as { sessionId: string }).sessionId).toBe('sess-A');
+    expect((page.items[1] as { sessionId: string }).sessionId).toBe('sess-B');
+    expect(page.sessionCount).toBe(2);
+  });
+
+  it('places fork-card items at child timeCreated relative to parts', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root-session']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetSessionParts.mockReturnValue([
+      makePart({ id: 'p1', type: 'text', text: 'before fork 1', createdAt: 500 }),
+      makePart({ id: 'p2', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 800 }),
+      makePart({ id: 'p3', type: 'text', text: 'between forks', createdAt: 1500 }),
+      makePart({ id: 'p4', type: 'text', text: 'after fork 2', createdAt: 2500 }),
+      makePart({ id: 'p5', type: 'text', text: 'final part', createdAt: 3000 }),
+    ]);
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [
+          { id: 'child-1', title: 'Subagent 1', timeCreated: 1000, timeUpdated: 1800 },
+          { id: 'child-2', title: 'Subagent 2', timeCreated: 2000, timeUpdated: 2800 },
+        ];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockImplementation((id: string) => id === 'child-1' || id === 'child-2');
+    mockGetAssistantMessageCount.mockReturnValue(3);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 100, output: 50, reasoning: 10, cacheRead: 5, cacheWrite: 2,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-1', role: 'assistant', content: 'Done', createdAt: 1800,
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // Find fork cards
+    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
+    expect(forkCards).toHaveLength(2);
+
+    // fork-card for child-1 at time=1000 should be AFTER part at 800 and BEFORE part at 1500
+    const forkCard1Index = page.items.findIndex(
+      (i) => i.kind === 'fork-card' && i.createdAt === 1000,
+    );
+    expect(forkCard1Index).toBeGreaterThan(-1);
+    // The part at 800 should come before the fork card at 1000
+    const partBefore = page.items.findIndex((i) => i.createdAt === 800);
+    expect(partBefore).toBeLessThan(forkCard1Index);
+    // The part at 1500 should come after the fork card at 1000
+    const partAfter = page.items.findIndex((i) => i.createdAt === 1500);
+    expect(partAfter).toBeGreaterThan(forkCard1Index);
+
+    // fork-card for child-2 at time=2000 should be AFTER part at 1500 and BEFORE part at 2500
+    const forkCard2Index = page.items.findIndex(
+      (i) => i.kind === 'fork-card' && i.createdAt === 2000,
+    );
+    expect(forkCard2Index).toBeGreaterThan(-1);
+    const part1500 = page.items.findIndex((i) => i.createdAt === 1500);
+    expect(part1500).toBeLessThan(forkCard2Index);
+    const part2500 = page.items.findIndex((i) => i.createdAt === 2500);
+    expect(part2500).toBeGreaterThan(forkCard2Index);
+
+    expect(page.childCount).toBe(2);
+  });
+
+  it('maps text/reasoning parts to activity kind and tool/patch parts to tool-summary kind', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root-session']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [{ id: 'child-x', title: 'Sub X', timeCreated: 300, timeUpdated: 600 }];
+      }
+      return [];
+    });
+    mockGetSessionParts.mockReturnValue([
+      makePart({ id: 'txt', type: 'text', text: 'Hello', createdAt: 100 }),
+      makePart({ id: 'rsn', type: 'reasoning', text: 'Thinking...', createdAt: 200 }),
+      makePart({ id: 'tool1', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 400 }),
+      makePart({ id: 'patch1', type: 'patch', patchFiles: ['file.ts'], createdAt: 500 }),
+    ]);
+    mockIsSessionDone.mockReturnValue(false);
+    mockGetAssistantMessageCount.mockReturnValue(1);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 10, output: 5, reasoning: 2, cacheRead: 1, cacheWrite: 0,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+
+    const page = getJobTimeline('ab12')!;
+
+    // text → activity
+    const textItem = page.items.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'txt');
+    expect(textItem).toBeDefined();
+    expect(textItem!.kind).toBe('activity');
+
+    // reasoning → activity
+    const reasonItem = page.items.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'rsn');
+    expect(reasonItem).toBeDefined();
+    expect(reasonItem!.kind).toBe('activity');
+
+    // tool → tool-summary
+    const toolItem = page.items.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'tool1');
+    expect(toolItem).toBeDefined();
+    expect(toolItem?.kind).toBe('tool-summary');
+    expect(toolItem?.kind === 'tool-summary' ? toolItem.tool : undefined).toBe('bash');
+    expect(toolItem?.kind === 'tool-summary' ? toolItem.toolInput : undefined).toBe('ls');
+
+    // patch → tool-summary
+    const patchItem = page.items.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'patch1');
+    expect(patchItem).toBeDefined();
+    expect(patchItem?.kind).toBe('tool-summary');
+    expect(patchItem?.kind === 'tool-summary' ? patchItem.patchFiles : undefined).toEqual(['file.ts']);
+
+    // child → fork-card
+    const forkCard = page.items.find((i) => i.kind === 'fork-card');
+    expect(forkCard).toBeDefined();
+    expect(forkCard?.kind).toBe('fork-card');
+    expect(forkCard?.kind === 'fork-card' ? forkCard.sessionId : undefined).toBe('child-x');
+    expect(forkCard?.kind === 'fork-card' ? forkCard.title : undefined).toBe('Sub X');
+  });
+
+  it('supports cursor-based pagination with correct slices', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockReturnValue([]);
+    // Create 10 parts
+    const parts = Array.from({ length: 10 }, (_, i) =>
+      makePart({ id: `p-${i}`, type: 'text', text: `Part ${i}`, createdAt: (i + 1) * 100 }),
+    );
+    mockGetSessionParts.mockReturnValue(parts);
+
+    // First page: limit=5
+    const page1 = getJobTimeline('ab12', { limit: 5 })!;
+
+    expect(page1.items).toHaveLength(5);
+    expect(page1.hasMore).toBe(true);
+    expect(page1.nextCursor).not.toBeNull();
+    // First page items should be timestamps 100-500
+    expect(page1.items[0].createdAt).toBe(100);
+    expect(page1.items[4].createdAt).toBe(500);
+
+    // Second page: use cursor from first page
+    const page2 = getJobTimeline('ab12', { cursor: page1.nextCursor!, limit: 5 })!;
+
+    expect(page2.items).toHaveLength(5);
+    expect(page2.hasMore).toBe(false);
+    // Second page items should be timestamps 600-1000
+    expect(page2.items[0].createdAt).toBe(600);
+    expect(page2.items[4].createdAt).toBe(1000);
+  });
+
+  it('returns empty items for job with no sessions', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: null }),
+    );
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page).not.toBeNull();
+    expect(page.items).toHaveLength(0);
+    expect(page.hasMore).toBe(false);
+    expect(page.sessionCount).toBe(0);
+    expect(page.childCount).toBe(0);
+  });
+
+  it('returns null for non-existent job', () => {
+    mockGetJob.mockReturnValue(null);
+    expect(getJobTimeline('zzzz')).toBeNull();
+  });
+
+  it('emits completion-card for done children with meaningful duration', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetSessionParts.mockReturnValue([]);
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [
+          { id: 'done-child', title: 'Done Sub', timeCreated: 1000, timeUpdated: 5000 },
+        ];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(10);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 1000, output: 500, reasoning: 100, cacheRead: 50, cacheWrite: 20,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg', role: 'assistant', content: 'All done!', createdAt: 5000,
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    const completionCards = page.items.filter((i) => i.kind === 'completion-card');
+    expect(completionCards).toHaveLength(1);
+    expect(completionCards[0].createdAt).toBe(5000); // at timeUpdated
+    expect(completionCards[0].kind === 'completion-card' && completionCards[0].durationMs).toBe(4000);
+
+    // Also has fork-card
+    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
+    expect(forkCards).toHaveLength(1);
+    expect(forkCards[0].createdAt).toBe(1000); // at timeCreated
+  });
+
+  it('maintains stable sort when items share the same timestamp', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockReturnValue([]);
+    // Multiple items at the same timestamp
+    mockGetSessionParts.mockReturnValue([
+      makePart({ id: 'p-a', type: 'text', text: 'A', createdAt: 1000 }),
+      makePart({ id: 'p-b', type: 'tool', tool: 'read', createdAt: 1000 }),
+      makePart({ id: 'p-c', type: 'text', text: 'C', createdAt: 1000 }),
+    ]);
+
+    const page = getJobTimeline('ab12')!;
+
+    // All three items are present — sort is stable (preserves insertion order for equal timestamps)
+    expect(page.items).toHaveLength(3);
+    expect(page.items.every((i) => i.createdAt === 1000)).toBe(true);
+  });
+});
+
+// ── Mutation Wrapper Tests ────────────────────────────────────────────────
+
+describe('retryJobAction', () => {
+  it('calls db.retry with the given job ID', () => {
+    retryJobAction('job-123');
+    expect(mockRetry).toHaveBeenCalledWith('job-123');
+  });
+});
+
+describe('cancelJobAction', () => {
+  it('calls db.cancel with the given job ID', () => {
+    cancelJobAction('job-456');
+    expect(mockCancel).toHaveBeenCalledWith('job-456');
+  });
+});
+
+describe('forceQuitJobAction', () => {
+  it('calls db.forceQuitJob with cli source and default reason', () => {
+    forceQuitJobAction('job-789');
+    expect(mockForceQuitJob).toHaveBeenCalledWith('job-789', 'cli', 'Force quit via web UI');
+  });
+
+  it('calls db.forceQuitJob with custom reason when provided', () => {
+    forceQuitJobAction('job-789', 'User requested');
+    expect(mockForceQuitJob).toHaveBeenCalledWith('job-789', 'cli', 'User requested');
+  });
+});
+
+describe('unblockProjectAction', () => {
+  it('calls db.unblockProject with the given path', () => {
+    unblockProjectAction('/test/path');
+    expect(mockUnblockProject).toHaveBeenCalledWith('/test/path');
   });
 });
