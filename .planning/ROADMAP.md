@@ -1068,12 +1068,17 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-web-ui-phase-1-feasibili
 
 ### Phase 62: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
 
-**Goal:** [To be planned]
+**Goal:** Build the merged timeline query composition layer, action mutation server functions, and rich web UI components for job detail with inline sub-agent cards and proactive action parity.
 **Depends on:** Phase 61
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 62 to break down)
+- [x] 62-01-PLAN.md — Merged timeline query composition + mutation wrappers + server functions
+- [ ] 62-02-PLAN.md — TBD
+- [ ] 62-03-PLAN.md — TBD
+- [ ] 62-04-PLAN.md — TBD
+- [ ] 62-05-PLAN.md — TBD
 
-**Details:**
-[To be added during planning]
+Wave structure:
+- Wave 1: 62-01 (timeline query + mutations)
+- Wave 2+: 62-02 through 62-05 (UI components + integration)
