@@ -105,6 +105,17 @@ describe('retry-job availability', () => {
     expect(retry.enabled).toBe(false);
     expect(retry.disabledReason).toBe('No job selected');
   });
+
+  it('is disabled when job status is paused', () => {
+    const ctx = makeContext({
+      job: { id: 'j1', status: 'paused', project: '/test' },
+    });
+    const actions = resolveActions(ctx);
+    const retry = findAction(actions, 'retry-job')!;
+
+    expect(retry.enabled).toBe(false);
+    expect(retry.disabledReason).toBe('Job is not in failed state');
+  });
 });
 
 describe('cancel-job availability', () => {
@@ -144,6 +155,17 @@ describe('cancel-job availability', () => {
   it('is disabled when job status is failed', () => {
     const ctx = makeContext({
       job: { id: 'j1', status: 'failed', project: '/test' },
+    });
+    const actions = resolveActions(ctx);
+    const cancel = findAction(actions, 'cancel-job')!;
+
+    expect(cancel.enabled).toBe(false);
+    expect(cancel.disabledReason).toBe('Job is not active');
+  });
+
+  it('is disabled when job status is paused', () => {
+    const ctx = makeContext({
+      job: { id: 'j1', status: 'paused', project: '/test' },
     });
     const actions = resolveActions(ctx);
     const cancel = findAction(actions, 'cancel-job')!;
@@ -201,6 +223,17 @@ describe('force-quit-job availability', () => {
   it('is disabled for cancelled status', () => {
     const ctx = makeContext({
       job: { id: 'j1', status: 'cancelled', project: '/test' },
+    });
+    const actions = resolveActions(ctx);
+    const fq = findAction(actions, 'force-quit-job')!;
+
+    expect(fq.enabled).toBe(false);
+    expect(fq.disabledReason).toBe('Job is not running');
+  });
+
+  it('is disabled for paused status', () => {
+    const ctx = makeContext({
+      job: { id: 'j1', status: 'paused', project: '/test' },
     });
     const actions = resolveActions(ctx);
     const fq = findAction(actions, 'force-quit-job')!;
@@ -351,6 +384,42 @@ describe('resolveActions integration', () => {
     expect(viewDetail.enabled).toBe(false);
 
     // Navigation actions still available
+    const backDash = findAction(actions, 'back-to-dashboard')!;
+    expect(backDash.enabled).toBe(true);
+
+    const refresh = findAction(actions, 'refresh')!;
+    expect(refresh.enabled).toBe(true);
+  });
+
+  it('returns correct availability for paused job state', () => {
+    const ctx = makeContext({
+      job: { id: 'j1', status: 'paused', project: '/test/project' },
+      projectPath: '/test/project',
+    });
+
+    const actions = resolveActions(ctx);
+
+    // Job actions — all disabled for paused
+    const retry = findAction(actions, 'retry-job')!;
+    expect(retry.enabled).toBe(false);
+    expect(retry.disabledReason).toBe('Job is not in failed state');
+
+    const cancel = findAction(actions, 'cancel-job')!;
+    expect(cancel.enabled).toBe(false);
+    expect(cancel.disabledReason).toBe('Job is not active');
+
+    const forceQuit = findAction(actions, 'force-quit-job')!;
+    expect(forceQuit.enabled).toBe(false);
+    expect(forceQuit.disabledReason).toBe('Job is not running');
+
+    // Project action — enabled (has project)
+    const unblock = findAction(actions, 'unblock-project')!;
+    expect(unblock.enabled).toBe(true);
+
+    // Navigation actions — enabled
+    const viewDetail = findAction(actions, 'view-job-detail')!;
+    expect(viewDetail.enabled).toBe(true);
+
     const backDash = findAction(actions, 'back-to-dashboard')!;
     expect(backDash.enabled).toBe(true);
 
