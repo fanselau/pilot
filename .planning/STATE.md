@@ -284,6 +284,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 59 added: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
 - Phase 60 added: Remove dirty-guard blocking entirely; only real failures should block projects
 - Phase 61 added: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
+- Phase 62 added: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
 
 ## Decisions
 

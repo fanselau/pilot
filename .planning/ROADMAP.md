@@ -1065,3 +1065,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-web-ui-phase-1-feasibility-tanstack-start-coss-and-queryable-job-detail-model.md` for full spec.
+
+### Phase 62: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
+
+**Goal:** [To be planned]
+**Depends on:** Phase 61
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 62 to break down)
+
+**Details:**
+[To be added during planning]
