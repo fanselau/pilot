@@ -1,0 +1,429 @@
+/**
+ * Compact query backbone for the web UI (and eventually TUI).
+ *
+ * Provides 5 query functions that return well-defined compact DTO shapes.
+ * This layer deliberately does NOT mirror the recursive TUI rendering model —
+ * subagents appear as summary cards with counts, not inline transcripts.
+ *
+ * Pure core module — no UI dependencies.
+ */
+
+import { getJob, getJobSteps } from './db.js';
+import {
+  findSessionByTitle,
+  getChildSessions,
+  getLastMessage,
+  getSessionParts,
+  getAssistantMessageCount,
+  isSessionDone,
+  getSessionTokensRecursive,
+  getSessionModelsRecursive,
+} from './opencode-db.js';
+import { truncate } from '../util/format.js';
+import type {
+  Job,
+  JobDetailSnapshot,
+  JobStepSummary,
+  SessionSummary,
+  ActivityPreviewItem,
+  SessionActivityPage,
+  SessionActivityOptions,
+  JobDetailEvent,
+  JobDetailEventsResponse,
+} from './types.js';
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Parse sessionTitles JSON array from a Job.
+ * Returns empty array on null, invalid JSON, or non-array values.
+ */
+function parseSessionTitles(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Parse judgeVerdict JSON for verdict string and confidence number.
+ */
+function parseJudgeVerdict(raw: string | null): { verdict: string | null; confidence: number | null } {
+  if (!raw) return { verdict: null, confidence: null };
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      verdict: typeof parsed.verdict === 'string' ? parsed.verdict : null,
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null,
+    };
+  } catch {
+    return { verdict: null, confidence: null };
+  }
+}
+
+/**
+ * Compute duration in ms between two ISO 8601 timestamps.
+ * Returns null if either timestamp is null or unparseable.
+ */
+function computeDurationMs(startedAt: string | null, completedAt: string | null): number | null {
+  if (!startedAt) return null;
+  const start = Date.parse(startedAt);
+  if (Number.isNaN(start)) return null;
+
+  if (completedAt) {
+    const end = Date.parse(completedAt);
+    if (!Number.isNaN(end)) return Math.max(0, end - start);
+  }
+
+  // Job still running — duration from start to now
+  return Math.max(0, Date.now() - start);
+}
+
+/**
+ * Map a SessionPart to an ActivityPreviewItem with truncated preview.
+ */
+function partToPreview(sessionId: string, part: { id: string; type: string; role: string; createdAt: number; text?: string; tool?: string; toolInput?: string; patchFiles?: string[] }): ActivityPreviewItem | null {
+  const type = part.type as 'text' | 'tool' | 'patch';
+  if (type !== 'text' && type !== 'tool' && type !== 'patch') return null;
+
+  let preview = '';
+  if (type === 'text' && part.text) {
+    preview = truncate(part.text, 300);
+  } else if (type === 'tool' && part.tool) {
+    preview = truncate(`${part.tool}: ${part.toolInput ?? ''}`, 300);
+  } else if (type === 'patch' && part.patchFiles) {
+    preview = truncate(part.patchFiles.join(', '), 300);
+  }
+
+  return {
+    sessionId,
+    partId: part.id,
+    type,
+    role: part.role,
+    createdAt: part.createdAt,
+    preview,
+    ...(part.tool ? { tool: part.tool } : {}),
+    ...(part.toolInput ? { toolInput: part.toolInput } : {}),
+  };
+}
+
+// ── Query Functions ───────────────────────────────────────────────────────
+
+/**
+ * Build a compact SessionSummary for a given session ID.
+ *
+ * @param sessionId - The opencode session ID
+ * @param role - 'root' or 'subagent'
+ * @param title - Display title for the session
+ * @param parentSessionId - Parent session ID (null for root sessions)
+ * @param timeCreated - Epoch ms when session was created
+ * @param timeUpdated - Epoch ms when session was last updated
+ */
+function summarizeSession(
+  sessionId: string,
+  role: 'root' | 'subagent',
+  title: string,
+  parentSessionId: string | null,
+  timeCreated: number,
+  timeUpdated: number,
+): SessionSummary {
+  const children = getChildSessions(sessionId);
+  const lastMsg = getLastMessage(sessionId);
+  const tokens = getSessionTokensRecursive(sessionId);
+  const models = getSessionModelsRecursive(sessionId);
+  const done = isSessionDone(sessionId);
+  const messageCount = getAssistantMessageCount(sessionId);
+  const tokenTotal = tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
+  const durationMs = timeUpdated > timeCreated ? timeUpdated - timeCreated : null;
+
+  let latestMessagePreview: string | null = null;
+  if (lastMsg && lastMsg.content) {
+    latestMessagePreview = truncate(lastMsg.content, 200);
+  }
+
+  return {
+    sessionId,
+    title,
+    role,
+    status: done ? 'done' : (messageCount > 0 ? 'active' : 'unknown'),
+    parentSessionId,
+    startedAt: timeCreated,
+    updatedAt: timeUpdated,
+    durationMs,
+    latestMessagePreview,
+    messageCount,
+    childCount: children.length,
+    tokenTotal,
+    models,
+  };
+}
+
+/**
+ * Get a compact root-based snapshot of a job.
+ *
+ * Returns null if the job doesn't exist. Subagents appear as summary cards
+ * with counts — NOT inline transcripts.
+ */
+function getJobDetail(jobId: string): JobDetailSnapshot | null {
+  const job = getJob(jobId);
+  if (!job) return null;
+
+  // Steps
+  const rawSteps = getJobSteps(jobId);
+  const steps: JobStepSummary[] = rawSteps.map((s) => ({
+    stepIndex: s.stepIndex,
+    command: s.command,
+    args: s.args,
+    status: s.status,
+    sessionId: s.sessionId,
+    durationMs: s.durationMs,
+    verdictReason: s.verdictReason,
+  }));
+
+  // Parse session titles to find root sessions
+  const sessionTitles = parseSessionTitles(job.sessionTitles);
+  const rootSessions: SessionSummary[] = [];
+  const subagents: SessionSummary[] = [];
+  const seenSessions = new Set<string>();
+
+  for (const title of sessionTitles) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId || seenSessions.has(sessionId)) continue;
+    seenSessions.add(sessionId);
+
+    // We don't have precise timestamps for root sessions found by title,
+    // so use current time as approximation for updatedAt
+    const now = Date.now();
+    const rootSummary = summarizeSession(sessionId, 'root', title, null, now, now);
+    rootSessions.push(rootSummary);
+
+    // Get immediate children as subagent cards
+    const children = getChildSessions(sessionId);
+    for (const child of children) {
+      if (seenSessions.has(child.id)) continue;
+      seenSessions.add(child.id);
+      const childSummary = summarizeSession(
+        child.id,
+        'subagent',
+        child.title,
+        sessionId,
+        child.timeCreated,
+        child.timeUpdated,
+      );
+      subagents.push(childSummary);
+    }
+  }
+
+  // Activity preview: most recent ~10 parts from the first root session
+  const activityPreview: ActivityPreviewItem[] = [];
+  if (rootSessions.length > 0) {
+    const firstRootId = rootSessions[0].sessionId;
+    const parts = getSessionParts(firstRootId);
+    // Take last 10 parts that are text/tool/patch
+    const recentParts = parts.slice(-20); // grab more, then filter
+    for (const part of recentParts) {
+      const item = partToPreview(firstRootId, part);
+      if (item) {
+        activityPreview.push(item);
+      }
+      if (activityPreview.length >= 10) break;
+    }
+  }
+
+  // Parse judge verdict
+  const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict);
+
+  // Compute duration
+  const durationMs = computeDurationMs(job.startedAt, job.completedAt);
+
+  return {
+    job: {
+      id: job.id,
+      project: job.project,
+      description: job.description,
+      scope: job.scope,
+      status: job.status,
+      verdict,
+      confidence,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      durationMs,
+      currentStep: job.currentStep,
+      modelProfile: job.modelProfile,
+      providerMode: job.providerMode,
+      error: job.error,
+    },
+    steps,
+    rootSessions,
+    subagents,
+    activityPreview,
+    cursor: String(Date.now()),
+  };
+}
+
+/**
+ * Get paginated session activity parts.
+ *
+ * Supports cursor-based pagination and optional tool detail exclusion
+ * for compact views.
+ */
+function getSessionActivity(sessionId: string, options?: SessionActivityOptions): SessionActivityPage {
+  const limit = options?.limit ?? 50;
+  const includeToolDetails = options?.includeToolDetails ?? false;
+  const since = options?.cursor ? Number(options.cursor) : undefined;
+
+  let parts = getSessionParts(sessionId, since);
+
+  // Apply limit
+  const hasMore = parts.length > limit;
+  parts = parts.slice(0, limit);
+
+  // Strip tool details if not requested
+  if (!includeToolDetails) {
+    parts = parts.map((p) => ({
+      ...p,
+      toolInput: undefined,
+      toolOutput: undefined,
+    }));
+  }
+
+  // Compute next cursor from last part's createdAt
+  const nextCursor = parts.length > 0 ? String(parts[parts.length - 1].createdAt) : null;
+
+  return {
+    parts,
+    hasMore,
+    nextCursor,
+  };
+}
+
+/**
+ * Get immediate children of a session as summary cards.
+ *
+ * Returns only direct children — not grandchildren. Each child includes
+ * a childCount showing how many sub-children it has.
+ */
+function getSessionChildSummaries(sessionId: string): SessionSummary[] {
+  const children = getChildSessions(sessionId);
+  return children.map((child) =>
+    summarizeSession(
+      child.id,
+      'subagent',
+      child.title,
+      sessionId,
+      child.timeCreated,
+      child.timeUpdated,
+    ),
+  );
+}
+
+/**
+ * Get incremental deltas for a job since a given cursor.
+ *
+ * Compares current job state against the cursor timestamp and returns
+ * compact events for changes — NOT full re-serialization.
+ */
+function getJobDetailEvents(jobId: string, sinceCursor: string): JobDetailEventsResponse {
+  const sinceMs = Number(sinceCursor);
+  const events: JobDetailEvent[] = [];
+  const now = Date.now();
+
+  // Reload job from DB
+  const job = getJob(jobId);
+  if (!job) {
+    return { events: [], cursor: String(now) };
+  }
+
+  // Check if job metadata changed since cursor
+  // We use a simple heuristic: if the job was updated after the cursor,
+  // emit a job-update event with key fields
+  const completedAtMs = job.completedAt ? Date.parse(job.completedAt) : null;
+  const startedAtMs = job.startedAt ? Date.parse(job.startedAt) : null;
+
+  if (
+    (completedAtMs && completedAtMs > sinceMs) ||
+    (startedAtMs && startedAtMs > sinceMs)
+  ) {
+    const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict);
+    events.push({
+      type: 'job-update',
+      timestamp: now,
+      data: {
+        status: job.status,
+        currentStep: job.currentStep,
+        verdict,
+        confidence,
+        error: job.error,
+      },
+    });
+  }
+
+  // Check steps for changes
+  const rawSteps = getJobSteps(jobId);
+  for (const step of rawSteps) {
+    const stepCompletedMs = step.completedAt ? Date.parse(step.completedAt) : null;
+    const stepStartedMs = step.startedAt ? Date.parse(step.startedAt) : null;
+
+    if (
+      (stepCompletedMs && stepCompletedMs > sinceMs) ||
+      (stepStartedMs && stepStartedMs > sinceMs)
+    ) {
+      events.push({
+        type: 'step-update',
+        timestamp: now,
+        data: {
+          stepIndex: step.stepIndex,
+          command: step.command,
+          status: step.status,
+          durationMs: step.durationMs,
+          verdictReason: step.verdictReason,
+        },
+      });
+    }
+  }
+
+  // Check for new activity parts from root sessions
+  const sessionTitles = parseSessionTitles(job.sessionTitles);
+  for (const title of sessionTitles) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId) continue;
+
+    const newParts = getSessionParts(sessionId, sinceMs);
+    for (const part of newParts.slice(0, 20)) { // cap at 20 new parts per poll
+      events.push({
+        type: 'activity-new',
+        timestamp: part.createdAt,
+        data: {
+          sessionId,
+          partId: part.id,
+          type: part.type,
+          role: part.role,
+          preview: part.text ? truncate(part.text, 300) : (part.tool ?? part.type),
+        },
+      });
+    }
+  }
+
+  return {
+    events,
+    cursor: String(now),
+  };
+}
+
+// ── Exports ───────────────────────────────────────────────────────────────
+
+export {
+  getJobDetail,
+  summarizeSession,
+  getSessionActivity,
+  getSessionChildSummaries,
+  getJobDetailEvents,
+};
