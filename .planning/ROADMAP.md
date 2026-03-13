@@ -1037,8 +1037,8 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-tui-shortcuts-and-projec
 **Plans:** 2 plans
 
 Plans:
-- [ ] 60-01-PLAN.md — Remove dirty-guard launch blocking from runner + delete provenance system + cleanup types/DB/CLI flag
-- [ ] 60-02-PLAN.md — Clean up UX surfaces (undo/info/status) + update/remove all dirty-guard tests
+- [x] 60-01-PLAN.md — Remove dirty-guard launch blocking from runner + delete provenance system + cleanup types/DB/CLI flag
+- [x] 60-02-PLAN.md — Clean up UX surfaces (undo/info/status) + update/remove all dirty-guard tests
 
 Wave structure:
 - Wave 1: 60-01 (core removal: runner, git-recovery, types, db, add, index)
@@ -1046,3 +1046,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-remove-dirty-guard-blocking-and-delete-stale-logic.md` for full spec.
+
+### Phase 61: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
+
+**Goal:** [To be planned]
+**Depends on:** Phase 60
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 61 to break down)
+
+**Details:**
+[To be added during planning]

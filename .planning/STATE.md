@@ -17,7 +17,7 @@ Progress: ████████████████ 56/56 plans (100%)
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 49 complete — CLI and TUI surfaces now expose explicit judge verdict/retry/undo triage badges for terminal jobs.
+**Current focus:** Phase 60 complete — Dirty-guard blocking fully removed; dirty worktrees are informational-only, never block job launch or undo.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -280,6 +280,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 58 added: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
 - Phase 59 added: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
 - Phase 60 added: Remove dirty-guard blocking entirely; only real failures should block projects
+- Phase 61 added: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
 
 ## Decisions
 
