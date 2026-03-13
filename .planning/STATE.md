@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 60 (Remove dirty-guard blocking entirely; only real failures should block projects)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-13 - Completed 60-01-PLAN.md (remove dirty-guard blocking + provenance system + CLI flag)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-13 - Completed 60-02-PLAN.md (clean up UX surfaces and tests — remove all dirty-guard blocking)
 
-Progress: █████████████░ 55/56 plans (98%)
+Progress: ████████████████ 56/56 plans (100%)
 
 ## Project Reference
 
@@ -152,7 +152,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 60: Remove dirty-guard blocking entirely; only real failures should block projects
-- **Status:** in progress (1/2 plans complete)
+- **Status:** complete (2/2 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -702,9 +702,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 60-01 | Keep getPorcelainStatus as private in git-recovery.ts | isWorktreeDirty() calls it internally — removing would break dirty check |
 | 60-01 | Remove allowDirtyStart from info.ts as part of Task 1 | TypeScript compilation requires consistent type removal across all consumers |
 | 60-01 | Keep startedDirty throughout all interfaces and DB schema | Informational metadata for observability — records worktree state at launch |
+| 60-02 | Dirty-start jobs return undo:safe instead of undo:guarded-dirty-start | Dirty state is no longer a guard condition — undo checkpoints are equally valid |
+| 60-02 | Remove allowDirtyStart from all positional addJob call expectations | Parameter removed from addJob() in 60-01, shifting skipGracePeriod/notifyRoute positions |
 
 ## Session Continuity
 
-Last session: 2026-03-13T12:33:12Z
-Stopped at: Completed 60-01-PLAN.md
+Last session: 2026-03-13
+Stopped at: Completed 60-02-PLAN.md (Phase 60 complete)
 Resume file: None

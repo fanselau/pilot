@@ -146,7 +146,7 @@ program
   .command('undo <id>')
   .description('Undo a job using recorded git recovery checkpoints')
   .option('--dry-run', 'Preview what undo would reset without mutating git state')
-  .option('--force', 'Override guarded-history and dirty-start safety refusals')
+  .option('--force', 'Override guarded-history safety refusals')
   .action(async (id: string, opts: Record<string, unknown>) => {
     const { undoCommand } = await import('./commands/undo.js');
     await undoCommand(id, opts as { dryRun?: boolean; force?: boolean });

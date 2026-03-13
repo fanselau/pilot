@@ -127,15 +127,8 @@ export function buildRecoveryHeader(job: Job): RecoveryHeader {
     };
   }
 
-  if (job.startedDirty) {
-    return {
-      line: `Recovery: guarded (dirty-start)   base:${base} head:${head}`,
-      state: 'guarded',
-    };
-  }
-
   return {
-    line: `Recovery: safe   base:${base} head:${head}`,
+    line: `Recovery: safe${job.startedDirty ? ' (started dirty)' : ''}   base:${base} head:${head}`,
     state: 'safe',
   };
 }
