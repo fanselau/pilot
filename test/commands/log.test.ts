@@ -82,7 +82,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     categories: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '1111111111111111111111111111111111111111',
-    allowDirtyStart: false,
+    notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,
@@ -289,7 +289,7 @@ describe('logCommand --summary', () => {
     expect(output).toContain('retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
   });
 
-  it('surfaces guarded undo/no-step fallback state without transcript reads', async () => {
+  it('surfaces safe undo/no-step fallback state without transcript reads', async () => {
     mockGetJob.mockReturnValue(
       makeJob({
         status: 'completed',
@@ -303,7 +303,7 @@ describe('logCommand --summary', () => {
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('badge: undo:guarded-dirty-start');
+    expect(output).toContain('badge: undo:safe');
     expect(output).toContain('step: no step metadata recorded');
     expect(output).toContain('commit delta: changed');
     expect(mockGetSessionParts).not.toHaveBeenCalled();

@@ -29,10 +29,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    notifyRoute: null,
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
-    allowDirtyStart: false,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,
@@ -140,7 +140,7 @@ describe('buildUndoWhy', () => {
     expect(why.badge).toBe('undo:safe');
   });
 
-  it('returns undo-guarded-dirty-start when started dirty', () => {
+  it('returns undo-safe even when started dirty (dirty-start no longer blocks)', () => {
     const why = buildUndoWhy(
       makeJob({
         status: 'failed',
@@ -150,8 +150,8 @@ describe('buildUndoWhy', () => {
       }),
     );
 
-    expect(why.code).toBe('undo-guarded-dirty-start');
-    expect(why.badge).toBe('undo:guarded-dirty-start');
+    expect(why.code).toBe('undo-safe');
+    expect(why.badge).toBe('undo:safe');
   });
 
   it('returns undo-unavailable when checkpoints are missing', () => {

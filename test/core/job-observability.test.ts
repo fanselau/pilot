@@ -45,7 +45,6 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
-    allowDirtyStart: false,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,

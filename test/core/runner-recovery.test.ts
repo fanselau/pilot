@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Job, ProjectDirtyBaseline } from '../../src/core/types.js';
+import type { Job } from '../../src/core/types.js';
 
 vi.mock('execa', () => ({
   execa: vi.fn(),
@@ -33,8 +33,6 @@ const mocks = vi.hoisted(() => ({
   })),
   updateJobRecoveryStart: vi.fn(),
   updateJobRecoveryHead: vi.fn(),
-  getLatestProjectDirtyBaseline: vi.fn<(project: string) => ProjectDirtyBaseline | null>(() => null),
-  upsertProjectDirtyBaseline: vi.fn<(baseline: ProjectDirtyBaseline) => void>(),
   delegate: vi.fn(),
   findSessionByTitle: vi.fn<(title: string) => string | null>(() => null),
   getSessionModelsRecursive: vi.fn<(sessionId: string) => string[]>(() => []),
@@ -63,8 +61,6 @@ vi.mock('../../src/core/db.js', () => ({
   getProject: mocks.getProject,
   updateJobRecoveryStart: mocks.updateJobRecoveryStart,
   updateJobRecoveryHead: mocks.updateJobRecoveryHead,
-  getLatestProjectDirtyBaseline: mocks.getLatestProjectDirtyBaseline,
-  upsertProjectDirtyBaseline: mocks.upsertProjectDirtyBaseline,
 }));
 
 vi.mock('../../src/core/delegate.js', () => ({
@@ -261,7 +257,6 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
-    allowDirtyStart: false,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,
@@ -284,179 +279,21 @@ describe('runner recovery preflight and checkpoint capture', () => {
     vi.restoreAllMocks();
   });
 
-  it('allows same-project continuation when dirty state matches prior Pilot baseline', async () => {
+  it('launches on dirty worktree without blocking — dirty state is informational only', async () => {
     mockRecoveryGit({
       worktree: true,
       statusPorcelain: ' M src/core/runner.ts',
       branch: 'main',
-      baseCommit: 'head-safe',
-      headCommit: 'head-safe',
+      baseCommit: 'head-dirty',
+      headCommit: 'head-dirty',
     });
-    mocks.getLatestProjectDirtyBaseline.mockReturnValue({
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'head-safe',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'prev1',
-    });
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     await launchJob(makeJob());
 
     expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
     expect(mocks.markFailed).not.toHaveBeenCalled();
     expect(mocks.delegate).toHaveBeenCalledTimes(1);
-    expect(mocks.updateJobRecoveryStart).toHaveBeenCalledWith('ab12', 'head-safe', true);
-    expect(mocks.upsertProjectDirtyBaseline).toHaveBeenCalledWith(expect.objectContaining({
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'head-safe',
-      statusPorcelain: ' M src/core/runner.ts',
-      jobId: 'ab12',
-    }));
-    const stderrOutput = stderrSpy.mock.calls.map(call => String(call[0])).join(' ');
-    expect(stderrOutput).toContain('allowed: continuation-safe dirty tree matches prior Pilot baseline');
-  });
-
-  it('blocks when manual tracked edits appear after the baseline snapshot', async () => {
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ' M src/core/runner.ts',
-      branch: 'main',
-      baseCommit: 'head-manual',
-      headCommit: 'head-manual',
-    });
-    mocks.getLatestProjectDirtyBaseline.mockReturnValue({
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'head-manual',
-      statusPorcelain: ' M src/core/db.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'prev2',
-    });
-
-    await launchJob(makeJob());
-
-    expect(mocks.delegate).not.toHaveBeenCalled();
-    expect(mocks.markFailed).toHaveBeenCalledTimes(1);
-    expect(String(mocks.markFailed.mock.calls[0][1])).toContain(
-      'blocked: manual/untracked changes not attributable to Pilot',
-    );
-    expect(mocks.upsertProjectDirtyBaseline).not.toHaveBeenCalled();
-  });
-
-  it('blocks when new unrelated untracked files appear', async () => {
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ' M src/core/runner.ts\n?? scratch.txt',
-      branch: 'main',
-      baseCommit: 'head-untracked',
-      headCommit: 'head-untracked',
-    });
-    mocks.getLatestProjectDirtyBaseline.mockReturnValue({
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'head-untracked',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'prev3',
-    });
-
-    await launchJob(makeJob());
-
-    expect(mocks.markFailed).toHaveBeenCalledTimes(1);
-    expect(String(mocks.markFailed.mock.calls[0][1])).toContain(
-      'blocked: manual/untracked changes not attributable to Pilot',
-    );
-  });
-
-  it('blocks when branch/head drift from the Pilot baseline', async () => {
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ' M src/core/runner.ts',
-      branch: 'feature/drift',
-      baseCommit: 'head-new',
-      headCommit: 'head-new',
-    });
-    mocks.getLatestProjectDirtyBaseline.mockReturnValue({
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'head-old',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'prev4',
-    });
-
-    await launchJob(makeJob());
-
-    expect(mocks.markFailed).toHaveBeenCalledTimes(1);
-    expect(String(mocks.markFailed.mock.calls[0][1])).toContain('blocked: HEAD moved outside Pilot');
-  });
-
-  it('blocks launch on merge/rebase/conflict state', async () => {
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ' M src/core/runner.ts',
-      branch: 'main',
-      baseCommit: 'head-conflict',
-      headCommit: 'head-conflict',
-      conflictRefs: ['MERGE_HEAD'],
-    });
-
-    await launchJob(makeJob());
-
-    expect(mocks.delegate).not.toHaveBeenCalled();
-    expect(mocks.markFailed).toHaveBeenCalledTimes(1);
-    expect(String(mocks.markFailed.mock.calls[0][1])).toContain(
-      'blocked: merge/rebase/conflict state detected',
-    );
-  });
-
-  it('allows retry launch after Pilot records dirty completion baseline', async () => {
-    let baselineState: {
-      project: string;
-      branch: string | null;
-      headCommit: string | null;
-      statusPorcelain: string;
-      recordedAt: string;
-      jobId: string;
-    } | null = null;
-
-    mocks.getLatestProjectDirtyBaseline.mockImplementation(() => baselineState);
-    mocks.upsertProjectDirtyBaseline.mockImplementation((baseline) => {
-      baselineState = baseline;
-    });
-
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ['', ' M src/core/runner.ts'],
-      branch: 'main',
-      baseCommit: 'head-retry',
-      headCommit: 'head-retry',
-    });
-
-    await launchJob(makeJob());
-
-    expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
-    expect(baselineState).not.toBeNull();
-    expect(baselineState!.statusPorcelain).toBe(' M src/core/runner.ts');
-
-    mockRecoveryGit({
-      worktree: true,
-      statusPorcelain: ' M src/core/runner.ts',
-      branch: 'main',
-      baseCommit: 'head-retry',
-      headCommit: 'head-retry',
-    });
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-    await launchJob(makeJob());
-
-    expect(mocks.markCompleted).toHaveBeenCalledTimes(2);
-    expect(mocks.markFailed).not.toHaveBeenCalled();
-    const stderrOutput = stderrSpy.mock.calls.map(call => String(call[0])).join(' ');
-    expect(stderrOutput).toContain('allowed: continuation-safe dirty tree matches prior Pilot baseline');
+    expect(mocks.updateJobRecoveryStart).toHaveBeenCalledWith('ab12', 'head-dirty', true);
   });
 
   it('does not crash when repos have no commits (null base/head checkpoints)', async () => {

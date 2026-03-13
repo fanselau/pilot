@@ -13,10 +13,7 @@ import { existsSync } from 'node:fs';
 import {
   isGitWorktree,
   isWorktreeDirty,
-  getBranchOrNull,
-  getPorcelainStatus,
   detectGitConflictState,
-  classifyDirtyStart,
   resolveCommitOrNull,
   classifyHeadRelation,
   listChangedFiles,
@@ -61,20 +58,6 @@ describe('git-recovery helpers', () => {
 
     mockExeca.mockResolvedValueOnce(gitResult(0, ''));
     await expect(isWorktreeDirty('/repo')).resolves.toBe(false);
-  });
-
-  it('returns branch name or null for detached HEAD', async () => {
-    mockExeca.mockResolvedValueOnce(gitResult(0, 'main\n'));
-    await expect(getBranchOrNull('/repo')).resolves.toBe('main');
-
-    mockExeca.mockResolvedValueOnce(gitResult(0, ''));
-    await expect(getBranchOrNull('/repo')).resolves.toBeNull();
-  });
-
-  it('captures raw porcelain payload for provenance baselines', async () => {
-    const payload = ' M src/core/runner.ts\n?? junk.txt';
-    mockExeca.mockResolvedValueOnce(gitResult(0, payload));
-    await expect(getPorcelainStatus('/repo')).resolves.toBe(payload);
   });
 
   it('returns null for unresolvable commits, including no-commit repos', async () => {
@@ -167,163 +150,4 @@ describe('git-recovery helpers', () => {
     ]));
   });
 
-  it('classifies continuation-safe dirty starts when branch/head/porcelain match baseline', async () => {
-    setGitMock((command, args) => {
-      if (command !== 'git') return gitResult(1, '');
-
-      if (args[0] === 'branch') return gitResult(0, 'main\n');
-      if (args[0] === 'status') return gitResult(0, ' M src/core/runner.ts');
-
-      if (args[0] === 'rev-parse' && args.includes('--verify') && args.includes('--quiet')) {
-        const ref = args[args.length - 1];
-        if (ref === 'HEAD^{commit}') {
-          return gitResult(0, 'abc123\n');
-        }
-        return gitResult(1, '');
-      }
-
-      if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-        return gitResult(0, `/repo/.git/${args[2]}`);
-      }
-
-      if (args[0] === 'ls-files' && args[1] === '--unmerged') {
-        return gitResult(0, '');
-      }
-
-      return gitResult(1, '');
-    });
-
-    const result = await classifyDirtyStart('/repo', {
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'abc123',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'ab12',
-    });
-
-    expect(result.allowed).toBe(true);
-    expect(result.reason).toBe('allowed: continuation-safe dirty tree matches prior Pilot baseline');
-  });
-
-  it('blocks dirty starts when provenance is missing or porcelain differs', async () => {
-    setGitMock((command, args) => {
-      if (command !== 'git') return gitResult(1, '');
-
-      if (args[0] === 'branch') return gitResult(0, 'main\n');
-      if (args[0] === 'status') return gitResult(0, ' M src/core/runner.ts\n?? temp.log');
-
-      if (args[0] === 'rev-parse' && args.includes('--verify') && args.includes('--quiet')) {
-        const ref = args[args.length - 1];
-        if (ref === 'HEAD^{commit}') {
-          return gitResult(0, 'abc123\n');
-        }
-        return gitResult(1, '');
-      }
-
-      if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-        return gitResult(0, `/repo/.git/${args[2]}`);
-      }
-
-      if (args[0] === 'ls-files' && args[1] === '--unmerged') {
-        return gitResult(0, '');
-      }
-
-      return gitResult(1, '');
-    });
-
-    const missing = await classifyDirtyStart('/repo', null);
-    expect(missing.allowed).toBe(false);
-    expect(missing.reason).toBe('blocked: manual/untracked changes not attributable to Pilot');
-
-    const mismatch = await classifyDirtyStart('/repo', {
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'abc123',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'ab12',
-    });
-    expect(mismatch.allowed).toBe(false);
-    expect(mismatch.reason).toBe('blocked: manual/untracked changes not attributable to Pilot');
-  });
-
-  it('blocks dirty starts on HEAD drift or conflict states', async () => {
-    mockExistsSync.mockReturnValue(true);
-    setGitMock((command, args) => {
-      if (command !== 'git') return gitResult(1, '');
-
-      if (args[0] === 'branch') return gitResult(0, 'feature\n');
-      if (args[0] === 'status') return gitResult(0, ' M src/core/runner.ts');
-
-      if (args[0] === 'rev-parse' && args.includes('--verify') && args.includes('--quiet')) {
-        const ref = args[args.length - 1];
-        if (ref === 'HEAD^{commit}') {
-          return gitResult(0, 'newhead\n');
-        }
-        if (ref === 'MERGE_HEAD') {
-          return gitResult(0, 'mergehead');
-        }
-        return gitResult(1, '');
-      }
-
-      if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-        return gitResult(0, `/repo/.git/${args[2]}`);
-      }
-
-      if (args[0] === 'ls-files' && args[1] === '--unmerged') {
-        return gitResult(0, '');
-      }
-
-      return gitResult(1, '');
-    });
-
-    const conflict = await classifyDirtyStart('/repo', {
-      project: '/repo',
-      branch: 'feature',
-      headCommit: 'newhead',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'ab12',
-    });
-    expect(conflict.allowed).toBe(false);
-    expect(conflict.reason).toBe('blocked: merge/rebase/conflict state detected');
-
-    mockExistsSync.mockReturnValue(false);
-    setGitMock((command, args) => {
-      if (command !== 'git') return gitResult(1, '');
-
-      if (args[0] === 'branch') return gitResult(0, 'feature\n');
-      if (args[0] === 'status') return gitResult(0, ' M src/core/runner.ts');
-
-      if (args[0] === 'rev-parse' && args.includes('--verify') && args.includes('--quiet')) {
-        const ref = args[args.length - 1];
-        if (ref === 'HEAD^{commit}') {
-          return gitResult(0, 'newhead\n');
-        }
-        return gitResult(1, '');
-      }
-
-      if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-        return gitResult(0, `/repo/.git/${args[2]}`);
-      }
-
-      if (args[0] === 'ls-files' && args[1] === '--unmerged') {
-        return gitResult(0, '');
-      }
-
-      return gitResult(1, '');
-    });
-
-    const drift = await classifyDirtyStart('/repo', {
-      project: '/repo',
-      branch: 'main',
-      headCommit: 'oldhead',
-      statusPorcelain: ' M src/core/runner.ts',
-      recordedAt: '2026-03-10T00:00:00.000Z',
-      jobId: 'ab12',
-    });
-    expect(drift.allowed).toBe(false);
-    expect(drift.reason).toBe('blocked: HEAD moved outside Pilot');
-  });
 });

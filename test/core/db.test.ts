@@ -26,8 +26,6 @@ import {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
-  upsertProjectDirtyBaseline,
-  getLatestProjectDirtyBaseline,
   _getTestDb,
   claimNextLaunchable,
   forceQuitJob,
@@ -83,7 +81,6 @@ describe('pilot.db', () => {
       expect(job.providerMode).toBe('claude-only');
       expect(job.gitBaseCommit).toBeNull();
       expect(job.gitHeadCommit).toBeNull();
-      expect(job.allowDirtyStart).toBe(false);
       expect(job.startedDirty).toBe(false);
       expect(job.skipGracePeriod).toBe(false);
     });
@@ -153,7 +150,6 @@ describe('pilot.db', () => {
         undefined,
         0,
         false,
-        false,
         route,
       );
 
@@ -171,24 +167,6 @@ describe('pilot.db', () => {
       expect(fetched!.notifyRoute).toBeNull();
     });
 
-    it('stores allowDirtyStart=true when explicitly provided', () => {
-      const job = addJob(
-        'proj',
-        'quick',
-        'dirty-start task',
-        undefined,
-        'balanced',
-        'claude-only',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        0,
-        true,
-      );
-      expect(job.allowDirtyStart).toBe(true);
-    });
-
     it('stores skipGracePeriod=true when explicitly provided', () => {
       const job = addJob(
         'proj',
@@ -202,7 +180,6 @@ describe('pilot.db', () => {
         undefined,
         undefined,
         0,
-        false,
         true,
       );
       expect(job.skipGracePeriod).toBe(true);
@@ -216,19 +193,17 @@ describe('pilot.db', () => {
       const job = addJob('proj', 'quick', 'task');
       expect(job.gitBaseCommit).toBeNull();
       expect(job.gitHeadCommit).toBeNull();
-      expect(job.allowDirtyStart).toBe(false);
       expect(job.startedDirty).toBe(false);
     });
 
     it('updates git_base_commit and started_dirty via updateJobRecoveryStart', () => {
-      const job = addJob('proj', 'quick', 'task', undefined, undefined, undefined, undefined, undefined, undefined, undefined, 0, true);
+      const job = addJob('proj', 'quick', 'task');
       updateJobRecoveryStart(job.id, 'abc1234', true);
 
       const updated = getJob(job.id);
       expect(updated).not.toBeNull();
       expect(updated!.gitBaseCommit).toBe('abc1234');
       expect(updated!.startedDirty).toBe(true);
-      expect(updated!.allowDirtyStart).toBe(true);
     });
 
     it('updates git_head_commit via updateJobRecoveryHead', () => {
@@ -256,70 +231,6 @@ describe('pilot.db', () => {
     });
   });
 
-  describe('project dirty baseline persistence', () => {
-    it('round-trips all baseline metadata fields', () => {
-      const baseline = {
-        project: '/repo',
-        branch: 'main',
-        headCommit: 'abc1234',
-        statusPorcelain: ' M src/core/runner.ts\n?? notes.txt',
-        recordedAt: '2026-03-10T12:34:56.000Z',
-        jobId: 'ab12',
-      };
-
-      upsertProjectDirtyBaseline(baseline);
-
-      expect(getLatestProjectDirtyBaseline('/repo')).toEqual(baseline);
-    });
-
-    it('replaces the previous baseline for the same project', () => {
-      upsertProjectDirtyBaseline({
-        project: '/repo',
-        branch: 'main',
-        headCommit: 'oldhead',
-        statusPorcelain: ' M old-file.ts',
-        recordedAt: '2026-03-10T01:00:00.000Z',
-        jobId: 'old1',
-      });
-
-      upsertProjectDirtyBaseline({
-        project: '/repo',
-        branch: 'feature/provenance',
-        headCommit: 'newhead',
-        statusPorcelain: ' M src/core/git-recovery.ts',
-        recordedAt: '2026-03-10T02:00:00.000Z',
-        jobId: 'new2',
-      });
-
-      expect(getLatestProjectDirtyBaseline('/repo')).toEqual({
-        project: '/repo',
-        branch: 'feature/provenance',
-        headCommit: 'newhead',
-        statusPorcelain: ' M src/core/git-recovery.ts',
-        recordedAt: '2026-03-10T02:00:00.000Z',
-        jobId: 'new2',
-      });
-    });
-
-    it('preserves job id, timestamp, and porcelain payload exactly for attribution', () => {
-      const payload = ' M tracked.ts\nA  added.ts\n?? scratch.log';
-      upsertProjectDirtyBaseline({
-        project: '/repo',
-        branch: null,
-        headCommit: null,
-        statusPorcelain: payload,
-        recordedAt: '2026-03-10T03:00:00.321Z',
-        jobId: 'z9y8',
-      });
-
-      const stored = getLatestProjectDirtyBaseline('/repo');
-      expect(stored).not.toBeNull();
-      expect(stored!.jobId).toBe('z9y8');
-      expect(stored!.recordedAt).toBe('2026-03-10T03:00:00.321Z');
-      expect(stored!.statusPorcelain).toBe(payload);
-    });
-  });
-
   // ── getJob ────────────────────────────────────────────────────────────
 
   describe('getJob', () => {
@@ -336,7 +247,7 @@ describe('pilot.db', () => {
     });
 
     it('maps skipGracePeriod from stored row values', () => {
-      const created = addJob('proj', 'quick', 'grace mapping', undefined, undefined, undefined, undefined, undefined, undefined, undefined, 0, false, true);
+      const created = addJob('proj', 'quick', 'grace mapping', undefined, undefined, undefined, undefined, undefined, undefined, undefined, 0, true);
       const fetched = getJob(created.id);
       expect(fetched).not.toBeNull();
       expect(fetched!.skipGracePeriod).toBe(true);
@@ -720,7 +631,6 @@ describe('pilot.db', () => {
         undefined,
         undefined,
         0,
-        false,
         true,
       );
 

@@ -98,7 +98,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     categories: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '2222222222222222222222222222222222222222',
-    allowDirtyStart: false,
+    notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,
@@ -358,7 +358,7 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('What happened: Job produced no commit delta.');
     expect(output).toContain('Checkpoints: 111111111111');
     expect(output).toContain('(no-op)');
-    expect(output).toContain('Undo safety: undo:guarded-dirty-start (undo-guarded-dirty-start)');
+    expect(output).toContain('Undo safety: undo:safe (undo-safe)');
     expect(output).toContain('Current/final step: no recorded step metadata');
   });
 

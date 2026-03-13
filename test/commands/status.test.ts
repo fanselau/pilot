@@ -39,7 +39,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
-    allowDirtyStart: false,
+    notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
     ...overrides,
@@ -294,7 +294,7 @@ describe('statusCommand', () => {
     expect(output).toContain('undo:safe');
   });
 
-  it('shows undo:guarded-dirty-start tag when job started dirty', async () => {
+  it('shows undo:safe tag when job started dirty (dirty-start no longer guards)', async () => {
     mockRecent = [
       makeJob({
         id: 'gd11',
@@ -310,7 +310,7 @@ describe('statusCommand', () => {
     await statusCommand({});
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('undo:guarded-dirty-start');
+    expect(output).toContain('undo:safe');
   });
 
   it('shows undo:guarded-newer-work tag when newer-work guard is known', async () => {

@@ -77,10 +77,11 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    notifyRoute: null,
     gitBaseCommit: 'base123',
     gitHeadCommit: 'head123',
-    allowDirtyStart: false,
     startedDirty: false,
+    skipGracePeriod: false,
     ...overrides,
   };
 }
@@ -275,32 +276,19 @@ describe('undoCommand', () => {
     expect(mockExeca).not.toHaveBeenCalled();
   });
 
-  it('refuses dirty-start jobs by default', async () => {
-    mockGetJob.mockReturnValue(makeJob({ startedDirty: true }));
-    mockResolvedCommits({ current: 'current123', base: 'base123', head: 'head123' });
-    mockClassifyHeadRelation.mockResolvedValue('exact');
-    mockListChangedFiles.mockResolvedValue(['src/index.ts']);
-
-    await expectRefusal(undoCommand('ab12', {}), 'job started from a dirty worktree');
-    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => call[0]).join('');
-    expect(stderr).toContain('What: undo was blocked');
-    expect(stderr).toContain('Why: this job started from a dirty worktree');
-    expect(stderr).toContain('Next: review local edits from that run');
-    expect(mockExeca).not.toHaveBeenCalled();
-  });
-
-  it('allows dirty-start jobs with --force override', async () => {
+  it('shows informational note for dirty-start jobs without blocking', async () => {
     mockGetJob.mockReturnValue(makeJob({ startedDirty: true }));
     mockResolvedCommits({ current: 'current123', base: 'base123', head: 'head123' });
     mockClassifyHeadRelation.mockResolvedValue('exact');
     mockListChangedFiles.mockResolvedValue(['src/index.ts']);
     mockExeca.mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
 
-    await undoCommand('ab12', { force: true });
+    await undoCommand('ab12', {});
 
     expect(mockExeca).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('started dirty');
+    expect(output).toContain('started on a dirty worktree');
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('fails clearly when checkpoint commits cannot be resolved', async () => {
