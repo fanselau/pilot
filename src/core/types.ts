@@ -416,3 +416,66 @@ export interface JobDetailEventsResponse {
   events: JobDetailEvent[];
   cursor: string;
 }
+
+// ── Merged Timeline Types (Phase 62) ──────────────────────────────────────
+
+/** Discriminated union for merged timeline stream items. */
+export type TimelineItem =
+  | TimelineActivityItem
+  | TimelineToolSummaryItem
+  | TimelineForkCardItem
+  | TimelineCompletionCardItem;
+
+export interface TimelineActivityItem {
+  kind: 'activity';
+  sessionId: string;
+  partId: string;
+  role: string;
+  createdAt: number;
+  text: string;
+}
+
+export interface TimelineToolSummaryItem {
+  kind: 'tool-summary';
+  sessionId: string;
+  partId: string;
+  createdAt: number;
+  tool: string;
+  toolInput?: string;
+  toolStatus?: string;
+  patchFiles?: string[];
+}
+
+export interface TimelineForkCardItem {
+  kind: 'fork-card';
+  sessionId: string;       // child session ID
+  parentSessionId: string;
+  title: string;
+  createdAt: number;       // child session start time = fork point
+  status: 'active' | 'done' | 'unknown';
+  messageCount: number;
+  tokenTotal: number;
+  models: string[];
+  latestMessagePreview: string | null;
+  childCount: number;
+  durationMs: number | null;
+}
+
+export interface TimelineCompletionCardItem {
+  kind: 'completion-card';
+  sessionId: string;
+  title: string;
+  createdAt: number;       // completion time
+  status: 'done';
+  durationMs: number | null;
+  tokenTotal: number;
+  latestMessagePreview: string | null;
+}
+
+export interface TimelinePage {
+  items: TimelineItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  sessionCount: number;
+  childCount: number;
+}

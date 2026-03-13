@@ -8,7 +8,14 @@
  * Pure core module — no UI dependencies.
  */
 
-import { getJob, getJobSteps } from './db.js';
+import {
+  getJob,
+  getJobSteps,
+  retry,
+  cancel,
+  forceQuitJob,
+  unblockProject,
+} from './db.js';
 import {
   findSessionByTitle,
   getChildSessions,
@@ -30,6 +37,8 @@ import type {
   SessionActivityOptions,
   JobDetailEvent,
   JobDetailEventsResponse,
+  TimelineItem,
+  TimelinePage,
 } from './types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -418,6 +427,171 @@ function getJobDetailEvents(jobId: string, sinceCursor: string): JobDetailEvents
   };
 }
 
+// ── Merged Timeline Query ─────────────────────────────────────────────────
+
+/**
+ * Build a merged chronological timeline for a job.
+ *
+ * Mixes root session activity (text parts → activity items, tool/patch parts →
+ * tool-summary items) with sub-agent fork cards positioned at the child
+ * session's creation time. Done child sessions also emit a completion card
+ * positioned at the child's update time.
+ *
+ * Items are sorted by createdAt ascending (chronological order).
+ * Supports cursor-based pagination: items where createdAt > cursor.
+ */
+function getJobTimeline(
+  jobId: string,
+  options?: { cursor?: string; limit?: number },
+): TimelinePage | null {
+  const job = getJob(jobId);
+  if (!job) return null;
+
+  const limit = options?.limit ?? 100;
+  const cursorMs = options?.cursor ? Number(options.cursor) : 0;
+
+  const sessionTitles = parseSessionTitles(job.sessionTitles);
+  const items: TimelineItem[] = [];
+  const seenSessions = new Set<string>();
+  let totalChildCount = 0;
+
+  for (const title of sessionTitles) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId || seenSessions.has(sessionId)) continue;
+    seenSessions.add(sessionId);
+
+    // Map root session parts → activity / tool-summary items
+    const parts = getSessionParts(sessionId);
+    for (const part of parts) {
+      if (part.type === 'text' || part.type === 'reasoning') {
+        if (part.text) {
+          items.push({
+            kind: 'activity',
+            sessionId,
+            partId: part.id,
+            role: part.role,
+            createdAt: part.createdAt,
+            text: part.text,
+          });
+        }
+      } else if (part.type === 'tool' || part.type === 'patch') {
+        items.push({
+          kind: 'tool-summary',
+          sessionId,
+          partId: part.id,
+          createdAt: part.createdAt,
+          tool: part.tool ?? part.type,
+          toolInput: part.toolInput,
+          toolStatus: part.toolStatus,
+          patchFiles: part.patchFiles,
+        });
+      }
+    }
+
+    // Map child sessions → fork cards + completion cards
+    const children = getChildSessions(sessionId);
+    totalChildCount += children.length;
+
+    for (const child of children) {
+      if (seenSessions.has(child.id)) continue;
+      seenSessions.add(child.id);
+
+      const done = isSessionDone(child.id);
+      const msgCount = getAssistantMessageCount(child.id);
+      const tokens = getSessionTokensRecursive(child.id);
+      const models = getSessionModelsRecursive(child.id);
+      const lastMsg = getLastMessage(child.id);
+      const childChildren = getChildSessions(child.id);
+      const tokenTotal = tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
+      const durationMs = child.timeUpdated > child.timeCreated
+        ? child.timeUpdated - child.timeCreated
+        : null;
+
+      let latestPreview: string | null = null;
+      if (lastMsg?.content) {
+        latestPreview = truncate(lastMsg.content, 200);
+      }
+
+      // Fork card at child creation time (the fork point)
+      items.push({
+        kind: 'fork-card',
+        sessionId: child.id,
+        parentSessionId: sessionId,
+        title: child.title,
+        createdAt: child.timeCreated,
+        status: done ? 'done' : (msgCount > 0 ? 'active' : 'unknown'),
+        messageCount: msgCount,
+        tokenTotal,
+        models,
+        latestMessagePreview: latestPreview,
+        childCount: childChildren.length,
+        durationMs,
+      });
+
+      // Completion card at child update time (if done)
+      if (done && child.timeUpdated > child.timeCreated) {
+        items.push({
+          kind: 'completion-card',
+          sessionId: child.id,
+          title: child.title,
+          createdAt: child.timeUpdated,
+          status: 'done',
+          durationMs,
+          tokenTotal,
+          latestMessagePreview: latestPreview,
+        });
+      }
+    }
+  }
+
+  // Sort chronologically
+  items.sort((a, b) => a.createdAt - b.createdAt);
+
+  // Apply cursor filter
+  const filtered = cursorMs > 0
+    ? items.filter((item) => item.createdAt > cursorMs)
+    : items;
+
+  // Apply limit
+  const hasMore = filtered.length > limit;
+  const page = filtered.slice(0, limit);
+
+  // Compute next cursor
+  const nextCursor = page.length > 0
+    ? String(page[page.length - 1].createdAt)
+    : null;
+
+  return {
+    items: page,
+    hasMore,
+    nextCursor,
+    sessionCount: seenSessions.size,
+    childCount: totalChildCount,
+  };
+}
+
+// ── Mutation Wrappers ─────────────────────────────────────────────────────
+
+/** Retry a failed job — delegates to db.retry(). */
+function retryJobAction(jobId: string): void {
+  retry(jobId);
+}
+
+/** Cancel a job — delegates to db.cancel(). */
+function cancelJobAction(jobId: string): void {
+  cancel(jobId);
+}
+
+/** Force-quit a running job — delegates to db.forceQuitJob(). */
+function forceQuitJobAction(jobId: string, reason?: string): void {
+  forceQuitJob(jobId, 'cli', reason ?? 'Force quit via web UI');
+}
+
+/** Unblock a project — delegates to db.unblockProject(). */
+function unblockProjectAction(projectPath: string): void {
+  unblockProject(projectPath);
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -426,4 +600,9 @@ export {
   getSessionActivity,
   getSessionChildSummaries,
   getJobDetailEvents,
+  getJobTimeline,
+  retryJobAction,
+  cancelJobAction,
+  forceQuitJobAction,
+  unblockProjectAction,
 };
