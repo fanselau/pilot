@@ -125,7 +125,6 @@ export interface Job {
   categories: string[] | null;    // user-assigned skill categories for the job
   gitBaseCommit: string | null;
   gitHeadCommit: string | null;
-  allowDirtyStart: boolean;
   startedDirty: boolean;
   skipGracePeriod: boolean;
 }
@@ -268,15 +267,6 @@ export interface Project {
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601
   createdAt: string;
-}
-
-export interface ProjectDirtyBaseline {
-  project: string;
-  branch: string | null;
-  headCommit: string | null;
-  statusPorcelain: string;
-  recordedAt: string;
-  jobId: string;
 }
 
 // ── Skills System ──────────────────────────────────────────────────────────

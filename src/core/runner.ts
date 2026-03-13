@@ -41,18 +41,13 @@ import {
   getProject,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
-  getLatestProjectDirtyBaseline,
-  upsertProjectDirtyBaseline,
 } from './db.js';
 import { delegate, resolveOpencodeBinary } from './delegate.js';
 import {
   isGitWorktree,
   isWorktreeDirty,
   resolveCommitOrNull,
-  getBranchOrNull,
-  getPorcelainStatus,
   detectGitConflictState,
-  classifyDirtyStart,
 } from './git-recovery.js';
 import { resolveSkillsForJob, injectSkills, cleanupInjectedSkills } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
@@ -561,16 +556,6 @@ class Runner {
         );
       }
 
-      if (startedDirty) {
-        const baseline = getLatestProjectDirtyBaseline(job.project);
-        const dirtyStart = await classifyDirtyStart(projectDir, baseline);
-        if (!dirtyStart.allowed) {
-          throw new Error(`Refusing to start job ${job.id}. ${dirtyStart.reason}`);
-        }
-
-        process.stderr.write(`[runner] ${dirtyStart.reason} (${job.id})\n`);
-      }
-
       preflightPassed = true;
 
       // Inject matching skills into project's .opencode/skills/ directory
@@ -730,9 +715,6 @@ class Runner {
 
       if (allStepsCompleted) {
         await this.captureRecoveryHead(job.id, projectDir);
-        if (preflightPassed) {
-          await this.captureProjectDirtyBaseline(job.id, job.project, projectDir);
-        }
         this.collectActualModels(job.id);
 
         markCompleted(job.id);
@@ -749,9 +731,6 @@ class Runner {
     } catch (err) {
       const error = errMsg(err);
       await this.captureRecoveryHead(job.id, projectDir);
-      if (preflightPassed) {
-        await this.captureProjectDirtyBaseline(job.id, job.project, projectDir);
-      }
       this.collectActualModels(job.id);
       try {
         markFailed(job.id, error);
@@ -1235,32 +1214,6 @@ class Runner {
     }
   }
 
-  private async captureProjectDirtyBaseline(
-    jobId: string,
-    project: string,
-    projectDir: string,
-  ): Promise<void> {
-    try {
-      const [branch, headCommit, statusPorcelain] = await Promise.all([
-        getBranchOrNull(projectDir),
-        resolveCommitOrNull(projectDir, 'HEAD'),
-        getPorcelainStatus(projectDir),
-      ]);
-
-      upsertProjectDirtyBaseline({
-        project,
-        branch,
-        headCommit,
-        statusPorcelain,
-        recordedAt: new Date().toISOString(),
-        jobId,
-      });
-    } catch (err) {
-      process.stderr.write(
-        `[runner] Warning: failed to persist dirty baseline for ${jobId}: ${errMsg(err)}\n`,
-      );
-    }
-  }
 }
 
 // ── Judge verdict parsing ──────────────────────────────────────────────────

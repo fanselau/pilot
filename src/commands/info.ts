@@ -98,7 +98,6 @@ interface RecoveryInfo {
   baseShort: string | null;
   headShort: string | null;
   currentShort: string | null;
-  allowDirtyStart: boolean;
   startedDirty: boolean;
   relation: HeadRelation | null;
   blockedByNewerWork: boolean;
@@ -258,7 +257,6 @@ function inferRecoveryFromMetadata(
   baseCommit: string | null,
   headCommit: string | null,
   currentHead: string | null,
-  allowDirtyStart: boolean,
   startedDirty: boolean,
 ): RecoveryInfo {
   return {
@@ -277,7 +275,6 @@ function inferRecoveryFromMetadata(
     baseShort: shortCommit(baseCommit),
     headShort: shortCommit(headCommit),
     currentShort: shortCommit(currentHead),
-    allowDirtyStart,
     startedDirty,
     relation: null,
     blockedByNewerWork: false,
@@ -294,7 +291,6 @@ async function buildRecoveryInfo(job: {
   project: string;
   gitBaseCommit: string | null;
   gitHeadCommit: string | null;
-  allowDirtyStart: boolean;
   startedDirty: boolean;
 }): Promise<RecoveryInfo> {
   const projectDir = resolveProjectDir(job.project);
@@ -308,7 +304,6 @@ async function buildRecoveryInfo(job: {
       job.gitBaseCommit,
       job.gitHeadCommit,
       null,
-      job.allowDirtyStart,
       job.startedDirty,
     );
   }
@@ -322,7 +317,6 @@ async function buildRecoveryInfo(job: {
       job.gitBaseCommit,
       job.gitHeadCommit,
       null,
-      job.allowDirtyStart,
       job.startedDirty,
     );
   }
@@ -343,7 +337,6 @@ async function buildRecoveryInfo(job: {
         baseCommit,
         headCommit,
         currentHead,
-        job.allowDirtyStart,
         job.startedDirty,
       ),
       projectIsGit: true,
@@ -360,7 +353,6 @@ async function buildRecoveryInfo(job: {
         baseCommit,
         headCommit,
         currentHead,
-        job.allowDirtyStart,
         job.startedDirty,
       ),
       projectIsGit: true,
@@ -377,7 +369,6 @@ async function buildRecoveryInfo(job: {
         baseCommit,
         headCommit,
         currentHead,
-        job.allowDirtyStart,
         job.startedDirty,
       ),
       projectIsGit: true,
@@ -439,7 +430,6 @@ async function buildRecoveryInfo(job: {
     baseShort: shortCommit(baseCommit),
     headShort: shortCommit(headCommit),
     currentShort: shortCommit(currentHead),
-    allowDirtyStart: job.allowDirtyStart,
     startedDirty: job.startedDirty,
     relation,
     blockedByNewerWork,
@@ -609,7 +599,6 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   outputHuman(`  ${dim(pad('Head:'))}     ${formatCommitDisplay(recovery.headCommit)}`);
   outputHuman(`  ${dim(pad('Current:'))}  ${formatCommitDisplay(recovery.currentHead)}`);
   outputHuman(`  ${dim(pad('Dirty start:'))} ${recovery.startedDirty ? 'yes' : 'no'}`);
-  outputHuman(`  ${dim(pad('Allow dirty:'))} ${recovery.allowDirtyStart ? 'yes' : 'no'}`);
   outputHuman(`  ${dim(pad('Worktree:'))} ${recovery.worktreeDirtyNow === null ? '—' : recovery.worktreeDirtyNow ? 'dirty' : 'clean'}`);
   if (recovery.relation) {
     outputHuman(`  ${dim(pad('Relation:'))} ${recovery.relation}`);

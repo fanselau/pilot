@@ -24,7 +24,6 @@ import type {
   ModelProfileRow,
   ProviderModeRow,
   OpenClawDeliverRoute,
-  ProjectDirtyBaseline,
 } from './types.js';
 import { AGENT_MODELS } from './models.js';
 
@@ -57,7 +56,6 @@ CREATE TABLE IF NOT EXISTS jobs (
   provider_mode TEXT NOT NULL DEFAULT 'claude-only',
   git_base_commit TEXT,
   git_head_commit TEXT,
-  allow_dirty_start INTEGER NOT NULL DEFAULT 0,
   started_dirty INTEGER NOT NULL DEFAULT 0,
   skip_grace_period INTEGER NOT NULL DEFAULT 0
 );
@@ -89,17 +87,6 @@ CREATE TABLE IF NOT EXISTS projects (
   blocked_reason TEXT,
   blocked_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
-
-const CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS project_dirty_baselines (
-  project TEXT PRIMARY KEY,
-  branch TEXT,
-  head_commit TEXT,
-  status_porcelain TEXT NOT NULL,
-  recorded_at TEXT NOT NULL,
-  job_id TEXT NOT NULL
 );
 `;
 
@@ -184,7 +171,6 @@ interface JobRow {
   categories: string | null;
   git_base_commit: string | null;
   git_head_commit: string | null;
-  allow_dirty_start: number;
   started_dirty: number;
   skip_grace_period: number;
 }
@@ -197,15 +183,6 @@ interface ProjectRow {
   blocked_reason: string | null;
   blocked_at: string | null;
   created_at: string;
-}
-
-interface ProjectDirtyBaselineRow {
-  project: string;
-  branch: string | null;
-  head_commit: string | null;
-  status_porcelain: string;
-  recorded_at: string;
-  job_id: string;
 }
 
 function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDeliverRoute | null {
@@ -248,17 +225,6 @@ function rowToProject(row: ProjectRow): Project {
   };
 }
 
-function rowToProjectDirtyBaseline(row: ProjectDirtyBaselineRow): ProjectDirtyBaseline {
-  return {
-    project: row.project,
-    branch: row.branch,
-    headCommit: row.head_commit,
-    statusPorcelain: row.status_porcelain,
-    recordedAt: row.recorded_at,
-    jobId: row.job_id,
-  };
-}
-
 function rowToJob(row: JobRow): Job {
   return {
     id: row.id,
@@ -296,7 +262,6 @@ function rowToJob(row: JobRow): Job {
     })(),
     gitBaseCommit: row.git_base_commit ?? null,
     gitHeadCommit: row.git_head_commit ?? null,
-    allowDirtyStart: row.allow_dirty_start === 1,
     startedDirty: row.started_dirty === 1,
     skipGracePeriod: row.skip_grace_period === 1,
   };
@@ -327,7 +292,6 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE jobs ADD COLUMN timeout INTEGER DEFAULT 0",
     'ALTER TABLE jobs ADD COLUMN git_base_commit TEXT',
     'ALTER TABLE jobs ADD COLUMN git_head_commit TEXT',
-    'ALTER TABLE jobs ADD COLUMN allow_dirty_start INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE projects ADD COLUMN notify_openclaw_route TEXT DEFAULT NULL',
@@ -386,7 +350,6 @@ function openPilotDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
-  cachedDb!.exec(CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
@@ -416,7 +379,6 @@ function _getTestDb(): DatabaseType {
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
-  cachedDb!.exec(CREATE_PROJECT_DIRTY_BASELINES_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
@@ -451,7 +413,6 @@ function addJob(
   callbackSessionKey?: string,
   callbackUrl?: string,
   timeout?: number,
-  allowDirtyStart?: boolean,
   skipGracePeriod?: boolean,
   notifyRoute?: OpenClawDeliverRoute | null,
 ): Job {
@@ -462,8 +423,8 @@ function addJob(
   const provider = providerMode ?? defaults.providerMode;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, allow_dirty_start, skip_grace_period, notify_route)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, skip_grace_period, notify_route)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     project,
@@ -477,7 +438,6 @@ function addJob(
     callbackSessionKey ?? null,
     callbackUrl ?? null,
     timeout ?? 0,
-    allowDirtyStart ? 1 : 0,
     skipGracePeriod ? 1 : 0,
     notifyRoute ? JSON.stringify(notifyRoute) : null,
   );
@@ -812,43 +772,6 @@ function updateJobRecoveryStart(
 function updateJobRecoveryHead(id: string, gitHeadCommit: string | null): void {
   const db = getDb();
   db.prepare('UPDATE jobs SET git_head_commit = ? WHERE id = ?').run(gitHeadCommit, id);
-}
-
-function upsertProjectDirtyBaseline(baseline: ProjectDirtyBaseline): void {
-  const db = getDb();
-  db.prepare(`
-    INSERT INTO project_dirty_baselines (
-      project,
-      branch,
-      head_commit,
-      status_porcelain,
-      recorded_at,
-      job_id
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(project) DO UPDATE SET
-      branch = excluded.branch,
-      head_commit = excluded.head_commit,
-      status_porcelain = excluded.status_porcelain,
-      recorded_at = excluded.recorded_at,
-      job_id = excluded.job_id
-  `).run(
-    baseline.project,
-    baseline.branch,
-    baseline.headCommit,
-    baseline.statusPorcelain,
-    baseline.recordedAt,
-    baseline.jobId,
-  );
-}
-
-function getLatestProjectDirtyBaseline(project: string): ProjectDirtyBaseline | null {
-  const db = getDb();
-  const row = db.prepare(
-    'SELECT * FROM project_dirty_baselines WHERE project = ?',
-  ).get(project) as ProjectDirtyBaselineRow | undefined;
-
-  return row ? rowToProjectDirtyBaseline(row) : null;
 }
 
 // ── Force Quit ────────────────────────────────────────────────────────
@@ -1436,8 +1359,6 @@ export {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
-  upsertProjectDirtyBaseline,
-  getLatestProjectDirtyBaseline,
   claimNextLaunchable,
   forceQuitJob,
   recordStep,

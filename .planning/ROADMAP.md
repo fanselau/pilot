@@ -1032,12 +1032,17 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-tui-shortcuts-and-projec
 
 ### Phase 60: Remove dirty-guard blocking entirely; only real failures should block projects
 
-**Goal:** [To be planned]
+**Goal:** Remove dirty-guard blocking behavior completely — dirty worktrees no longer block job launch or create blocked-project status. Delete the provenance-aware dirty classification system, `--force-dirty` flag, and `ProjectDirtyBaseline` infrastructure. Keep `startedDirty` as informational metadata only. Only real failures (build/execution/verification) block projects.
 **Depends on:** Phase 59
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 60 to break down)
+- [ ] 60-01-PLAN.md — Remove dirty-guard launch blocking from runner + delete provenance system + cleanup types/DB/CLI flag
+- [ ] 60-02-PLAN.md — Clean up UX surfaces (undo/info/status) + update/remove all dirty-guard tests
+
+Wave structure:
+- Wave 1: 60-01 (core removal: runner, git-recovery, types, db, add, index)
+- Wave 2: 60-02 (UX cleanup + test updates, depends on 60-01)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-remove-dirty-guard-blocking-and-delete-stale-logic.md` for full spec.
