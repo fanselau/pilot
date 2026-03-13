@@ -56,7 +56,7 @@ function PartCard({ part }: { part: SessionPart }) {
 
   return (
     <Collapsible>
-      <div className="flex items-start gap-2 py-1.5">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
           {formatTime(part.createdAt)}
         </span>

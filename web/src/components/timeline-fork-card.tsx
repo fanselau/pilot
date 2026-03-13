@@ -65,7 +65,7 @@ export function TimelineForkCard({ item, jobId }: TimelineForkCardProps) {
   return (
     <Card className="border-l-4 border-l-primary/40 bg-muted/30">
       <CardContent className="py-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           {/* Left: identity + meta */}
           <div className="min-w-0 flex-1 space-y-1.5">
             {/* Title row */}

@@ -173,7 +173,7 @@ function JobHeader({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm">{job.description}</p>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 md:grid-cols-3">
           <div>
             <span className="text-muted-foreground">Project: </span>
             <span className="font-medium">{shortProject(job.project)}</span>

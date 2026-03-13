@@ -93,7 +93,7 @@ function toolStatusVariant(status: string | undefined) {
 
 function ActivityRow({ item }: { item: TimelineActivityItem }) {
   return (
-    <div className="flex items-start gap-2 py-1.5">
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
         {formatTime(item.createdAt)}
       </span>
@@ -112,7 +112,7 @@ function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
 
   return (
     <Collapsible>
-      <div className="flex items-start gap-2 py-1.5">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
           {formatTime(item.createdAt)}
         </span>
@@ -161,7 +161,7 @@ function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
 
 function CompletionRow({ item }: { item: TimelineCompletionCardItem }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 opacity-70">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 opacity-70">
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
         {formatTime(item.createdAt)}
       </span>
