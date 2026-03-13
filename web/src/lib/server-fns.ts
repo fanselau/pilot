@@ -12,6 +12,11 @@ import {
   getSessionActivity,
   getSessionChildSummaries,
   getJobDetailEvents,
+  getJobTimeline,
+  retryJobAction,
+  cancelJobAction,
+  forceQuitJobAction,
+  unblockProjectAction,
 } from '@pilot/core/job-detail-query.js'
 import { getQueue, getRecent } from '@pilot/core/db.js'
 
@@ -72,5 +77,70 @@ export const getJobDetailEventsFn = createServerFn({ method: 'GET' })
         data: Record<string, {}>
       }>
       cursor: string
+    }
+  })
+
+// ── Job Timeline (merged chronological stream) ───────────────────────────
+
+export const getJobTimelineFn = createServerFn({ method: 'GET' })
+  .inputValidator(
+    (d: { jobId: string; cursor?: string; limit?: number }) => d,
+  )
+  .handler(async ({ data }) => {
+    return getJobTimeline(data.jobId, {
+      cursor: data.cursor,
+      limit: data.limit,
+    })
+  })
+
+// ── Mutation: Retry Job ──────────────────────────────────────────────────
+
+export const retryJobFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { jobId: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      retryJobAction(data.jobId)
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+// ── Mutation: Cancel Job ─────────────────────────────────────────────────
+
+export const cancelJobFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { jobId: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      cancelJobAction(data.jobId)
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+// ── Mutation: Force Quit Job ─────────────────────────────────────────────
+
+export const forceQuitJobFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { jobId: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      forceQuitJobAction(data.jobId, 'Force quit via web UI')
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+// ── Mutation: Unblock Project ────────────────────────────────────────────
+
+export const unblockProjectFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectPath: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      unblockProjectAction(data.projectPath)
+      return { ok: true }
+    } catch {
+      return { ok: false }
     }
   })
