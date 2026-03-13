@@ -9,6 +9,7 @@
 import { useState, useMemo } from 'react'
 import type { SessionSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
+import { Card, CardContent } from '~/components/ui/card'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
 import {
   Table,
@@ -24,6 +25,7 @@ import {
   TooltipPopup,
   TooltipProvider,
 } from '~/components/ui/tooltip'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -147,6 +149,69 @@ function SortableHead({
   )
 }
 
+// ── Mobile Card ──────────────────────────────────────────────────────────
+
+function SessionCard({ session }: { session: SessionSummary }) {
+  return (
+    <Card>
+      <CardContent className="py-3 space-y-2">
+        {/* Title + status + role */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium truncate max-w-[200px]">
+            {truncateTitle(session.title, 40)}
+          </span>
+          <Badge
+            variant={sessionStatusVariant(session.status)}
+            size="sm"
+            className={session.status === 'active' ? 'animate-pulse' : ''}
+          >
+            {session.status}
+          </Badge>
+          <Badge
+            variant={session.role === 'root' ? 'outline' : 'secondary'}
+            size="sm"
+          >
+            {session.role}
+          </Badge>
+        </div>
+
+        {/* Compact stats row */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            <span className="text-muted-foreground/70">Duration: </span>
+            <span className="font-mono">{computeIdleLabel(session)}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground/70">Msgs: </span>
+            <span className="font-mono">{session.messageCount}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground/70">Tokens: </span>
+            <span className="font-mono">{formatTokens(session.tokenTotal)}</span>
+          </span>
+          {session.childCount > 0 && (
+            <span>
+              <span className="text-muted-foreground/70">Children: </span>
+              <span className="font-mono">{session.childCount}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Model badges */}
+        {session.models.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {session.models.map((model) => (
+              <Badge key={model} variant="outline" size="sm">
+                {model.split('/').pop() ?? model}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── Component ────────────────────────────────────────────────────────────
 
 export interface SessionOverviewProps {
@@ -155,6 +220,7 @@ export interface SessionOverviewProps {
 }
 
 export function SessionOverview({ sessions }: SessionOverviewProps) {
+  const isMobile = useIsMobile()
   const [sortField, setSortField] = useState<SessionSortField>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -182,6 +248,16 @@ export function SessionOverview({ sessions }: SessionOverviewProps) {
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
+    )
+  }
+
+  if (isMobile) {
+    return (
+      <div className="space-y-2">
+        {sorted.map((session) => (
+          <SessionCard key={session.sessionId} session={session} />
+        ))}
+      </div>
     )
   }
 
