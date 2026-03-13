@@ -315,3 +315,104 @@ export interface PilotStatusJson {
   queue: Job[];
   recent: Job[];
 }
+
+// ── Compact DTO shapes for web UI / TUI query backbone ────────────────────
+
+/**
+ * Root return type of getJobDetail() — compact snapshot of a job
+ * with summary cards for sessions, steps, and recent activity.
+ */
+export interface JobDetailSnapshot {
+  job: {
+    id: string;
+    project: string;
+    description: string;
+    scope: JobScope;
+    status: JobStatus;
+    verdict: string | null;
+    confidence: number | null;
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    durationMs: number | null;
+    currentStep: number;
+    modelProfile: ModelProfile;
+    providerMode: string;
+    error: string | null;
+  };
+  steps: JobStepSummary[];
+  rootSessions: SessionSummary[];
+  subagents: SessionSummary[];
+  activityPreview: ActivityPreviewItem[];
+  cursor: string;
+}
+
+/** Compact step timeline entry. */
+export interface JobStepSummary {
+  stepIndex: number;
+  command: string;
+  args: string;
+  status: string;
+  sessionId: string | null;
+  durationMs: number | null;
+  verdictReason: string | null;
+}
+
+/**
+ * Compact session card — used for root sessions AND subagent cards.
+ * Deliberately non-recursive: children are summary counts, not inline transcripts.
+ */
+export interface SessionSummary {
+  sessionId: string;
+  title: string;
+  role: 'root' | 'subagent';
+  status: 'active' | 'done' | 'unknown';
+  parentSessionId: string | null;
+  startedAt: number;
+  updatedAt: number;
+  durationMs: number | null;
+  latestMessagePreview: string | null;
+  messageCount: number;
+  childCount: number;
+  tokenTotal: number;
+  models: string[];
+}
+
+/** Compact activity snippet for the main scroll pane. */
+export interface ActivityPreviewItem {
+  sessionId: string;
+  partId: string;
+  type: 'text' | 'tool' | 'patch';
+  role: string;
+  createdAt: number;
+  preview: string;
+  tool?: string;
+  toolInput?: string;
+}
+
+/** Paginated session activity response. */
+export interface SessionActivityPage {
+  parts: SessionPart[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+/** Options for getSessionActivity(). */
+export interface SessionActivityOptions {
+  cursor?: string;
+  limit?: number;
+  includeToolDetails?: boolean;
+}
+
+/** Incremental update delta for job detail polling. */
+export interface JobDetailEvent {
+  type: 'job-update' | 'step-update' | 'session-update' | 'activity-new';
+  timestamp: number;
+  data: Record<string, unknown>;
+}
+
+/** Return type of getJobDetailEvents(). */
+export interface JobDetailEventsResponse {
+  events: JobDetailEvent[];
+  cursor: string;
+}

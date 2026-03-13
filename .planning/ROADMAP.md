@@ -1049,12 +1049,19 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-remove-dirty-guard-block
 
 ### Phase 61: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
 
-**Goal:** [To be planned]
+**Goal:** Build a separate minimal web UI subproject using TanStack Start + Coss UI, while first creating a compact, queryable detail model in src/core/ that serves root-based non-recursive job detail snapshots, supports pagination and on-demand expansion, and streams incremental updates via lightweight SSE-style polling.
 **Depends on:** Phase 60
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 61 to break down)
+- [ ] 61-01-PLAN.md — Compact query backbone: reusable detail/query layer with 5 functions + DTO types in src/core/
+- [ ] 61-02-PLAN.md — Web scaffold: TanStack Start subproject + Coss UI + server functions + SSE streaming
+- [ ] 61-03-PLAN.md — Working UI screens: jobs list, job detail, sub-agent drill-in, load-more, live updates
+
+Wave structure:
+- Wave 1: 61-01 (compact query backbone in src/core/)
+- Wave 2: 61-02 (web scaffold + server functions, depends on 61-01)
+- Wave 3: 61-03 (UI screens + human verification, depends on 61-01 + 61-02)
 
 **Details:**
-[To be added during planning]
+Read `/home/luca/.openclaw/workspace/requirements/pilot-web-ui-phase-1-feasibility-tanstack-start-coss-and-queryable-job-detail-model.md` for full spec.
