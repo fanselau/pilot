@@ -276,6 +276,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 57 added: Pilot notify setup must be optional and operator-friendly
 - Phase 58 added: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
 - Phase 59 added: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
+- Phase 60 added: Remove dirty-guard blocking entirely; only real failures should block projects
 
 ## Decisions
 

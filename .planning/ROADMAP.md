@@ -1029,3 +1029,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-tui-shortcuts-and-project-management-actions-must-work-in-real-usage.md` for full spec.
+
+### Phase 60: Remove dirty-guard blocking entirely; only real failures should block projects
+
+**Goal:** [To be planned]
+**Depends on:** Phase 59
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 60 to break down)
+
+**Details:**
+[To be added during planning]
