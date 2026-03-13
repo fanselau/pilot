@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { Job } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
@@ -18,6 +18,7 @@ import {
   TooltipPopup,
   TooltipProvider,
 } from '~/components/ui/tooltip'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -107,25 +108,6 @@ function sortJobs(jobs: Job[], field: SortField, dir: SortDir): Job[] {
     }
     return dir === 'asc' ? cmp : -cmp
   })
-}
-
-// ── Responsive hook ──────────────────────────────────────────────────────
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.matchMedia(query).matches
-  })
-
-  useEffect(() => {
-    const mql = window.matchMedia(query)
-    setMatches(mql.matches)
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [query])
-
-  return matches
 }
 
 // ── Sort header helper ───────────────────────────────────────────────────
@@ -366,7 +348,7 @@ export interface JobListData {
  * will render whichever array is non-empty.
  */
 export function JobList({ data }: { data: JobListData }) {
-  const isMobile = useMediaQuery('(max-width: 768px)')
+  const isMobile = useIsMobile()
 
   return (
     <div className="space-y-2">

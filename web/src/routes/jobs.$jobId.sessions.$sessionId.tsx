@@ -31,7 +31,7 @@ function SessionDrillIn() {
     <div className="space-y-6">
       {/* Breadcrumb navigation */}
       <Breadcrumb>
-        <BreadcrumbList>
+        <BreadcrumbList className="flex-wrap">
           <BreadcrumbItem>
             <BreadcrumbLink render={<Link to="/" />}>
               Dashboard

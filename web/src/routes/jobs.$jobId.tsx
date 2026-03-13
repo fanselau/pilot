@@ -30,7 +30,7 @@ function JobDetailPage() {
 
   if (!snapshot) {
     return (
-      <div className="min-h-screen p-8">
+      <div className="min-h-screen p-4 sm:p-8">
         <div className="mx-auto max-w-5xl">
           <Empty>
             <EmptyHeader>
@@ -49,7 +49,7 @@ function JobDetailPage() {
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
           <Link to="/">
@@ -57,7 +57,7 @@ function JobDetailPage() {
               &larr; Dashboard
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Job {snapshot.job.id}
           </h1>
         </div>

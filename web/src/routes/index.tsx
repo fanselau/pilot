@@ -76,7 +76,7 @@ function Home() {
 
   if (isLoading && !data) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <div>
             <Skeleton className="h-10 w-64" />
@@ -93,12 +93,12 @@ function Home() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
         {/* Header with counts and refresh */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
             <div className="mt-2 flex items-center gap-3">
               {activeCount > 0 && (
                 <Badge variant="info" size="sm">
