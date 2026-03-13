@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 60
+## Current Phase: 61
 
 ## Current Position
 
-Phase: 60 (Remove dirty-guard blocking entirely; only real failures should block projects)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-13 - Completed 60-02-PLAN.md (clean up UX surfaces and tests — remove all dirty-guard blocking)
+Phase: 61 (Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model)
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-13 - Completed 61-02-PLAN.md (web scaffold — TanStack Start + Coss UI + server functions + SSE streaming)
 
-Progress: ████████████████ 56/56 plans (100%)
+Progress: █████████████████ 58/59 plans (98%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 60 complete — Dirty-guard blocking fully removed; dirty worktrees are informational-only, never block job launch or undo.
+**Current focus:** Phase 61 plan 02 complete — TanStack Start web scaffold with Coss UI, server functions wrapping compact query backbone, and SSE streaming hook.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -153,6 +153,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 60: Remove dirty-guard blocking entirely; only real failures should block projects
 - **Status:** complete (2/2 plans, verified ✓)
+
+### Phase 61: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
+- **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -705,9 +708,19 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 60-01 | Keep startedDirty throughout all interfaces and DB schema | Informational metadata for observability — records worktree state at launch |
 | 60-02 | Dirty-start jobs return undo:safe instead of undo:guarded-dirty-start | Dirty state is no longer a guard condition — undo checkpoints are equally valid |
 | 60-02 | Remove allowDirtyStart from all positional addJob call expectations | Parameter removed from addJob() in 60-01, shifting skipGracePeriod/notifyRoute positions |
+| 61-01 | Named getSessionChildSummaries instead of getSessionChildren | opencode-db.ts already exports getChildSessions; avoids import name collision |
+| 61-01 | Session status is done/active/unknown three-state model | Distinguishes finished sessions, sessions with activity, and possibly-crashed sessions |
+| 61-01 | Activity preview capped at 10 items from last 20 parts | Compact preview without overwhelming UI; recent parts only |
+| 61-01 | Cursor is opaque timestamp string | Future flexibility to change cursor format without breaking clients |
+| 61-02 | Manual web/ scaffold instead of pnpm create @tanstack/start@latest | Precise control over dependency versions, path aliases, and port config |
+| 61-02 | Vite 7 chosen for peer dependency satisfaction | Vite 6 had unmet peer warnings; Vite 8 broke plugin-react and tailwindcss/vite |
+| 61-02 | inputValidator (not validator) on createServerFn | TanStack Start 1.166.8 API uses inputValidator for server function data validation |
+| 61-02 | QueryClientProvider in __root.tsx instead of app.tsx | TanStack Start auto-generates app entry; root route is correct integration point |
+| 61-02 | CSS ?url import with vite-env.d.ts type declaration | Standard TanStack Start SSR pattern; type declaration needed for standalone tsc |
+| 61-02 | Server functions import @pilot/core/*.js with .js extension | Parent project uses Node16 resolution; Vite resolves .js → .ts via tsconfig paths |
 
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 60-02-PLAN.md (Phase 60 complete)
+Stopped at: Completed 61-02-PLAN.md (web scaffold — TanStack Start + Coss UI + server functions + SSE)
 Resume file: None
