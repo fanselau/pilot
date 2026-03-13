@@ -13,6 +13,7 @@ import {
   forceQuitJobFn,
   unblockProjectFn,
 } from '~/lib/server-fns'
+import { toastManager } from '~/components/ui/toast'
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -64,8 +65,14 @@ export const ACTION_REGISTRY: ActionDefinition[] = [
     },
     execute: async (ctx) => {
       if (!ctx.job) return
-      await retryJobFn({ data: { jobId: ctx.job.id } })
-      await ctx.queryClient.invalidateQueries()
+      try {
+        await retryJobFn({ data: { jobId: ctx.job.id } })
+        await ctx.queryClient.invalidateQueries()
+        toastManager.add({ title: 'Job Retried', description: 'Job re-queued for another attempt', type: 'success' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        toastManager.add({ title: 'Retry Failed', description: message, type: 'error' })
+      }
     },
   },
   {
@@ -80,8 +87,14 @@ export const ACTION_REGISTRY: ActionDefinition[] = [
     },
     execute: async (ctx) => {
       if (!ctx.job) return
-      await cancelJobFn({ data: { jobId: ctx.job.id } })
-      await ctx.queryClient.invalidateQueries()
+      try {
+        await cancelJobFn({ data: { jobId: ctx.job.id } })
+        await ctx.queryClient.invalidateQueries()
+        toastManager.add({ title: 'Job Cancelled', description: 'Job has been cancelled', type: 'success' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        toastManager.add({ title: 'Cancel Failed', description: message, type: 'error' })
+      }
     },
   },
   {
@@ -97,8 +110,14 @@ export const ACTION_REGISTRY: ActionDefinition[] = [
     },
     execute: async (ctx) => {
       if (!ctx.job) return
-      await forceQuitJobFn({ data: { jobId: ctx.job.id } })
-      await ctx.queryClient.invalidateQueries()
+      try {
+        await forceQuitJobFn({ data: { jobId: ctx.job.id } })
+        await ctx.queryClient.invalidateQueries()
+        toastManager.add({ title: 'Job Force Quit', description: 'Job has been forcefully terminated', type: 'success' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        toastManager.add({ title: 'Force Quit Failed', description: message, type: 'error' })
+      }
     },
   },
 
@@ -116,8 +135,14 @@ export const ACTION_REGISTRY: ActionDefinition[] = [
     execute: async (ctx) => {
       const path = ctx.projectPath ?? ctx.job?.project ?? null
       if (!path) return
-      await unblockProjectFn({ data: { projectPath: path } })
-      await ctx.queryClient.invalidateQueries()
+      try {
+        await unblockProjectFn({ data: { projectPath: path } })
+        await ctx.queryClient.invalidateQueries()
+        toastManager.add({ title: 'Project Unblocked', description: 'Project block status cleared', type: 'success' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        toastManager.add({ title: 'Unblock Failed', description: message, type: 'error' })
+      }
     },
   },
 

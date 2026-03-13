@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 62 (Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-03-13 - Completed 62-03-PLAN.md (merged timeline stream, inline fork cards, proactive action buttons)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-03-13 - Completed 62-05-PLAN.md (timeline query + action model tests)
 
-Progress: ██████████████████ 62/64 plans (97%)
+Progress: ████████████████████ 64/64 plans (100%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 62 plan 03 complete — merged chronological timeline, inline sub-agent fork cards, proactive action buttons, breadcrumb navigation. Plan 04 also complete.
+**Current focus:** Phase 62 complete — merged chronological timeline, inline sub-agent fork cards, proactive action buttons, table overview, and comprehensive tests for timeline query + action model.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -158,7 +158,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** in progress (2/3 plans complete)
 
 ### Phase 62: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
-- **Status:** in progress (2/5 plans complete)
+- **Status:** complete (5/5 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -722,6 +722,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 61-02 | QueryClientProvider in __root.tsx instead of app.tsx | TanStack Start auto-generates app entry; root route is correct integration point |
 | 61-02 | CSS ?url import with vite-env.d.ts type declaration | Standard TanStack Start SSR pattern; type declaration needed for standalone tsc |
 | 61-02 | Server functions import @pilot/core/*.js with .js extension | Parent project uses Node16 resolution; Vite resolves .js → .ts via tsconfig paths |
+| 62-05 | Actions tests placed in test/web/ under root vitest config | Web directory has no vitest; root config finds test/**/*.test.ts |
+| 62-05 | Server-fns mock uses vi.mock('~/lib/server-fns') exact specifier | Must match the exact import path in source for vitest module interception |
+| 62-05 | Timeline ordering verified via timestamp array equality | More readable and deterministic than pairwise comparison assertions |
 
 ## Session Continuity
 
