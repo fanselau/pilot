@@ -1074,7 +1074,7 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-web-ui-phase-1-feasibili
 
 Plans:
 - [x] 62-01-PLAN.md — Merged timeline query composition + mutation wrappers + server functions
-- [ ] 62-02-PLAN.md — TBD
+- [x] 62-02-PLAN.md — Centralized action model + command palette shell
 - [ ] 62-03-PLAN.md — TBD
 - [ ] 62-04-PLAN.md — TBD
 - [ ] 62-05-PLAN.md — TBD
