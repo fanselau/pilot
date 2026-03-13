@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Badge } from '~/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { useQuery } from '@tanstack/react-query'
+import { Tabs, TabsList, TabsTab, TabsPanel } from '~/components/ui/tabs'
+import { Skeleton } from '~/components/ui/skeleton'
+import { JobList } from '~/components/job-list'
 import { getJobsListFn } from '~/lib/server-fns'
 
 export const Route = createFileRoute('/')({
@@ -9,137 +11,75 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const { active, queued, recent } = Route.useLoaderData()
+  const loaderData = Route.useLoaderData()
+
+  // Auto-refresh every 5 seconds via React Query
+  const { data, isLoading } = useQuery({
+    queryKey: ['jobs-list'],
+    queryFn: () => getJobsListFn(),
+    initialData: loaderData,
+    refetchInterval: 5000,
+  })
+
+  if (isLoading && !data) {
+    return (
+      <div className="min-h-screen p-8">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <div>
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="mt-2 h-5 w-48" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const { active, queued, recent } = data ?? loaderData
+
+  const activeCount = active.length
+  const queuedCount = queued.length
+  const recentCount = recent.length
 
   return (
     <div className="min-h-screen p-8">
-      <div className="mx-auto max-w-4xl space-y-8">
+      <div className="mx-auto max-w-5xl space-y-6">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Pilot Dashboard</h1>
-          <p className="mt-2 text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight">Pilot Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Autonomous AI development pipeline
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active Jobs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{active.length}</div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="active">
+          <TabsList>
+            <TabsTab value="active">
+              Active{activeCount > 0 ? ` (${activeCount})` : ''}
+            </TabsTab>
+            <TabsTab value="queued">
+              Queued{queuedCount > 0 ? ` (${queuedCount})` : ''}
+            </TabsTab>
+            <TabsTab value="recent">
+              Recent{recentCount > 0 ? ` (${recentCount})` : ''}
+            </TabsTab>
+          </TabsList>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Queued
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{queued.length}</div>
-            </CardContent>
-          </Card>
+          <TabsPanel value="active">
+            <JobList data={{ active, queued: [], recent: [] }} />
+          </TabsPanel>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Recent
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{recent.length}</div>
-            </CardContent>
-          </Card>
-        </div>
+          <TabsPanel value="queued">
+            <JobList data={{ active: [], queued, recent: [] }} />
+          </TabsPanel>
 
-        {active.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Running</h2>
-            {active.map((job) => (
-              <Card key={job.id}>
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold">{job.id}</span>
-                      <Badge variant="default">running</Badge>
-                      <Badge variant="outline">{job.scope}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {job.description}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {job.project.split('/').pop()}
-                  </span>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {queued.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Pending</h2>
-            {queued.map((job) => (
-              <Card key={job.id}>
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold">{job.id}</span>
-                      <Badge variant="secondary">pending</Badge>
-                      <Badge variant="outline">{job.scope}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {job.description}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {job.project.split('/').pop()}
-                  </span>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {recent.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Recent</h2>
-            {recent.slice(0, 10).map((job) => (
-              <Card key={job.id}>
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold">{job.id}</span>
-                      <Badge
-                        variant={
-                          job.status === 'completed'
-                            ? 'default'
-                            : job.status === 'failed'
-                              ? 'destructive'
-                              : 'secondary'
-                        }
-                      >
-                        {job.status}
-                      </Badge>
-                      <Badge variant="outline">{job.scope}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {job.description}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {job.project.split('/').pop()}
-                  </span>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+          <TabsPanel value="recent">
+            <JobList data={{ active: [], queued: [], recent }} />
+          </TabsPanel>
+        </Tabs>
       </div>
     </div>
   )
