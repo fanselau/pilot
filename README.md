@@ -144,6 +144,17 @@ Checks opencode binary, pilot-gsd, system memory, cgroups v2, and user lingering
 
 ## Features
 
+### Web dashboard for operators
+
+Pilot also ships a web dashboard that is built for day-to-day operator triage, not just as an experimental view.
+
+- **Dashboard overview:** See active, queued, and recent jobs alongside a session-oriented overview for quick triage.
+- **Step-aware timeline inspection:** Open a job to inspect merged timeline activity grouped by execution step, including inline tool and assistant activity.
+- **Branch lifecycle + drill-in:** Follow inline branch lifecycle cards, then drill into child/session detail pages with scoped back context.
+- **Action surfaces:** Trigger follow-up work from a global command palette and contextual job-level actions (for example retry/cancel/force-quit when available).
+
+Run it from `web/` with `bun run dev` (default: `http://localhost:3100`).
+
 ### Smart queue with auto-detected scope
 
 `pilot add` inspects the requirement and classifies it as `quick`, `phase`, or `milestone` automatically. You can override with `--as`:
