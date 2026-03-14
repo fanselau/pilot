@@ -133,10 +133,12 @@ function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
                 </span>
                 <span className="text-xs text-primary ml-1">[expand]</span>
               </CollapsibleTrigger>
-              <CollapsibleContent>
-                <pre className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground/90 font-mono bg-muted/50 p-2 rounded-md max-h-48 overflow-auto">
-                  {item.toolInput}
-                </pre>
+              <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
+                <div className="mt-1 max-w-full rounded-md border bg-muted/50 p-2">
+                  <pre className="whitespace-pre-wrap break-words text-xs text-foreground/90 font-mono [overflow-wrap:anywhere]">
+                    {item.toolInput}
+                  </pre>
+                </div>
               </CollapsibleContent>
             </>
           ) : (
@@ -316,11 +318,11 @@ export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
         Timeline
       </h3>
-      <Card>
-        <CardContent className="py-3">
-          <ScrollArea className="max-h-[70vh]">
+      <Card className="min-w-0 max-w-full overflow-hidden">
+        <CardContent className="min-w-0 max-w-full overflow-hidden py-3">
+          <ScrollArea className="max-w-full" scrollbarGutter>
             {/* Vertical line connector via left border on container */}
-            <div className="relative border-l-2 border-border/40 pl-4 space-y-0.5">
+            <div className="relative min-w-0 max-w-full space-y-0.5 border-l-2 border-border/40 pl-4">
               {allItems.map((item, idx) => (
                 <div key={`${item.kind}-${'partId' in item ? item.partId : item.sessionId}-${idx}`}>
                   <TimelineItemRenderer item={item} jobId={jobId} />

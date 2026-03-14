@@ -63,13 +63,13 @@ interface TimelineForkCardProps {
 
 export function TimelineForkCard({ item, jobId }: TimelineForkCardProps) {
   return (
-    <Card className="border-l-4 border-l-primary/40 bg-muted/30">
-      <CardContent className="py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <Card className="min-w-0 max-w-full overflow-hidden border-l-4 border-l-primary/40 bg-muted/30">
+      <CardContent className="min-w-0 max-w-full overflow-hidden py-3">
+        <div className="flex min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           {/* Left: identity + meta */}
-          <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="min-w-0 max-w-full flex-1 space-y-1.5 overflow-hidden">
             {/* Title row */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-hidden">
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 {formatTime(item.createdAt)}
               </span>
@@ -85,7 +85,7 @@ export function TimelineForkCard({ item, jobId }: TimelineForkCardProps) {
             </div>
 
             {/* Stats row */}
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 overflow-hidden text-xs text-muted-foreground">
               <span>{formatDurationMs(item.durationMs)}</span>
               <span>{item.messageCount} msgs</span>
               {item.tokenTotal > 0 && (
@@ -98,7 +98,7 @@ export function TimelineForkCard({ item, jobId }: TimelineForkCardProps) {
 
             {/* Model badges */}
             {item.models.length > 0 && (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex min-w-0 max-w-full flex-wrap gap-1 overflow-hidden">
                 {item.models.map((model) => (
                   <Badge key={model} variant="outline" size="sm">
                     {model.split('/').pop() ?? model}
@@ -116,12 +116,12 @@ export function TimelineForkCard({ item, jobId }: TimelineForkCardProps) {
           </div>
 
           {/* Right: drill-in link */}
-          <div className="shrink-0">
+          <div className="min-w-0 max-w-full self-start sm:shrink-0">
             <Link
               to="/jobs/$jobId/sessions/$sessionId"
               params={{ jobId, sessionId: item.sessionId }}
             >
-              <Button variant="ghost" size="sm" className="text-xs">
+              <Button variant="ghost" size="sm" className="max-w-full text-xs whitespace-normal text-left">
                 View details &rarr;
               </Button>
             </Link>
