@@ -1,17 +1,14 @@
-import { createFileRoute, Link, Outlet, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Button } from '~/components/ui/button'
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
-import { JobDetail } from '~/components/job-detail'
 import { CommandPalette } from '~/components/command-palette'
 import { getJobDetailFn } from '~/lib/server-fns'
 
 export const Route = createFileRoute('/jobs/$jobId')({
   loader: ({ params }) => getJobDetailFn({ data: params.jobId }),
-  component: JobDetailPage,
+  component: JobLayout,
 })
 
-function JobDetailPage() {
+function JobLayout() {
   const loaderData = Route.useLoaderData()
   const { jobId } = Route.useParams()
   const navigate = useNavigate()
@@ -28,55 +25,31 @@ function JobDetailPage() {
     refetchInterval: isActive ? 3000 : false,
   })
 
-  if (!snapshot) {
-    return (
-      <div className="min-h-screen p-4 sm:p-8">
-        <div className="mx-auto max-w-5xl">
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Job not found</EmptyTitle>
-              <EmptyDescription>
-                Job &quot;{jobId}&quot; doesn&apos;t exist or has no data.
-              </EmptyDescription>
-            </EmptyHeader>
-            <Link to="/">
-              <Button variant="outline">&larr; Back to Dashboard</Button>
-            </Link>
-          </Empty>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center gap-4">
-          <Link to="/">
-            <Button variant="ghost" size="sm">
-              &larr; Dashboard
-            </Button>
-          </Link>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-            Job {snapshot.job.id}
-          </h1>
-        </div>
-
-        <JobDetail snapshot={snapshot} />
         <Outlet />
       </div>
 
       {/* Command palette with job context */}
       <CommandPalette
-        ctx={{
-          job: {
-            id: snapshot.job.id,
-            status: snapshot.job.status,
-            project: snapshot.job.project,
-          },
-          projectPath: snapshot.job.project,
-          navigate: (to) => navigate({ to }),
-        }}
+        ctx={
+          snapshot
+            ? {
+                job: {
+                  id: snapshot.job.id,
+                  status: snapshot.job.status,
+                  project: snapshot.job.project,
+                },
+                projectPath: snapshot.job.project,
+                navigate: (to) => navigate({ to }),
+              }
+            : {
+                job: null,
+                projectPath: null,
+                navigate: (to) => navigate({ to }),
+              }
+        }
       />
     </div>
   )
