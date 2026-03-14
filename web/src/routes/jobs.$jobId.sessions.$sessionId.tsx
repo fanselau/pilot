@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import {
   Breadcrumb,
@@ -29,7 +30,6 @@ function SessionDrillIn() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb navigation */}
       <Breadcrumb>
         <BreadcrumbList className="flex-wrap">
           <BreadcrumbItem>
@@ -54,16 +54,35 @@ function SessionDrillIn() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold">Session Activity</h2>
-        <Badge variant="outline" size="sm" className="font-mono">
-          {sessionId.slice(0, 8)}
-        </Badge>
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Nested child session
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold">Inside sub-agent session</h2>
+            <Badge variant="outline" size="sm" className="font-mono">
+              {sessionId.slice(0, 8)}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            This page is focused on one child branch and its descendants.
+          </p>
+        </div>
+        <Link to="/jobs/$jobId" params={{ jobId }}>
+          <Button variant="outline" size="sm">
+            &larr; Back to job detail
+          </Button>
+        </Link>
       </div>
 
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Session Activity
+        </h3>
       <SessionActivity key={sessionId} sessionId={sessionId} initialLimit={30} />
+      </div>
 
-      {/* Sub-sub-agents (children of this session) */}
       {childrenLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-5 w-32" />
