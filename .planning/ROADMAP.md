@@ -1086,3 +1086,25 @@ Wave structure:
 - Wave 2: 62-02 (action model + command palette)
 - Wave 3: 62-03 + 62-04 (UI components: timeline stream, table overview)
 - Wave 4: 62-05 (tests, depends on 62-01 through 62-04)
+
+### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
+
+**Status:** in progress (3/5 plans complete)
+**Goal:** Refactor web and TUI detail UX into a shared step-first execution story: explicit step containers, one lifecycle-aware branch object per child session, and true nested child drill-in that feels like entering child context (not appended overflow).
+**Depends on:** Phase 62
+**Plans:** 5 plans
+
+Plans:
+- [x] 63-01-PLAN.md — Core step-grouped timeline contract + lifecycle branch composition + regression tests
+- [ ] 63-02-PLAN.md — Web step-first timeline rendering + lifecycle branch block UI
+- [x] 63-03-PLAN.md — Web nested route/layout restructure for primary child detail flow
+- [x] 63-04-PLAN.md — TUI step-first detail model alignment with shared core timeline contract
+- [ ] 63-05-PLAN.md — TUI explicit child drill-in navigation, hint parity, and shortcut regression tests
+
+Wave structure:
+- Wave 1: 63-01 (core shared contract + tests)
+- Wave 2: 63-02 + 63-03 + 63-04 (web UI rendering, web routing, and TUI model alignment in parallel)
+- Wave 3: 63-05 (TUI drill-in navigation polish + keyboard/hint tests)
+
+**Details:**
+Read `/home/luca/.openclaw/workspace/requirements/pilot-phase-63-step-first-branch-blocks-and-nested-child-detail-for-web-and-tui.md` for full spec.

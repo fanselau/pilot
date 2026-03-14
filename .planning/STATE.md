@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 62
+## Current Phase: 63
 
 ## Current Position
 
-Phase: 62 (Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-03-14 - Completed quick task 084: Fix child session drill-in navigation
+Phase: 63 (Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI)
+Plan: 3 of 5 in current phase
+Status: In progress
+Last activity: 2026-03-14 - Completed 63-04-PLAN.md
 
-Progress: ████████████████████ 64/64 plans (100%)
+Progress: ██████████████████░░ 67/73 plans (92%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 62 complete — merged chronological timeline, inline sub-agent fork cards, proactive action buttons, table overview, and comprehensive tests for timeline query + action model.
+**Current focus:** Phase 63 in progress — shared step-grouped detail model is now active in TUI with session-ID lifecycle merge semantics and focused step-flow regressions.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -160,6 +160,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 62: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
 - **Status:** complete (5/5 plans, verified ✓)
 
+### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
+- **Status:** in progress (3/5 plans complete)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -291,6 +294,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 60 added: Remove dirty-guard blocking entirely; only real failures should block projects
 - Phase 61 added: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
 - Phase 62 added: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
+- Phase 63 added: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
 
 ## Decisions
 
@@ -728,9 +732,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 62-05 | Actions tests placed in test/web/ under root vitest config | Web directory has no vitest; root config finds test/**/*.test.ts |
 | 62-05 | Server-fns mock uses vi.mock('~/lib/server-fns') exact specifier | Must match the exact import path in source for vitest module interception |
 | 62-05 | Timeline ordering verified via timestamp array equality | More readable and deterministic than pairwise comparison assertions |
+| 63-01 | Step attribution fallback order fixed as sessionId → sessionTitle → time window → unattributed | Keeps grouping deterministic and resilient when step/session metadata is partially missing |
+| 63-01 | Child lifecycle represented as one fork-card object with completion fields | Removes split fork/completion rows and keeps one coherent branch identity over time |
+| 63-01 | Grouped timeline payload keeps deprecated flat items array during migration | Avoids breaking existing consumers while step-grouped contract becomes the default |
+| 63-03 | `/jobs/$jobId` now acts as layout-only shell while parent detail moves to `jobs.$jobId.index` | Makes child drill-in primary content instead of appending below parent detail |
+| 63-03 | Command palette job context stays at layout scope, shared by index and child routes | Preserves action parity and avoids per-route context drift |
+| 63-03 | Route contract tests assert source + generated route-tree invariants instead of deep router internals | Stable regression coverage for nested layout/index/session topology |
+| 63-04 | TUI detail polling merges grouped snapshots by immutable section/item keys | Keeps lifecycle branch rows up-to-date without title-key collisions |
+| 63-04 | Branch lifecycle identity is `fork:<childSessionId>` instead of title | Prevents same-title subagents from overwriting each other during merges |
+| 63-04 | Adapter emits unattributed fallback section when grouped data is absent | Ensures timeline activity never disappears during partial step attribution |
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: Completed 61-02-PLAN.md (web scaffold — TanStack Start + Coss UI + server functions + SSE)
+Last session: 2026-03-14 13:24 UTC
+Stopped at: Completed 63-04-PLAN.md
 Resume file: None
