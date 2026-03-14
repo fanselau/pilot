@@ -683,7 +683,7 @@ function getJobTimeline(
     nextCursor,
     sessionCount: seenSessions.size,
     childCount: totalChildCount,
-  } as GroupedTimelinePage & { items: StepTimelineItem[] };
+  };
 }
 
 // ── Mutation Wrappers ─────────────────────────────────────────────────────

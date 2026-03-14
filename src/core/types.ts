@@ -480,6 +480,8 @@ export interface StepTimelineGroup {
 /** Grouped timeline payload for step-first rendering. */
 export interface GroupedTimelinePage {
   groups: StepTimelineGroup[];
+  /** @deprecated Transitional flat list; consumers should use groups. */
+  items: StepTimelineItem[];
   hasMore: boolean;
   nextCursor: string | null;
   sessionCount: number;

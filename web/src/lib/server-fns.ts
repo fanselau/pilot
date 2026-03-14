@@ -18,6 +18,7 @@ import {
   forceQuitJobAction,
   unblockProjectAction,
 } from '@pilot/core/job-detail-query.js'
+import type { GroupedTimelinePage } from '@pilot/core/types.js'
 import { getQueue, getRecent } from '@pilot/core/db.js'
 
 // ── Jobs List ────────────────────────────────────────────────────────────
@@ -80,13 +81,13 @@ export const getJobDetailEventsFn = createServerFn({ method: 'GET' })
     }
   })
 
-// ── Job Timeline (merged chronological stream) ───────────────────────────
+// ── Job Timeline (step-grouped stream) ───────────────────────────────────
 
 export const getJobTimelineFn = createServerFn({ method: 'GET' })
   .inputValidator(
     (d: { jobId: string; cursor?: string; limit?: number }) => d,
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<GroupedTimelinePage | null> => {
     return getJobTimeline(data.jobId, {
       cursor: data.cursor,
       limit: data.limit,

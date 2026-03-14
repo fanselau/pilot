@@ -769,7 +769,7 @@ describe('getJobTimeline', () => {
     expect(getJobTimeline('zzzz')).toBeNull();
   });
 
-  it('emits completion-card for done children with meaningful duration', () => {
+  it('folds done children into a single lifecycle fork-card without completion-card row', () => {
     mockGetJob.mockReturnValue(
       makeJob({ sessionTitles: JSON.stringify(['root']) }),
     );
@@ -795,15 +795,14 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
-    const completionCards = page.items.filter((i) => i.kind === 'completion-card');
-    expect(completionCards).toHaveLength(1);
-    expect(completionCards[0].createdAt).toBe(5000); // at timeUpdated
-    expect(completionCards[0].kind === 'completion-card' && completionCards[0].durationMs).toBe(4000);
-
-    // Also has fork-card
     const forkCards = page.items.filter((i) => i.kind === 'fork-card');
     expect(forkCards).toHaveLength(1);
-    expect(forkCards[0].createdAt).toBe(1000); // at timeCreated
+    expect(forkCards[0].createdAt).toBe(1000);
+    expect(forkCards[0].kind === 'fork-card' && forkCards[0].completedAt).toBe(5000);
+    expect(forkCards[0].kind === 'fork-card' && forkCards[0].durationMs).toBe(4000);
+
+    const completionCards = page.items.filter((i) => i.kind === 'completion-card');
+    expect(completionCards).toHaveLength(0);
   });
 
   it('maintains stable sort when items share the same timestamp', () => {
@@ -877,6 +876,202 @@ describe('getJobTimeline', () => {
     // Fork cards are sorted chronologically by createdAt
     const forkTimestamps = forkCards.map((fc) => fc.createdAt);
     expect(forkTimestamps).toEqual([1000, 1100, 1200]);
+  });
+
+  it('returns explicit step-grouped output with step metadata', () => {
+    mockGetJobSteps.mockReturnValue([
+      makeStep({
+        stepIndex: 0,
+        command: 'add-phase',
+        status: 'completed',
+        sessionId: 'sess-step-0',
+        sessionTitle: 'step-0',
+        startedAt: '2026-03-13T10:00:00Z',
+        completedAt: '2026-03-13T10:01:00Z',
+      }),
+      makeStep({
+        id: 2,
+        stepIndex: 1,
+        command: 'execute-phase',
+        status: 'running',
+        sessionId: 'sess-step-1',
+        sessionTitle: 'step-1',
+        startedAt: '2026-03-13T10:02:00Z',
+        completedAt: null,
+      }),
+    ]);
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['step-0', 'step-1']) }),
+    );
+    mockFindSessionByTitle.mockImplementation((title: string) => {
+      if (title === 'step-0') return 'sess-step-0';
+      if (title === 'step-1') return 'sess-step-1';
+      return null;
+    });
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-step-0') {
+        return [
+          makePart({ id: 's0-1', type: 'text', text: 'step0-1', createdAt: 100 }),
+          makePart({ id: 's0-2', type: 'tool', tool: 'bash', toolInput: 'echo 0', createdAt: 200 }),
+        ];
+      }
+      if (sessionId === 'sess-step-1') {
+        return [
+          makePart({ id: 's1-1', type: 'text', text: 'step1-1', createdAt: 300 }),
+        ];
+      }
+      return [];
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page.groups).toHaveLength(2);
+    expect(page.groups[0].stepIndex).toBe(0);
+    expect(page.groups[0].command).toBe('add-phase');
+    expect(page.groups[0].status).toBe('completed');
+    expect(page.groups[0].sessionId).toBe('sess-step-0');
+    expect(page.groups[0].items.map((i) => i.createdAt)).toEqual([100, 200]);
+
+    expect(page.groups[1].stepIndex).toBe(1);
+    expect(page.groups[1].command).toBe('execute-phase');
+    expect(page.groups[1].status).toBe('running');
+    expect(page.groups[1].sessionId).toBe('sess-step-1');
+    expect(page.groups[1].items.map((i) => i.createdAt)).toEqual([300]);
+  });
+
+  it('keeps one lifecycle object per child session without completion-card rows', () => {
+    mockGetJobSteps.mockReturnValue([
+      makeStep({
+        stepIndex: 0,
+        command: 'execute-phase',
+        sessionId: 'sess-root',
+        sessionTitle: 'root',
+      }),
+    ]);
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetSessionParts.mockReturnValue([]);
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [{ id: 'child-1', title: 'Worker 1', timeCreated: 1000, timeUpdated: 5000 }];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(3);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 10,
+      output: 20,
+      reasoning: 3,
+      cacheRead: 1,
+      cacheWrite: 0,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-final',
+      role: 'assistant',
+      content: 'final answer',
+      createdAt: 5000,
+    });
+
+    const page = getJobTimeline('ab12')!;
+    const allItems = page.groups.flatMap((group) => group.items);
+    const lifecycleItems = allItems.filter((item) => item.kind === 'fork-card');
+
+    expect(lifecycleItems).toHaveLength(1);
+    const lifecycle = lifecycleItems[0];
+    expect(lifecycle.kind).toBe('fork-card');
+    if (lifecycle.kind === 'fork-card') {
+      expect(lifecycle.sessionId).toBe('child-1');
+      expect(lifecycle.createdAt).toBe(1000);
+      expect(lifecycle.completedAt).toBe(5000);
+      expect(lifecycle.status).toBe('done');
+      expect(lifecycle.latestMessagePreview).toContain('final answer');
+      expect(lifecycle.finalMessagePreview).toContain('final answer');
+    }
+
+    expect(allItems.map((item) => item.kind)).not.toContain('completion-card');
+  });
+
+  it('uses unattributed fallback when identity/title/window attribution fails', () => {
+    mockGetJobSteps.mockReturnValue([
+      makeStep({
+        stepIndex: 0,
+        command: 'execute-phase',
+        sessionId: 'step-session',
+        sessionTitle: 'step-title',
+        startedAt: '2026-03-13T10:10:00Z',
+        completedAt: '2026-03-13T10:20:00Z',
+      }),
+    ]);
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root-title']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('root-session');
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionParts.mockReturnValue([
+      makePart({ id: 'u1', type: 'text', text: 'unattributed event', createdAt: 1000 }),
+    ]);
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page.groups).toHaveLength(1);
+    expect(page.groups[0].stepIndex).toBeNull();
+    expect(page.groups[0].command).toBe('unattributed');
+    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups[0].items[0].createdAt).toBe(1000);
+  });
+
+  it('keeps step grouping intact across cursor pagination', () => {
+    mockGetJobSteps.mockReturnValue([
+      makeStep({ stepIndex: 0, sessionId: 'sess-step-0', sessionTitle: 'step-0' }),
+      makeStep({ id: 2, stepIndex: 1, sessionId: 'sess-step-1', sessionTitle: 'step-1' }),
+    ]);
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['step-0', 'step-1']) }),
+    );
+    mockFindSessionByTitle.mockImplementation((title: string) => {
+      if (title === 'step-0') return 'sess-step-0';
+      if (title === 'step-1') return 'sess-step-1';
+      return null;
+    });
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-step-0') {
+        return [
+          makePart({ id: 'p1', type: 'text', text: 'a', createdAt: 100 }),
+          makePart({ id: 'p2', type: 'text', text: 'b', createdAt: 200 }),
+        ];
+      }
+      if (sessionId === 'sess-step-1') {
+        return [
+          makePart({ id: 'p3', type: 'text', text: 'c', createdAt: 300 }),
+          makePart({ id: 'p4', type: 'text', text: 'd', createdAt: 400 }),
+        ];
+      }
+      return [];
+    });
+
+    const page1 = getJobTimeline('ab12', { limit: 3 })!;
+
+    expect(page1.hasMore).toBe(true);
+    expect(page1.nextCursor).toBe('300');
+    expect(page1.groups).toHaveLength(2);
+    expect(page1.groups[0].stepIndex).toBe(0);
+    expect(page1.groups[0].items.map((i) => i.createdAt)).toEqual([100, 200]);
+    expect(page1.groups[1].stepIndex).toBe(1);
+    expect(page1.groups[1].items.map((i) => i.createdAt)).toEqual([300]);
+
+    const page2 = getJobTimeline('ab12', { cursor: page1.nextCursor ?? undefined, limit: 3 })!;
+
+    expect(page2.hasMore).toBe(false);
+    expect(page2.nextCursor).toBe('400');
+    expect(page2.groups).toHaveLength(1);
+    expect(page2.groups[0].stepIndex).toBe(1);
+    expect(page2.groups[0].items.map((i) => i.createdAt)).toEqual([400]);
   });
 });
 
