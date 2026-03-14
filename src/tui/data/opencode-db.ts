@@ -13,161 +13,138 @@ import {
   getSessionTokensRecursive,
   getLastMessage,
   getSessionMessages,
-  getSessionParts,
-  getChildSessions,
   isSessionDone,
 } from '../../core/opencode-db.js';
-import type { SessionMessage, SessionPart, Job } from '../../core/types.js';
-import { getJobSteps } from '../../core/db.js';
+import { getJobTimeline } from '../../core/job-detail-query.js';
+import type {
+  SessionMessage,
+  SessionPart,
+  Job,
+  StepTimelineItem,
+  GroupedTimelinePage,
+  StepTimelineGroup,
+} from '../../core/types.js';
 
-// ── Session section types ─────────────────────────────────────────────────
+// ── Step-first timeline adapter types ─────────────────────────────────────
 
-export interface SessionSection {
-  title: string;
-  type: 'delegation' | 'execution' | 'subagent' | 'verify';
-  command?: string;       // extracted from execution title
-  agentType?: string;     // 'gsd-planner', 'gsd-executor', etc. for subagent sections
-  parts: SessionPart[];
-  children?: SessionSection[];  // nested subagent sections (max 2 levels)
+export interface TimelineSection {
+  key: string;
+  stepIndex: number | null;
+  command: string;
+  status: string;
+  sessionId: string | null;
+  items: StepTimelineItem[];
 }
 
-// ── Child session resolution ──────────────────────────────────────────────
+export interface TimelineSnapshot {
+  groups: TimelineSection[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  sessionCount: number;
+  childCount: number;
+}
 
 /**
- * Resolve child sessions spawned by `task` tool calls within a parent session.
- * Uses getChildSessions() which queries the parent_id column — no heuristics needed.
- *
- * @param sessionId - Parent session ID
- * @param parts - Parts array for the parent session (to check for task tool calls)
- * @param depth - Current nesting depth (max 2 levels)
- * @returns Array of SessionSection objects for child subagent sessions
+ * Stable identity for a step group.
+ * Step index is immutable per job execution and sessionId is immutable per
+ * session branch, so this remains stable across refreshes.
  */
-function resolveChildSections(
-  sessionId: string,
-  parts: SessionPart[],
-  depth: number,
-): SessionSection[] {
-  if (depth >= 2) return [];
-
-  const taskParts = parts.filter(p => p.type === 'tool' && p.tool === 'task');
-  if (taskParts.length === 0) return [];
-
-  const childSessions = getChildSessions(sessionId);
-  if (childSessions.length === 0) return [];
-
-  return childSessions.map((child) => {
-    const childParts = getSessionParts(child.id);
-
-    // Extract agent type from title (e.g. contains "gsd-planner", "gsd-executor")
-    let agentType = 'subagent';
-    const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
-    if (agentMatch) agentType = agentMatch[0]; // e.g. "gsd-planner"
-
-    const grandchildren = resolveChildSections(child.id, childParts, depth + 1);
-
-    return {
-      title: child.title,
-      type: 'subagent' as const,
-      agentType,
-      parts: childParts,
-      children: grandchildren.length > 0 ? grandchildren : undefined,
-    };
-  });
+export function getTimelineSectionKey(group: {
+  stepIndex: number | null;
+  sessionId: string | null;
+}): string {
+  if (group.stepIndex === null) return 'step:unattributed';
+  return `step:${group.stepIndex}:${group.sessionId ?? 'none'}`;
 }
 
-// ── Job part fetching ─────────────────────────────────────────────────────
+/**
+ * Stable identity for timeline items.
+ * Branch lifecycle items are keyed by immutable child sessionId to avoid title
+ * collisions. Activity/tool items remain keyed by part identity.
+ */
+export function getTimelineItemKey(item: StepTimelineItem): string {
+  switch (item.kind) {
+    case 'fork-card':
+      return `fork:${item.sessionId}`;
+    case 'activity':
+      return `activity:${item.sessionId}:${item.partId}`;
+    case 'tool-summary':
+      return `tool:${item.sessionId}:${item.partId}`;
+    default:
+      return 'item:unknown';
+  }
+}
+
+function toTimelineSection(group: StepTimelineGroup): TimelineSection {
+  return {
+    key: getTimelineSectionKey(group),
+    stepIndex: group.stepIndex,
+    command: group.command,
+    status: group.status,
+    sessionId: group.sessionId,
+    items: [...group.items].sort((a, b) => a.createdAt - b.createdAt),
+  };
+}
+
+function normalizeGroups(page: GroupedTimelinePage): TimelineSection[] {
+  if (page.groups.length > 0) {
+    return page.groups.map(toTimelineSection);
+  }
+
+  // Transitional fallback: grouped contract should be primary, but if a caller
+  // receives only flat items we bucket into unattributed so no activity disappears.
+  if (page.items.length === 0) return [];
+
+  return [
+    {
+      key: 'step:unattributed',
+      stepIndex: null,
+      command: 'unattributed',
+      status: 'unattributed',
+      sessionId: null,
+      items: [...page.items].sort((a, b) => a.createdAt - b.createdAt),
+    },
+  ];
+}
+
+// ── Job timeline fetching ─────────────────────────────────────────────────
 
 /**
- * Fetch session parts for a job, organized by session section.
- * Categorizes sessions as delegation or execution, fetches parts for each,
- * and returns sections sorted: delegation first, then execution.
+ * Fetch step-grouped timeline data for a job using the shared core adapter.
+ *
+ * The TUI keeps only a thin projection layer (section keying + sorting).
+ * Grouping and lifecycle composition remain in core/getJobTimeline().
  *
  * @param job - The job to fetch parts for
- * @param since - Optional epoch ms; only parts after this time returned
+ * @param since - Optional epoch ms cursor; only items after this time returned
  */
-export function fetchJobParts(job: Job, since?: number): SessionSection[] {
-  let sessionTitles: string[] = [];
-  if (job.sessionTitles) {
-    try {
-      sessionTitles = JSON.parse(job.sessionTitles) as string[];
-    } catch {
-      return [];
-    }
-  }
-
-  if (sessionTitles.length === 0) return [];
-
-  // Deduplicate titles (can accumulate across retries)
-  const seenTitles = new Set<string>();
-  const uniqueTitles = sessionTitles.filter((t) => {
-    if (seenTitles.has(t)) return false;
-    seenTitles.add(t);
-    return true;
+export function fetchJobTimelineSnapshot(job: Job, since?: number): TimelineSnapshot {
+  const page = getJobTimeline(job.id, {
+    cursor: since !== undefined ? String(since) : undefined,
+    limit: 200,
   });
 
-  // If job has step records, only show sessions referenced by current steps
-  let stepTitles: Set<string> | null = null;
-  try {
-    const steps = getJobSteps(job.id);
-    if (steps.length > 0) {
-      stepTitles = new Set(steps.filter(s => s.sessionTitle).map(s => s.sessionTitle!));
-    }
-  } catch { /* db not available */ }
-
-  const sections: SessionSection[] = [];
-
-  for (const title of uniqueTitles) {
-    // Filter: only show delegation + step-referenced execution sessions + verify sessions
-    const isDelegationTitle = title.startsWith('pilot-delegate-');
-    const isVerifyTitle = title.startsWith('pilot-verify-');
-    if (stepTitles && !isDelegationTitle && !stepTitles.has(title) && !isVerifyTitle) continue;
-    const isDelegation = title.startsWith('pilot-delegate-');
-
-    let command: string | undefined;
-    if (!isDelegation && !isVerifyTitle) {
-      // Extract command by matching known GSD commands in the title
-      const knownCommands = ['add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'phase', 'quick', 'new-project'];
-      for (const cmd of knownCommands) {
-        if (title.includes(`-${cmd}-`) || title.includes(`-gsd-${cmd}-`)) {
-          command = cmd;
-          break;
-        }
-      }
-    }
-
-    const sessionId = findSessionByTitle(title);
-    const parts = sessionId ? getSessionParts(sessionId, since) : [];
-    const children = sessionId ? resolveChildSections(sessionId, parts, 0) : [];
-
-    let sectionType: SessionSection['type'];
-    if (isDelegation) {
-      sectionType = 'delegation';
-    } else if (isVerifyTitle) {
-      sectionType = 'verify';
-    } else {
-      sectionType = 'execution';
-    }
-
-    sections.push({
-      title,
-      type: sectionType,
-      command,
-      parts,
-      children: children.length > 0 ? children : undefined,
-    });
+  if (!page) {
+    return {
+      groups: [],
+      hasMore: false,
+      nextCursor: null,
+      sessionCount: 0,
+      childCount: 0,
+    };
   }
 
-  // Sort: delegation first, then verify, then execution
-  sections.sort((a, b) => {
-    if (a.type === 'delegation' && b.type !== 'delegation') return -1;
-    if (a.type !== 'delegation' && b.type === 'delegation') return 1;
-    if (a.type === 'verify' && b.type !== 'verify') return -1;
-    if (a.type !== 'verify' && b.type === 'verify') return 1;
-    return 0;
-  });
-
-  return sections;
+  return {
+    groups: normalizeGroups(page),
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
+    sessionCount: page.sessionCount,
+    childCount: page.childCount,
+  };
 }
+
+/** Back-compat alias during detail renderer migration. */
+export const fetchJobParts = fetchJobTimelineSnapshot;
 
 // ── Session enrichment ────────────────────────────────────────────────────
 
