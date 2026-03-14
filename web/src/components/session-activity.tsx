@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { SessionPart } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
@@ -135,6 +135,15 @@ export function SessionActivity({
   const [pages, setPages] = useState<SessionPart[][]>([])
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  // Reset pagination state when sessionId changes
+  useEffect(() => {
+    setPages([])
+    setCursor(undefined)
+    setHasMore(true)
+    setLoadingMore(false)
+  }, [sessionId])
 
   // Initial load
   const { isLoading: initialLoading } = useQuery({
@@ -155,7 +164,6 @@ export function SessionActivity({
   })
 
   // Load more handler
-  const [loadingMore, setLoadingMore] = useState(false)
 
   async function loadMore() {
     if (!hasMore || !cursor) return

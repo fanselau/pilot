@@ -61,7 +61,7 @@ function SessionDrillIn() {
         </Badge>
       </div>
 
-      <SessionActivity sessionId={sessionId} initialLimit={30} />
+      <SessionActivity key={sessionId} sessionId={sessionId} initialLimit={30} />
 
       {/* Sub-sub-agents (children of this session) */}
       {childrenLoading ? (
