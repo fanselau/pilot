@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 63 (Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-14 - Completed 63-04-PLAN.md
+Last activity: 2026-03-14 - Completed 63-02-PLAN.md
 
-Progress: ██████████████████░░ 67/73 plans (92%)
+Progress: ███████████████████░ 68/73 plans (93%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 63 in progress — shared step-grouped detail model is now active in TUI with session-ID lifecycle merge semantics and focused step-flow regressions.
+**Current focus:** Phase 63 in progress — web detail now renders grouped step-first timeline sections with lifecycle branch blocks; final TUI drill-in parity remains.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -161,7 +161,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
-- **Status:** in progress (3/5 plans complete)
+- **Status:** in progress (4/5 plans complete)
 
 ### Quick Tasks Completed
 
@@ -741,9 +741,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 63-04 | TUI detail polling merges grouped snapshots by immutable section/item keys | Keeps lifecycle branch rows up-to-date without title-key collisions |
 | 63-04 | Branch lifecycle identity is `fork:<childSessionId>` instead of title | Prevents same-title subagents from overwriting each other during merges |
 | 63-04 | Adapter emits unattributed fallback section when grouped data is absent | Ensures timeline activity never disappears during partial step attribution |
+| 63-02 | TimelineStream uses `useInfiniteQuery` with grouped page merging | Preserves loaded pages during live polling and keeps chronology stable within each step |
+| 63-02 | Branch semantic logic extracted to `branch-lifecycle-block.helpers.ts` | Enables deterministic regression tests without UI runtime alias constraints |
+| 63-02 | `timeline-fork-card` kept as thin compatibility wrapper over `BranchLifecycleBlock` | Retires split branch assumptions without breaking existing component entry points |
 
 ## Session Continuity
 
-Last session: 2026-03-14 13:24 UTC
-Stopped at: Completed 63-04-PLAN.md
+Last session: 2026-03-14 13:27 UTC
+Stopped at: Completed 63-02-PLAN.md
 Resume file: None
