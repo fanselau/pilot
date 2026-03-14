@@ -437,6 +437,34 @@ pilot export f91c --output docs/exports/job-f91c-failure.md
 
 Use `--stdout` to print markdown directly instead of writing a file.
 
+### 8. Web UI (operator dashboard)
+
+Pilot's web UI is useful for operator triage when you want a visual pass across jobs and session detail.
+
+1. Start it from the web workspace:
+
+```bash
+cd web
+bun run dev
+```
+
+2. Open `http://localhost:3100` and use the dashboard for active/queued/recent jobs, then open a job detail page for the merged step-aware timeline.
+3. Use branch lifecycle cards to drill into child sessions (`/jobs/:jobId/sessions/:sessionId`) and inspect focused Session Activity with breadcrumb context.
+4. Use action surfaces for follow-up execution:
+   - global command palette (`Cmd/Ctrl+K`)
+   - contextual job-level actions on detail views (retry/cancel/force-quit when available)
+
+Remote/tunneled access (same default port as local):
+
+```bash
+cd web
+bun run dev -- --host 0.0.0.0 --port 3100
+# from your local machine
+ssh -L 3100:localhost:3100 <user>@<remote-host>
+```
+
+Narrow-screen note: recent responsive follow-ups make dashboard cards, timeline rows, and session views usable on small screens for triage and follow-up checks, but desktop remains the primary operator experience.
+
 Release verification checklist for Phase 45 observability/export behavior:
 
 ```bash
