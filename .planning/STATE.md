@@ -8,7 +8,7 @@
 Phase: 62 (Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity)
 Plan: 5 of 5 in current phase
 Status: Phase complete
-Last activity: 2026-03-13 - Completed quick task 083: Pilot Web UI mobile responsiveness
+Last activity: 2026-03-14 - Completed quick task 084: Fix child session drill-in navigation
 
 Progress: ████████████████████ 64/64 plans (100%)
 
@@ -232,6 +232,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 080 | TUI feedback follow-up — truthful footer hints, flash feedback for inapplicable shortcuts, extracted keyboard handler with 9 real-path branching tests | 2026-03-12 | 48e7bef | [080-quick-follow-up-phase-59-tui-feedback-fo](./quick/080-quick-follow-up-phase-59-tui-feedback-fo/) |
 | 082 | Phase 62 follow-up — toast feedback for action execute handlers + paused-state predicate tests (11/13 → 13/13) | 2026-03-13 | dbd4a1d | [082-quick-follow-up-phase-62-toast-feedback-](./quick/082-quick-follow-up-phase-62-toast-feedback-/) |
 | 083 | Pilot Web UI mobile responsiveness — responsive padding, Coss useIsMobile, session-overview card fallback, timeline flex-wrap | 2026-03-13 | cb0dbe8 | [083-pilot-web-ui-mobile-responsiveness-and-n](./quick/083-pilot-web-ui-mobile-responsiveness-and-n/) |
+| 084 | Fix child session drill-in navigation — reset SessionActivity pagination on sessionId change, key-based remount, multi-child fork card uniqueness tests | 2026-03-14 | e86a5b4 | [084-quick-follow-up-subjob-navigation-must-r](./quick/084-quick-follow-up-subjob-navigation-must-r/) |
 
 ## Accumulated Context
 
