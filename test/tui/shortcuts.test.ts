@@ -301,7 +301,7 @@ describe('Context-aware footer hints', () => {
 
   it('detail view without jobStatus falls back to static HINTS.detail', () => {
     const hint = getFooterHint('detail', 'queue');
-    expect(hint).toContain('esc back');
+    expect(hint).toContain('esc/backspace back');
     expect(hint).toContain('r retry');
   });
 
@@ -310,8 +310,9 @@ describe('Context-aware footer hints', () => {
     expect(hint).toContain('K kill');
     expect(hint).not.toContain('r retry');
     expect(hint).not.toContain('x cancel');
+    expect(hint).not.toContain('enter drill');
     expect(hint).toContain('? help');
-    expect(hint).toContain('esc back');
+    expect(hint).toContain('esc/backspace back');
   });
 
   it('detail view with pending jobStatus shows only x cancel', () => {
@@ -341,7 +342,23 @@ describe('Context-aware footer hints', () => {
     expect(hint).not.toContain('x cancel');
     expect(hint).not.toContain('K kill');
     expect(hint).toContain('? help');
-    expect(hint).toContain('esc back');
+    expect(hint).toContain('esc/backspace back');
+  });
+
+  it('detail footer shows drill-in controls only when child sessions exist', () => {
+    const withoutChildren = getFooterHint('detail', undefined, 'running', 0, 0);
+    expect(withoutChildren).not.toContain('j/k select child');
+    expect(withoutChildren).not.toContain('enter drill');
+
+    const withChildren = getFooterHint('detail', undefined, 'running', 2, 0);
+    expect(withChildren).toContain('j/k select child');
+    expect(withChildren).toContain('enter drill');
+  });
+
+  it('detail footer shows level-up wording when nested', () => {
+    const nestedHint = getFooterHint('detail', undefined, 'running', 1, 2);
+    expect(nestedHint).toContain('esc/backspace up');
+    expect(nestedHint).not.toContain('esc/backspace back');
   });
 
   it('split view ignores panelFocus', () => {
@@ -421,6 +438,10 @@ function createMockState(overrides?: {
   panelFocus?: string;
   selectedIndex?: number;
   view?: string;
+  detailJobId?: string | null;
+  detailSessionPath?: string[];
+  detailSelectedChildIndex?: number;
+  detailChildSessionIds?: string[];
   projects?: Array<{ path: string; status: string }>;
 }): PilotStateStore {
   let _queue = overrides?.queue ?? [];
@@ -429,6 +450,10 @@ function createMockState(overrides?: {
   let _panelFocus = overrides?.panelFocus ?? 'queue';
   let _selectedIndex = overrides?.selectedIndex ?? 0;
   let _view = overrides?.view ?? 'dashboard';
+  let _detailJobId = overrides?.detailJobId ?? null;
+  let _detailSessionPath = overrides?.detailSessionPath ?? [];
+  let _detailSelectedChildIndex = overrides?.detailSelectedChildIndex ?? 0;
+  let _detailChildSessionIds = overrides?.detailChildSessionIds ?? [];
   let _flashMessage = '';
   let _showConfirm = false;
   let _showFilter = false;
@@ -460,8 +485,18 @@ function createMockState(overrides?: {
     setSelectedIndex: (v: any) => { _selectedIndex = typeof v === 'function' ? v(_selectedIndex) : v; },
     panelFocus: () => _panelFocus as any,
     setPanelFocus: (v: any) => { _panelFocus = typeof v === 'function' ? v(_panelFocus) : v; },
-    detailJobId: () => null,
-    setDetailJobId: vi.fn(),
+    detailJobId: () => _detailJobId,
+    setDetailJobId: (v: any) => { _detailJobId = typeof v === 'function' ? v(_detailJobId) : v; },
+    detailSessionPath: () => _detailSessionPath,
+    setDetailSessionPath: (v: any) => { _detailSessionPath = typeof v === 'function' ? v(_detailSessionPath) : v; },
+    detailSelectedChildIndex: () => _detailSelectedChildIndex,
+    setDetailSelectedChildIndex: (v: any) => {
+      _detailSelectedChildIndex = typeof v === 'function' ? v(_detailSelectedChildIndex) : v;
+    },
+    detailChildSessionIds: () => _detailChildSessionIds,
+    setDetailChildSessionIds: (v: any) => {
+      _detailChildSessionIds = typeof v === 'function' ? v(_detailChildSessionIds) : v;
+    },
     showHelp: () => _showHelp,
     setShowHelp: (v: any) => { _showHelp = typeof v === 'function' ? v(_showHelp) : v; },
     showFilter: () => _showFilter,
@@ -494,6 +529,40 @@ function createMockState(overrides?: {
     navigateBack: vi.fn(),
     toggleSplit: vi.fn(),
     cyclePanelFocus: vi.fn(),
+    setDetailChildren: (sessionIds: string[]) => {
+      _detailChildSessionIds = [...sessionIds];
+      if (_detailChildSessionIds.length === 0) {
+        _detailSelectedChildIndex = 0;
+      } else {
+        _detailSelectedChildIndex = Math.min(
+          Math.max(_detailSelectedChildIndex, 0),
+          _detailChildSessionIds.length - 1,
+        );
+      }
+    },
+    moveDetailChildSelection: (delta: number) => {
+      if (_detailChildSessionIds.length === 0) return;
+      _detailSelectedChildIndex = Math.min(
+        Math.max(_detailSelectedChildIndex + delta, 0),
+        _detailChildSessionIds.length - 1,
+      );
+    },
+    drillIntoSelectedChild: () => {
+      if (_detailChildSessionIds.length === 0) return null;
+      const next = _detailChildSessionIds[_detailSelectedChildIndex];
+      if (!next) return null;
+      _detailSessionPath = [..._detailSessionPath, next];
+      _detailSelectedChildIndex = 0;
+      _detailChildSessionIds = [];
+      return next;
+    },
+    popDetailSessionPath: () => {
+      if (_detailSessionPath.length === 0) return false;
+      _detailSessionPath = _detailSessionPath.slice(0, -1);
+      _detailSelectedChildIndex = 0;
+      _detailChildSessionIds = [];
+      return true;
+    },
   } as unknown as PilotStateStore;
 }
 
@@ -625,5 +694,48 @@ describe('Keyboard handler branching (real handler)', () => {
     expect(state.flashMessage()).toBe('');
     expect(state.showConfirm()).toBe(true);
     expect(state.confirmMessage()).toContain('Kill job');
+  });
+
+  it('detail j/k updates child selection and Enter drills into child', () => {
+    const state = createMockState({
+      view: 'detail',
+      detailSessionPath: [],
+      detailSelectedChildIndex: 0,
+      detailChildSessionIds: ['child-a', 'child-b'],
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('j'), state, renderer);
+    expect(state.detailSelectedChildIndex()).toBe(1);
+
+    handleKeyPress(makeKey('return', { name: 'return' }), state, renderer);
+    expect(state.detailSessionPath()).toEqual(['child-b']);
+    expect(state.detailSelectedChildIndex()).toBe(0);
+  });
+
+  it('Esc in nested detail pops one level before exiting detail view', () => {
+    const state = createMockState({
+      view: 'detail',
+      detailSessionPath: ['child-a', 'child-b'],
+      detailChildSessionIds: ['child-c'],
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('escape', { name: 'escape' }), state, renderer);
+
+    expect(state.detailSessionPath()).toEqual(['child-a']);
+    expect(state.navigateBack).not.toHaveBeenCalled();
+  });
+
+  it('Backspace at root detail exits to dashboard', () => {
+    const state = createMockState({
+      view: 'detail',
+      detailSessionPath: [],
+    });
+    const renderer = { destroy: vi.fn() };
+
+    handleKeyPress(makeKey('backspace', { name: 'backspace' }), state, renderer);
+
+    expect(state.navigateBack).toHaveBeenCalledTimes(1);
   });
 });
