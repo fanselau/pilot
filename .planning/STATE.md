@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: 63 (Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-03-14 - Completed 63-02-PLAN.md
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-03-14 - Completed 63-05-PLAN.md
 
-Progress: ███████████████████░ 68/73 plans (93%)
+Progress: ███████████████████░ 69/73 plans (95%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 63 in progress — web detail now renders grouped step-first timeline sections with lifecycle branch blocks; final TUI drill-in parity remains.
+**Current focus:** Phase 63 complete — TUI detail now has explicit child drill-in path semantics with scoped back navigation and hint/test parity.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -161,7 +161,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
-- **Status:** in progress (4/5 plans complete)
+- **Status:** complete (5/5 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -741,12 +741,15 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 63-04 | TUI detail polling merges grouped snapshots by immutable section/item keys | Keeps lifecycle branch rows up-to-date without title-key collisions |
 | 63-04 | Branch lifecycle identity is `fork:<childSessionId>` instead of title | Prevents same-title subagents from overwriting each other during merges |
 | 63-04 | Adapter emits unattributed fallback section when grouped data is absent | Ensures timeline activity never disappears during partial step attribution |
+| 63-05 | Detail drill-in state is centralized in TUI store (path + selected child + visible children) | Keeps keyboard routing, footer hints, and detail rendering in sync from one source of truth |
+| 63-05 | Esc/Backspace pop one nested child level before leaving detail | Makes back-navigation predictable and preserves context while drilling through child sessions |
+| 63-05 | Detail hint surfaces are context-aware (child count + depth) | Prevents phantom shortcuts and ensures footer/help copy only shows relevant implemented controls |
 | 63-02 | TimelineStream uses `useInfiniteQuery` with grouped page merging | Preserves loaded pages during live polling and keeps chronology stable within each step |
 | 63-02 | Branch semantic logic extracted to `branch-lifecycle-block.helpers.ts` | Enables deterministic regression tests without UI runtime alias constraints |
 | 63-02 | `timeline-fork-card` kept as thin compatibility wrapper over `BranchLifecycleBlock` | Retires split branch assumptions without breaking existing component entry points |
 
 ## Session Continuity
 
-Last session: 2026-03-14 13:27 UTC
-Stopped at: Completed 63-02-PLAN.md
+Last session: 2026-03-14 13:41 UTC
+Stopped at: Completed 63-05-PLAN.md
 Resume file: None

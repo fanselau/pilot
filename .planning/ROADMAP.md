@@ -1089,7 +1089,7 @@ Wave structure:
 
 ### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
 
-**Status:** in progress (4/5 plans complete)
+**Status:** complete (5/5 plans, verified ✓)
 **Goal:** Refactor web and TUI detail UX into a shared step-first execution story: explicit step containers, one lifecycle-aware branch object per child session, and true nested child drill-in that feels like entering child context (not appended overflow).
 **Depends on:** Phase 62
 **Plans:** 5 plans
@@ -1099,7 +1099,7 @@ Plans:
 - [x] 63-02-PLAN.md — Web step-first timeline rendering + lifecycle branch block UI
 - [x] 63-03-PLAN.md — Web nested route/layout restructure for primary child detail flow
 - [x] 63-04-PLAN.md — TUI step-first detail model alignment with shared core timeline contract
-- [ ] 63-05-PLAN.md — TUI explicit child drill-in navigation, hint parity, and shortcut regression tests
+- [x] 63-05-PLAN.md — TUI explicit child drill-in navigation, hint parity, and shortcut regression tests
 
 Wave structure:
 - Wave 1: 63-01 (core shared contract + tests)
