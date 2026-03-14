@@ -8,7 +8,7 @@
 Phase: 63 (Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI)
 Plan: 5 of 5 in current phase
 Status: Phase complete
-Last activity: 2026-03-14 - Completed 63-05-PLAN.md
+Last activity: 2026-03-14 - Completed quick task 085-PLAN.md
 
 Progress: ███████████████████░ 69/73 plans (95%)
 
@@ -17,7 +17,7 @@ Progress: ███████████████████░ 69/73 pla
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Phase 63 complete — TUI detail now has explicit child drill-in path semantics with scoped back navigation and hint/test parity.
+**Current focus:** Docs now reflect shipped web UI operator workflow (dashboard triage, step-aware timeline inspection, child/session drill-in, and action surfaces).
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -236,6 +236,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 082 | Phase 62 follow-up — toast feedback for action execute handlers + paused-state predicate tests (11/13 → 13/13) | 2026-03-13 | dbd4a1d | [082-quick-follow-up-phase-62-toast-feedback-](./quick/082-quick-follow-up-phase-62-toast-feedback-/) |
 | 083 | Pilot Web UI mobile responsiveness — responsive padding, Coss useIsMobile, session-overview card fallback, timeline flex-wrap | 2026-03-13 | cb0dbe8 | [083-pilot-web-ui-mobile-responsiveness-and-n](./quick/083-pilot-web-ui-mobile-responsiveness-and-n/) |
 | 084 | Fix child session drill-in navigation — reset SessionActivity pagination on sessionId change, key-based remount, multi-child fork card uniqueness tests | 2026-03-14 | e86a5b4 | [084-quick-follow-up-subjob-navigation-must-r](./quick/084-quick-follow-up-subjob-navigation-must-r/) |
+| 085 | Follow-up docs update — position web UI as operator surface in README and Getting Started (timeline/drill-in, actions, remote tunnel, narrow-screen notes) | 2026-03-14 | 37e04cc | [085-quick-follow-up-update-readme-and-docs-f](./quick/085-quick-follow-up-update-readme-and-docs-f/) |
 
 ## Accumulated Context
 
@@ -747,9 +748,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 63-02 | TimelineStream uses `useInfiniteQuery` with grouped page merging | Preserves loaded pages during live polling and keeps chronology stable within each step |
 | 63-02 | Branch semantic logic extracted to `branch-lifecycle-block.helpers.ts` | Enables deterministic regression tests without UI runtime alias constraints |
 | 63-02 | `timeline-fork-card` kept as thin compatibility wrapper over `BranchLifecycleBlock` | Retires split branch assumptions without breaking existing component entry points |
+| quick-085 | README keeps web UI launch guidance concise and defers deeper operator workflow to Getting Started | Maintains top-level product framing while keeping setup/tutorial detail out of README |
+| quick-085 | Remote web access guidance uses real dev-server behavior (`bun run dev -- --host ... --port 3100` + `ssh -L`) | Keeps operator instructions truthful to current `web/` scripts and Vite port defaults |
 
 ## Session Continuity
 
-Last session: 2026-03-14 13:41 UTC
-Stopped at: Completed 63-05-PLAN.md
+Last session: 2026-03-14 20:49 UTC
+Stopped at: Completed 085-PLAN.md
 Resume file: None
