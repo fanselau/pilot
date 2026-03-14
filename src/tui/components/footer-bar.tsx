@@ -19,7 +19,7 @@ import type { JobStatus } from '../../core/types.js';
 // Prefer getFooterHint(view, panelFocus) for context-aware hints.
 export const HINTS: Record<ViewType, string> = {
   dashboard: ' j/k navigate │ enter detail │ tab panel │ r retry │ x cancel │ K kill │ / filter │ ? help │ q quit',
-  detail: ' r retry │ x cancel │ K kill │ ? help │ esc back',
+  detail: ' j/k select child │ enter drill │ r retry │ x cancel │ K kill │ ? help │ esc/backspace back',
   split: ' esc back │ ? help │ q quit',
 };
 
@@ -34,22 +34,35 @@ const DASHBOARD_PANEL_HINTS: Record<PanelFocus, string> = {
 
 // ── Detail view status-specific action hints ──────────────────────────────
 
-function getDetailActionHints(jobStatus: JobStatus): string {
-  const base = ' ? help │ esc back';
+function getDetailActionHints(jobStatus: JobStatus, detailChildCount = 0, detailDepth = 0): string {
+  const parts: string[] = [];
+
   switch (jobStatus) {
     case 'pending':
-      return ' x cancel │' + base;
+      parts.push('x cancel');
+      break;
     case 'running':
-      return ' K kill │' + base;
+      parts.push('K kill');
+      break;
     case 'failed':
     case 'cancelled':
-      return ' r retry │' + base;
+      parts.push('r retry');
+      break;
     case 'completed':
     case 'paused':
-      return base;
+      break;
     default:
-      return base;
+      break;
   }
+
+  if (detailChildCount > 0) {
+    parts.push('j/k select child');
+    parts.push('enter drill');
+  }
+
+  parts.push('? help');
+  parts.push(detailDepth > 0 ? 'esc/backspace up' : 'esc/backspace back');
+  return parts.join(' │ ');
 }
 
 /**
@@ -61,18 +74,37 @@ function getDetailActionHints(jobStatus: JobStatus): string {
  * For the detail view, when jobStatus is provided, hints show only the
  * actions valid for that job's current status.
  */
-export function getFooterHint(view: ViewType, panelFocus?: PanelFocus, jobStatus?: JobStatus): string {
+export function getFooterHint(
+  view: ViewType,
+  panelFocus?: PanelFocus,
+  jobStatus?: JobStatus,
+  detailChildCount = 0,
+  detailDepth = 0,
+): string {
   if (view === 'dashboard' && panelFocus) {
     return DASHBOARD_PANEL_HINTS[panelFocus] ?? HINTS.dashboard;
   }
   if (view === 'detail' && jobStatus) {
-    return getDetailActionHints(jobStatus);
+    return getDetailActionHints(jobStatus, detailChildCount, detailDepth);
   }
   return HINTS[view] ?? HINTS.dashboard;
 }
 
-export function FooterBar(props: { view: ViewType; panelFocus?: PanelFocus; jobStatus?: JobStatus; flash?: string }) {
-  const content = () => props.flash || getFooterHint(props.view, props.panelFocus, props.jobStatus);
+export function FooterBar(props: {
+  view: ViewType;
+  panelFocus?: PanelFocus;
+  jobStatus?: JobStatus;
+  detailChildCount?: number;
+  detailDepth?: number;
+  flash?: string;
+}) {
+  const content = () => props.flash || getFooterHint(
+    props.view,
+    props.panelFocus,
+    props.jobStatus,
+    props.detailChildCount ?? 0,
+    props.detailDepth ?? 0,
+  );
   const color = () => props.flash ? '#bbbb00' : theme.muted;
   return (
     <box height={1}>

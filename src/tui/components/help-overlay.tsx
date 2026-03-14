@@ -25,14 +25,18 @@ export const HELP_TEXT = `
   Enter        Open job detail
   r            Retry failed job
   x            Cancel pending job
-   K            Force-quit running job
-   u            Unblock project (projects panel)
-   d            Remove project (projects panel)
-   g            Jump to top
+  K            Force-quit running job
+  u            Unblock project (projects panel)
+  d            Remove project (projects panel)
+  g            Jump to top
   G            Jump to bottom
 
  ── Detail ──────────────────────────
-  Esc / q      Back to dashboard
+  j / ↓        Select next child session
+  k / ↑        Select previous child session
+  Enter        Drill into selected child session
+  Esc / Backspace  Back one level (or dashboard at root)
+  q            Back to dashboard
   K            Force-quit running job
   r            Retry failed job
   x            Cancel pending job

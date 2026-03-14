@@ -14,7 +14,7 @@
 
 /* @jsxImportSource @opentui/solid */
 
-import { createSignal, createEffect, on, onMount, onCleanup, For, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, on, onMount, onCleanup, For, Show } from 'solid-js';
 import { createPoller } from '../data/poller.js';
 import {
   fetchJobTimelineSnapshot,
@@ -518,6 +518,131 @@ export function mergeTimelineSections(
   return merged;
 }
 
+interface DetailChildOption {
+  sessionId: string;
+  parentSessionId: string;
+  title: string;
+  status: 'active' | 'done' | 'unknown';
+  createdAt: number;
+  updatedAt: number;
+}
+
+function collectBranchOptions(groups: TimelineSection[]): DetailChildOption[] {
+  const bySessionId = new Map<string, DetailChildOption>();
+
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (item.kind !== 'fork-card') continue;
+      const current: DetailChildOption = {
+        sessionId: item.sessionId,
+        parentSessionId: item.parentSessionId,
+        title: item.title,
+        status: item.status,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt ?? item.createdAt,
+      };
+      const existing = bySessionId.get(item.sessionId);
+      if (!existing || current.updatedAt >= existing.updatedAt) {
+        bySessionId.set(item.sessionId, current);
+      }
+    }
+  }
+
+  return [...bySessionId.values()].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function buildChildrenByParent(options: DetailChildOption[]): Map<string, DetailChildOption[]> {
+  const grouped = new Map<string, DetailChildOption[]>();
+
+  for (const option of options) {
+    const list = grouped.get(option.parentSessionId) ?? [];
+    list.push(option);
+    grouped.set(option.parentSessionId, list);
+  }
+
+  for (const list of grouped.values()) {
+    list.sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  return grouped;
+}
+
+function resolveRootParents(options: DetailChildOption[]): Set<string> {
+  const childIds = new Set(options.map((option) => option.sessionId));
+  const roots = new Set<string>();
+
+  for (const option of options) {
+    if (!childIds.has(option.parentSessionId)) {
+      roots.add(option.parentSessionId);
+    }
+  }
+
+  return roots;
+}
+
+function resolveChildrenForPath(
+  options: DetailChildOption[],
+  childrenByParent: Map<string, DetailChildOption[]>,
+  path: string[],
+): DetailChildOption[] {
+  if (path.length > 0) {
+    return childrenByParent.get(path[path.length - 1]) ?? [];
+  }
+
+  const roots = resolveRootParents(options);
+  const rootChildren = options.filter((option) => roots.has(option.parentSessionId));
+  return rootChildren.length > 0 ? rootChildren : options;
+}
+
+function collectDescendantSessionIds(
+  childrenByParent: Map<string, DetailChildOption[]>,
+  rootSessionId: string,
+): Set<string> {
+  const allowed = new Set<string>([rootSessionId]);
+  const queue = [rootSessionId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    const children = childrenByParent.get(current) ?? [];
+    for (const child of children) {
+      if (allowed.has(child.sessionId)) continue;
+      allowed.add(child.sessionId);
+      queue.push(child.sessionId);
+    }
+  }
+
+  return allowed;
+}
+
+function filterSectionsForPath(
+  allSections: TimelineSection[],
+  path: string[],
+  childrenByParent: Map<string, DetailChildOption[]>,
+): TimelineSection[] {
+  if (path.length === 0) return allSections;
+
+  const allowedSessionIds = collectDescendantSessionIds(childrenByParent, path[path.length - 1]);
+  const scoped: TimelineSection[] = [];
+
+  for (const section of allSections) {
+    const items = section.items.filter((item) => {
+      if (item.kind === 'fork-card') {
+        return allowedSessionIds.has(item.sessionId) || allowedSessionIds.has(item.parentSessionId);
+      }
+      return allowedSessionIds.has(item.sessionId);
+    });
+
+    if (items.length === 0) continue;
+    scoped.push({
+      ...section,
+      items,
+    });
+  }
+
+  return scoped;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DetailView(props: { state: PilotStateStore }) {
@@ -609,6 +734,54 @@ export function DetailView(props: { state: PilotStateStore }) {
   }
 
   const currentJob = () => job();
+
+  const branchOptions = createMemo(() => collectBranchOptions(sections()));
+
+  const childrenByParent = createMemo(() => buildChildrenByParent(branchOptions()));
+
+  const pathContext = createMemo(() => props.state.detailSessionPath());
+
+  const currentChildren = createMemo(() => resolveChildrenForPath(
+    branchOptions(),
+    childrenByParent(),
+    pathContext(),
+  ));
+
+  const scopedSections = createMemo(() => filterSectionsForPath(
+    sections(),
+    pathContext(),
+    childrenByParent(),
+  ));
+
+  const sessionLabelById = createMemo(() => {
+    const labels = new Map<string, string>();
+    for (const option of branchOptions()) {
+      labels.set(option.sessionId, option.title || `session ${option.sessionId.slice(0, 8)}`);
+    }
+    return labels;
+  });
+
+  const selectedChild = createMemo(() => {
+    const children = currentChildren();
+    if (children.length === 0) return null;
+    const index = Math.min(
+      Math.max(props.state.detailSelectedChildIndex(), 0),
+      children.length - 1,
+    );
+    return children[index] ?? null;
+  });
+
+  const contextPathText = createMemo(() => {
+    const labels = ['job root'];
+    for (const sessionId of pathContext()) {
+      labels.push(sessionLabelById().get(sessionId) ?? `session ${sessionId.slice(0, 8)}`);
+    }
+    return labels.join(' > ');
+  });
+
+  createEffect(() => {
+    props.state.setDetailChildren(currentChildren().map((child) => child.sessionId));
+  });
 
   const reasonContext = (): JobWhyContext => {
     const current = currentJob();
@@ -786,10 +959,39 @@ export function DetailView(props: { state: PilotStateStore }) {
             content={`Session: ${truncate(getSessionTitle(currentJob()!), 80)}`}
             fg={theme.muted}
           />
-          {/* Line 11: descendant count (only when > 0) */}
-          <Show when={countDescendants(sections()) > 0}>
+          <text
+            content={`Context: ${truncate(contextPathText(), 120)}`}
+            fg={theme.muted}
+          />
+          <Show when={currentChildren().length > 0} fallback={
+            <text content="Child drill-in: no child sessions in this context" fg={theme.muted} />
+          }>
             <text
-              content={`Descendants: ${countDescendants(sections())} subagent ${countDescendants(sections()) === 1 ? 'session' : 'sessions'}`}
+              content={`Child drill-in: j/k select | Enter open | Esc/Backspace ${pathContext().length > 0 ? 'up one level' : 'back to dashboard'}`}
+              fg={theme.muted}
+            />
+            <For each={currentChildren()}>
+              {(child, index) => {
+                const selected = index() === props.state.detailSelectedChildIndex();
+                return (
+                  <text
+                    content={`${selected ? '  >' : '   '} [${child.status}] ${truncate(child.title || 'child session', 52)} (${child.sessionId.slice(0, 8)})`}
+                    fg={selected ? statusColors.running : theme.muted}
+                  />
+                );
+              }}
+            </For>
+            <Show when={selectedChild()}>
+              <text
+                content={`Selected child: ${selectedChild()!.sessionId.slice(0, 8)} (${selectedChild()!.status})`}
+                fg={theme.muted}
+              />
+            </Show>
+          </Show>
+          {/* Line 11: descendant count (only when > 0) */}
+          <Show when={countDescendants(scopedSections()) > 0}>
+            <text
+              content={`Descendants: ${countDescendants(scopedSections())} subagent ${countDescendants(scopedSections()) === 1 ? 'session' : 'sessions'}`}
               fg={theme.muted}
             />
           </Show>
@@ -800,7 +1002,7 @@ export function DetailView(props: { state: PilotStateStore }) {
         {/* Activity stream: scrollable */}
         <box flexGrow={1}>
           <Scrollable follow={true}>
-            <For each={sections()}>
+            <For each={scopedSections()}>
               {(section) => (
                 <box flexDirection="column">
                   <text
@@ -811,8 +1013,13 @@ export function DetailView(props: { state: PilotStateStore }) {
                 </box>
               )}
             </For>
-            <Show when={sections().length === 0}>
-              <text content="  Waiting for session to start..." fg={theme.muted} />
+            <Show when={scopedSections().length === 0}>
+              <text
+                content={pathContext().length > 0
+                  ? '  No activity in this child context yet...'
+                  : '  Waiting for session to start...'}
+                fg={theme.muted}
+              />
             </Show>
           </Scrollable>
         </box>

@@ -448,6 +448,15 @@ export function App(_props: { interval?: number }) {
     return job?.status;
   }
 
+  function detailChildCount() {
+    if (state.view() !== 'detail') return 0;
+    return state.detailChildSessionIds().length;
+  }
+
+  function detailDepth() {
+    return state.detailSessionPath().length;
+  }
+
   // ── Keyboard handler (delegates to exported handleKeyPress) ────────────
 
   useKeyboard((key: TuiKeyEvent) => handleKeyPress(key, state, renderer));
@@ -499,7 +508,14 @@ export function App(_props: { interval?: number }) {
           }}
         />
       </Show>
-      <FooterBar view={state.view()} panelFocus={state.panelFocus()} jobStatus={detailJobStatus()} flash={state.flashMessage()} />
+      <FooterBar
+        view={state.view()}
+        panelFocus={state.panelFocus()}
+        jobStatus={detailJobStatus()}
+        detailChildCount={detailChildCount()}
+        detailDepth={detailDepth()}
+        flash={state.flashMessage()}
+      />
     </box>
   );
 }
