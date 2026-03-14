@@ -417,14 +417,7 @@ export interface JobDetailEventsResponse {
   cursor: string;
 }
 
-// ── Merged Timeline Types (Phase 62) ──────────────────────────────────────
-
-/** Discriminated union for merged timeline stream items. */
-export type TimelineItem =
-  | TimelineActivityItem
-  | TimelineToolSummaryItem
-  | TimelineForkCardItem
-  | TimelineCompletionCardItem;
+// ── Step-First Timeline Types (Phase 63) ──────────────────────────────────
 
 export interface TimelineActivityItem {
   kind: 'activity';
@@ -446,20 +439,57 @@ export interface TimelineToolSummaryItem {
   patchFiles?: string[];
 }
 
-export interface TimelineForkCardItem {
+/**
+ * One lifecycle-aware branch object keyed by child session identity.
+ *
+ * The item is inserted at fork time (`createdAt`) and later updated in place
+ * with latest status/progress/completion metadata.
+ */
+export interface BranchLifecycleItem {
   kind: 'fork-card';
   sessionId: string;       // child session ID
   parentSessionId: string;
   title: string;
   createdAt: number;       // child session start time = fork point
+  updatedAt?: number;       // latest observed child activity/update timestamp
+  completedAt?: number | null;
   status: 'active' | 'done' | 'unknown';
   messageCount: number;
   tokenTotal: number;
   models: string[];
   latestMessagePreview: string | null;
+  finalMessagePreview?: string | null;
   childCount: number;
   durationMs: number | null;
 }
+
+/** Discriminated union for step-grouped timeline items. */
+export type StepTimelineItem =
+  | TimelineActivityItem
+  | TimelineToolSummaryItem
+  | BranchLifecycleItem;
+
+export interface StepTimelineGroup {
+  stepIndex: number | null;
+  command: string;
+  status: string;
+  sessionId: string | null;
+  items: StepTimelineItem[];
+}
+
+/** Grouped timeline payload for step-first rendering. */
+export interface GroupedTimelinePage {
+  groups: StepTimelineGroup[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  sessionCount: number;
+  childCount: number;
+}
+
+// Legacy flat timeline exports kept temporarily for transitional callers.
+// New consumers should use StepTimelineGroup + GroupedTimelinePage.
+
+export type TimelineForkCardItem = BranchLifecycleItem;
 
 export interface TimelineCompletionCardItem {
   kind: 'completion-card';
@@ -472,6 +502,10 @@ export interface TimelineCompletionCardItem {
   latestMessagePreview: string | null;
 }
 
+/** @deprecated Use StepTimelineItem for grouped timeline consumers. */
+export type TimelineItem = StepTimelineItem | TimelineCompletionCardItem;
+
+/** @deprecated Use GroupedTimelinePage for grouped timeline consumers. */
 export interface TimelinePage {
   items: TimelineItem[];
   hasMore: boolean;
