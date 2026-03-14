@@ -16,10 +16,13 @@
 
 import { createSignal, createEffect, on, onMount, onCleanup, For, Show } from 'solid-js';
 import { createPoller } from '../data/poller.js';
-import { fetchJobParts } from '../data/opencode-db.js';
-import type { SessionSection } from '../data/opencode-db.js';
+import {
+  fetchJobTimelineSnapshot,
+  getTimelineItemKey,
+} from '../data/opencode-db.js';
+import type { TimelineSection } from '../data/opencode-db.js';
 import { Scrollable } from '../widgets/scrollable.js';
-import { statusColors, theme, subagentColors } from '../theme.js';
+import { statusColors, theme } from '../theme.js';
 import { formatTokens } from '../components/running-panel.js';
 import { resolveAllAgentModels } from '../../core/models.js';
 import { getConfig } from '../../core/config.js';
@@ -27,7 +30,13 @@ import { buildJobWhy, buildRetryWhy, buildUndoWhy } from '../../core/job-introsp
 import { buildJudgeSignal } from '../../core/judge-signal.js';
 import type { JobWhyContext } from '../../core/job-introspection.js';
 import type { PilotStateStore } from '../state.js';
-import type { Job, JobObservabilitySnapshot, SessionPart, DelegationPlan, JobStatus } from '../../core/types.js';
+import type {
+  Job,
+  JobObservabilitySnapshot,
+  DelegationPlan,
+  JobStatus,
+  StepTimelineItem,
+} from '../../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -338,17 +347,16 @@ export function buildHeaderLines(
   return lines;
 }
 
-function countDescendants(sections: import('../data/opencode-db.js').SessionSection[]): number {
-  let count = 0;
+function countDescendants(sections: TimelineSection[]): number {
+  const unique = new Set<string>();
   for (const section of sections) {
-    if (section.type === 'subagent') {
-      count++;
-      if (section.children) {
-        count += section.children.filter(c => c.type === 'subagent').length;
+    for (const item of section.items) {
+      if (item.kind === 'fork-card') {
+        unique.add(item.sessionId);
       }
     }
   }
-  return count;
+  return unique.size;
 }
 
 function getSessionTitle(job: Job): string {
@@ -361,74 +369,161 @@ function getSessionTitle(job: Job): string {
   } catch { return '—'; }
 }
 
-// ── Part formatting ───────────────────────────────────────────────────────
+// ── Step-first timeline formatting ───────────────────────────────────────
 
 interface FormattedLine {
   text: string;
   color: string;
 }
 
-/**
- * Format a single session part into display lines.
- * Returns null for parts that should be skipped (reasoning, step-start/step-finish).
- */
-function formatPartLines(part: SessionPart): FormattedLine[] | null {
-  const time = formatTime(part.createdAt);
+function formatDurationMs(ms: number | null): string {
+  if (ms == null) return '—';
+  const secs = Math.floor(ms / 1000);
+  const mins = Math.floor(secs / 60);
+  if (mins < 1) return `${secs}s`;
+  if (mins < 60) return `${mins}m ${secs % 60}s`;
+  const hours = Math.floor(mins / 60);
+  return `${hours}h ${mins % 60}m`;
+}
 
-  if (part.type === 'tool') {
-    const tool = part.tool ?? 'unknown';
-    const lines: FormattedLine[] = [];
+function timelineStatusColor(status: string): string {
+  if (status === 'completed' || status === 'done') return statusColors.done;
+  if (status === 'failed') return statusColors.failed;
+  if (status === 'running' || status === 'active') return statusColors.running;
+  return theme.muted;
+}
 
-    if (tool === 'bash') {
-      const cmd = part.toolInput ?? '';
-      lines.push({ text: `  ${time}  [assistant] bash $ ${cmd}`, color: '#FACC15' }); // yellow
-      if (part.toolOutput) {
-        const output = part.toolOutput.replace(/\n/g, ' ');
-        if (output.trim()) {
-          lines.push({ text: `             -> ${output}`, color: theme.muted });
-        }
-      }
-    } else if (tool === 'read' || tool === 'write' || tool === 'edit') {
-      lines.push({ text: `  ${time}  [assistant] ${tool} ${part.toolInput ?? ''}`, color: '#FACC15' });
-    } else if (tool === 'glob' || tool === 'grep') {
-      const input = part.toolInput ?? '';
-      lines.push({ text: `  ${time}  [assistant] ${tool} ${input}`, color: '#FACC15' });
-    } else {
-      const input = part.toolInput ?? '';
-      lines.push({ text: `  ${time}  [assistant] ${tool} ${input}`, color: '#FACC15' });
+function branchStatusColor(status: 'active' | 'done' | 'unknown'): string {
+  if (status === 'done') return statusColors.done;
+  if (status === 'active') return statusColors.running;
+  return theme.muted;
+}
+
+export function formatStepSectionHeader(section: TimelineSection): string {
+  if (section.stepIndex === null) {
+    return '  ── Unattributed Activity ──';
+  }
+  return `  ── Step ${section.stepIndex + 1}: ${section.command} [${section.status}] ──`;
+}
+
+function formatTimelineItemLines(item: StepTimelineItem): FormattedLine[] {
+  const time = formatTime(item.createdAt);
+
+  if (item.kind === 'activity') {
+    const content = item.text.replace(/\n/g, ' ');
+    return [{
+      text: `  ${time}  [${item.role}] ${content}`,
+      color: item.role === 'user' ? '#4ADE80' : '#22D3EE',
+    }];
+  }
+
+  if (item.kind === 'tool-summary') {
+    const lines: FormattedLine[] = [
+      {
+        text: `  ${time}  [assistant] ${item.tool}${item.toolInput ? ` ${item.toolInput}` : ''}`,
+        color: '#FACC15',
+      },
+    ];
+    if (item.patchFiles && item.patchFiles.length > 0) {
+      lines.push({
+        text: `             files: ${item.patchFiles.join(', ')}`,
+        color: theme.muted,
+      });
     }
     return lines;
   }
 
-  if (part.type === 'text') {
-    const text = part.text ?? '';
-    if (!text.trim()) return null;
+  const preview = item.finalMessagePreview ?? item.latestMessagePreview;
+  const modelSummary = item.models.length > 0
+    ? item.models.map((model) => model.split('/')[1] ?? model).slice(0, 2).join(', ')
+    : 'unknown-model';
+  const childInfo = item.childCount > 0 ? `   children:${item.childCount}` : '';
 
-    const content = text.replace(/\n/g, ' ');
-    if (part.role === 'user') {
-      return [{ text: `  ${time}  [user] ${content}`, color: '#4ADE80' }]; // green
+  const lines: FormattedLine[] = [
+    {
+      text: `  ${time}  [branch] ${item.title || 'subagent'} [${item.status}] (sid:${item.sessionId.slice(0, 8)})`,
+      color: branchStatusColor(item.status),
+    },
+    {
+      text: `             msgs:${item.messageCount}   tok:${formatTokens(item.tokenTotal)}   dur:${formatDurationMs(item.durationMs)}   models:${modelSummary}${childInfo}`,
+      color: theme.muted,
+    },
+  ];
+
+  if (preview) {
+    lines.push({
+      text: `             preview: ${preview.replace(/\n/g, ' ')}`,
+      color: '#22D3EE',
+    });
+  }
+
+  return lines;
+}
+
+function mergeSectionItems(existing: StepTimelineItem[], incoming: StepTimelineItem[]): StepTimelineItem[] {
+  const merged = [...existing];
+  const keyToIndex = new Map<string, number>();
+
+  for (let i = 0; i < merged.length; i += 1) {
+    keyToIndex.set(getTimelineItemKey(merged[i]), i);
+  }
+
+  for (const item of incoming) {
+    const key = getTimelineItemKey(item);
+    const existingIndex = keyToIndex.get(key);
+    if (existingIndex === undefined) {
+      keyToIndex.set(key, merged.length);
+      merged.push(item);
+    } else {
+      merged[existingIndex] = item;
     }
-    return [{ text: `  ${time}  [assistant] ${content}`, color: '#22D3EE' }]; // cyan
   }
 
-  if (part.type === 'patch') {
-    const files = part.patchFiles?.join(', ') ?? 'unknown';
-    return [{ text: `  ${time}  [assistant] patch ${files}`, color: '#4ADE80' }]; // green
+  merged.sort((a, b) => a.createdAt - b.createdAt);
+  return merged;
+}
+
+export function mergeTimelineSections(
+  existing: TimelineSection[],
+  incoming: TimelineSection[],
+): TimelineSection[] {
+  const merged: TimelineSection[] = [];
+  const existingMap = new Map(existing.map((section) => [section.key, section]));
+
+  for (const nextSection of incoming) {
+    const prev = existingMap.get(nextSection.key);
+    if (!prev) {
+      merged.push(nextSection);
+      continue;
+    }
+
+    merged.push({
+      ...nextSection,
+      items: mergeSectionItems(prev.items, nextSection.items),
+    });
+    existingMap.delete(nextSection.key);
   }
 
-  // reasoning, step-start, step-finish — skip
-  return null;
+  for (const leftover of existingMap.values()) {
+    merged.push(leftover);
+  }
+
+  merged.sort((a, b) => {
+    if (a.stepIndex === null && b.stepIndex === null) return 0;
+    if (a.stepIndex === null) return 1;
+    if (b.stepIndex === null) return -1;
+    return a.stepIndex - b.stepIndex;
+  });
+
+  return merged;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DetailView(props: { state: PilotStateStore }) {
-  const [sections, setSections] = createSignal<SessionSection[]>([]);
+  const [sections, setSections] = createSignal<TimelineSection[]>([]);
   const [tick, setTick] = createSignal(0);
   const queueGraceSeconds = getConfig().queueGraceSeconds ?? 0;
-
-  // Track last-seen timestamp per session for incremental fetches
-  const lastSeenMap = new Map<string, number>();
 
   // ── Resolve the job from state ────────────────────────────────────────
 
@@ -457,67 +552,20 @@ export function DetailView(props: { state: PilotStateStore }) {
     if (tickTimer) clearInterval(tickTimer);
   });
 
-  // ── Poller: fetch parts every 1s ──────────────────────────────────────
+  // ── Poller: fetch grouped timeline every 1s ───────────────────────────
 
   const partsPoller = createPoller(() => {
     const currentJob = job();
     if (!currentJob) return;
 
-    // On first call (no sections yet), do a full fetch
+    const snapshot = fetchJobTimelineSnapshot(currentJob);
     const existing = sections();
     if (existing.length === 0) {
-      const allSections = fetchJobParts(currentJob);
-      setSections(allSections);
-
-      // Seed lastSeenMap from fetched parts
-      for (const section of allSections) {
-        if (section.parts.length > 0) {
-          lastSeenMap.set(section.title, section.parts[section.parts.length - 1].createdAt);
-        }
-      }
-    } else {
-      // Incremental fetch: only new parts since last seen
-      const updated = fetchJobParts(currentJob);
-      // Merge new parts into existing sections
-      const merged: SessionSection[] = [];
-      const existingMap = new Map(existing.map(s => [s.title, s]));
-
-      for (const newSection of updated) {
-        const existingSection = existingMap.get(newSection.title);
-        const since = lastSeenMap.get(newSection.title);
-
-        if (!existingSection) {
-          // Brand new session
-          merged.push(newSection);
-          if (newSection.parts.length > 0) {
-            lastSeenMap.set(newSection.title, newSection.parts[newSection.parts.length - 1].createdAt);
-          }
-        } else {
-          // Filter to only genuinely new parts
-          const newParts = since !== undefined
-            ? newSection.parts.filter(p => p.createdAt > since)
-            : newSection.parts;
-
-          if (newParts.length > 0) {
-            merged.push({
-              ...existingSection,
-              parts: [...existingSection.parts, ...newParts],
-              children: newSection.children,  // refresh children from latest fetch
-            });
-            lastSeenMap.set(newSection.title, newParts[newParts.length - 1].createdAt);
-          } else {
-            merged.push({ ...existingSection, children: newSection.children });
-          }
-        }
-        existingMap.delete(newSection.title);
-      }
-      // Keep any sections that disappeared from updated (shouldn't happen, but safe)
-      for (const [, leftover] of existingMap) {
-        merged.push(leftover);
-      }
-
-      setSections(merged);
+      setSections(snapshot.groups);
+      return;
     }
+
+    setSections(mergeTimelineSections(existing, snapshot.groups));
 
   }, 1000);
 
@@ -533,76 +581,23 @@ export function DetailView(props: { state: PilotStateStore }) {
 
   createEffect(on(() => props.state.detailJobId(), () => {
     setSections([]);
-    lastSeenMap.clear();
   }));
 
   // ── Render helpers ─────────────────────────────────────────────────────
 
-  /** Render parts list with no indentation prefix. */
-  function renderParts(parts: SessionPart[]) {
+  function renderTimelineItems(items: StepTimelineItem[]) {
     return (
-      <Show when={parts.length > 0} fallback={
+      <Show when={items.length > 0} fallback={
         <text content="  (no activity yet)" fg={theme.muted} />
       }>
-        <For each={parts}>
-          {(part) => {
-            const lines = formatPartLines(part);
-            if (!lines) return null;
+        <For each={items}>
+          {(item) => {
+            const lines = formatTimelineItemLines(item);
             return (
               <box flexDirection="column">
                 <For each={lines}>
                   {(line) => (
                     <text content={line.text} fg={line.color} />
-                  )}
-                </For>
-              </box>
-            );
-          }}
-        </For>
-      </Show>
-    );
-  }
-
-  /** Render parts for child sections (2-space indent). */
-  function renderChildParts(parts: SessionPart[]) {
-    return (
-      <Show when={parts.length > 0} fallback={
-        <text content="    (no activity yet)" fg={theme.muted} />
-      }>
-        <For each={parts}>
-          {(part) => {
-            const lines = formatPartLines(part);
-            if (!lines) return null;
-            return (
-              <box flexDirection="column">
-                <For each={lines}>
-                  {(line) => (
-                    <text content={`  ${line.text}`} fg={line.color} />
-                  )}
-                </For>
-              </box>
-            );
-          }}
-        </For>
-      </Show>
-    );
-  }
-
-  /** Render parts for grandchild sections (4-space indent). */
-  function renderGrandchildParts(parts: SessionPart[]) {
-    return (
-      <Show when={parts.length > 0} fallback={
-        <text content="      (no activity yet)" fg={theme.muted} />
-      }>
-        <For each={parts}>
-          {(part) => {
-            const lines = formatPartLines(part);
-            if (!lines) return null;
-            return (
-              <box flexDirection="column">
-                <For each={lines}>
-                  {(line) => (
-                    <text content={`    ${line.text}`} fg={line.color} />
                   )}
                 </For>
               </box>
@@ -808,102 +803,11 @@ export function DetailView(props: { state: PilotStateStore }) {
             <For each={sections()}>
               {(section) => (
                 <box flexDirection="column">
-                  <Show when={section.type === 'subagent'} fallback={
-                    <>
-                      {/* Delegation/Execution: plain text header (the "spine") */}
-                      <text
-                        content={section.type === 'delegation'
-                          ? `  ── Delegation ──`
-                          : section.type === 'verify'
-                          ? `  ── Verification ──`
-                          : `  ── Execution: ${section.command ?? 'unknown'} ──`}
-                        fg={theme.muted}
-                      />
-                      {renderParts(section.parts)}
-                    </>
-                  }>
-                    {/* Subagent: bordered box (the "branches") */}
-                    <box
-                      borderStyle="rounded"
-                      border={true}
-                      borderColor={subagentColors.border}
-                      marginLeft={1}
-                      marginTop={1}
-                      flexDirection="column"
-                      focusable={false}
-                    >
-                      <text content={` ${section.agentType ?? 'subagent'} `} fg={subagentColors.header} />
-                      {renderParts(section.parts)}
-                    </box>
-                  </Show>
-                  {/* Child sections */}
-                  <Show when={section.children && section.children.length > 0}>
-                    <For each={section.children ?? []}>
-                      {(child) => (
-                        <box flexDirection="column">
-                          <Show when={child.type === 'subagent'} fallback={
-                            <box flexDirection="column" paddingLeft={2}>
-                              <text
-                                content={child.type === 'delegation'
-                                  ? `  ── Delegation ──`
-                                  : `  ── Execution: ${child.command ?? 'unknown'} ──`}
-                                fg={theme.muted}
-                              />
-                              {renderChildParts(child.parts)}
-                            </box>
-                          }>
-                            {/* Child subagent: lighter bordered box, indented */}
-                            <box
-                              borderStyle="single"
-                              border={true}
-                              borderColor={subagentColors.borderChild}
-                              marginLeft={3}
-                              marginTop={1}
-                              flexDirection="column"
-                              focusable={false}
-                            >
-                              <text content={` ${child.agentType ?? 'subagent'} `} fg={subagentColors.headerChild} />
-                              {renderChildParts(child.parts)}
-                            </box>
-                          </Show>
-                          {/* Grandchild sections (level 2, no further recursion) */}
-                          <Show when={child.children && child.children.length > 0}>
-                            <For each={child.children ?? []}>
-                              {(grandchild) => (
-                                <box flexDirection="column">
-                                  <Show when={grandchild.type === 'subagent'} fallback={
-                                    <box flexDirection="column" paddingLeft={4}>
-                                      <text
-                                        content={grandchild.type === 'delegation'
-                                          ? `    ── Delegation ──`
-                                          : `    ── Execution: ${grandchild.command ?? 'unknown'} ──`}
-                                        fg={theme.muted}
-                                      />
-                                      {renderGrandchildParts(grandchild.parts)}
-                                    </box>
-                                  }>
-                                    {/* Grandchild subagent: dimmest bordered box */}
-                                    <box
-                                      borderStyle="single"
-                                      border={true}
-                                      borderColor={subagentColors.borderGrandchild}
-                                      marginLeft={5}
-                                      marginTop={1}
-                                      flexDirection="column"
-                                      focusable={false}
-                                    >
-                                      <text content={` ${grandchild.agentType ?? 'subagent'} `} fg={subagentColors.headerGrandchild} />
-                                      {renderGrandchildParts(grandchild.parts)}
-                                    </box>
-                                  </Show>
-                                </box>
-                              )}
-                            </For>
-                          </Show>
-                        </box>
-                      )}
-                    </For>
-                  </Show>
+                  <text
+                    content={formatStepSectionHeader(section)}
+                    fg={timelineStatusColor(section.status)}
+                  />
+                  {renderTimelineItems(section.items)}
                 </box>
               )}
             </For>
