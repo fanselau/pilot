@@ -37,8 +37,10 @@ import type {
   SessionActivityOptions,
   JobDetailEvent,
   JobDetailEventsResponse,
-  TimelineItem,
-  TimelinePage,
+  BranchLifecycleItem,
+  StepTimelineItem,
+  StepTimelineGroup,
+  GroupedTimelinePage,
 } from './types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -427,77 +429,153 @@ function getJobDetailEvents(jobId: string, sinceCursor: string): JobDetailEvents
   };
 }
 
-// ── Merged Timeline Query ─────────────────────────────────────────────────
+// ── Step-First Timeline Query ─────────────────────────────────────────────
+
+interface TimelineStepRef {
+  stepIndex: number;
+  command: string;
+  status: string;
+  sessionId: string | null;
+  sessionTitle: string | null;
+  startedAtMs: number | null;
+  completedAtMs: number | null;
+}
+
+interface TimelineCandidate {
+  item: StepTimelineItem;
+  createdAt: number;
+  sessionId: string | null;
+  sessionTitle: string | null;
+}
+
+function parseStepTime(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function resolveStepIndex(candidate: TimelineCandidate, steps: TimelineStepRef[]): number | null {
+  if (candidate.sessionId) {
+    const bySessionId = steps.find((step) => step.sessionId === candidate.sessionId);
+    if (bySessionId) return bySessionId.stepIndex;
+  }
+
+  if (candidate.sessionTitle) {
+    const bySessionTitle = steps.find((step) => step.sessionTitle === candidate.sessionTitle);
+    if (bySessionTitle) return bySessionTitle.stepIndex;
+  }
+
+  const byWindow = steps.find((step) => {
+    if (step.startedAtMs === null) return false;
+    const windowStart = step.startedAtMs;
+    const windowEnd = step.completedAtMs ?? Number.POSITIVE_INFINITY;
+    return candidate.createdAt >= windowStart && candidate.createdAt <= windowEnd;
+  });
+  if (byWindow) return byWindow.stepIndex;
+
+  return null;
+}
 
 /**
- * Build a merged chronological timeline for a job.
+ * Build a step-grouped chronological timeline for a job.
  *
- * Mixes root session activity (text parts → activity items, tool/patch parts →
- * tool-summary items) with sub-agent fork cards positioned at the child
- * session's creation time. Done child sessions also emit a completion card
- * positioned at the child's update time.
+ * Timeline attribution order is deterministic:
+ * 1) job_steps.sessionId identity
+ * 2) job_steps.sessionTitle match
+ * 3) step time window
+ * 4) unattributed bucket
  *
- * Items are sorted by createdAt ascending (chronological order).
- * Supports cursor-based pagination: items where createdAt > cursor.
+ * Child branches are represented as one lifecycle-aware object per child
+ * session ID (no separate completion item).
  */
 function getJobTimeline(
   jobId: string,
   options?: { cursor?: string; limit?: number },
-): TimelinePage | null {
+): GroupedTimelinePage | null {
   const job = getJob(jobId);
   if (!job) return null;
 
   const limit = options?.limit ?? 100;
   const cursorMs = options?.cursor ? Number(options.cursor) : 0;
 
-  const sessionTitles = parseSessionTitles(job.sessionTitles);
-  const items: TimelineItem[] = [];
+  const stepRefs: TimelineStepRef[] = getJobSteps(jobId).map((step) => ({
+    stepIndex: step.stepIndex,
+    command: step.command,
+    status: step.status,
+    sessionId: step.sessionId,
+    sessionTitle: step.sessionTitle,
+    startedAtMs: parseStepTime(step.startedAt),
+    completedAtMs: parseStepTime(step.completedAt),
+  }));
+
+  const queue: Array<{ sessionId: string; title: string; parentSessionId: string | null }> = [];
+  const queuedSessionIds = new Set<string>();
+
+  for (const title of parseSessionTitles(job.sessionTitles)) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId || queuedSessionIds.has(sessionId)) continue;
+    queue.push({ sessionId, title, parentSessionId: null });
+    queuedSessionIds.add(sessionId);
+  }
+
   const seenSessions = new Set<string>();
+  const sessionTitleById = new Map<string, string>();
+  const branchByChildSessionId = new Map<string, BranchLifecycleItem>();
+  const candidates: TimelineCandidate[] = [];
   let totalChildCount = 0;
 
-  for (const title of sessionTitles) {
-    const sessionId = findSessionByTitle(title);
-    if (!sessionId || seenSessions.has(sessionId)) continue;
-    seenSessions.add(sessionId);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    if (seenSessions.has(current.sessionId)) continue;
 
-    // Map root session parts → activity / tool-summary items
-    const parts = getSessionParts(sessionId);
+    seenSessions.add(current.sessionId);
+    sessionTitleById.set(current.sessionId, current.title);
+
+    const parts = getSessionParts(current.sessionId);
     for (const part of parts) {
-      if (part.type === 'text' || part.type === 'reasoning') {
-        if (part.text) {
-          items.push({
+      if ((part.type === 'text' || part.type === 'reasoning') && part.text) {
+        candidates.push({
+          item: {
             kind: 'activity',
-            sessionId,
+            sessionId: current.sessionId,
             partId: part.id,
             role: part.role,
             createdAt: part.createdAt,
             text: part.text,
-          });
-        }
-      } else if (part.type === 'tool' || part.type === 'patch') {
-        items.push({
-          kind: 'tool-summary',
-          sessionId,
-          partId: part.id,
+          },
           createdAt: part.createdAt,
-          tool: part.tool ?? part.type,
-          toolInput: part.toolInput,
-          toolStatus: part.toolStatus,
-          patchFiles: part.patchFiles,
+          sessionId: current.sessionId,
+          sessionTitle: current.title,
+        });
+        continue;
+      }
+
+      if (part.type === 'tool' || part.type === 'patch') {
+        candidates.push({
+          item: {
+            kind: 'tool-summary',
+            sessionId: current.sessionId,
+            partId: part.id,
+            createdAt: part.createdAt,
+            tool: part.tool ?? part.type,
+            toolInput: part.toolInput,
+            toolStatus: part.toolStatus,
+            patchFiles: part.patchFiles,
+          },
+          createdAt: part.createdAt,
+          sessionId: current.sessionId,
+          sessionTitle: current.title,
         });
       }
     }
 
-    // Map child sessions → fork cards + completion cards
-    const children = getChildSessions(sessionId);
+    const children = getChildSessions(current.sessionId);
     totalChildCount += children.length;
 
     for (const child of children) {
-      if (seenSessions.has(child.id)) continue;
-      seenSessions.add(child.id);
-
       const done = isSessionDone(child.id);
-      const msgCount = getAssistantMessageCount(child.id);
+      const messageCount = getAssistantMessageCount(child.id);
       const tokens = getSessionTokensRecursive(child.id);
       const models = getSessionModelsRecursive(child.id);
       const lastMsg = getLastMessage(child.id);
@@ -506,68 +584,106 @@ function getJobTimeline(
       const durationMs = child.timeUpdated > child.timeCreated
         ? child.timeUpdated - child.timeCreated
         : null;
+      const latestPreview = lastMsg?.content ? truncate(lastMsg.content, 200) : null;
+      const existing = branchByChildSessionId.get(child.id);
+      const completedAt = done && child.timeUpdated > child.timeCreated
+        ? child.timeUpdated
+        : (existing?.completedAt ?? null);
 
-      let latestPreview: string | null = null;
-      if (lastMsg?.content) {
-        latestPreview = truncate(lastMsg.content, 200);
-      }
-
-      // Fork card at child creation time (the fork point)
-      items.push({
+      branchByChildSessionId.set(child.id, {
         kind: 'fork-card',
         sessionId: child.id,
-        parentSessionId: sessionId,
+        parentSessionId: current.sessionId,
         title: child.title,
-        createdAt: child.timeCreated,
-        status: done ? 'done' : (msgCount > 0 ? 'active' : 'unknown'),
-        messageCount: msgCount,
+        createdAt: existing?.createdAt ?? child.timeCreated,
+        updatedAt: Math.max(existing?.updatedAt ?? child.timeUpdated, child.timeUpdated),
+        completedAt,
+        status: done ? 'done' : (messageCount > 0 ? 'active' : 'unknown'),
+        messageCount,
         tokenTotal,
         models,
         latestMessagePreview: latestPreview,
+        finalMessagePreview: done ? latestPreview : (existing?.finalMessagePreview ?? null),
         childCount: childChildren.length,
         durationMs,
       });
-
-      // Completion card at child update time (if done)
-      if (done && child.timeUpdated > child.timeCreated) {
-        items.push({
-          kind: 'completion-card',
-          sessionId: child.id,
-          title: child.title,
-          createdAt: child.timeUpdated,
-          status: 'done',
-          durationMs,
-          tokenTotal,
-          latestMessagePreview: latestPreview,
-        });
-      }
     }
   }
 
-  // Sort chronologically
-  items.sort((a, b) => a.createdAt - b.createdAt);
+  for (const branch of branchByChildSessionId.values()) {
+    candidates.push({
+      item: branch,
+      createdAt: branch.createdAt,
+      sessionId: branch.parentSessionId,
+      sessionTitle: sessionTitleById.get(branch.parentSessionId) ?? null,
+    });
+  }
 
-  // Apply cursor filter
+  candidates.sort((a, b) => a.createdAt - b.createdAt);
+
   const filtered = cursorMs > 0
-    ? items.filter((item) => item.createdAt > cursorMs)
-    : items;
-
-  // Apply limit
+    ? candidates.filter((candidate) => candidate.createdAt > cursorMs)
+    : candidates;
   const hasMore = filtered.length > limit;
   const page = filtered.slice(0, limit);
+  const flatItems = page.map((candidate) => candidate.item);
+  const nextCursor = page.length > 0 ? String(page[page.length - 1].createdAt) : null;
 
-  // Compute next cursor
-  const nextCursor = page.length > 0
-    ? String(page[page.length - 1].createdAt)
-    : null;
+  const groupsByStepIndex = new Map<number, StepTimelineGroup>();
+  for (const step of stepRefs) {
+    groupsByStepIndex.set(step.stepIndex, {
+      stepIndex: step.stepIndex,
+      command: step.command,
+      status: step.status,
+      sessionId: step.sessionId,
+      items: [],
+    });
+  }
+
+  const unattributed: StepTimelineGroup = {
+    stepIndex: null,
+    command: 'unattributed',
+    status: 'unattributed',
+    sessionId: null,
+    items: [],
+  };
+
+  for (const candidate of page) {
+    const attributedStepIndex = resolveStepIndex(candidate, stepRefs);
+    if (attributedStepIndex === null) {
+      unattributed.items.push(candidate.item);
+      continue;
+    }
+
+    const group = groupsByStepIndex.get(attributedStepIndex);
+    if (!group) {
+      unattributed.items.push(candidate.item);
+      continue;
+    }
+    group.items.push(candidate.item);
+  }
+
+  const groups: StepTimelineGroup[] = [];
+  for (const step of stepRefs) {
+    const group = groupsByStepIndex.get(step.stepIndex);
+    if (!group || group.items.length === 0) continue;
+    group.items.sort((a, b) => a.createdAt - b.createdAt);
+    groups.push(group);
+  }
+
+  if (unattributed.items.length > 0) {
+    unattributed.items.sort((a, b) => a.createdAt - b.createdAt);
+    groups.push(unattributed);
+  }
 
   return {
-    items: page,
+    groups,
+    items: flatItems,
     hasMore,
     nextCursor,
     sessionCount: seenSessions.size,
     childCount: totalChildCount,
-  };
+  } as GroupedTimelinePage & { items: StepTimelineItem[] };
 }
 
 // ── Mutation Wrappers ─────────────────────────────────────────────────────
