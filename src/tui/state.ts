@@ -36,6 +36,9 @@ export function createPilotState() {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [panelFocus, setPanelFocus] = createSignal<PanelFocus>('queue');
   const [detailJobId, setDetailJobId] = createSignal<string | null>(null);
+  const [detailSessionPath, setDetailSessionPath] = createSignal<string[]>([]);
+  const [detailSelectedChildIndex, setDetailSelectedChildIndex] = createSignal(0);
+  const [detailChildSessionIds, setDetailChildSessionIds] = createSignal<string[]>([]);
 
   // ── Overlay signals ───────────────────────────────────────────────────
   const [showHelp, setShowHelp] = createSignal(false);
@@ -105,6 +108,9 @@ export function createPilotState() {
     selectedIndex, setSelectedIndex,
     panelFocus, setPanelFocus,
     detailJobId, setDetailJobId,
+    detailSessionPath, setDetailSessionPath,
+    detailSelectedChildIndex, setDetailSelectedChildIndex,
+    detailChildSessionIds, setDetailChildSessionIds,
 
     // Overlays
     showHelp, setShowHelp,
@@ -137,6 +143,9 @@ export function createPilotState() {
         setDetailJobId(jobId);
         setView('detail');
         setFollowLog(true);
+        setDetailSessionPath([]);
+        setDetailSelectedChildIndex(0);
+        setDetailChildSessionIds([]);
       });
     },
 
@@ -145,8 +154,55 @@ export function createPilotState() {
       batch(() => {
         setView('dashboard');
         setDetailJobId(null);
+        setDetailSessionPath([]);
+        setDetailSelectedChildIndex(0);
+        setDetailChildSessionIds([]);
         setLogMessages([]);
       });
+    },
+
+    /** Sync currently visible child sessions for detail drill-in controls. */
+    setDetailChildren(sessionIds: string[]) {
+      batch(() => {
+        setDetailChildSessionIds(sessionIds);
+        setDetailSelectedChildIndex((idx) => {
+          if (sessionIds.length === 0) return 0;
+          return Math.min(Math.max(idx, 0), sessionIds.length - 1);
+        });
+      });
+    },
+
+    /** Move child-branch selection in detail view. */
+    moveDetailChildSelection(delta: number) {
+      const count = detailChildSessionIds().length;
+      if (count === 0) return;
+      setDetailSelectedChildIndex((idx) => Math.min(Math.max(idx + delta, 0), count - 1));
+    },
+
+    /** Drill into currently selected child session in detail view. */
+    drillIntoSelectedChild(): string | null {
+      const children = detailChildSessionIds();
+      if (children.length === 0) return null;
+      const index = detailSelectedChildIndex();
+      const nextSession = children[index];
+      if (!nextSession) return null;
+      batch(() => {
+        setDetailSessionPath((path) => [...path, nextSession]);
+        setDetailSelectedChildIndex(0);
+        setDetailChildSessionIds([]);
+      });
+      return nextSession;
+    },
+
+    /** Pop one nested detail level. Returns true when a level was popped. */
+    popDetailSessionPath(): boolean {
+      if (detailSessionPath().length === 0) return false;
+      batch(() => {
+        setDetailSessionPath((path) => path.slice(0, -1));
+        setDetailSelectedChildIndex(0);
+        setDetailChildSessionIds([]);
+      });
+      return true;
     },
 
     /** Toggle between dashboard and split view. */

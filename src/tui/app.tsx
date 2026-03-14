@@ -121,7 +121,13 @@ export function handleKeyPress(
 
   // Escape — close overlays / navigate back
   if (key.name === 'escape') {
-    if (state.view() !== 'dashboard') {
+    if (state.view() === 'detail') {
+      if (!state.popDetailSessionPath()) {
+        state.navigateBack();
+      }
+      return;
+    }
+    if (state.view() === 'split') {
       state.navigateBack();
     }
     return;
@@ -129,8 +135,34 @@ export function handleKeyPress(
 
   // Backspace — navigate back from detail/split view
   if (key.name === 'backspace' || key.name === 'delete') {
-    if (state.view() !== 'dashboard') {
+    if (state.view() === 'detail') {
+      if (!state.popDetailSessionPath()) {
+        state.navigateBack();
+      }
+      return;
+    }
+    if (state.view() === 'split') {
       state.navigateBack();
+      return;
+    }
+  }
+
+  // Detail view child drill-in navigation
+  if (state.view() === 'detail') {
+    const childCount = state.detailChildSessionIds().length;
+
+    if ((key.name === 'j' || key.name === 'down') && childCount > 0) {
+      state.moveDetailChildSelection(1);
+      return;
+    }
+
+    if ((key.name === 'k' || key.name === 'up') && childCount > 0) {
+      state.moveDetailChildSelection(-1);
+      return;
+    }
+
+    if (key.name === 'return') {
+      state.drillIntoSelectedChild();
       return;
     }
   }
