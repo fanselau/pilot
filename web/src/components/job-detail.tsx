@@ -1,13 +1,12 @@
 /**
  * Job detail component — merged chronological timeline view.
  *
- * Replaces the Phase 1 session-separated layout with a unified
- * TimelineStream, proactive action buttons in the header, and
- * retained StepTimeline for delegation step visibility.
+ * Presents proactive actions and a step-first timeline stream as
+ * the primary execution story.
  */
 
 import { useNavigate } from '@tanstack/react-router'
-import type { JobDetailSnapshot, JobStepSummary } from '@pilot/core/types.js'
+import type { JobDetailSnapshot } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -83,11 +82,6 @@ function formatTime(iso: string | null): string {
 
 function shortProject(project: string): string {
   return project.split('/').pop() ?? project
-}
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text
-  return text.slice(0, max).trimEnd() + '\u2026'
 }
 
 // ── Action button variant mapping ────────────────────────────────────────
@@ -212,55 +206,6 @@ function JobHeader({
   )
 }
 
-// ── Step Timeline ────────────────────────────────────────────────────────
-
-function StepTimeline({ steps }: { steps: JobStepSummary[] }) {
-  if (steps.length === 0) return null
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        Steps
-      </h3>
-      <Card>
-        <CardContent className="py-2">
-          <div className="divide-y divide-border/50">
-            {steps.map((step) => (
-              <div
-                key={step.stepIndex}
-                className="flex items-center gap-3 py-2"
-              >
-                <span className="shrink-0 font-mono text-xs text-muted-foreground w-6 text-right">
-                  {step.stepIndex}
-                </span>
-                <Badge variant={statusVariant(step.status)} size="sm">
-                  {step.status}
-                </Badge>
-                <div className="min-w-0 flex-1">
-                  <span className="text-sm font-medium">{step.command}</span>
-                  {step.args && (
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      {truncate(step.args, 60)}
-                    </span>
-                  )}
-                  {step.verdictReason && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                      {step.verdictReason}
-                    </p>
-                  )}
-                </div>
-                <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                  {formatDurationMs(step.durationMs)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
 // ── Main Component ───────────────────────────────────────────────────────
 
 interface JobDetailProps {
@@ -269,7 +214,7 @@ interface JobDetailProps {
 
 export function JobDetail({ snapshot }: JobDetailProps) {
   const navigate = useNavigate()
-  const { job, steps } = snapshot
+  const { job } = snapshot
 
   const isActive = job.status === 'running' || job.status === 'pending'
 
@@ -283,7 +228,6 @@ export function JobDetail({ snapshot }: JobDetailProps) {
   return (
     <div className="space-y-6">
       <JobHeader job={job} actionCtx={actionCtx} />
-      <StepTimeline steps={steps} />
       <TimelineStream jobId={job.id} isActive={isActive} />
     </div>
   )
