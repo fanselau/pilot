@@ -460,6 +460,32 @@ describe('getSessionChildSummaries', () => {
 
     expect(summaries).toHaveLength(0);
   });
+
+  it('returns correct sessionIds for drill-in even when children share title prefix', () => {
+    // Children with similar titles but distinct IDs — verifies sessionId comes from child.id, not title
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-parent') {
+        return [
+          { id: 'real-id-alpha', title: 'Worker-1', timeCreated: 1000, timeUpdated: 2000 },
+          { id: 'real-id-beta', title: 'Worker-1', timeCreated: 1100, timeUpdated: 2100 },
+        ];
+      }
+      return [];
+    });
+
+    const summaries = getSessionChildSummaries('sess-parent');
+
+    expect(summaries).toHaveLength(2);
+    // Each SessionSummary has a unique sessionId matching the child's real ID
+    expect(summaries[0].sessionId).toBe('real-id-alpha');
+    expect(summaries[1].sessionId).toBe('real-id-beta');
+    // Both have correct parentSessionId
+    expect(summaries[0].parentSessionId).toBe('sess-parent');
+    expect(summaries[1].parentSessionId).toBe('sess-parent');
+    // sessionIds are unique despite same title
+    const ids = summaries.map((s) => s.sessionId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
 
 describe('getJobDetailEvents', () => {
@@ -798,6 +824,59 @@ describe('getJobTimeline', () => {
     // All three items are present — sort is stable (preserves insertion order for equal timestamps)
     expect(page.items).toHaveLength(3);
     expect(page.items.every((i) => i.createdAt === 1000)).toBe(true);
+  });
+
+  it('produces unique fork-card sessionIds for multiple children', () => {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['root']) }),
+    );
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetSessionParts.mockReturnValue([]); // no root activity needed
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [
+          { id: 'child-aaa', title: 'Worker A', timeCreated: 1000, timeUpdated: 2000 },
+          { id: 'child-bbb', title: 'Worker B', timeCreated: 1100, timeUpdated: 2100 },
+          { id: 'child-ccc', title: 'Worker C', timeCreated: 1200, timeUpdated: 2200 },
+        ];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(5);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 100, output: 50, reasoning: 10, cacheRead: 5, cacheWrite: 2,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue({
+      id: 'msg-done', role: 'assistant', content: 'Done', createdAt: 2000,
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // Extract fork-card items
+    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
+    expect(forkCards).toHaveLength(3);
+
+    // Verify sessionIds match child IDs
+    const forkSessionIds = forkCards.map((fc) =>
+      fc.kind === 'fork-card' ? fc.sessionId : '',
+    );
+    expect(forkSessionIds).toEqual(['child-aaa', 'child-bbb', 'child-ccc']);
+
+    // All sessionIds are unique (no duplicates)
+    expect(new Set(forkSessionIds).size).toBe(forkSessionIds.length);
+
+    // Each fork card has the correct parentSessionId
+    for (const fc of forkCards) {
+      if (fc.kind === 'fork-card') {
+        expect(fc.parentSessionId).toBe('sess-root');
+      }
+    }
+
+    // Fork cards are sorted chronologically by createdAt
+    const forkTimestamps = forkCards.map((fc) => fc.createdAt);
+    expect(forkTimestamps).toEqual([1000, 1100, 1200]);
   });
 });
 
