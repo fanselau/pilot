@@ -1155,9 +1155,9 @@ Read `requirements/gsd-02-config-preseeding.md` and `.planning/phases/65-gsd-con
 **Plans:** 3 plans
 
 Plans:
-- [ ] 66-01-PLAN.md — Types + delegation rewrite (DelegationIntent/DelegationResult types, delegate.ts rewrite, src/prompts/delegate.md prompt)
-- [ ] 66-02-PLAN.md — Runner intent routing (step loop → executeIntent dispatch, gap retry, milestone loop, info/db type updates)
-- [ ] 66-03-PLAN.md — Tests for all Phase 66 changes (parseIntentOutput coverage, removed function cleanup, full suite pass)
+- [x] 66-01-PLAN.md — Types + delegation rewrite (DelegationIntent/DelegationResult types, delegate.ts rewrite, src/prompts/delegate.md prompt)
+- [x] 66-02-PLAN.md — Runner intent routing (step loop → executeIntent dispatch, gap retry, milestone loop, info/db type updates)
+- [x] 66-03-PLAN.md — Tests for all Phase 66 changes (parseIntentOutput coverage, removed function cleanup, full suite pass)
 
 Wave structure:
 - Wave 1: 66-01 (types + delegation module + prompt)
