@@ -1176,7 +1176,7 @@ Read requirements/gsd-03-delegation-redesign.md for full spec.
 
 Plans:
 - [x] 67-01-PLAN.md — Core DB detection: `getSessionState()` in opencode-db.ts with hung-on-prompt/hung-on-tool/crashed/working/done states (TDD)
-- [ ] 67-02-PLAN.md — Error types + kill behavior: `HungSessionError` class, SIGTERM→SIGKILL kill sequence, PID cleanup, fix orphan bug in timeout path
+- [x] 67-02-PLAN.md — Error types + kill behavior: `HungSessionError` class, SIGTERM→SIGKILL kill sequence, PID cleanup, fix orphan bug in timeout path
 - [ ] 67-03-PLAN.md — Poll loop integration: replace `isSessionDone()` with `getSessionState()` in `spawnAndWait()`, state-based routing
 - [ ] 67-04-PLAN.md — Retry integration: add retry_budget/retry_count/hung_count to Job type + DB schema, hung retry logic in runner workflow, same-error escalation, notification on budget exhaustion
 

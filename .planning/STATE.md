@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 67 (Session Blocker Handling — DB-Based Hung Detection)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-15 - Completed 67-01-PLAN.md (getSessionState 5-state DB detection)
+Last activity: 2026-03-15 - Completed 67-02-PLAN.md (HungSessionError + killHungSession + orphan bug fix)
 
-Progress: █████████████████████░ 79/86 plans (92%)
+Progress: █████████████████████░ 80/86 plans (93%)
 
 ## Project Reference
 
@@ -785,9 +785,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 67-01 | DB error in getSessionState() returns 'working' | Safe fallback — don't kill on query failure |
 | 67-01 | pidAlive parameter defaults to true in getSessionState() | Caller does OS PID check; function stays pure DB query |
 | 67-01 | step-finish reason='tool-calls' falls through to pending tool check | Not a terminal state; session starts another step after tool-calls |
+| 67-02 | killHungSession is private on Runner (not exported) | Only the poll loop integration (Plan 03) calls it; no reason to export |
+| 67-02 | Both timeout paths in spawnAndWait() fixed for orphan bug | sessionFound=false and timeout expiry both call killHungSession before throw |
+| 67-02 | log() private helper added to Runner | Consistent [runner] prefix without repeating process.stderr.write boilerplate |
 
 ## Session Continuity
 
-Last session: 2026-03-15 23:48 UTC
-Stopped at: Completed 67-01-PLAN.md (getSessionState 5-state DB detection, TDD RED+GREEN)
+Last session: 2026-03-15 23:53 UTC
+Stopped at: Completed 67-02-PLAN.md (HungSessionError + killHungSession + orphan bug fix)
 Resume file: None
