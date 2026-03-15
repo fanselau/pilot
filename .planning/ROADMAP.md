@@ -1111,12 +1111,19 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-phase-63-step-first-bran
 
 ### Phase 64: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
 
-**Goal:** [To be planned]
+**Goal:** Replace pilot-gsd symlink-based GSD installation with upstream `get-shit-done-cc` npm package installer. Remove all gsdDir/pilot-gsd infrastructure from types, config, and CLI. All GSD files installed per-project via upstream installer.
 **Depends on:** Phase 63
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 64 to break down)
+- [ ] 64-01-PLAN.md — Foundation cleanup: remove gsdDir from types/config/CLI + add get-shit-done-cc dependency
+- [ ] 64-02-PLAN.md — Rewrite setup.ts (upstream installer + migration), update.ts (npm update + per-project), doctor.ts (upstream checks)
+- [ ] 64-03-PLAN.md — Update all tests for new installer-based GSD workflow
+
+Wave structure:
+- Wave 1: 64-01 (foundation cleanup — types, config, package.json)
+- Wave 2: 64-02 (implementation — setup, update, doctor rewrites, depends on 64-01)
+- Wave 3: 64-03 (tests — full suite update, depends on 64-01 + 64-02)
 
 **Details:**
-[To be added during planning]
+Read requirements/gsd-01-installation-switch.md for full spec.
