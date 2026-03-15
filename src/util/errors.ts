@@ -12,3 +12,32 @@
 export function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+
+// ── HungSessionError ───────────────────────────────────────────────────────
+
+export type HungReason = 'interactive-prompt' | 'stuck-tool' | 'unknown';
+
+/**
+ * Thrown when a session is detected as hung and must be killed.
+ * Carries enough context for the runner to log and notify meaningfully.
+ */
+export class HungSessionError extends Error {
+  readonly hungReason: HungReason;
+  readonly lastToolCall: string | undefined;
+  readonly sessionTitle: string;
+
+  constructor(opts: {
+    hungReason: HungReason;
+    lastToolCall?: string;
+    sessionTitle: string;
+    message?: string;
+  }) {
+    const msg = opts.message ??
+      `Session hung on ${opts.hungReason}${opts.lastToolCall ? ` (tool: ${opts.lastToolCall})` : ''}: ${opts.sessionTitle}`;
+    super(msg);
+    this.name = 'HungSessionError';
+    this.hungReason = opts.hungReason;
+    this.lastToolCall = opts.lastToolCall;
+    this.sessionTitle = opts.sessionTitle;
+  }
+}
