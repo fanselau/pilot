@@ -78,7 +78,6 @@ function buildConfigContent(opts: {
 }): Record<string, unknown> {
   return {
     projectDir: opts.projectDir,
-    gsdDir: null,
     runner: {
       maxParallel: null,
     },

@@ -14,7 +14,6 @@
  */
 export interface ConfigFileSchema {
   projectDir?: string;
-  gsdDir?: string | null;
   runner?: {
     maxParallel?: number | null;  // null = auto-detect from RAM
     queueGraceSeconds?: number;
@@ -57,7 +56,6 @@ export interface PilotConfig {
   pilotDir: string;          // ~/.pilot/
   pilotDbPath: string;       // ~/.pilot/pilot.db
   projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
-  gsdDir: string;            // ./pilot-gsd (PILOT_GSD_DIR)
   maxParallel: number;       // auto from RAM, default 1
   queueGraceSeconds: number; // minimum queue age before launch eligibility, default 120
   sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)

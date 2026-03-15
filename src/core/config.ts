@@ -165,37 +165,6 @@ function loadConfigFile(): ConfigFileSchema | null {
   return cachedFileConfig;
 }
 
-// ── gsdDir resolution ─────────────────────────────────────────────────────
-
-function resolveGsdDir(home: string, fileConfig: ConfigFileSchema | null): string {
-  // 1. Explicit env var override (highest priority)
-  if (process.env.PILOT_GSD_DIR) {
-    return expandTilde(process.env.PILOT_GSD_DIR);
-  }
-
-  // 2. Config file
-  if (fileConfig?.gsdDir) {
-    return expandTilde(fileConfig.gsdDir);
-  }
-
-  // 3. Submodule location: <pilot_repo_root>/pilot-gsd/
-  //    Works both from source (src/core/ → ../../) and dist (dist/core/ → ../../)
-  const pilotRoot = path.resolve(import.meta.dirname, '..', '..');
-  const submodulePath = path.join(pilotRoot, 'pilot-gsd');
-  if (existsSync(submodulePath)) {
-    return submodulePath;
-  }
-
-  // 4. Home directory fallback for standalone installs
-  const homeFallback = path.join(home, 'pilot-gsd');
-  if (existsSync(homeFallback)) {
-    return homeFallback;
-  }
-
-  // 5. Return submodule path as default — doctor/setup will surface the error
-  return submodulePath;
-}
-
 // ── Main getConfig ────────────────────────────────────────────────────────
 
 function getConfig(): PilotConfig {
@@ -208,9 +177,6 @@ function getConfig(): PilotConfig {
     ?? fileConfig?.projectDir
     ?? `${home}/dev`,
   );
-
-  // ── gsdDir: env > config > submodule > home fallback
-  const gsdDir = resolveGsdDir(home, fileConfig);
 
   // ── maxParallel: env > config > auto-detect from RAM
   const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
@@ -286,7 +252,6 @@ function getConfig(): PilotConfig {
     pilotDir,
     pilotDbPath,
     projectDir,
-    gsdDir,
     maxParallel,
     queueGraceSeconds,
     sessionMemoryMaxMb,
@@ -323,7 +288,6 @@ function getConfigFileDefaults(): ConfigFileDefaults {
 /** Mapping from PilotConfig key to the env var that sets it. */
 const ENV_VAR_MAP: Record<string, string> = {
   projectDir: 'PILOT_PROJECT_DIR',
-  gsdDir: 'PILOT_GSD_DIR',
   maxParallel: 'PILOT_MAX_PARALLEL',
   queueGraceSeconds: 'PILOT_QUEUE_GRACE_SECONDS',
   sessionMemoryMaxMb: 'PILOT_SESSION_MEMORY_MAX_MB',
@@ -341,7 +305,6 @@ const ENV_VAR_MAP: Record<string, string> = {
 /** Config file key paths for each PilotConfig key. */
 const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
   projectDir: (fc) => fc.projectDir,
-  gsdDir: (fc) => fc.gsdDir,
   maxParallel: (fc) => fc.runner?.maxParallel,
   queueGraceSeconds: (fc) => fc.runner?.queueGraceSeconds,
   sessionMemoryMaxMb: (fc) => fc.memory?.sessionMaxMb,
@@ -357,7 +320,7 @@ const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
 };
 
 /** Fields that are auto-detected when neither env var nor config file set them. */
-const AUTO_DETECT_FIELDS = new Set(['maxParallel', 'gsdDir']);
+const AUTO_DETECT_FIELDS = new Set(['maxParallel']);
 
 /**
  * Returns the source of a config value: 'env', 'config', 'default', or 'auto-detect'.

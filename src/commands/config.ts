@@ -38,7 +38,6 @@ function formatSource(source: ConfigSource, key: string): string {
     case 'env': {
       const envVarMap: Record<string, string> = {
         projectDir: 'PILOT_PROJECT_DIR',
-        gsdDir: 'PILOT_GSD_DIR',
         maxParallel: 'PILOT_MAX_PARALLEL',
         queueGraceSeconds: 'PILOT_QUEUE_GRACE_SECONDS',
         sessionMemoryMaxMb: 'PILOT_SESSION_MEMORY_MAX_MB',
@@ -74,7 +73,6 @@ const CONFIG_DISPLAY: Array<{ key: string; unit?: string; secret?: boolean }> = 
   { key: 'pilotDir' },
   { key: 'pilotDbPath' },
   { key: 'projectDir' },
-  { key: 'gsdDir' },
   { key: 'maxParallel' },
   { key: 'queueGraceSeconds', unit: 's' },
   { key: 'sessionMemoryMaxMb', unit: 'MB' },
@@ -94,7 +92,6 @@ const CONFIG_DISPLAY: Array<{ key: string; unit?: string; secret?: boolean }> = 
 function getDefaultConfigFileContent(): Record<string, unknown> {
   return {
     projectDir: '~/dev',
-    gsdDir: null,
     runner: {
       maxParallel: null,
       queueGraceSeconds: 120,
@@ -135,7 +132,6 @@ interface FieldSpec {
 
 const CONFIG_FIELD_SPECS: Record<string, FieldSpec> = {
   'projectDir': { type: 'string', path: ['projectDir'] },
-  'gsdDir': { type: 'nullable-string', path: ['gsdDir'] },
   'runner.maxParallel': { type: 'nullable-number', path: ['runner', 'maxParallel'], min: 1 },
   'runner.queueGraceSeconds': { type: 'number', path: ['runner', 'queueGraceSeconds'], min: 0 },
   'memory.sessionMaxMb': { type: 'number', path: ['memory', 'sessionMaxMb'], min: 1 },
@@ -241,7 +237,6 @@ const CONFIG_ONLY_KEYS: Record<string, (defaults: ReturnType<typeof getConfigFil
 /** Map dot-notation keys to PilotConfig keys (for resolved values). */
 const DOT_TO_PILOT_KEY: Record<string, string> = {
   'projectDir': 'projectDir',
-  'gsdDir': 'gsdDir',
   'runner.maxParallel': 'maxParallel',
   'runner.queueGraceSeconds': 'queueGraceSeconds',
   'memory.sessionMaxMb': 'sessionMemoryMaxMb',
