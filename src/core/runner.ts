@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSy
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { getConfig, resolveProjectDir } from './config.js';
+import { ensureAutonomousGsdConfig } from './gsd-config.js';
 import {
   markCompleted,
   markFailed,
@@ -957,6 +958,7 @@ class Runner {
     }
     await enforceSpawnRateLimit();
     await validateProjectConfig(cwd);
+    await ensureAutonomousGsdConfig(cwd);
 
     // Resolve top-level model for --model flag
     // Judge/verify sessions use 'judge' scope (cheap tier); all others use job scope from activeJobs
