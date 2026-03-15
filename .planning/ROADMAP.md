@@ -1128,3 +1128,34 @@ Wave structure:
 
 **Details:**
 Read requirements/gsd-01-installation-switch.md for full spec.
+
+### Phase 65: GSD Config Pre-seeding for Autonomous Execution
+
+**Goal:** Ensure every Pilot-managed project gets and keeps an autonomous-safe `.planning/config.json` (`mode: yolo`, `workflow.auto_advance: true`, and required workflow defaults) so headless phase execution never blocks on interactive prompts while preserving user custom keys via deep merge + explicit PILOT_WINS overrides.
+**Depends on:** Phase 64
+**Requirements:** GSD02-01, GSD02-02, GSD02-03, GSD02-04, GSD02-05, GSD02-06, GSD02-07
+**Plans:** 3 plans
+
+Plans:
+- [ ] 65-01-PLAN.md — Core `gsd-config` helper with defaults, deep merge policy, PILOT_WINS enforcement, and locked atomic writes
+- [ ] 65-02-PLAN.md — Setup integration: seed/merge `.planning/config.json` after installer flow with setup regression coverage
+- [ ] 65-03-PLAN.md — Runner enforcement: pre-spawn config assertion + post-`new-project` re-apply with runner regression coverage
+
+Wave structure:
+- Wave 1: 65-01 (core config lifecycle helper + unit tests)
+- Wave 2: 65-02 + 65-03 in parallel (setup integration and runner enforcement, both depend on 65-01)
+
+**Details:**
+Read `requirements/gsd-02-config-preseeding.md` and `.planning/phases/65-gsd-config-pre-seeding-for-autonomous-execution/65-RESEARCH.md` for full spec.
+
+### Phase 66: Delegation Pipeline Redesign — Intent-Based Architecture
+
+**Goal:** [To be planned]
+**Depends on:** Phase 65
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 66 to break down)
+
+**Details:**
+[To be added during planning]

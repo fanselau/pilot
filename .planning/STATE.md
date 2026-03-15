@@ -6,7 +6,7 @@
 ## Current Position
 
 Phase: 65 (GSD Config Pre-seeding for Autonomous Execution)
-**Next Phase:** TBD (Phase 65 currently in progress)
+**Next Phase:** Phase 66 (Delegation Pipeline Redesign — Intent-Based Architecture)
 Plan: 3 of 3 in current phase
 Status: Phase complete
 Last activity: 2026-03-15 - Completed 65-03-PLAN.md (runner runtime config assertion + lifecycle reapply coverage)
@@ -299,6 +299,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 63 added: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
 - Phase 64 added: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
 - Phase 65 added: GSD Config Pre-seeding for Autonomous Execution
+- Phase 66 added: Delegation Pipeline Redesign — Intent-Based Architecture
 
 ## Decisions
 
