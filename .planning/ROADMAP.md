@@ -1114,11 +1114,12 @@ Read `/home/luca/.openclaw/workspace/requirements/pilot-phase-63-step-first-bran
 **Goal:** Replace pilot-gsd symlink-based GSD installation with upstream `get-shit-done-cc` npm package installer. Remove all gsdDir/pilot-gsd infrastructure from types, config, and CLI. All GSD files installed per-project via upstream installer.
 **Depends on:** Phase 63
 **Plans:** 3 plans
+**Status:** Complete (2026-03-15)
 
 Plans:
-- [ ] 64-01-PLAN.md — Foundation cleanup: remove gsdDir from types/config/CLI + add get-shit-done-cc dependency
-- [ ] 64-02-PLAN.md — Rewrite setup.ts (upstream installer + migration), update.ts (npm update + per-project), doctor.ts (upstream checks)
-- [ ] 64-03-PLAN.md — Update all tests for new installer-based GSD workflow
+- [x] 64-01-PLAN.md — Foundation cleanup: remove gsdDir from types/config/CLI + add get-shit-done-cc dependency
+- [x] 64-02-PLAN.md — Rewrite setup.ts (upstream installer + migration), update.ts (npm update + per-project), doctor.ts (upstream checks)
+- [x] 64-03-PLAN.md — Update all tests for new installer-based GSD workflow
 
 Wave structure:
 - Wave 1: 64-01 (foundation cleanup — types, config, package.json)

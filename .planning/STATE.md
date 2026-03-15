@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 64 (GSD Installation Switch — Replace pilot-gsd with Vanilla GSD)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-15 - Completed 64-02-PLAN.md (setup/update/doctor rewrite with upstream installer)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-15 - Completed 64-03-PLAN.md (test suite updated for upstream installer workflow)
 
-Progress: ████████████████████░ 71/76 plans (93%)
+Progress: █████████████████████ 72/76 plans (95%)
 
 ## Project Reference
 
@@ -755,9 +755,11 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 64-02 | Missing package.json warns + skips GSD only; rest of setup continues | GSD installer requires Node.js project; other setup steps (opencode.json, .gitignore) are still useful |
 | 64-02 | bun update used in update.ts for get-shit-done-cc upgrade | Pilot uses bun as runtime; consistent with project toolchain |
 | 64-02 | verifySetup() accepts real directories as valid GSD state (not requiring symlinks) | Post-migration projects have real dirs; symlinks are legacy pilot-gsd pattern |
+| 64-03 | vi.importActual incompatible with bun — use direct module imports in mocks | bun's mock system doesn't support vi.importActual; spread from direct import instead |
+| 64-03 | Installer timeout test uses exitCode:null (not throw) — matches reject:false execa behavior | With reject:false, execa returns error result not exception; null != 0 triggers error path |
 
 ## Session Continuity
 
-Last session: 2026-03-15 20:07 UTC
-Stopped at: Completed 64-02-PLAN.md
+Last session: 2026-03-15 20:24 UTC
+Stopped at: Completed 64-03-PLAN.md (Phase 64 complete)
 Resume file: None
