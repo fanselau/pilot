@@ -1,18 +1,18 @@
 /**
- * Project setup: symlinks, opencode.json, .gitignore, git init.
+ * Project setup: GSD commands via upstream installer, opencode.json, .gitignore, git init.
  *
- * Powers `pilot setup <dir>` by creating the .opencode/ directory structure
- * with symlinks to pilot-gsd resources, generating the permissive
- * opencode.json config, and ensuring .gitignore and git are set up.
+ * Powers `pilot setup <dir>` by invoking the upstream get-shit-done-cc installer
+ * in the project directory, generating the permissive opencode.json config,
+ * and ensuring .gitignore and git are set up.
+ *
+ * Migration: detects and removes old pilot-gsd symlinks before running installer.
  *
  * Pure core module — no UI dependencies.
  */
 
-import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdir, symlink, readlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
-import { getConfig } from './config.js';
 import { errMsg } from '../util/errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -92,20 +92,19 @@ async function isDirectory(filePath: string): Promise<boolean> {
  *
  * Creates:
  * 1. The project directory (if needed)
- * 2. .opencode/ directory with symlinks to pilot-gsd
+ * 2. .opencode/ directory with GSD commands via upstream installer
  * 3. opencode.json with permissive permissions
  * 4. .gitignore entry for .opencode/
  * 5. git init (if not already a repo)
  *
- * With options.refresh=true: re-creates symlinks pointing to current gsdDir
- * and deep-merges opencode.json template into existing config (adds missing
- * fields without overwriting user values). With options.force=true alongside
- * refresh, overwrites opencode.json entirely with template.
+ * With options.refresh=true: re-runs the upstream installer and deep-merges
+ * opencode.json template into existing config (adds missing fields without
+ * overwriting user values). With options.force=true alongside refresh,
+ * overwrites opencode.json entirely with template.
  *
  * Without options: never overwrites existing opencode.json (backward compatible).
  */
 async function setupProject(dir: string, options?: SetupOptions): Promise<SetupResult> {
-  const config = getConfig();
   const absDir = path.resolve(dir);
   const result: SetupResult = {
     created: [],
@@ -132,74 +131,91 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     return result;
   }
 
-  // 3. Create symlinks
-  const symlinks: Array<{ name: string; target: string }> = [
-    { name: 'command', target: path.join(config.gsdDir, 'commands') },
-    { name: 'agents', target: path.join(config.gsdDir, 'agents') },
-    { name: 'get-shit-done', target: path.join(config.gsdDir, 'get-shit-done') },
-  ];
+  // 3. Migration cleanup: remove old pilot-gsd symlinks before running installer
+  //    This ensures the installer can create real directories/files in their place.
 
-  for (const link of symlinks) {
-    const linkPath = path.join(opencodeDir, link.name);
-
-    // Check if target exists
-    if (!(await isDirectory(link.target))) {
-      result.errors.push(`Symlink target not found: ${link.target}`);
-      continue;
-    }
-
-    // Check if path already exists — distinguish symlinks from real directories
-    if (await exists(linkPath)) {
-      try {
-        const linkStats = await lstat(linkPath);
-        if (linkStats.isSymbolicLink()) {
-          if (options?.refresh) {
-            // Refresh mode: delete and re-create symlink pointing to current gsdDir
-            try {
-              await unlink(linkPath);
-              await symlink(link.target, linkPath);
-              result.created.push(`Refreshed .opencode/${link.name}/ → ${link.target}`);
-            } catch (err: unknown) {
-              const msg = errMsg(err);
-              result.errors.push(`Failed to refresh symlink .opencode/${link.name}/: ${msg}`);
-            }
-          } else {
-            result.skipped.push(`.opencode/${link.name}/ (already exists)`);
-          }
-        } else {
-          result.skipped.push(
-            `.opencode/${link.name}/ exists as real directory (not symlink) — skipping to avoid data loss`,
-          );
-        }
-      } catch {
-        result.skipped.push(`.opencode/${link.name}/ (already exists)`);
-      }
-      continue;
-    }
-
+  // 3a. Directory-level symlinks in .opencode/ that point to pilot-gsd
+  for (const name of ['command', 'agents', 'get-shit-done']) {
+    const linkPath = path.join(opencodeDir, name);
     try {
-      await symlink(link.target, linkPath);
-      result.created.push(`.opencode/${link.name}/ → ${link.target}`);
-    } catch (err: unknown) {
-      const msg = errMsg(err);
-      result.errors.push(`Failed to create symlink .opencode/${link.name}/: ${msg}`);
+      const linkStats = await lstat(linkPath);
+      if (linkStats.isSymbolicLink()) {
+        const target = await readlink(linkPath);
+        if (target.includes('pilot-gsd')) {
+          await unlink(linkPath);
+          result.created.push(`Removed old pilot-gsd symlink: .opencode/${name}/`);
+        }
+      }
+    } catch {
+      // Path doesn't exist or can't be stat'd — nothing to clean up
     }
   }
 
-  // 3b. Validate that the linked command directory has the expected flat layout.
-  // gsd-delegate.md is a sentinel — if it's missing, the GSD installation is outdated.
-  const commandTarget = path.join(config.gsdDir, 'commands');
-  const delegatePath = path.join(commandTarget, 'gsd-delegate.md');
-  if (!existsSync(delegatePath)) {
-    result.errors.push(
-      `GSD delegate command not found. Your pilot-gsd installation may be outdated.\n` +
-      `  Expected: ${delegatePath}\n` +
-      `  Hint: Update pilot-gsd submodule or set gsdDir in ~/.pilot/config.json to a working fork.\n` +
-      `  The correct layout has flat gsd-*.md files in ${commandTarget}/`,
-    );
-    return result;
+  // 3b. File-level symlinks inside .opencode/command/ or .opencode/agents/ that point to pilot-gsd
+  for (const dirName of ['command', 'agents']) {
+    const subDir = path.join(opencodeDir, dirName);
+    try {
+      const subDirStats = await lstat(subDir);
+      // Only scan if it's a real directory (not a symlink — those were handled above)
+      if (!subDirStats.isSymbolicLink() && subDirStats.isDirectory()) {
+        const entries = await readdir(subDir);
+        for (const entry of entries) {
+          const entryPath = path.join(subDir, entry);
+          try {
+            const entryStats = await lstat(entryPath);
+            if (entryStats.isSymbolicLink()) {
+              const target = await readlink(entryPath);
+              if (target.includes('pilot-gsd')) {
+                await unlink(entryPath);
+              }
+            }
+          } catch {
+            // Can't stat entry — skip
+          }
+        }
+      }
+    } catch {
+      // Directory doesn't exist — nothing to scan
+    }
   }
-  result.created.push(`Verified GSD command layout: ${commandTarget}`);
+
+  // 3c. Check for package.json — GSD installer requires a Node.js project
+  const packageJsonPath = path.join(absDir, 'package.json');
+  const hasPackageJson = await exists(packageJsonPath);
+  if (!hasPackageJson) {
+    result.errors.push(
+      'Skipping GSD installation: no package.json found in project (GSD installer requires a Node.js project)',
+    );
+    // Do NOT return early — continue with opencode.json, .gitignore, git init, shell exposure
+  } else {
+    // 3d. Run upstream installer
+    const installerBin = path.join(
+      path.resolve(import.meta.dirname, '..', '..'),
+      'node_modules', '.bin', 'get-shit-done-cc',
+    );
+    const { stdout: _installerStdout, stderr: installerStderr, exitCode } = await execa(installerBin, ['--opencode', '--local'], {
+      cwd: absDir,
+      timeout: 60_000,
+      reject: false,
+    });
+
+    if (exitCode !== 0) {
+      result.errors.push(`GSD installer failed: ${installerStderr.trim()}`);
+    } else {
+      result.created.push('GSD commands installed via get-shit-done-cc');
+    }
+
+    // 3e. Validate installation — check sentinel files
+    const helpMd = path.join(opencodeDir, 'command', 'gsd-help.md');
+    if (!(await exists(helpMd))) {
+      result.errors.push('gsd-help.md not found after installation — installer may have failed');
+    }
+
+    const toolsCjs = path.join(opencodeDir, 'get-shit-done', 'bin', 'gsd-tools.cjs');
+    if (!(await exists(toolsCjs))) {
+      result.errors.push('gsd-tools.cjs not found after installation — installer may have failed');
+    }
+  }
 
   // 4. Link project commands into .opencode/command/ (only for real dirs, not symlinks)
   const commandDir = path.join(opencodeDir, 'command');
@@ -348,8 +364,8 @@ interface VerifySetupResult {
  *
  * Checks:
  * 1. .opencode/ (or .claude/) directory exists
- * 2. Expected symlinks exist AND resolve to valid targets
- * 3. Entries in config dir are symlinks (not real files/dirs)
+ * 2. Expected GSD directories (command, agents, get-shit-done) exist and are accessible
+ * 3. gsd-help.md sentinel exists (confirms upstream installer ran)
  * 4. opencode.json (or claude.json) exists and is valid JSON
  */
 async function verifySetup(dir: string): Promise<VerifySetupResult> {
@@ -383,70 +399,62 @@ async function verifySetup(dir: string): Promise<VerifySetupResult> {
       detail: `${configDirName}/ exists`,
     });
 
-    // 2. Check symlinks
-    const expectedLinks = ['command', 'agents', 'get-shit-done'];
+    // 2. Check GSD directories exist (real directories OR symlinks both valid post-migration)
+    const expectedDirs = ['command', 'agents', 'get-shit-done'];
 
-    for (const linkName of expectedLinks) {
-      const linkPath = path.join(foundConfigDir, linkName);
+    for (const dirName of expectedDirs) {
+      const dirPath = path.join(foundConfigDir, dirName);
 
       try {
-        const linkStats = await lstat(linkPath);
+        const dirStats = await lstat(dirPath);
 
-        if (!linkStats.isSymbolicLink()) {
+        if (dirStats.isDirectory() || dirStats.isSymbolicLink()) {
+          // Verify it's accessible (resolves for symlinks)
+          try {
+            await realpath(dirPath);
+            findings.push({
+              status: 'pass',
+              label: `${configDirName}/${dirName}`,
+              detail: 'exists',
+            });
+          } catch {
+            findings.push({
+              status: 'fail',
+              label: `${configDirName}/${dirName}`,
+              detail: 'broken symlink (target does not exist) — run: pilot setup --refresh',
+            });
+          }
+        } else {
           findings.push({
             status: 'warn',
-            label: `${configDirName}/${linkName}`,
-            detail: 'exists as real directory/file (not a symlink)',
-          });
-          continue;
-        }
-
-        // Check symlink resolves
-        try {
-          const resolved = await realpath(linkPath);
-          findings.push({
-            status: 'pass',
-            label: `${configDirName}/${linkName}`,
-            detail: `→ ${resolved}`,
-          });
-        } catch {
-          findings.push({
-            status: 'fail',
-            label: `${configDirName}/${linkName}`,
-            detail: 'broken symlink (target does not exist)',
+            label: `${configDirName}/${dirName}`,
+            detail: 'exists but is not a directory — run: pilot setup --refresh',
           });
         }
       } catch {
         findings.push({
           status: 'fail',
-          label: `${configDirName}/${linkName}`,
-          detail: 'not found',
+          label: `${configDirName}/${dirName}`,
+          detail: 'not found — run: pilot setup --refresh',
         });
       }
     }
 
-    // 3. Check for unexpected real files/dirs (not symlinks) in config dir
+    // 3. Check gsd-help.md sentinel (indicates upstream installer ran successfully)
+    const helpMdPath = path.join(foundConfigDir, 'command', 'gsd-help.md');
     try {
-      const entries = await readdir(foundConfigDir);
-      for (const entry of entries) {
-        if (expectedLinks.includes(entry)) continue; // Already checked above
-
-        const entryPath = path.join(foundConfigDir, entry);
-        try {
-          const entryStats = await lstat(entryPath);
-          if (!entryStats.isSymbolicLink()) {
-            findings.push({
-              status: 'warn',
-              label: `${configDirName}/${entry}`,
-              detail: 'real file/directory (expected symlink or not expected at all)',
-            });
-          }
-        } catch {
-          // Can't stat — skip
-        }
-      }
+      await access(helpMdPath);
+      findings.push({
+        status: 'pass',
+        label: 'gsd-help.md',
+        detail: 'GSD commands installed',
+      });
     } catch {
-      // Can't read dir — skip
+      findings.push({
+        status: 'fail',
+        label: 'gsd-help.md',
+        detail: 'not found — run: pilot setup --refresh',
+      });
     }
   }
 

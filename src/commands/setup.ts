@@ -1,7 +1,7 @@
 /**
  * `pilot setup <dir>` — Set up a project directory for Pilot.
  *
- * Creates .opencode/ with symlinks to pilot-gsd, generates opencode.json,
+ * Creates .opencode/ with GSD commands via upstream installer, generates opencode.json,
  * adds .opencode/ to .gitignore, and initializes git if needed.
  *
  * With --verify, checks an existing setup without modifying anything.

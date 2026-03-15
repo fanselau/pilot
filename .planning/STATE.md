@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 63
+## Current Phase: 64
 
 ## Current Position
 
-Phase: 63 (Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-03-14 - Completed quick task 085: Quick follow-up - update README and docs for new Pilot web UI features
+Phase: 64 (GSD Installation Switch — Replace pilot-gsd with Vanilla GSD)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-15 - Completed 64-01-PLAN.md (remove gsdDir, add get-shit-done-cc)
 
-Progress: ███████████████████░ 69/73 plans (95%)
+Progress: ████████████████████░ 70/76 plans (92%)
 
 ## Project Reference
 
@@ -754,6 +754,6 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Session Continuity
 
-Last session: 2026-03-14 20:49 UTC
-Stopped at: Completed 085-PLAN.md
+Last session: 2026-03-15 20:04 UTC
+Stopped at: Completed 64-01-PLAN.md
 Resume file: None
