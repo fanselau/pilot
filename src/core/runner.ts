@@ -57,12 +57,13 @@ import {
   exportSessionFromDb,
   isSessionDone,
   getLastMessage,
+  getSessionState,
   getSessionModelsRecursive,
   getAssistantMessageCount,
 } from './opencode-db.js';
 import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } from './models.js';
 import { truncateTitle } from '../util/format.js';
-import { errMsg } from '../util/errors.js';
+import { errMsg, HungSessionError } from '../util/errors.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationResult, DelegationIntent } from './types.js';
 
@@ -1177,9 +1178,13 @@ class Runner {
       }
     }
 
-    // Poll opencode DB for session completion using isSessionDone() + PID liveness.
-    // isSessionDone() uses step-finish reason as ground truth — eliminated the broken
-    // premature completion heuristic that fired when sessions had long-running tool calls.
+    // Poll opencode DB for session completion using getSessionState() state machine.
+    // State-based routing:
+    //   done          → return (success)
+    //   hung-on-prompt → kill + throw HungSessionError (immediate, within one poll)
+    //   hung-on-tool  → continue polling (long-running tools are legitimate)
+    //   crashed       → throw (process dead, no clean step-finish)
+    //   working       → continue polling
     const pollMs = this.options.pollInterval * 1000;
     let sessionFound = false;
     const procPid = proc.pid;
@@ -1193,16 +1198,6 @@ class Runner {
 
       const sessionId = findSessionByTitle(title);
 
-      if (process.env['PILOT_DEBUG']) {
-        const pollElapsedS = Math.round((Date.now() - start) / 1000);
-        let pidAlive = 'n/a';
-        if (procPid !== undefined) {
-          try { process.kill(procPid, 0); pidAlive = 'true'; } catch { pidAlive = 'false'; }
-        }
-        process.stderr.write(
-          `[runner] poll ${title}: elapsed=${pollElapsedS}s sessionFound=${sessionFound} isSessionDone=${sessionId ? isSessionDone(sessionId) : 'n/a'} pid=${procPid ?? 'n/a'} pidAlive=${pidAlive}\n`,
-        );
-      }
       if (!sessionId) {
         // Session not yet in DB — check PID liveness as early termination guard
         if (procPid !== undefined) {
@@ -1220,39 +1215,86 @@ class Runner {
       }
       sessionFound = true;
 
-      // Primary completion check: step-finish reason is the ground truth
-      if (isSessionDone(sessionId)) {
-        return; // Session completed normally
+      // Compute PID liveness for getSessionState
+      let pidAlive = true;
+      if (procPid !== undefined) {
+        try { process.kill(procPid, 0); } catch { pidAlive = false; }
       }
 
-      // Belt-and-suspenders: check PID liveness
-      if (procPid !== undefined) {
-        try {
-          process.kill(procPid, 0);
-          // PID alive — session still in progress, keep polling
-        } catch {
-          // PID dead — give SQLite WAL a moment to flush, then check
-          await this.sleep(2000);
-          if (isSessionDone(sessionId)) {
-            return; // Completed just as process exited
-          }
-          // One more check after a longer wait (WAL can be slow under load)
-          await this.sleep(3000);
-          if (isSessionDone(sessionId)) {
-            return;
-          }
-          // Check if session has assistant messages — if so, it likely completed
-          // but the step-finish record wasn't written (e.g. process killed by cgroup)
+      // WAL flush race: PID just died but state may still be 'working'.
+      // Give SQLite WAL a 2s flush window and re-check before declaring crash.
+      if (!pidAlive) {
+        const recheck = getSessionState(sessionId, false);
+        if (recheck.state === 'done') {
+          return;
+        }
+        if (recheck.state === 'crashed') {
+          // PID confirmed dead, still no step-finish — check message count as fallback
           const msgCount = getAssistantMessageCount(sessionId);
           if (msgCount > 0) {
             process.stderr.write(
               `[runner] Warning: process died for ${title} but session has ${msgCount} messages. Treating as complete.\n`,
             );
+            return; // Had activity, treat as done
+          }
+          throw new Error(`Process died without clean completion for: ${title}`);
+        }
+        // State is working/hung-on-tool/hung-on-prompt — wait for WAL to flush
+        await this.sleep(2000);
+        const afterWal = getSessionState(sessionId, false);
+        if (afterWal.state === 'done') return;
+        if (afterWal.state === 'crashed') {
+          const msgCount = getAssistantMessageCount(sessionId);
+          if (msgCount > 0) {
+            process.stderr.write(
+              `[runner] Warning: process died for ${title} (after WAL wait) but session has ${msgCount} messages. Treating as complete.\n`,
+            );
             return;
           }
-          // Truly dead with no activity
-          throw new Error(`Process died without clean completion for session ${title} (no step-finish in opencode DB, 0 messages)`);
+          throw new Error(`Process died without clean completion for: ${title}`);
         }
+        // Otherwise continue into the state switch below with pidAlive=false
+      }
+
+      const stateResult = getSessionState(sessionId, pidAlive);
+
+      // Debug logging: always log state in PILOT_DEBUG mode, else just track
+      if (process.env['PILOT_DEBUG']) {
+        const pollElapsedS = Math.round((Date.now() - start) / 1000);
+        process.stderr.write(
+          `[runner] poll ${title}: elapsed=${pollElapsedS}s sessionFound=${sessionFound} state=${stateResult.state}${stateResult.pendingToolName ? ` tool=${stateResult.pendingToolName}` : ''} pid=${procPid ?? 'n/a'} pidAlive=${pidAlive}\n`,
+        );
+      }
+
+      // Structured log on every poll cycle (visible in daemon logs)
+      this.log(`Poll: ${title} — state=${stateResult.state}${stateResult.pendingToolName ? ` tool=${stateResult.pendingToolName}` : ''}`);
+
+      switch (stateResult.state) {
+        case 'done':
+          return;
+
+        case 'hung-on-prompt':
+          // Immediate kill — session is waiting for user input that will never come
+          await this.killHungSession(procPid, title, `hung-on-prompt (tool: ${stateResult.pendingToolName})`);
+          this.log(`Session hung on interactive prompt: ${title} (tool: ${stateResult.pendingToolName}, content: ${stateResult.pendingToolContent ?? 'unknown'})`);
+          throw new HungSessionError({
+            hungReason: 'interactive-prompt',
+            lastToolCall: stateResult.pendingToolName,
+            sessionTitle: title,
+          });
+
+        case 'hung-on-tool':
+          // Long-running tool (bash build, test suite) — continue polling
+          // Wall timeout (from the while-loop condition) serves as safety net
+          break;
+
+        case 'crashed':
+          // PID dead, no clean step-finish
+          throw new Error(`Process died without clean completion for: ${title}`);
+
+        case 'working':
+          // Session is actively processing — continue polling
+          break;
       }
     }
 
