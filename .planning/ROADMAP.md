@@ -1150,12 +1150,19 @@ Read `requirements/gsd-02-config-preseeding.md` and `.planning/phases/65-gsd-con
 
 ### Phase 66: Delegation Pipeline Redesign — Intent-Based Architecture
 
-**Goal:** [To be planned]
+**Goal:** Replace step-based delegation with intent-based delegation — the delegation AI outputs a single typed intent object, the runner owns all workflow logic per intent type, and the delegation prompt moves from pilot-gsd to Pilot-internal `src/prompts/delegate.md`.
 **Depends on:** Phase 65
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 66 to break down)
+- [ ] 66-01-PLAN.md — Types + delegation rewrite (DelegationIntent/DelegationResult types, delegate.ts rewrite, src/prompts/delegate.md prompt)
+- [ ] 66-02-PLAN.md — Runner intent routing (step loop → executeIntent dispatch, gap retry, milestone loop, info/db type updates)
+- [ ] 66-03-PLAN.md — Tests for all Phase 66 changes (parseIntentOutput coverage, removed function cleanup, full suite pass)
+
+Wave structure:
+- Wave 1: 66-01 (types + delegation module + prompt)
+- Wave 2: 66-02 (runner + db + info rewrites, depends on 66-01)
+- Wave 3: 66-03 (tests, depends on 66-01 + 66-02)
 
 **Details:**
-[To be added during planning]
+Read requirements/gsd-03-delegation-redesign.md for full spec.

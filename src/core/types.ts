@@ -110,7 +110,7 @@ export interface Job {
   resumeHint: string | null;  // hint for --resume flag on next attempt
   attempts: number;
   timeout: number;            // minutes, 0 = infinite (no timeout)
-  delegationPlan: string | null;  // JSON string of DelegationPlan
+  delegationPlan: string | null;  // JSON string of DelegationResult (intent-based, since Phase 66)
   currentStep: number;
   sessionTitles: string | null;   // JSON array of session titles
   modelProfile: ModelProfile;
@@ -190,13 +190,17 @@ export interface JobObservabilitySnapshot {
 
 // ── Delegation AI ─────────────────────────────────────────────────────────
 
-export interface DelegationStep {
-  command: string;  // "quick", "add-phase", "plan-phase", "execute-phase", "verify-phase"
-  args: string;
-}
+export type DelegationIntent =
+  | { type: 'quick'; description: string; flags?: ('full' | 'research')[] }
+  | { type: 'init-project'; prdPath: string }
+  | { type: 'new-milestone'; prdPath: string }
+  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string }
+  | { type: 'execute-only'; phaseNumber: number }
+  | { type: 'audit-milestone'; version: string }
+  | { type: 'noop'; reason: string }
 
-export interface DelegationPlan {
-  steps: DelegationStep[];
+export interface DelegationResult {
+  intent: DelegationIntent;
   reasoning: string;
 }
 
