@@ -182,7 +182,7 @@ program
 
 program
   .command('setup <dir>')
-  .description('Set up project for Pilot (links pilot-gsd)')
+  .description('Set up project for Pilot (installs GSD commands)')
   .option('--verify', 'Verify existing setup')
   .option('--refresh', 'Refresh existing setup (re-link symlinks, merge config)')
   .option('--force', 'With --refresh: overwrite opencode.json instead of merging')
@@ -231,7 +231,7 @@ program
 
 program
   .command('update')
-  .description('Update pilot-gsd definitions')
+  .description('Update GSD commands for all projects')
   .action(async () => {
     const { updateCommand } = await import('./commands/update.js');
     await updateCommand();
