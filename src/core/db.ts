@@ -18,7 +18,7 @@ import type {
   JobStep,
   JobScope,
   ModelProfile,
-  DelegationPlan,
+  DelegationResult,
   Project,
   ProjectStatus,
   ModelProfileRow,
@@ -689,9 +689,9 @@ function getRecent(limit: number = 20): Job[] {
 }
 
 /**
- * Store a delegation plan as JSON string.
+ * Store a delegation result as JSON string.
  */
-function updateDelegationPlan(id: string, plan: DelegationPlan): void {
+function updateDelegationPlan(id: string, plan: DelegationResult): void {
   const db = getDb();
   db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?').run(
     JSON.stringify(plan),

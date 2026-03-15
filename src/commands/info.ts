@@ -23,7 +23,7 @@ import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
-import type { DelegationPlan, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
+import type { DelegationResult, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
 import type { HeadRelation } from '../core/git-recovery.js';
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
@@ -445,13 +445,13 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
 
   const steps = getJobSteps(id);
 
-  // Parse delegation plan
-  let delegationPlan: DelegationPlan | null = null;
+  // Parse delegation result (intent-based since Phase 66)
+  let delegationResult: DelegationResult | null = null;
   if (job.delegationPlan) {
     try {
-      delegationPlan = JSON.parse(job.delegationPlan) as DelegationPlan;
+      delegationResult = JSON.parse(job.delegationPlan) as DelegationResult;
     } catch {
-      delegationPlan = null;
+      delegationResult = null;
     }
   }
 
@@ -499,7 +499,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     outputJson({
       job,
       triage,
-      delegationPlan,
+      delegationResult,
       steps,
       sessions: sessionTokens,
       recovery,
@@ -610,17 +610,19 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
     outputHuman('');
   }
 
-  // Delegation plan
-  if (delegationPlan && delegationPlan.steps.length > 0) {
-    outputHuman(`  ${bold('Delegation Plan')}`);
+  // Delegation result (intent-based since Phase 66)
+  if (delegationResult && delegationResult.intent) {
+    outputHuman(`  ${bold('Delegation Intent')}`);
     outputHuman(`  ${hr()}`);
-    if (delegationPlan.reasoning) {
-      outputHuman(`  ${dim(delegationPlan.reasoning)}`);
+    if (delegationResult.reasoning) {
+      outputHuman(`  ${dim(delegationResult.reasoning)}`);
       outputHuman('');
     }
-    delegationPlan.steps.forEach((step, i) => {
-      outputHuman(`    ${dim(`${i + 1}.`)} ${step.command} ${dim(`"${step.args}"`)}`);
-    });
+    const intent = delegationResult.intent;
+    const intentDisplay = Object.entries(intent)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join(', ');
+    outputHuman(`    ${cyan(intent.type)} ${dim(`{ ${intentDisplay} }`)}`);
     outputHuman('');
   }
 

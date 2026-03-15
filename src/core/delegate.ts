@@ -1,10 +1,13 @@
 /**
  * Delegation AI — spawns a short opencode session to read project state
- * and output a JSON execution plan (DelegationPlan).
+ * and output a JSON intent (DelegationResult).
  *
  * Core v2 innovation: Instead of parsing .planning/ files with regex
  * (which constantly broke in v1), we spawn a cheap AI session that reads
- * project state and decides what GSD commands to run.
+ * project state and decides what intent to run.
+ *
+ * Intent-based (since Phase 66): The AI outputs a single typed intent object,
+ * making the runner's workflow logic explicit and type-safe.
  *
  * Pure core module — no UI dependencies.
  */
@@ -12,45 +15,17 @@
 import { execa } from 'execa';
 import { accessSync, constants, readFileSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
 import { resolveSkillsForJob } from './skills.js';
 import { errMsg } from '../util/errors.js';
-import type { Job, DelegationPlan } from './types.js';
+import type { Job, DelegationIntent, DelegationResult } from './types.js';
 
-/**
- * Known GSD instruction text fragments that should NEVER appear in a phase title.
- * If an add-phase directory name contains any of these phrases, it means the AI
- * misinterpreted the prompt instructions as the phase title.
- */
-const GSD_INSTRUCTION_BLOCKLIST: readonly string[] = [
-  'add a new integer phase',
-  'add a new phase to the end',
-  'execute all plans',
-  'spawn subagents',
-  'current milestone in the roadmap',
-  'phase to the end of',
-  'run /gsd-plan-phase',
-  'run /gsd-execute-phase',
-  'break down into tasks',
-  'to be planned',
-];
-
-/**
- * Check if a title contains any known GSD instruction phrase.
- * Returns the matched blocklist phrase if found (case-insensitive substring match),
- * or null if the title is clean.
- */
-function matchesBlocklist(title: string): string | null {
-  const lower = title.toLowerCase();
-  for (const phrase of GSD_INSTRUCTION_BLOCKLIST) {
-    if (lower.includes(phrase)) {
-      return phrase;
-    }
-  }
-  return null;
-}
+// Load delegation prompt from src/prompts/delegate.md at module load time
+const DELEGATE_PROMPT_PATH = fileURLToPath(new URL('../prompts/delegate.md', import.meta.url));
+const DELEGATE_PROMPT = readFileSync(DELEGATE_PROMPT_PATH, 'utf8');
 
 /**
  * Extract a human-readable title from a requirement file's `# Title` heading.
@@ -92,17 +67,26 @@ function getPhaseState(phasesDir: string, phaseDirName: string): { planCount: nu
 }
 
 /**
- * Spawn a delegation AI session to determine what GSD commands to run for a job.
- * Uses a short cheap AI session that reads .planning/ and outputs a JSON plan.
+ * Spawn a delegation AI session to determine what intent to execute for a job.
+ * Uses a short cheap AI session that reads .planning/ and outputs a JSON intent.
  *
- * Fails fast on error — the runner's job retry mechanism (attempts 1/3 → 2/3 → 3/3)
- * handles retries. No fallback plan guessing.
+ * Fails fast on parse error, retrying once with error injection before failing.
+ * The runner's job retry mechanism (attempts 1/3 → 2/3 → 3/3) handles higher-level retries.
  */
-async function delegate(job: Job, projectDir: string): Promise<DelegationPlan> {
+async function delegate(job: Job, projectDir: string): Promise<DelegationResult> {
   try {
     return await attemptDelegation(job, projectDir, 1);
-  } catch (err) {
-    throw new Error(`${errMsg(err)}. Check project setup with: pilot doctor --project ${projectDir}`);
+  } catch (firstErr) {
+    // If parse failure, retry once with error context injected into prompt
+    const firstErrMsg = errMsg(firstErr);
+    if (firstErrMsg.includes('Failed to parse') || firstErrMsg.includes('Invalid intent')) {
+      try {
+        return await attemptDelegation(job, projectDir, 2, `Your previous attempt produced invalid JSON: ${firstErrMsg}`);
+      } catch (retryErr) {
+        throw new Error(`${errMsg(retryErr)}. Check project setup with: pilot doctor --project ${projectDir}`);
+      }
+    }
+    throw new Error(`${firstErrMsg}. Check project setup with: pilot doctor --project ${projectDir}`);
   }
 }
 
@@ -130,32 +114,6 @@ function getNextPhaseNumber(phasesDir: string): number {
 }
 
 /**
- * Build a milestone coordinator plan for an initialized project.
- *
- * The coordinator runs a single `new-milestone` step. After it completes,
- * the runner reads ROADMAP.md and spawns child phase jobs with depends_on chaining.
- * This replaces the old flat per-requirement step list (add-phase × N).
- */
-function buildMilestonePlan(job: Job, _projectDir: string): DelegationPlan {
-  return {
-    steps: [{ command: 'new-milestone', args: buildNewMilestoneArgs(job) }],
-    reasoning: 'Milestone coordinator — will spawn child phase jobs after new-milestone completes',
-  };
-}
-
-/**
- * Build args for gsd-new-milestone.
- * Same convention as buildNewProjectArgs: file reference first, then flags.
- * GSD checks for --auto presence anywhere in $ARGUMENTS.
- */
-function buildNewMilestoneArgs(job: Job): string {
-  if (job.requirementPath) {
-    return `@${job.requirementPath} --auto`;
-  }
-  return `${job.description} --auto`;
-}
-
-/**
  * Build args for gsd-new-project.
  * IMPORTANT: opencode's yargs parser swallows args starting with --.
  * So we put the file reference FIRST, then the auto flag.
@@ -179,9 +137,19 @@ function buildQuickArgs(job: Job): string {
 }
 
 /**
- * Single delegation attempt: spawn opencode, wait for result, parse output.
+ * Single delegation attempt: spawn opencode with inline prompt, wait for result, parse output.
+ *
+ * The prompt is passed directly as the message — fully under Pilot's control.
+ * No GSD command reference needed.
+ *
+ * @param parseErrorHint Optional error context from a previous failed parse attempt.
  */
-async function attemptDelegation(job: Job, projectDir: string, attempt: number): Promise<DelegationPlan & { _sessionTitle: string }> {
+async function attemptDelegation(
+  job: Job,
+  projectDir: string,
+  attempt: number,
+  parseErrorHint?: string,
+): Promise<DelegationResult & { _sessionTitle: string }> {
   const ts = Date.now().toString(36).slice(-4);
   const title = `pilot-delegate-${job.id}-${attempt}-${ts}`;
 
@@ -190,6 +158,8 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
     `project: ${job.project}`,
     `description: ${job.description}`,
     `requirement_path: ${job.requirementPath ?? 'none'}`,
+    `retry_context: ${job.resumeHint ?? 'none'}`,
+    `attempt: ${job.attempts}`,
   ];
 
   // Append skills hint if job has categories and matched skills exist
@@ -207,19 +177,29 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
     process.stderr.write(`[delegate] skills resolution failed: ${errMsg(err)}\n`);
   }
 
+  // If this is a retry after parse failure, inject the error context
+  if (parseErrorHint) {
+    argLines.push(`\nParse Error from Previous Attempt:`);
+    argLines.push(parseErrorHint);
+    argLines.push(`Please produce valid JSON this time.`);
+  }
+
   const args = argLines.join('\n');
+
+  // Combine the delegation prompt with the current job context
+  const fullPrompt = `${DELEGATE_PROMPT}\n\n---\n\n## Current Job\n\n${args}`;
 
   const opencodeBin = resolveOpencodeBinary();
   const { model: topLevelModel, variant } = resolveTopLevelModel('phase', job.modelProfile, job.providerMode);
   process.stderr.write(`[delegate] Model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}\n`);
+
   const proc = execa(opencodeBin, [
     'run',
     '--format', 'default',
     '--model', topLevelModel,
     ...(variant ? ['--variant', variant] : []),
     '--title', title,
-    '--command', 'gsd-delegate',
-    args,
+    fullPrompt,
   ], {
     cwd: projectDir,
     stdin: 'ignore',
@@ -233,8 +213,8 @@ async function attemptDelegation(job: Job, projectDir: string, attempt: number):
   proc.unref();
 
   const spawnedPid = proc.pid;
-  const plan = await waitForDelegationResult(title, spawnedPid);
-  return { ...plan, _sessionTitle: title };
+  const result = await waitForDelegationResult(title, spawnedPid);
+  return { ...result, _sessionTitle: title };
 }
 
 /**
@@ -280,7 +260,7 @@ function resolveOpencodeBinary(): string {
  * Exits when isSessionDone() returns true, or throws immediately if the PID dies.
  * If pid is provided, checks process liveness each cycle — bails early on dead process.
  */
-async function waitForDelegationResult(title: string, pid?: number): Promise<DelegationPlan> {
+async function waitForDelegationResult(title: string, pid?: number): Promise<DelegationResult> {
   const pollMs = 2_000;
 
   while (true) {
@@ -300,7 +280,7 @@ async function waitForDelegationResult(title: string, pid?: number): Promise<Del
             if (exported.messages.length > 0) {
               const lastAssistant = [...exported.messages].reverse().find(m => m.role === 'assistant');
               if (lastAssistant) {
-                return parseDelegationOutput(String(lastAssistant.content ?? ''));
+                return parseIntentOutput(String(lastAssistant.content ?? ''));
               }
             }
           } catch (err) {
@@ -326,7 +306,7 @@ async function waitForDelegationResult(title: string, pid?: number): Promise<Del
 
         if (lastAssistant) {
           const content = String(lastAssistant.content ?? '');
-          return parseDelegationOutput(content);
+          return parseIntentOutput(content);
         }
       }
     } catch (err) {
@@ -336,9 +316,12 @@ async function waitForDelegationResult(title: string, pid?: number): Promise<Del
 }
 
 /**
- * Parse delegation AI output into a DelegationPlan.
+ * Parse delegation AI output into a DelegationResult.
+ * Extracts JSON from a ```json block or uses raw content.
+ * Validates that intent.type is one of the known DelegationIntent types.
  */
-function parseDelegationOutput(content: string): DelegationPlan {
+function parseIntentOutput(content: string): DelegationResult {
+  // Extract JSON from ```json ... ``` block, or use raw content
   const jsonBlockMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
   const jsonStr = jsonBlockMatch ? jsonBlockMatch[1] : content.trim();
 
@@ -351,49 +334,65 @@ function parseDelegationOutput(content: string): DelegationPlan {
     );
   }
 
-  if (!Array.isArray(parsed.steps) || parsed.steps.length === 0) {
-    throw new Error('Delegation plan has no steps');
+  const validTypes = ['quick', 'init-project', 'new-milestone', 'plan-and-execute', 'execute-only', 'audit-milestone', 'noop'];
+  const intent = parsed.intent as Record<string, unknown> | undefined;
+
+  if (!intent || typeof intent.type !== 'string' || !validTypes.includes(intent.type)) {
+    throw new Error(`Invalid intent type: ${intent?.type ?? 'undefined'}. Valid types: ${validTypes.join(', ')}`);
   }
 
-  for (const step of parsed.steps as Array<Record<string, unknown>>) {
-    if (typeof step.command !== 'string' || typeof step.args !== 'string') {
-      throw new Error('Invalid step: missing command or args');
-    }
+  // Type-specific field validation
+  switch (intent.type) {
+    case 'quick':
+      if (typeof intent.description !== 'string') {
+        throw new Error('Intent "quick" must have a string "description" field');
+      }
+      break;
+    case 'init-project':
+      if (typeof intent.prdPath !== 'string') {
+        throw new Error('Intent "init-project" must have a string "prdPath" field');
+      }
+      break;
+    case 'new-milestone':
+      if (typeof intent.prdPath !== 'string') {
+        throw new Error('Intent "new-milestone" must have a string "prdPath" field');
+      }
+      break;
+    case 'plan-and-execute':
+      if (typeof intent.phaseNumber !== 'number') {
+        throw new Error('Intent "plan-and-execute" must have a numeric "phaseNumber" field');
+      }
+      break;
+    case 'execute-only':
+      if (typeof intent.phaseNumber !== 'number') {
+        throw new Error('Intent "execute-only" must have a numeric "phaseNumber" field');
+      }
+      break;
+    case 'audit-milestone':
+      if (typeof intent.version !== 'string') {
+        throw new Error('Intent "audit-milestone" must have a string "version" field');
+      }
+      break;
+    case 'noop':
+      if (typeof intent.reason !== 'string') {
+        throw new Error('Intent "noop" must have a string "reason" field');
+      }
+      break;
   }
-
-  const steps = (parsed.steps as Array<{ command: string; args: string }>).map(s => ({
-    command: s.command,
-    args: s.args,
-  }));
-
-  const filteredSteps = steps.flatMap(step => {
-    // Strip --auto from plan-phase args (triggers broken Task() auto-advance)
-    if (step.command === 'plan-phase' && step.args.includes('--auto')) {
-      return [{ command: step.command, args: step.args.replace(/--auto/g, '').trim() }];
-    }
-    // Skip verify-phase (runner handles verification separately)
-    if (step.command === 'verify-phase') {
-      return [];
-    }
-    return [step];
-  });
 
   return {
-    steps: filteredSteps,
+    intent: intent as DelegationIntent,
     reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
   };
 }
 
 export {
   delegate,
-  parseDelegationOutput,
+  parseIntentOutput,
   resolveOpencodeBinary,
   buildNewProjectArgs,
   buildQuickArgs,
   getNextPhaseNumber,
-  buildMilestonePlan,
   extractRequirementTitle,
   getPhaseState,
-  GSD_INSTRUCTION_BLOCKLIST,
-  matchesBlocklist,
 };

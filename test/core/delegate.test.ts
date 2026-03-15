@@ -8,19 +8,13 @@ import { resolveTopLevelModel } from '../../src/core/models.js';
 const THROW_ENOENT = '__THROW_ENOENT__';
 const THROW_READDIRSYNC = '__THROW_READDIRSYNC__';
 
-let mockRoadmapContent: string = '';
-let mockRoadmapExists = true;
 let mockPhaseDirs: string[] = [];
-let mockRequirementDirFiles: string[] = [];
-let mockRequirementIsDir = false;
 // Map of requirement file path → content (for extractRequirementTitle mock)
 let mockRequirementFileContent: Record<string, string> = {};
 
 // Map of phase subdir path → file list (for getPhaseState testing)
 // Key: the phase dir path suffix (e.g., '01-setup'), value: array of files
 let mockPhaseSubdirFiles: Record<string, string[]> = {};
-
-
 
 // ── Mock node:fs ───────────────────────────────────────────────────────────
 
@@ -29,23 +23,22 @@ vi.mock('node:fs', async () => {
   return {
     ...actual,
     readFileSync: vi.fn((filePath: string, encoding?: string) => {
-      if (typeof filePath === 'string' && filePath.includes('ROADMAP.md')) {
-        if (mockRoadmapContent === THROW_ENOENT) {
-          const err = new Error('ENOENT: no such file or directory');
-          (err as NodeJS.ErrnoException).code = 'ENOENT';
-          throw err;
-        }
-        return mockRoadmapContent;
+      if (typeof filePath !== 'string') {
+        return actual.readFileSync(filePath as Parameters<typeof actual.readFileSync>[0], encoding as BufferEncoding);
       }
-      // Requirement file reads (for extractRequirementTitle)
-      if (typeof filePath === 'string' && filePath in mockRequirementFileContent) {
+      // delegate.md is read at module initialization — pass through to actual fs
+      if (filePath.includes('delegate.md') || filePath.includes('prompts/')) {
+        return actual.readFileSync(filePath, encoding as BufferEncoding);
+      }
+      // Requirement file reads (for extractRequirementTitle) — access mockRequirementFileContent safely
+      if (mockRequirementFileContent && filePath in mockRequirementFileContent) {
         return mockRequirementFileContent[filePath];
       }
       return actual.readFileSync(filePath, encoding as BufferEncoding);
     }),
     existsSync: vi.fn((filePath: string) => {
-      if (typeof filePath === 'string' && filePath.includes('ROADMAP.md')) {
-        return mockRoadmapExists;
+      if (typeof filePath === 'string' && filePath.includes('delegate.md')) {
+        return actual.existsSync(filePath);
       }
       return actual.existsSync(filePath);
     }),
@@ -68,21 +61,10 @@ vi.mock('node:fs', async () => {
           }
           return mockPhaseDirs;
         }
-        // Requirement directory reads
-        if (dirPath.includes('requirements')) {
-          return mockRequirementDirFiles;
-        }
       }
       return actual.readdirSync(dirPath);
     }),
     statSync: vi.fn((filePath: string) => {
-      // For requirement paths in buildMilestonePlan
-      if (typeof filePath === 'string' && filePath.includes('requirements')) {
-        return {
-          isDirectory: () => mockRequirementIsDir,
-          isFile: () => !mockRequirementIsDir,
-        };
-      }
       return actual.statSync(filePath);
     }),
   };
@@ -91,15 +73,12 @@ vi.mock('node:fs', async () => {
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
 import {
-  parseDelegationOutput,
+  parseIntentOutput,
   buildNewProjectArgs,
   buildQuickArgs,
   getNextPhaseNumber,
-  buildMilestonePlan,
   extractRequirementTitle,
   getPhaseState,
-  matchesBlocklist,
-  GSD_INSTRUCTION_BLOCKLIST,
 } from '../../src/core/delegate.js';
 
 // ── Test helpers ───────────────────────────────────────────────────────────
@@ -143,120 +122,162 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 
-describe('parseDelegationOutput', () => {
-  it('parses JSON from markdown code block', () => {
-    const content = '```json\n{"steps":[{"command":"quick","args":"Fix the bug"}],"reasoning":"Quick task"}\n```';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('quick');
-    expect(plan.steps[0].args).toBe('Fix the bug');
-    expect(plan.reasoning).toBe('Quick task');
+describe('parseIntentOutput', () => {
+  it('parses quick intent from JSON code block', () => {
+    const content = '```json\n{"intent":{"type":"quick","description":"Fix the bug"},"reasoning":"Quick task"}\n```';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('quick');
+    if (result.intent.type === 'quick') {
+      expect(result.intent.description).toBe('Fix the bug');
+    }
+    expect(result.reasoning).toBe('Quick task');
+  });
+
+  it('parses quick intent with flags', () => {
+    const content = '```json\n{"intent":{"type":"quick","description":"Research WebRTC","flags":["research"]},"reasoning":"Unfamiliar domain"}\n```';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('quick');
+    if (result.intent.type === 'quick') {
+      expect(result.intent.flags).toEqual(['research']);
+    }
   });
 
   it('parses raw JSON without code block', () => {
-    const content = '{"steps":[{"command":"add-phase","args":"Dark mode"}],"reasoning":"Phase 17"}';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('add-phase');
-    expect(plan.steps[0].args).toBe('Dark mode');
-    expect(plan.reasoning).toBe('Phase 17');
+    const content = '{"intent":{"type":"noop","reason":"Phase 42 complete"},"reasoning":"Done"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('noop');
+    if (result.intent.type === 'noop') {
+      expect(result.intent.reason).toBe('Phase 42 complete');
+    }
   });
 
-  it('parses multi-step phase plan and strips verify-phase and --auto', () => {
-    // AI might output verify-phase and --auto, but parser strips them:
-    // - verify-phase: runner handles verification separately
-    // - --auto: triggers broken Task() auto-advance in plan-phase
-    const content = '```json\n{"steps":[{"command":"add-phase","args":"Add OAuth"},{"command":"plan-phase","args":"17 --auto"},{"command":"execute-phase","args":"17"},{"command":"verify-phase","args":"17"}],"reasoning":"Adding as phase 17"}\n```';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(3);  // verify-phase stripped
-    expect(plan.steps.map(s => s.command)).toEqual([
-      'add-phase',
-      'plan-phase',
-      'execute-phase',
-    ]);
-    expect(plan.steps[1].args).toBe('17');  // --auto stripped
-    expect(plan.reasoning).toBe('Adding as phase 17');
+  it('parses init-project intent', () => {
+    const content = '```json\n{"intent":{"type":"init-project","prdPath":"requirements/new.md"},"reasoning":"No .planning dir"}\n```';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('init-project');
+    if (result.intent.type === 'init-project') {
+      expect(result.intent.prdPath).toBe('requirements/new.md');
+    }
   });
 
-  it('throws on empty steps', () => {
-    const content = '{"steps":[],"reasoning":"Nothing to do"}';
-    expect(() => parseDelegationOutput(content)).toThrow('no steps');
+  it('parses new-milestone intent', () => {
+    const content = '{"intent":{"type":"new-milestone","prdPath":"requirements/v2.md"},"reasoning":"No phases in roadmap"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('new-milestone');
+    if (result.intent.type === 'new-milestone') {
+      expect(result.intent.prdPath).toBe('requirements/v2.md');
+    }
+  });
+
+  it('parses plan-and-execute intent with all fields', () => {
+    const content = '```json\n{"intent":{"type":"plan-and-execute","phaseNumber":42,"prdPath":"requirements/feature.md","addPhaseTitle":"Feature Name"},"reasoning":"New phase"}\n```';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.phaseNumber).toBe(42);
+      expect(result.intent.prdPath).toBe('requirements/feature.md');
+      expect(result.intent.addPhaseTitle).toBe('Feature Name');
+    }
+  });
+
+  it('parses plan-and-execute with isGapClosure flag', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":5,"isGapClosure":true},"reasoning":"Gap closure retry"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.phaseNumber).toBe(5);
+      expect(result.intent.isGapClosure).toBe(true);
+    }
+  });
+
+  it('parses execute-only intent', () => {
+    const content = '{"intent":{"type":"execute-only","phaseNumber":17},"reasoning":"Plans exist but incomplete"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('execute-only');
+    if (result.intent.type === 'execute-only') {
+      expect(result.intent.phaseNumber).toBe(17);
+    }
+  });
+
+  it('parses audit-milestone intent', () => {
+    const content = '{"intent":{"type":"audit-milestone","version":"launch-v1"},"reasoning":"All phases complete"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('audit-milestone');
+    if (result.intent.type === 'audit-milestone') {
+      expect(result.intent.version).toBe('launch-v1');
+    }
+  });
+
+  it('handles missing reasoning gracefully', () => {
+    const content = '{"intent":{"type":"noop","reason":"Already done"}}';
+    const result = parseIntentOutput(content);
+    expect(result.reasoning).toBe('');
+    expect(result.intent.type).toBe('noop');
+  });
+
+  it('handles surrounding text before/after JSON block', () => {
+    const content = 'Here is my analysis:\n\n```json\n{"intent":{"type":"quick","description":"Fix it"},"reasoning":"Simple"}\n```\n\nDone.';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('quick');
+    if (result.intent.type === 'quick') {
+      expect(result.intent.description).toBe('Fix it');
+    }
   });
 
   it('throws on invalid JSON', () => {
     const content = 'This is not JSON at all';
-    expect(() => parseDelegationOutput(content)).toThrow('Failed to parse');
+    expect(() => parseIntentOutput(content)).toThrow('Failed to parse');
   });
 
-  it('throws on malformed step (missing command)', () => {
-    const content = '{"steps":[{"args":"something"}],"reasoning":"Bad"}';
-    expect(() => parseDelegationOutput(content)).toThrow('missing command or args');
+  it('throws on missing intent field', () => {
+    const content = '{"reasoning":"something"}';
+    expect(() => parseIntentOutput(content)).toThrow('Invalid intent type');
   });
 
-  it('throws on malformed step (missing args)', () => {
-    const content = '{"steps":[{"command":"quick"}],"reasoning":"Bad"}';
-    expect(() => parseDelegationOutput(content)).toThrow('missing command or args');
+  it('throws on unknown intent type', () => {
+    const content = '{"intent":{"type":"unknown-type"},"reasoning":"Bad"}';
+    expect(() => parseIntentOutput(content)).toThrow('Invalid intent type');
   });
 
-  it('passes { command: "phase" } through as-is (no decomposition)', () => {
-    // phase command passes through without conversion — GSD orchestrates lifecycle internally
-    const content = '{"steps":[{"command":"phase","args":"Document Management UI --auto"}],"reasoning":"New format"}';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('phase');
-    expect(plan.steps[0].args).toBe('Document Management UI --auto');
+  it('throws on complete-milestone intent type (runner-internal only)', () => {
+    const content = '{"intent":{"type":"complete-milestone","version":"v1"},"reasoning":"Done"}';
+    expect(() => parseIntentOutput(content)).toThrow('Invalid intent type');
   });
 
-  it('passes { command: "phase" } with requirement path through as-is', () => {
-    const content = '{"steps":[{"command":"phase","args":"@requirements/foo.md --auto"}],"reasoning":"With path"}';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('phase');
-    expect(plan.steps[0].args).toBe('@requirements/foo.md --auto');
+  it('throws on quick intent without description', () => {
+    const content = '{"intent":{"type":"quick"},"reasoning":"Missing desc"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a string "description"');
   });
 
-  it('handles missing reasoning gracefully', () => {
-    const content = '{"steps":[{"command":"quick","args":"Fix it"}]}';
-    const plan = parseDelegationOutput(content);
-    expect(plan.reasoning).toBe('');
-    expect(plan.steps).toHaveLength(1);
+  it('throws on init-project without prdPath', () => {
+    const content = '{"intent":{"type":"init-project"},"reasoning":"Missing prdPath"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a string "prdPath"');
   });
 
-  it('handles surrounding text before/after JSON block', () => {
-    const content = 'Here is the plan:\n\n```json\n{"steps":[{"command":"quick","args":"Do thing"}],"reasoning":"Simple"}\n```\n\nDone.';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('quick');
-    expect(plan.steps[0].args).toBe('Do thing');
-    expect(plan.reasoning).toBe('Simple');
+  it('throws on plan-and-execute without phaseNumber', () => {
+    const content = '{"intent":{"type":"plan-and-execute","prdPath":"foo.md"},"reasoning":"Missing number"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a numeric "phaseNumber"');
   });
 
-  it('parses milestone new-project step', () => {
-    const content = '```json\n{"steps":[{"command":"new-project","args":"--auto Build a CRM tool"}],"reasoning":"New project, initializing with milestone scope"}\n```';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('new-project');
-    expect(plan.steps[0].args).toBe('--auto Build a CRM tool');
+  it('throws on execute-only without phaseNumber', () => {
+    const content = '{"intent":{"type":"execute-only"},"reasoning":"Missing number"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a numeric "phaseNumber"');
   });
 
-  it('parses milestone new-milestone step for existing project', () => {
-    const content = '{"steps":[{"command":"new-milestone","args":"v2.0"}],"reasoning":"Existing project, creating new milestone"}';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('new-milestone');
-    expect(plan.steps[0].args).toBe('v2.0');
+  it('throws on audit-milestone without version', () => {
+    const content = '{"intent":{"type":"audit-milestone"},"reasoning":"Missing version"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a string "version"');
   });
 
-  it('throws when steps is not an array', () => {
-    const content = '{"steps":"not-an-array","reasoning":"Bad"}';
-    expect(() => parseDelegationOutput(content)).toThrow('no steps');
+  it('throws on noop without reason', () => {
+    const content = '{"intent":{"type":"noop"},"reasoning":"Missing reason"}';
+    expect(() => parseIntentOutput(content)).toThrow('must have a string "reason"');
   });
 
   it('handles JSON with extra whitespace in code block', () => {
-    const content = '```json\n  {\n    "steps": [\n      { "command": "quick", "args": "Fix bug" }\n    ],\n    "reasoning": "Formatted JSON"\n  }\n```';
-    const plan = parseDelegationOutput(content);
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('quick');
+    const content = '```json\n  {\n    "intent": {\n      "type": "quick",\n      "description": "Fix bug"\n    },\n    "reasoning": "Formatted JSON"\n  }\n```';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('quick');
   });
 });
 
@@ -296,8 +317,6 @@ describe('getNextPhaseNumber', () => {
     expect(getNextPhaseNumber('/nonexistent/.planning/phases')).toBe(1);
   });
 });
-
-
 
 // ── getPhaseState ──────────────────────────────────────────────────────────
 
@@ -349,31 +368,12 @@ describe('getPhaseState', () => {
   });
 
   it('returns zero counts for missing dir (ENOENT)', () => {
-    // No mockPhaseSubdirFiles entry — will fall through to actual readdirSync which throws
-    // But the dir doesn't exist in mock, and it's not in mockPhaseDirs so mock won't match
-    // We need to force ENOENT for the phase subdir
-    // The mock checks: dirPath.endsWith(subdirKey) — so if subdirKey is 'missing-phase' it will match
-    mockPhaseSubdirFiles['missing-phase'] = THROW_READDIRSYNC as unknown as string[];
-    mockPhaseDirs = [];
-    // getPhaseState builds path as join(phasesDir, phaseDirName) and calls readdirSync
-    // Since 'missing-phase' is the subdirKey and the path ends with it, mock throws ENOENT
-    // But wait — the mock checks mockPhaseSubdirFiles for the key and if it's THROW_READDIRSYNC,
-    // we'd need to check for that sentinel. Let's use a different approach:
-    // The mock's readdirSync for phase subdirs uses the actual THROW_READDIRSYNC sentinel in mockPhaseDirs,
-    // but for subdirs we use mockPhaseSubdirFiles. For ENOENT, we simply don't add an entry,
-    // and the path won't match any mockPhaseSubdirFiles key, so it falls through to actual.
-    // Actually the actual will throw ENOENT for /tmp/.planning/phases/nonexistent-phase.
-    // Let's test with a dir that clearly doesn't exist on the filesystem.
     const result = getPhaseState('/tmp/clearly-not-a-real-path/.planning/phases', 'nonexistent-phase-xyz');
     expect(result.planCount).toBe(0);
     expect(result.summaryCount).toBe(0);
     expect(result.isComplete).toBe(false);
   });
 });
-
-
-
-
 
 // ── buildNewProjectArgs ───────────────────────────────────────────────────
 
@@ -419,66 +419,6 @@ describe('buildQuickArgs', () => {
   });
 });
 
-// ── buildMilestonePlan ────────────────────────────────────────────────────
-// buildMilestonePlan now produces a simple coordinator plan (new-milestone step).
-// Runner re-delegates for phase steps after the coordinator completes.
-
-describe('buildMilestonePlan', () => {
-  beforeEach(() => {
-    mockPhaseDirs = ['01-setup', '02-core'];
-    mockPhaseSubdirFiles = {};
-    mockRequirementDirFiles = [];
-    mockRequirementIsDir = false;
-    mockRequirementFileContent = {};
-  });
-
-  it('returns single new-milestone step for initialized project with requirementPath', () => {
-    const job = makeTestJob({
-      scope: 'milestone',
-      requirementPath: '/tmp/requirements/milestone-v2',
-      description: 'Milestone V2',
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('new-milestone');
-    expect(plan.steps[0].args).toBe('@/tmp/requirements/milestone-v2 --auto');
-    expect(plan.reasoning).toContain('coordinator');
-  });
-
-  it('returns single new-milestone step with description when no requirementPath', () => {
-    const job = makeTestJob({
-      scope: 'milestone',
-      description: 'Build everything',
-      requirementPath: null,
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].command).toBe('new-milestone');
-    expect(plan.steps[0].args).toBe('Build everything --auto');
-  });
-
-  it('never produces { command: "phase" } steps', () => {
-    const job = makeTestJob({
-      scope: 'milestone',
-      description: 'Test milestone',
-      requirementPath: null,
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    const phaseStep = plan.steps.find(s => s.command === 'phase');
-    expect(phaseStep).toBeUndefined();
-  });
-
-  it('args include --auto flag', () => {
-    const job = makeTestJob({
-      scope: 'milestone',
-      description: 'Launch v2',
-      requirementPath: null,
-    });
-    const plan = buildMilestonePlan(job, '/tmp/project');
-    expect(plan.steps[0].args).toContain('--auto');
-  });
-});
-
 // ── extractRequirementTitle ───────────────────────────────────────────────
 
 describe('extractRequirementTitle', () => {
@@ -513,9 +453,6 @@ describe('extractRequirementTitle', () => {
 
   it('matches ## heading but extracts only first # heading', () => {
     mockRequirementFileContent['/tmp/req.md'] = '## Sub Heading\n\n# Main Heading\n\nBody.';
-    // The regex /^#\s+(.+)$/m matches first occurrence of any # heading
-    // ## Sub Heading doesn't match /^#\s+/ because it starts with ##
-    // Wait — actually ## matches ^# too. Let's check the actual behavior.
     // The regex /^#\s+(.+)$/m: ^ = start of line, # = literal hash, \s+ = one or more whitespace
     // "## Sub Heading" → first char is #, second is #, which is NOT \s → no match
     // "# Main Heading" → first char is #, second is space → match!
@@ -526,59 +463,6 @@ describe('extractRequirementTitle', () => {
   it('handles file with only a heading', () => {
     mockRequirementFileContent['/tmp/req.md'] = '# Just A Title';
     expect(extractRequirementTitle('/tmp/req.md')).toBe('Just A Title');
-  });
-});
-
-// ── matchesBlocklist ──────────────────────────────────────────────────────
-
-describe('matchesBlocklist', () => {
-  it('returns matched phrase for title containing "add a new integer phase"', () => {
-    const result = matchesBlocklist('Add a new integer phase to the end of the current milestone');
-    expect(result).toBe('add a new integer phase');
-  });
-
-  it('returns matched phrase for titles containing "execute all plans"', () => {
-    const result = matchesBlocklist('Execute all plans in the current milestone');
-    expect(result).toBe('execute all plans');
-  });
-
-  it('returns null for legitimate titles like "Fix premature completion detection"', () => {
-    expect(matchesBlocklist('Fix premature completion detection')).toBeNull();
-  });
-
-  it('returns null for another legitimate title', () => {
-    expect(matchesBlocklist('TUI Visual Polish')).toBeNull();
-  });
-
-  it('returns null for "Harden add-phase reliability"', () => {
-    expect(matchesBlocklist('Harden add-phase reliability')).toBeNull();
-  });
-
-  it('is case-insensitive', () => {
-    expect(matchesBlocklist('ADD A NEW INTEGER PHASE to the end')).toBe('add a new integer phase');
-    expect(matchesBlocklist('EXECUTE ALL PLANS for this milestone')).toBe('execute all plans');
-  });
-
-  it('returns matched phrase for "current milestone in the roadmap"', () => {
-    expect(matchesBlocklist('current milestone in the roadmap')).toBe('current milestone in the roadmap');
-  });
-
-  it('returns matched phrase for "spawn subagents"', () => {
-    expect(matchesBlocklist('spawn subagents for parallel execution')).toBe('spawn subagents');
-  });
-
-  it('returns null for partial matches that are not blocklisted', () => {
-    // "phase" alone is fine — only full phrases are blocklisted
-    expect(matchesBlocklist('Fix phase detection logic')).toBeNull();
-    expect(matchesBlocklist('Add planned features')).toBeNull();
-  });
-
-  it('GSD_INSTRUCTION_BLOCKLIST is exported and non-empty', () => {
-    expect(GSD_INSTRUCTION_BLOCKLIST).toBeDefined();
-    expect(GSD_INSTRUCTION_BLOCKLIST.length).toBeGreaterThan(0);
-    // Verify it contains the key phrases
-    expect(GSD_INSTRUCTION_BLOCKLIST).toContain('add a new integer phase');
-    expect(GSD_INSTRUCTION_BLOCKLIST).toContain('execute all plans');
   });
 });
 
@@ -626,5 +510,3 @@ describe('attemptDelegation model enforcement', () => {
     expect(entry.variant).toBe('medium');
   });
 });
-
-
