@@ -55,7 +55,6 @@ import { notifyJobCompletion } from './callback.js';
 import {
   findSessionByTitle,
   exportSessionFromDb,
-  isSessionDone,
   getLastMessage,
   getSessionState,
   getSessionModelsRecursive,
