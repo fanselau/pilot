@@ -631,6 +631,11 @@ class Runner {
         completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
         advanceStep(job.id);
 
+        if (step.command === 'new-project') {
+          // Coordination hook for init-project/gsd-04 flows that recreate .planning.
+          await ensureAutonomousGsdConfig(projectDir);
+        }
+
         // After new-milestone: re-delegate to get phase steps
         if (step.command === 'new-milestone') {
           process.stderr.write(
