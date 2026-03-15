@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 64 (GSD Installation Switch — Replace pilot-gsd with Vanilla GSD)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-15 - Completed 64-01-PLAN.md (remove gsdDir, add get-shit-done-cc)
+Last activity: 2026-03-15 - Completed 64-02-PLAN.md (setup/update/doctor rewrite with upstream installer)
 
-Progress: ████████████████████░ 70/76 plans (92%)
+Progress: ████████████████████░ 71/76 plans (93%)
 
 ## Project Reference
 
@@ -751,9 +751,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 63-02 | `timeline-fork-card` kept as thin compatibility wrapper over `BranchLifecycleBlock` | Retires split branch assumptions without breaking existing component entry points |
 | quick-085 | README keeps web UI launch guidance concise and defers deeper operator workflow to Getting Started | Maintains top-level product framing while keeping setup/tutorial detail out of README |
 | quick-085 | Remote web access guidance uses real dev-server behavior (`bun run dev -- --host ... --port 3100` + `ssh -L`) | Keeps operator instructions truthful to current `web/` scripts and Vite port defaults |
+| 64-02 | installer bin path via import.meta.dirname: path.resolve(dirname, '..', '..', 'node_modules/.bin/get-shit-done-cc') | Works from both dist/core/ and dist/commands/ — both 2 levels up from repo root |
+| 64-02 | Missing package.json warns + skips GSD only; rest of setup continues | GSD installer requires Node.js project; other setup steps (opencode.json, .gitignore) are still useful |
+| 64-02 | bun update used in update.ts for get-shit-done-cc upgrade | Pilot uses bun as runtime; consistent with project toolchain |
+| 64-02 | verifySetup() accepts real directories as valid GSD state (not requiring symlinks) | Post-migration projects have real dirs; symlinks are legacy pilot-gsd pattern |
 
 ## Session Continuity
 
-Last session: 2026-03-15 20:04 UTC
-Stopped at: Completed 64-01-PLAN.md
+Last session: 2026-03-15 20:07 UTC
+Stopped at: Completed 64-02-PLAN.md
 Resume file: None
