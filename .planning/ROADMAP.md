@@ -1166,3 +1166,37 @@ Wave structure:
 
 **Details:**
 Read requirements/gsd-03-delegation-redesign.md for full spec.
+
+### Phase 67: Session Blocker Handling — DB-Based Hung Detection
+
+**Goal:** Use the opencode DB (session/message/part tables) to deterministically detect hung sessions. Replace wall-clock timeout heuristics with DB state queries: immediately kill sessions stuck on `question` tool calls (interactive prompts), tolerate long-running legitimate tool calls, and integrate hung detection with the retry system.
+**Depends on:** Phase 66
+**Requirements:** DBSD-01, DBSD-02, DBSD-03, DBSD-04, DBSD-05, DBSD-06, DBSD-07, POLL-01, POLL-02, POLL-03, POLL-04, POLL-05, POLL-06, HERR-01, HERR-02, HERR-03, HERR-04, HERR-05, KILL-01, KILL-02, KILL-03, RTRY-01, RTRY-02, RTRY-03, RTRY-04, RTRY-05, RTRY-06, RTRY-07, RTRY-08, NTFY-01, NTFY-02
+**Plans:** 4 plans
+
+Plans:
+- [x] 67-01-PLAN.md — Core DB detection: `getSessionState()` in opencode-db.ts with hung-on-prompt/hung-on-tool/crashed/working/done states (TDD)
+- [ ] 67-02-PLAN.md — Error types + kill behavior: `HungSessionError` class, SIGTERM→SIGKILL kill sequence, PID cleanup, fix orphan bug in timeout path
+- [ ] 67-03-PLAN.md — Poll loop integration: replace `isSessionDone()` with `getSessionState()` in `spawnAndWait()`, state-based routing
+- [ ] 67-04-PLAN.md — Retry integration: add retry_budget/retry_count/hung_count to Job type + DB schema, hung retry logic in runner workflow, same-error escalation, notification on budget exhaustion
+
+**Success Criteria:**
+- `getSessionState()` correctly returns all 5 states for their respective DB conditions
+- Sessions hung on `question` tool call are killed within one poll cycle (no waiting)
+- Sessions with long-running bash/build tool calls are NOT killed
+- `HungSessionError` thrown with correct reason, tool name, and session title
+- Kill sequence: SIGTERM → 5s → SIGKILL, PID cleaned from sessionPids map
+- Existing timeout path also kills the process (fixes orphan bug)
+- `retry_budget` and `retry_count` persisted on Job, shared between hung and judge-fail retries
+- Two consecutive same-type hangs escalate immediately (don't burn budget)
+- Notifications only fire on budget exhaustion, not per-retry
+- All existing tests pass with no regressions
+
+Wave structure:
+- Wave 1: 67-01 (core DB detection function — pure query, no side effects)
+- Wave 2: 67-02 (error types + kill behavior, depends on 67-01 for state detection)
+- Wave 3: 67-03 (poll loop integration, depends on 67-01 + 67-02)
+- Wave 4: 67-04 (retry integration, depends on 67-01 + 67-02 + 67-03)
+
+**Details:**
+Read requirements/gsd-04b-session-blocker-handling.md for full spec.

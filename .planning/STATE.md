@@ -1,16 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 66
+## Current Phase: 67
 
 ## Current Position
 
-Phase: 66 (Delegation Pipeline Redesign — Intent-Based Architecture)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-15 - Completed 66-03-PLAN.md (test verification for intent-based architecture)
+Phase: 67 (Session Blocker Handling — DB-Based Hung Detection)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-03-15 - Completed 67-01-PLAN.md (getSessionState 5-state DB detection)
 
-Progress: █████████████████████ 78/82 plans (95%)
+Progress: █████████████████████░ 79/86 plans (92%)
 
 ## Project Reference
 
@@ -166,6 +166,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 66: Delegation Pipeline Redesign — Intent-Based Architecture
 - **Status:** complete (3/3 plans, verified ✓)
 
+### Phase 67: Session Blocker Handling — DB-Based Hung Detection
+- **Status:** in progress (1/4 plans complete)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -302,6 +305,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 64 added: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
 - Phase 65 added: GSD Config Pre-seeding for Autonomous Execution
 - Phase 66 added: Delegation Pipeline Redesign — Intent-Based Architecture
+- Phase 67 added: Session Blocker Handling — DB-Based Hung Detection
 
 ## Decisions
 
@@ -777,9 +781,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 66-02 | milestoneLoop uses MAX_REDELEGATION_DEPTH=3 per type + absolute cap | Belt-and-suspenders to prevent infinite loops; per-type cap is more precise |
 | 66-02 | runJudgeAndHandleResult returns (not throws) on no-activity/no-session | Consistent with existing behavior; resetToPending handles retry |
 | 66-02 | runJudge() accepts phaseNumber directly instead of DelegationStep | Decouples judge from step structure; cleaner contract |
+| 67-01 | Nonexistent session returns 'done' for getSessionState() | Safe default — prevents killing a session that hasn't written parts yet |
+| 67-01 | DB error in getSessionState() returns 'working' | Safe fallback — don't kill on query failure |
+| 67-01 | pidAlive parameter defaults to true in getSessionState() | Caller does OS PID check; function stays pure DB query |
+| 67-01 | step-finish reason='tool-calls' falls through to pending tool check | Not a terminal state; session starts another step after tool-calls |
 
 ## Session Continuity
 
-Last session: 2026-03-15 22:16 UTC
-Stopped at: Completed 66-03-PLAN.md (Phase 66 complete)
+Last session: 2026-03-15 23:48 UTC
+Stopped at: Completed 67-01-PLAN.md (getSessionState 5-state DB detection, TDD RED+GREEN)
 Resume file: None
