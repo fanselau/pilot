@@ -17,7 +17,7 @@ import path from 'node:path';
 import { accessSync, constants } from 'node:fs';
 import { errMsg } from '../util/errors.js';
 import { truncateNullable } from '../util/format.js';
-import type { SessionInfo, SessionMessage, SessionPart } from './types.js';
+import type { SessionInfo, SessionMessage, SessionPart, SessionState, SessionStateResult } from './types.js';
 
 // ── Module-level cached DB connection ──────────────────────────────────────
 
@@ -614,6 +614,121 @@ function isSessionDone(sessionId: string): boolean {
 }
 
 /**
+ * Get deterministic session state by querying the opencode DB part table.
+ *
+ * Returns one of 5 states (in priority order):
+ *   1. 'done'           — step-finish with reason 'stop' or 'length'
+ *   2. 'hung-on-prompt' — question tool has status='running' (no result)
+ *   3. 'hung-on-tool'   — non-question tool has status='running' (no result)
+ *   4. 'crashed'        — pidAlive=false AND no terminal step-finish found
+ *   5. 'working'        — default (PID alive, no blocking state found)
+ *
+ * For nonexistent sessions (no parts at all): returns 'done' as a safe default.
+ * On DB error: returns 'working' as a safe fallback (don't kill on query failure).
+ *
+ * @param sessionId - The opencode session ID
+ * @param pidAlive  - Whether the process is still running (default: true)
+ */
+function getSessionState(sessionId: string, pidAlive: boolean = true): SessionStateResult {
+  const db = openDb();
+  if (db === null) {
+    return { state: 'working' };
+  }
+
+  try {
+    // Step 1: Check for terminal step-finish (done states).
+    // reason='stop' → clean completion; reason='length' → token limit (also done).
+    // reason='tool-calls' → still working between steps, do NOT treat as done.
+    const stepFinishRow = db.prepare(
+      `SELECT json_extract(data, '$.reason') as reason
+       FROM part
+       WHERE session_id = ?
+         AND json_extract(data, '$.type') = 'step-finish'
+       ORDER BY time_created DESC LIMIT 1`,
+    ).get(sessionId) as { reason: string | null } | undefined;
+
+    if (stepFinishRow) {
+      const reason = stepFinishRow.reason;
+      if (reason === 'stop' || reason === 'length') {
+        return { state: 'done' };
+      }
+      // reason='tool-calls' → fall through to check for pending tools
+    }
+
+    // Step 2: Check for pending tool calls (status='running' = no result yet).
+    // Query ordered by time_created DESC so we get the LATEST pending tool.
+    const pendingToolRow = db.prepare(
+      `SELECT json_extract(data, '$.tool') as tool,
+              json_extract(data, '$.state.input') as tool_input,
+              json_extract(data, '$.state.status') as tool_status
+       FROM part
+       WHERE session_id = ?
+         AND json_extract(data, '$.type') = 'tool'
+         AND json_extract(data, '$.state.status') = 'running'
+       ORDER BY time_created DESC LIMIT 1`,
+    ).get(sessionId) as { tool: string | null; tool_input: string | null; tool_status: string | null } | undefined;
+
+    if (pendingToolRow && pendingToolRow.tool) {
+      const toolName = pendingToolRow.tool;
+
+      if (toolName === 'question') {
+        // Session is waiting for user input — hung-on-prompt
+        let pendingToolContent: string | undefined;
+        if (pendingToolRow.tool_input) {
+          // tool_input from json_extract returns a JSON-serialized value or raw string
+          let inputObj: unknown;
+          try {
+            inputObj = JSON.parse(pendingToolRow.tool_input);
+          } catch {
+            inputObj = pendingToolRow.tool_input;
+          }
+
+          // Extract the question text if it's an object
+          if (typeof inputObj === 'object' && inputObj !== null) {
+            const inp = inputObj as Record<string, unknown>;
+            const questionText = inp.question ?? inp.content ?? inp.text ?? inp.prompt;
+            if (typeof questionText === 'string') {
+              pendingToolContent = truncateNullable(questionText, 200) ?? undefined;
+            } else {
+              pendingToolContent = truncateNullable(JSON.stringify(inputObj), 200) ?? undefined;
+            }
+          } else if (typeof inputObj === 'string') {
+            pendingToolContent = truncateNullable(inputObj, 200) ?? undefined;
+          }
+        }
+
+        return { state: 'hung-on-prompt', pendingToolName: toolName, pendingToolContent };
+      }
+
+      // Non-question tool pending — hung-on-tool
+      return { state: 'hung-on-tool', pendingToolName: toolName };
+    }
+
+    // Step 3: Check if there are any parts at all for this session.
+    // If no parts exist, session hasn't started or doesn't exist — return 'done' (safe default).
+    const anyPartRow = db.prepare(
+      `SELECT 1 FROM part WHERE session_id = ? LIMIT 1`,
+    ).get(sessionId) as { 1: number } | undefined;
+
+    if (!anyPartRow) {
+      return { state: 'done' };
+    }
+
+    // Step 4: If PID is dead and we haven't found done/pending states, it's crashed.
+    if (!pidAlive) {
+      return { state: 'crashed' };
+    }
+
+    // Step 5: Default — session is working.
+    return { state: 'working' };
+  } catch (err) {
+    handleDbError(err);
+    // Safe fallback — don't kill session on query failure
+    return { state: 'working' };
+  }
+}
+
+/**
  * Aggregate token usage for a session from assistant messages.
  * Reads input, output, reasoning, cache_read, and cache_write token fields from message data JSON.
  * Returns zeroed struct if no tokens found or DB unavailable.
@@ -945,6 +1060,7 @@ export {
   getLastMessage,
   getAssistantMessageCount,
   isSessionDone,
+  getSessionState,
   getSessionTokens,
   getSessionTokenUsageByModel,
   getSessionTokenUsageByModelRecursive,
@@ -955,3 +1071,5 @@ export {
   _resetDbCache,
   _setTestDb,
 };
+
+export type { SessionState, SessionStateResult };
