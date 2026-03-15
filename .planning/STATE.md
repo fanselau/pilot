@@ -7,11 +7,11 @@
 
 Phase: 65 (GSD Config Pre-seeding for Autonomous Execution)
 **Next Phase:** TBD (Phase 65 currently in progress)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-15 - Completed 65-01-PLAN.md (autonomous config lifecycle helper + tests)
+Last activity: 2026-03-15 - Completed 65-02-PLAN.md (setup lifecycle integration + regression coverage)
 
-Progress: ███████████████████░░ 73/79 plans (92%)
+Progress: ████████████████████░ 74/79 plans (94%)
 
 ## Project Reference
 
@@ -762,9 +762,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 65-01 | Preserve user values via deep merge, then enforce explicit PILOT_WINS paths | Keeps custom project config intact while guaranteeing autonomous safety gates |
 | 65-01 | Lock `.planning/config.json` directly with proper-lockfile retries | Prevents concurrent ensure calls from producing torn writes or lock contention failures |
 | 65-01 | Missing/invalid config is treated as empty object before reseeding | Makes lifecycle helper idempotent and self-healing for malformed config states |
+| 65-02 | setupProject enforces autonomous planning config via ensureAutonomousGsdConfig() after Node installer flow | Guarantees setup refreshes and fresh runs both apply centralized autonomous policy without duplicating merge logic |
+| 65-02 | setup keeps autonomous config enforcement failures in SetupResult.errors without aborting remaining setup steps | Preserves existing setup error semantics while still surfacing autonomous config problems clearly |
+| 65-02 | setup tests use vi.hoisted execa mock wiring | Keeps fallback vitest verification deterministic when bun is unavailable |
 
 ## Session Continuity
 
-Last session: 2026-03-15 21:11 UTC
-Stopped at: Completed 65-01-PLAN.md
+Last session: 2026-03-15 21:17 UTC
+Stopped at: Completed 65-02-PLAN.md
 Resume file: None
