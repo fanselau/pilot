@@ -1257,9 +1257,13 @@ class Runner {
     }
 
     if (!sessionFound) {
+      // Kill orphan process before throwing (fixes orphan bug on timeout-no-session path)
+      await this.killHungSession(procPid, title, 'timeout-no-session');
       throw new Error(`Session never appeared in opencode DB: ${title}`);
     }
 
+    // Kill the process before throwing timeout error (fixes orphan bug on timeout path)
+    await this.killHungSession(procPid, title, 'timeout');
     // Find the job timeout for the error message
     const jobEntry2 = [...this.activeJobs.values()].find(a => a.title === title);
     const timeoutMin = jobEntry2?.job.timeout ?? 0;
@@ -1350,6 +1354,47 @@ class Runner {
         `[runner] Warning: failed to capture git head checkpoint for ${jobId}: ${errMsg(err)}\n`,
       );
     }
+  }
+
+  /**
+   * Kill a hung session process: SIGTERM → wait up to 5s → SIGKILL.
+   * Cleans up the sessionPids entry after kill.
+   *
+   * @param procPid - PID of the spawned opencode process (undefined = no-op)
+   * @param title   - Session title used as sessionPids key
+   * @param reason  - Short reason string for logging
+   */
+  private async killHungSession(
+    procPid: number | undefined,
+    title: string,
+    reason: string,
+  ): Promise<void> {
+    if (procPid === undefined) return;
+
+    this.log(`Killing hung session (${reason}): ${title} [PID ${procPid}]`);
+
+    // SIGTERM first
+    try { process.kill(procPid, 'SIGTERM'); } catch { /* already dead */ }
+
+    // Wait up to 5s for graceful shutdown
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      await this.sleep(500);
+      try { process.kill(procPid, 0); } catch {
+        // Process is dead
+        this.sessionPids.delete(title);
+        return;
+      }
+    }
+
+    // SIGKILL if still alive
+    try { process.kill(procPid, 'SIGKILL'); } catch { /* already dead */ }
+    this.sessionPids.delete(title);
+    this.log(`Force-killed hung session: ${title} [PID ${procPid}]`);
+  }
+
+  private log(msg: string): void {
+    process.stderr.write(`[runner] ${msg}\n`);
   }
 
 }

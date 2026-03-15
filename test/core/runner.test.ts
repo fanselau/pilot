@@ -330,3 +330,68 @@ describe('runner dispatch wiring', () => {
     rmSync(pilotDir, { recursive: true, force: true });
   });
 });
+
+// ── HungSessionError tests ──────────────────────────────────────────────────
+
+describe('HungSessionError', () => {
+  it('should be an instance of Error', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'my-session' });
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(HungSessionError);
+  });
+
+  it('should have name="HungSessionError"', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'unknown', sessionTitle: 'my-session' });
+    expect(err.name).toBe('HungSessionError');
+  });
+
+  it('should carry hungReason field', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'stuck-tool', sessionTitle: 'my-session' });
+    expect(err.hungReason).toBe('stuck-tool');
+  });
+
+  it('should carry sessionTitle field', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'my-session-title' });
+    expect(err.sessionTitle).toBe('my-session-title');
+  });
+
+  it('should have undefined lastToolCall when not provided', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'my-session' });
+    expect(err.lastToolCall).toBeUndefined();
+  });
+
+  it('should carry lastToolCall when provided', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'stuck-tool', lastToolCall: 'bash', sessionTitle: 'my-session' });
+    expect(err.lastToolCall).toBe('bash');
+  });
+
+  it('should generate default message for interactive-prompt without tool', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'test-session' });
+    expect(err.message).toBe('Session hung on interactive-prompt: test-session');
+  });
+
+  it('should generate default message for stuck-tool with tool name', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'stuck-tool', lastToolCall: 'write_file', sessionTitle: 'test-session' });
+    expect(err.message).toBe('Session hung on stuck-tool (tool: write_file): test-session');
+  });
+
+  it('should use custom message when provided', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'unknown', sessionTitle: 'test-session', message: 'Custom error message' });
+    expect(err.message).toBe('Custom error message');
+  });
+
+  it('should generate default message for unknown reason without tool', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const err = new HungSessionError({ hungReason: 'unknown', sessionTitle: 'my-session' });
+    expect(err.message).toBe('Session hung on unknown: my-session');
+  });
+});
