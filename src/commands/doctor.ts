@@ -1,7 +1,7 @@
 /**
  * `pilot doctor` — Health check for Pilot system and individual projects.
  *
- * Without flags: Checks opencode binary, pilot-gsd, pilot data dir, system memory.
+ * Without flags: Checks opencode binary, get-shit-done-cc binary, pilot data dir, system memory.
  * With --project <path>: Checks project-level config, commands, planning, git, agents.
  * Reports pass/fail/warn for each check. Supports --json output.
  *
@@ -142,12 +142,56 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
       } catch { /* empty */ }
     }
 
-    // gsd-delegate.md present
-    const delegateMd = path.join(commandDir, 'gsd-delegate.md');
-    if (await fileExists(delegateMd)) {
-      checks.push({ name: 'gsd-delegate.md present', status: 'pass', detail: 'Found' });
+    // gsd-help.md present (upstream installer sentinel)
+    const helpMd = path.join(commandDir, 'gsd-help.md');
+    if (await fileExists(helpMd)) {
+      checks.push({ name: 'gsd-help.md present', status: 'pass', detail: 'Found' });
     } else {
-      checks.push({ name: 'gsd-delegate.md present', status: 'fail', detail: 'gsd-delegate.md not found in .opencode/command/' });
+      checks.push({ name: 'gsd-help.md present', status: 'fail', detail: 'gsd-help.md not found — run pilot setup --refresh' });
+    }
+
+    // gsd-tools.cjs present
+    const opencodeDir = path.join(absPath, '.opencode');
+    const toolsCjs = path.join(opencodeDir, 'get-shit-done', 'bin', 'gsd-tools.cjs');
+    if (await fileExists(toolsCjs)) {
+      checks.push({ name: 'gsd-tools.cjs present', status: 'pass', detail: 'Found' });
+    } else {
+      checks.push({ name: 'gsd-tools.cjs present', status: 'warn', detail: 'gsd-tools.cjs not found — run pilot setup --refresh' });
+    }
+
+    // GSD VERSION
+    const versionFile = path.join(opencodeDir, 'get-shit-done', 'VERSION');
+    try {
+      const version = (await readFile(versionFile, 'utf8')).trim();
+      checks.push({ name: 'GSD version', status: 'pass', detail: version });
+    } catch {
+      checks.push({ name: 'GSD version', status: 'warn', detail: 'VERSION file not found' });
+    }
+
+    // Broken symlinks in .opencode/
+    try {
+      const opencodeEntries = await readdir(opencodeDir);
+      for (const entry of opencodeEntries) {
+        const entryPath = path.join(opencodeDir, entry);
+        try {
+          const entryStats = await lstat(entryPath);
+          if (entryStats.isSymbolicLink()) {
+            try {
+              await import('node:fs/promises').then(m => m.realpath(entryPath));
+            } catch {
+              checks.push({
+                name: `broken symlink: .opencode/${entry}`,
+                status: 'warn',
+                detail: 'broken symlink — may need migration, run pilot setup --refresh',
+              });
+            }
+          }
+        } catch {
+          // Can't stat — skip
+        }
+      }
+    } catch {
+      // Can't read .opencode/ — skip
     }
   } else {
     checks.push({ name: '.opencode/command/ exists', status: 'fail', detail: `Not found — run: pilot setup ${projectPath}` });
@@ -299,7 +343,7 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
       } else {
         // Spawn AI session for drift detection using haiku-tier (cheapest) model
         // TODO: Replace 'gsd-setup-agents check' with actual health check command when available
-        // in pilot-gsd. The AI session should read AGENTS.md, package.json, and project structure
+        // in the GSD package. The AI session should read AGENTS.md, package.json, and project structure
         // to detect stale references, wrong versions, and deleted paths.
         try {
           const result = await spawnAgentsMdSession({
@@ -395,12 +439,14 @@ async function systemHealthCheck(skipAgents?: boolean, fix?: boolean): Promise<C
     }
   }
 
-  // Check pilot-gsd directory
+  // Check get-shit-done-cc binary
+  const pilotRoot = path.resolve(import.meta.dirname, '..', '..');
+  const gsdBinPath = path.join(pilotRoot, 'node_modules', '.bin', 'get-shit-done-cc');
   try {
-    accessSync(config.gsdDir);
-    checks.push({ name: 'pilot-gsd', status: 'pass', detail: config.gsdDir });
+    accessSync(gsdBinPath);
+    checks.push({ name: 'get-shit-done-cc', status: 'pass', detail: gsdBinPath });
   } catch {
-    checks.push({ name: 'pilot-gsd', status: 'fail', detail: `Not found at ${config.gsdDir}` });
+    checks.push({ name: 'get-shit-done-cc', status: 'fail', detail: 'Not installed — run bun install' });
   }
 
   // Check pilot data directory
