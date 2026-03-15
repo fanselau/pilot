@@ -95,7 +95,6 @@ vi.mock('../../src/core/config.js', () => ({
     pilotDir: _mockPilotDir,
     pilotDbPath: path.join(_mockPilotDir, 'pilot.db'),
     projectDir: _mockPilotDir,
-    gsdDir: _mockPilotDir,
     maxParallel: 1,
     sessionMemoryMaxMb: 8192,
     reservedMemoryMb: 4096,

@@ -267,7 +267,6 @@ describe('runner dispatch wiring', () => {
         pilotDir,
         pilotDbPath,
         projectDir: pilotDir,
-        gsdDir: pilotDir,
         maxParallel: 1,
         queueGraceSeconds: 42,
         sessionMemoryMaxMb: 8192,

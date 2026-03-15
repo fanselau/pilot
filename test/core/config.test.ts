@@ -4,7 +4,6 @@
  *
  * Covers:
  *   - resolveProjectDir four resolution modes (absolute, tilde, relative, shorthand)
- *   - gsdDir 3-step fallback: PILOT_GSD_DIR env → submodule → ~/pilot-gsd/
  *   - Resource management config fields (sessionMemoryMaxMb, reservedMemoryMb, memoryKillThresholdMb)
  *   - Config file loading: loadConfigFile reads ~/.pilot/config.json
  *   - Resolution order: env var > config file > default
@@ -15,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -132,41 +131,9 @@ describe('resource management config fields', () => {
   });
 });
 
-// ── gsdDir resolution ─────────────────────────────────────────────────────
-
-describe('gsdDir resolution', () => {
-  afterEach(() => {
-    delete process.env.PILOT_GSD_DIR;
-  });
-
-  it('PILOT_GSD_DIR env var overrides all other resolution', () => {
-    process.env.PILOT_GSD_DIR = '/custom/gsd-path';
-    const config = getConfig();
-    expect(config.gsdDir).toBe('/custom/gsd-path');
-  });
-
-  it('PILOT_GSD_DIR with tilde expands to home directory', () => {
-    process.env.PILOT_GSD_DIR = '~/my-gsd';
-    const config = getConfig();
-    expect(config.gsdDir).toBe(path.join(os.homedir(), 'my-gsd'));
-  });
-
-  it('without env var, resolves to a path containing pilot-gsd', () => {
-    delete process.env.PILOT_GSD_DIR;
-    const config = getConfig();
-    expect(config.gsdDir).toMatch(/pilot-gsd$/);
-  });
-
-  it('without env var, resolves to submodule when it exists', () => {
-    // In the test environment (running from repo), the submodule exists
-    delete process.env.PILOT_GSD_DIR;
-    const config = getConfig();
-    // Should resolve to <repo_root>/pilot-gsd which exists as submodule
-    expect(config.gsdDir).toContain('pilot-gsd');
-    // The resolved path should actually exist (submodule was initialized)
-    expect(existsSync(config.gsdDir)).toBe(true);
-  });
-});
+// Note: gsdDir was removed from PilotConfig in Phase 64 (Plan 01).
+// GSD installation is now handled by the upstream get-shit-done-cc package
+// (installed as a project dependency) rather than a local symlinked directory.
 
 // ── Config file loading ───────────────────────────────────────────────────
 
@@ -519,15 +486,8 @@ describe('config resolution order', () => {
     expect(config.noColor).toBe(true);
   });
 
-  it('config file sets gsdDir', () => {
-    tempConfigPath = writeTempConfig({
-      gsdDir: '/custom/gsd',
-    });
-    process.env.PILOT_CONFIG_FILE = tempConfigPath;
-    delete process.env.PILOT_GSD_DIR;
-    const config = getConfig();
-    expect(config.gsdDir).toBe('/custom/gsd');
-  });
+  // Note: gsdDir was removed from PilotConfig in Phase 64 Plan 01.
+  // GSD is now installed as a project dependency (get-shit-done-cc package).
 
   it('config file sets maxParallel', () => {
     tempConfigPath = writeTempConfig({

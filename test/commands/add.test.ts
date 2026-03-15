@@ -91,7 +91,6 @@ vi.mock('../../src/core/config.js', () => {
     pilotDir: '/tmp/.pilot',
     pilotDbPath: '/tmp/.pilot/pilot.db',
     projectDir: process.env.PILOT_PROJECT_DIR ?? '/tmp/pilot-test-projects',
-    gsdDir: '/tmp/pilot-gsd',
     stuckThreshold: 90,
     maxParallel: 1,
     pollInterval: 5,

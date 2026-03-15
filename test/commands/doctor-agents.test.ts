@@ -44,7 +44,6 @@ vi.mock('../../src/util/colors.js', () => ({
 
 vi.mock('../../src/core/config.js', () => ({
   getConfig: () => ({
-    gsdDir: '/tmp/gsd',
     pilotDir: '/tmp/.pilot',
     sessionMemoryMaxMb: 4096,
     reservedMemoryMb: 2048,

@@ -58,7 +58,6 @@ vi.mock('../../src/core/config.js', () => ({
     pilotDir: '/tmp/test-pilot',
     pilotDbPath: ':memory:',
     projectDir: '/tmp/test-project',
-    gsdDir: '/tmp/test-gsd',
     maxParallel: 1,
     queueGraceSeconds: 0,
     sessionMemoryMaxMb: 8192,

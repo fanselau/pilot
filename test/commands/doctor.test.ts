@@ -58,17 +58,18 @@ vi.mock('../../src/core/shell-exposure.js', () => ({
   },
 }));
 
-vi.mock('node:fs', async () => {
-  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+import * as nodeFs from 'node:fs';
+
+vi.mock('node:fs', () => {
   return {
-    ...actual,
+    default: nodeFs,
     accessSync: vi.fn((filePath: string, _mode?: number) => {
       if (mockAccessiblePaths.has(filePath)) return undefined;
       const err = new Error(`EACCES: permission denied, access '${filePath}'`);
       (err as NodeJS.ErrnoException).code = 'EACCES';
       throw err;
     }),
-    constants: actual.constants,
+    constants: nodeFs.constants,
     readFileSync: vi.fn((filePath: string, _encoding?: string) => {
       // Service unit file
       if (typeof filePath === 'string' && filePath.includes('pilot-runner.service')) {
@@ -83,23 +84,24 @@ vi.mock('node:fs', async () => {
       if (typeof filePath === 'string' && filePath.includes('config.json')) {
         return '{}';
       }
-      return actual.readFileSync(filePath, _encoding as BufferEncoding);
+      return nodeFs.readFileSync(filePath, _encoding as BufferEncoding);
     }),
     statSync: vi.fn((filePath: string) => {
       if (typeof filePath === 'string' && filePath.includes('config.json')) {
         return { mode: 0o100600 };
       }
-      return actual.statSync(filePath);
+      return nodeFs.statSync(filePath);
     }),
+    existsSync: nodeFs.existsSync,
   };
 });
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os');
+import * as nodeOs from 'node:os';
+
+vi.mock('node:os', () => {
   return {
-    ...actual,
     default: {
-      ...actual,
+      ...nodeOs,
       homedir: () => mockHomedir,
       freemem: () => 8 * 1024 * 1024 * 1024, // 8GB
       userInfo: () => ({ username: 'testuser' }),
@@ -107,6 +109,16 @@ vi.mock('node:os', async () => {
     homedir: () => mockHomedir,
     freemem: () => 8 * 1024 * 1024 * 1024,
     userInfo: () => ({ username: 'testuser' }),
+    // Re-export everything else that might be used
+    cpus: nodeOs.cpus,
+    platform: nodeOs.platform,
+    arch: nodeOs.arch,
+    tmpdir: nodeOs.tmpdir,
+    EOL: nodeOs.EOL,
+    networkInterfaces: nodeOs.networkInterfaces,
+    release: nodeOs.release,
+    type: nodeOs.type,
+    version: nodeOs.version,
   };
 });
 
@@ -132,7 +144,6 @@ vi.mock('execa', () => ({
 vi.mock('../../src/core/config.js', () => ({
   getConfig: () => ({
     pilotDir: '/home/testuser/.local/share/pilot',
-    gsdDir: '/home/testuser/pilot-gsd',
     projectDir: '/home/testuser/projects/myapp',
     sessionMemoryMaxMb: 4096,
     reservedMemoryMb: 1024,
@@ -164,6 +175,12 @@ import { doctorCommand } from '../../src/commands/doctor.js';
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
+// Computed once: the path doctor.ts uses for the get-shit-done-cc binary check.
+// doctor.ts: path.resolve(import.meta.dirname, '..', '..') + '/node_modules/.bin/get-shit-done-cc'
+// In test builds, import.meta.dirname is the src/commands directory.
+// We add this to mockAccessiblePaths by default so the check passes unless explicitly removed.
+const GSD_BIN_PATH = new URL('../../node_modules/.bin/get-shit-done-cc', import.meta.url).pathname;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let exitSpy: any;
 
@@ -172,6 +189,8 @@ beforeEach(() => {
   mockResolvedBinary = '/home/user/.opencode/bin/opencode';
   mockUnitContent = null;
   mockAccessiblePaths = new Set();
+  // Always make the get-shit-done-cc binary accessible by default
+  mockAccessiblePaths.add(GSD_BIN_PATH);
   mockJsonMode = true; // Use JSON mode for structured assertions
   mockShellExposureError = null;
   mockShellExposureResult = {
@@ -219,8 +238,7 @@ describe('doctor system health — service unit check', () => {
     mockUnitContent = `[Service]\nExecStart=/usr/bin/env bun ${binaryPath} run --daemon\n`;
     mockAccessiblePaths.add(binaryPath);
 
-    // gsdDir and pilotDir accessible
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
+    // pilotDir accessible; get-shit-done-cc binary accessible
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -236,7 +254,6 @@ describe('doctor system health — service unit check', () => {
     mockUnitContent = `[Service]\nExecStart=/usr/bin/env bun ${stalePath} run --daemon\n`;
     // stalePath NOT in mockAccessiblePaths — accessSync will throw
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     try {
@@ -255,7 +272,6 @@ describe('doctor system health — service unit check', () => {
   it('reports warn when service file does not exist', async () => {
     mockUnitContent = null; // ENOENT
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -271,7 +287,6 @@ describe('doctor system health — opencode binary check', () => {
   it('reports pass with resolved binary path (not hardcoded)', async () => {
     mockResolvedBinary = '/usr/local/bin/opencode';
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -300,7 +315,6 @@ describe('doctor system health — opencode binary check', () => {
       return { stdout: '', exitCode: 0 };
     });
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     try {
@@ -316,11 +330,43 @@ describe('doctor system health — opencode binary check', () => {
   });
 });
 
+// ── get-shit-done-cc binary check ─────────────────────────────────────────
+
+describe('doctor system health — get-shit-done-cc binary check', () => {
+  it('reports pass when get-shit-done-cc binary is accessible', async () => {
+    // GSD_BIN_PATH is already in mockAccessiblePaths (added in beforeEach)
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const check = findCheck('get-shit-done-cc');
+    expect(check).toBeDefined();
+    expect(check!.status).toBe('pass');
+    expect(check!.detail).toContain('get-shit-done-cc');
+  });
+
+  it('reports fail when get-shit-done-cc binary is not accessible', async () => {
+    // Remove the gsd binary from accessible paths
+    mockAccessiblePaths.delete(GSD_BIN_PATH);
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    try {
+      await doctorCommand(undefined, false, true);
+    } catch {
+      // process.exit(1) throws in our mock — expected for fail checks
+    }
+
+    const check = findCheck('get-shit-done-cc');
+    expect(check).toBeDefined();
+    expect(check!.status).toBe('fail');
+    expect(check!.detail).toContain('bun install');
+  });
+});
+
 // ── Shell exposure health checks ──────────────────────────────────────────
 
 describe('doctor system health — shell exposure checks', () => {
   it('includes shell: pilot, shell: node, shell: pnpm, shell: fnm checks when all pass', async () => {
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -357,7 +403,6 @@ describe('doctor system health — shell exposure checks', () => {
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
     };
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -378,7 +423,6 @@ describe('doctor system health — shell exposure checks', () => {
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
     };
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -402,7 +446,6 @@ describe('doctor system health — shell exposure checks', () => {
   it('shows single warn when shell-exposure module throws', async () => {
     mockShellExposureError = new Error('Module not available');
 
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -422,7 +465,6 @@ describe('doctor system health — shell exposure checks', () => {
   });
 
   it('fnm exclusion note is surfaced as pass with correct message', async () => {
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true);
@@ -456,7 +498,6 @@ describe('doctor system health — --fix shell exposure repair', () => {
       ],
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
     };
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true, true); // fix=true
@@ -478,7 +519,6 @@ describe('doctor system health — --fix shell exposure repair', () => {
 
   it('does not call ensureShellExposure when --fix but no issues exist', async () => {
     // All pass — no fix needed
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true, true); // fix=true
@@ -506,7 +546,6 @@ describe('doctor system health — --fix shell exposure repair', () => {
       ],
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
     };
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true, true);
@@ -525,7 +564,6 @@ describe('doctor system health — --fix shell exposure repair', () => {
       ],
       fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
     };
-    mockAccessiblePaths.add('/home/testuser/pilot-gsd');
     mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
 
     await doctorCommand(undefined, false, true); // no fix
