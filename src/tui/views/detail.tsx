@@ -33,7 +33,7 @@ import type { PilotStateStore } from '../state.js';
 import type {
   Job,
   JobObservabilitySnapshot,
-  DelegationPlan,
+  DelegationResult,
   JobStatus,
   StepTimelineItem,
 } from '../../core/types.js';
@@ -145,11 +145,11 @@ export function buildRecoveryHeader(job: Job): RecoveryHeader {
 export function parseStepInfo(job: Job): { label: string; index: string } {
   if (!job.delegationPlan) return { label: '—', index: '—' };
   try {
-    const plan = JSON.parse(job.delegationPlan) as DelegationPlan;
-    const step = plan.steps[job.currentStep];
-    const total = plan.steps.length;
-    const label = step ? `${step.command} "${truncate(step.args, 20)}"` : '—';
-    const index = `${Math.min(job.currentStep + 1, total)}/${total}`;
+    const result = JSON.parse(job.delegationPlan) as DelegationResult;
+    const intent = result.intent;
+    if (!intent) return { label: '—', index: '—' };
+    const label = intent.type;
+    const index = `${job.currentStep + 1}`;
     return { label, index };
   } catch { return { label: '—', index: '—' }; }
 }

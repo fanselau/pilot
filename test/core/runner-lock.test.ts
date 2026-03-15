@@ -50,6 +50,9 @@ vi.mock('../../src/core/db.js', () => ({
 vi.mock('../../src/core/delegate.js', () => ({
   delegate: vi.fn(),
   resolveOpencodeBinary: vi.fn(() => '/usr/local/bin/opencode'),
+  buildNewProjectArgs: vi.fn((job: { description: string }) => job.description),
+  buildQuickArgs: vi.fn((job: { description: string }) => job.description),
+  getNextPhaseNumber: vi.fn(() => 1),
 }));
 
 vi.mock('../../src/core/opencode-db.js', () => ({

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { DelegationPlan, OpenClawDeliverRoute } from '../../src/core/types.js';
+import type { DelegationResult, OpenClawDeliverRoute } from '../../src/core/types.js';
 import { _resetConfigCache } from '../../src/core/config.js';
 
 // Import the module under test — will fail until db.ts is implemented
@@ -446,13 +446,10 @@ describe('pilot.db', () => {
   // ── updateDelegationPlan ──────────────────────────────────────────────
 
   describe('updateDelegationPlan', () => {
-    it('stores and retrieves JSON plan', () => {
+    it('stores and retrieves JSON delegation result', () => {
       const job = addJob('proj', 'phase', 'build feature');
-      const plan: DelegationPlan = {
-        steps: [
-          { command: 'plan-phase', args: '3 --auto' },
-          { command: 'execute-phase', args: '3 --auto' },
-        ],
+      const plan: DelegationResult = {
+        intent: { type: 'plan-and-execute', phaseNumber: 3 },
         reasoning: 'Phase 3 needs planning then execution',
       };
 
@@ -460,9 +457,8 @@ describe('pilot.db', () => {
       const updated = getJob(job.id);
       expect(updated!.delegationPlan).not.toBeNull();
 
-      const parsed = JSON.parse(updated!.delegationPlan!) as DelegationPlan;
-      expect(parsed.steps).toHaveLength(2);
-      expect(parsed.steps[0].command).toBe('plan-phase');
+      const parsed = JSON.parse(updated!.delegationPlan!) as DelegationResult;
+      expect(parsed.intent.type).toBe('plan-and-execute');
       expect(parsed.reasoning).toBe('Phase 3 needs planning then execution');
     });
   });

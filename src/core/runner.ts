@@ -43,7 +43,7 @@ import {
   updateJobRecoveryStart,
   updateJobRecoveryHead,
 } from './db.js';
-import { delegate, resolveOpencodeBinary } from './delegate.js';
+import { delegate, resolveOpencodeBinary, getNextPhaseNumber, buildNewProjectArgs, buildQuickArgs } from './delegate.js';
 import {
   isGitWorktree,
   isWorktreeDirty,
@@ -64,7 +64,7 @@ import { patchAgentFrontmatter, resolveAllAgentModels, resolveTopLevelModel } fr
 import { truncateTitle } from '../util/format.js';
 import { errMsg } from '../util/errors.js';
 import { dim } from '../util/colors.js';
-import type { Job, DelegationPlan, DelegationStep } from './types.js';
+import type { Job, DelegationResult, DelegationIntent } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -575,165 +575,27 @@ class Runner {
 
       this.patchModelsForJob(job, projectDir);
 
-      // Step 1: Delegation — get execution plan (typically single step for phase jobs)
-      let plan: DelegationPlan;
+      // Step 1: Delegation — get intent
+      let result: DelegationResult;
       try {
-        const result = await delegate(job, projectDir);
-        const { _sessionTitle, ...planData } = result as DelegationPlan & { _sessionTitle?: string };
-        plan = planData;
-        if (_sessionTitle) {
-          updateSessionTitles(job.id, [_sessionTitle]);
-        }
+        const delegationOutput = await delegate(job, projectDir);
+        const { _sessionTitle, ...resultData } = delegationOutput as DelegationResult & { _sessionTitle?: string };
+        result = resultData;
+        if (_sessionTitle) updateSessionTitles(job.id, [_sessionTitle]);
       } catch (err) {
         throw new Error(`Delegation failed: ${errMsg(err)}`);
       }
-      updateDelegationPlan(job.id, plan);
+      updateDelegationPlan(job.id, result);
 
-      // Step 2: Execute each step
-      let allStepsCompleted = true;
-      for (let i = 0; i < plan.steps.length; i++) {
-        if (this.shuttingDown) {
-          allStepsCompleted = false;
-          skipRemainingSteps(job.id, i, 'Runner shutdown');
-          break;
-        }
+      // Step 2: Route intent
+      await this.executeIntent(job, projectDir, result);
 
-        // Verify we still own this job (guards against stale resets or external cancellation)
-        const freshJob = getJob(job.id);
-        if (!freshJob || freshJob.status !== 'running') {
-          process.stderr.write(
-            `[runner] Job ${job.id} no longer running (status=${freshJob?.status ?? 'gone'}). Aborting step ${i}.\n`,
-          );
-          allStepsCompleted = false;
-          break;
-        }
-
-        const step = plan.steps[i];
-        const ts = Date.now().toString(36).slice(-4);
-        const title = truncateTitle(`${job.project}-${step.command}-${job.id}-${ts}`, 80);
-        this.activeJobs.set(job.id, { job, title });
-        updateSessionTitles(job.id, [title]);
-        this.patchModelsForJob(job, projectDir);
-
-        const currentStepRowId = recordStep(job.id, i, step.command, step.args, title);
-
-        try {
-          await this.spawnAndWait(projectDir, step.command, step.args, title);
-        } catch (spawnErr) {
-          const sessionId = findSessionByTitle(title);
-          completeStep(currentStepRowId, 'failed', null,
-            errMsg(spawnErr),
-            sessionId ?? null);
-          throw spawnErr;
-        }
-
-        const sessionId = findSessionByTitle(title);
-        completeStep(currentStepRowId, 'completed', null, null, sessionId ?? null);
-        advanceStep(job.id);
-
-        if (step.command === 'new-project') {
-          // Coordination hook for init-project/gsd-04 flows that recreate .planning.
-          await ensureAutonomousGsdConfig(projectDir);
-        }
-
-        // After new-milestone: re-delegate to get phase steps
-        if (step.command === 'new-milestone') {
-          process.stderr.write(
-            `[runner] new-milestone complete, re-delegating for phase steps...\n`,
-          );
-          try {
-            const rePlan = await delegate(job, projectDir);
-            if (rePlan.steps.length > 0) {
-              plan.steps.push(...rePlan.steps);
-              // Update stored plan so step tracking stays accurate
-              updateDelegationPlan(job.id, plan);
-              process.stderr.write(
-                `[runner] Re-delegation added ${rePlan.steps.length} steps\n`,
-              );
-            } else {
-              process.stderr.write(
-                `[runner] Re-delegation returned 0 steps — all phases may be done\n`,
-              );
-            }
-          } catch (err) {
-            throw new Error(`Re-delegation after new-milestone failed: ${errMsg(err)}`);
-          }
-        }
-
-        // Step 3: For execute-phase commands, spawn judge to evaluate results
-        if (step.command === 'execute-phase') {
-          // No-activity check: did the execution session actually produce output?
-          // If the session has 0 assistant messages, the process likely crashed or
-          // exited immediately (missing commands, OOM, etc.). Mark as failed rather
-          // than letting the judge "benefit of doubt" mark it as completed.
-          const execSessionId = findSessionByTitle(title);
-          if (execSessionId) {
-            const assistantMsgCount = getAssistantMessageCount(execSessionId);
-            if (assistantMsgCount === 0) {
-              resetToPending(job.id, 'No activity detected — session may have crashed or exited immediately');
-              process.stderr.write(
-                `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
-              );
-              return;
-            }
-          } else {
-            // No session found at all — reset to pending
-            resetToPending(job.id, 'No session created — opencode may have crashed before starting');
-            process.stderr.write(
-              `[runner] No session found for ${job.id}. Resetting to pending.\n`,
-            );
-            return;
-          }
-
-          // Judge shutdown guard
-          if (this.shuttingDown) {
-            resetToPending(job.id, 'Interrupted before verification');
-            process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
-            return;
-          }
-
-          // Run gsd-judge to get structured verdict from session output
-          const judgeVerdict = await this.runJudge(job, projectDir, step);
-
-          if (judgeVerdict === null) {
-            // Judge crash or unparseable — benefit of doubt
-            updateJudgeVerdict(job.id, JSON.stringify({
-              verdict: 'succeeded',
-              confidence: 0,
-              reason: 'judge unavailable',
-            }));
-          } else if (judgeVerdict.verdict === 'succeeded') {
-            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-          } else if (judgeVerdict.verdict === 'doubting') {
-            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-            if (judgeVerdict.confidence < 50) {
-              // Low confidence doubt — treat as fail
-              throw new Error(judgeVerdict.reason);
-            }
-            // confidence >= 50 — treat as pass, fall through
-          } else {
-            // 'failed'
-            updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-            throw new Error(judgeVerdict.reason);
-          }
-        }
-      }
-
-      if (allStepsCompleted) {
-        await this.captureRecoveryHead(job.id, projectDir);
-        this.collectActualModels(job.id);
-
-        markCompleted(job.id);
-        // Fire-and-forget callback to wake originating session
-        const completedJob = getJob(job.id);
-        if (completedJob) {
-          notifyJobCompletion(completedJob).catch(() => {});
-        }
-      } else {
-        // Shutdown interrupted — reset to pending instead of cancel
-        // resetToPending is guarded by AND status='running' — no-op if job was force-quit
-        resetToPending(job.id, 'Interrupted by shutdown');
-      }
+      // Completion
+      await this.captureRecoveryHead(job.id, projectDir);
+      this.collectActualModels(job.id);
+      markCompleted(job.id);
+      const completedJob = getJob(job.id);
+      if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
     } catch (err) {
       const error = errMsg(err);
       await this.captureRecoveryHead(job.id, projectDir);
@@ -789,6 +651,279 @@ class Runner {
       } catch {
         // Best-effort cleanup — don't fail the job
       }
+    }
+  }
+
+  // ── Intent Routing ──────────────────────────────────────────────────────
+
+  /**
+   * Route a DelegationResult intent to the correct workflow handler.
+   */
+  private async executeIntent(job: Job, projectDir: string, result: DelegationResult): Promise<void> {
+    const intent = result.intent;
+
+    switch (intent.type) {
+      case 'quick':
+        await this.handleQuick(job, projectDir, intent);
+        break;
+      case 'init-project':
+        await this.handleInitProject(job, projectDir, intent);
+        break;
+      case 'new-milestone':
+        await this.handleNewMilestone(job, projectDir, intent);
+        break;
+      case 'plan-and-execute':
+        await this.handlePlanAndExecute(job, projectDir, intent);
+        break;
+      case 'execute-only':
+        await this.handleExecuteOnly(job, projectDir, intent);
+        break;
+      case 'audit-milestone':
+        await this.handleAuditMilestone(job, projectDir, intent);
+        break;
+      case 'noop':
+        process.stderr.write(`[runner] Delegation returned noop: ${intent.reason}\n`);
+        break;
+      default:
+        throw new Error(`Unknown intent type: ${(intent as DelegationIntent).type}`);
+    }
+  }
+
+  private async handleQuick(
+    job: Job,
+    projectDir: string,
+    intent: Extract<DelegationIntent, { type: 'quick' }>,
+  ): Promise<void> {
+    let args = buildQuickArgs(job);
+    // Add flags: --full for quality-critical, --research for unfamiliar domains
+    if (intent.flags?.includes('full')) args += ' --full';
+    if (intent.flags?.includes('research')) args += ' --research';
+    await this.runGsdStep(job, projectDir, 'quick', args, job.currentStep);
+  }
+
+  private async handleInitProject(
+    job: Job,
+    projectDir: string,
+    _intent: Extract<DelegationIntent, { type: 'init-project' }>,
+  ): Promise<void> {
+    const args = buildNewProjectArgs(job);
+    await this.runGsdStep(job, projectDir, 'new-project', args, job.currentStep);
+    await ensureAutonomousGsdConfig(projectDir);
+    // After init-project, re-delegate to get next intent (milestone loop)
+    await this.milestoneLoop(job, projectDir, job.currentStep);
+  }
+
+  private async handleNewMilestone(
+    job: Job,
+    projectDir: string,
+    intent: Extract<DelegationIntent, { type: 'new-milestone' }>,
+  ): Promise<void> {
+    const args = intent.prdPath ? `@${intent.prdPath} --auto` : `${job.description} --auto`;
+    await this.runGsdStep(job, projectDir, 'new-milestone', args, job.currentStep);
+    // After new-milestone, re-delegate to get phase steps (milestone loop)
+    await this.milestoneLoop(job, projectDir, job.currentStep);
+  }
+
+  private async handlePlanAndExecute(
+    job: Job,
+    projectDir: string,
+    intent: Extract<DelegationIntent, { type: 'plan-and-execute' }>,
+  ): Promise<void> {
+    let stepIdx = job.currentStep;
+    let phaseNumber = intent.phaseNumber;
+
+    // If this requires adding a new phase first
+    if (intent.addPhaseTitle) {
+      const addTitle = intent.addPhaseTitle;
+      const addArgs = intent.prdPath
+        ? `"${addTitle}" @${intent.prdPath}`
+        : `"${addTitle}"`;
+      await this.runGsdStep(job, projectDir, 'add-phase', addArgs, stepIdx++);
+
+      // CRITICAL: Re-read .planning/phases/ to get the actual created phase number.
+      // The delegation-predicted phaseNumber may differ from what GSD created.
+      const phasesDir = path.join(projectDir, '.planning', 'phases');
+      const actualPhaseNumber = getNextPhaseNumber(phasesDir) - 1; // getNextPhaseNumber returns N+1
+      if (actualPhaseNumber > 0 && actualPhaseNumber !== phaseNumber) {
+        process.stderr.write(
+          `[runner] Phase number adjusted: predicted=${phaseNumber}, actual=${actualPhaseNumber}\n`,
+        );
+        phaseNumber = actualPhaseNumber;
+      }
+    }
+
+    // Plan phase
+    const planArgs = intent.prdPath
+      ? `${phaseNumber} @${intent.prdPath}${intent.isGapClosure ? ' --gaps' : ''}`
+      : `${phaseNumber}${intent.isGapClosure ? ' --gaps' : ''}`;
+    await this.runGsdStep(job, projectDir, 'plan-phase', planArgs, stepIdx++);
+
+    // Execute phase
+    await this.runGsdStep(job, projectDir, 'execute-phase', `${phaseNumber}`, stepIdx++);
+
+    // Judge after execute-phase
+    await this.runJudgeAndHandleResult(job, projectDir, phaseNumber, stepIdx);
+  }
+
+  private async handleExecuteOnly(
+    job: Job,
+    projectDir: string,
+    intent: Extract<DelegationIntent, { type: 'execute-only' }>,
+  ): Promise<void> {
+    let stepIdx = job.currentStep;
+    // Execute phase
+    await this.runGsdStep(job, projectDir, 'execute-phase', `${intent.phaseNumber}`, stepIdx++);
+    // Judge after execute-phase
+    await this.runJudgeAndHandleResult(job, projectDir, intent.phaseNumber, stepIdx);
+  }
+
+  private async handleAuditMilestone(
+    job: Job,
+    _projectDir: string,
+    intent: Extract<DelegationIntent, { type: 'audit-milestone' }>,
+  ): Promise<void> {
+    process.stderr.write(`[runner] Audit milestone ${intent.version} for job ${job.id} — no-op for now\n`);
+  }
+
+  /**
+   * Run a single GSD command step with proper step recording and error handling.
+   */
+  private async runGsdStep(
+    job: Job,
+    projectDir: string,
+    command: string,
+    args: string,
+    stepIdx: number,
+  ): Promise<void> {
+    if (this.shuttingDown) throw new Error('Runner shutdown');
+
+    // Verify we still own this job
+    const freshJob = getJob(job.id);
+    if (!freshJob || freshJob.status !== 'running') {
+      throw new Error(`Job ${job.id} no longer running (status=${freshJob?.status ?? 'gone'})`);
+    }
+
+    const ts = Date.now().toString(36).slice(-4);
+    const title = truncateTitle(`${job.project}-${command}-${job.id}-${ts}`, 80);
+    this.activeJobs.set(job.id, { job, title });
+    updateSessionTitles(job.id, [title]);
+    this.patchModelsForJob(job, projectDir);
+
+    const rowId = recordStep(job.id, stepIdx, command, args, title);
+    try {
+      await this.spawnAndWait(projectDir, command, args, title);
+      const sessionId = findSessionByTitle(title);
+      completeStep(rowId, 'completed', null, null, sessionId ?? null);
+      advanceStep(job.id);
+    } catch (err) {
+      const sessionId = findSessionByTitle(title);
+      completeStep(rowId, 'failed', null, errMsg(err), sessionId ?? null);
+      throw err;
+    }
+  }
+
+  /**
+   * Run judge after execute-phase and handle the result.
+   * On judge failure: stores verdict and throws (runner-internal gap closure is done at job-retry level).
+   */
+  private async runJudgeAndHandleResult(
+    job: Job,
+    projectDir: string,
+    phaseNumber: number,
+    _stepIdx: number,
+  ): Promise<void> {
+    // No-activity check: did the execution session actually produce output?
+    const activeEntry = this.activeJobs.get(job.id);
+    const execTitle = activeEntry?.title;
+    if (execTitle) {
+      const execSessionId = findSessionByTitle(execTitle);
+      if (execSessionId) {
+        const assistantMsgCount = getAssistantMessageCount(execSessionId);
+        if (assistantMsgCount === 0) {
+          resetToPending(job.id, 'No activity detected — session may have crashed');
+          process.stderr.write(
+            `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
+          );
+          return;
+        }
+      } else {
+        resetToPending(job.id, 'No session created — opencode may have crashed before starting');
+        process.stderr.write(`[runner] No session found for ${job.id}. Resetting to pending.\n`);
+        return;
+      }
+    }
+
+    if (this.shuttingDown) {
+      resetToPending(job.id, 'Interrupted before verification');
+      process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
+      return;
+    }
+
+    // Run judge
+    const judgeVerdict = await this.runJudge(job, projectDir, phaseNumber);
+
+    if (judgeVerdict === null) {
+      // Benefit of doubt
+      updateJudgeVerdict(job.id, JSON.stringify({
+        verdict: 'succeeded', confidence: 0, reason: 'judge unavailable',
+      }));
+    } else if (judgeVerdict.verdict === 'succeeded') {
+      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+    } else if (judgeVerdict.verdict === 'doubting' && judgeVerdict.confidence >= 50) {
+      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+      // Treat as pass — fall through
+    } else {
+      // Failed or low-confidence doubt — store verdict and throw
+      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
+      throw new Error(judgeVerdict.reason);
+    }
+  }
+
+  /**
+   * Re-delegation loop for milestone-scope jobs.
+   * After init-project or new-milestone, keeps re-delegating until noop or audit-milestone.
+   * Max depth: 3 per intent type to prevent infinite loops.
+   */
+  private async milestoneLoop(job: Job, projectDir: string, startStepIdx: number): Promise<void> {
+    const MAX_REDELEGATION_DEPTH = 3;
+    const intentCounts = new Map<string, number>();
+    let _stepIdx = startStepIdx;
+
+    for (let i = 0; i < MAX_REDELEGATION_DEPTH * 3; i++) { // absolute safety cap
+      if (this.shuttingDown) {
+        resetToPending(job.id, 'Interrupted during milestone loop');
+        return;
+      }
+
+      process.stderr.write(`[runner] Milestone loop iteration ${i + 1}: re-delegating...\n`);
+      const reResult = await delegate(job, projectDir);
+      const { _sessionTitle, ...resultData } = reResult as DelegationResult & { _sessionTitle?: string };
+      if (_sessionTitle) updateSessionTitles(job.id, [_sessionTitle]);
+
+      const reIntent = resultData.intent;
+
+      // Depth check per intent type
+      const typeCount = (intentCounts.get(reIntent.type) ?? 0) + 1;
+      intentCounts.set(reIntent.type, typeCount);
+      if (typeCount > MAX_REDELEGATION_DEPTH) {
+        throw new Error(
+          `Max re-delegation depth (${MAX_REDELEGATION_DEPTH}) exceeded for intent type: ${reIntent.type}`,
+        );
+      }
+
+      if (reIntent.type === 'noop') {
+        process.stderr.write(`[runner] Milestone loop: noop — ${reIntent.reason}\n`);
+        break;
+      }
+
+      if (reIntent.type === 'audit-milestone') {
+        await this.handleAuditMilestone(job, projectDir, reIntent);
+        break;
+      }
+
+      // Execute the returned intent
+      await this.executeIntent(job, projectDir, resultData);
+      _stepIdx = (getJob(job.id)?.currentStep ?? _stepIdx);
     }
   }
 
@@ -868,12 +1003,8 @@ class Runner {
    * Extracts JSON verdict from the last assistant message of the judge session.
    * Same pattern as delegation JSON extraction in delegate.ts.
    */
-  private async runJudge(job: Job, projectDir: string, step: DelegationStep): Promise<JudgeVerdict | null> {
-    const phaseNum = step.args.match(/(\d+)/)?.[1];
-    if (!phaseNum) {
-      process.stderr.write(`[runner] runJudge: no phase number found in step args "${step.args}"\n`);
-      return null;
-    }
+  private async runJudge(job: Job, projectDir: string, phaseNumber: number): Promise<JudgeVerdict | null> {
+    const phaseNum = String(phaseNumber);
 
     const ts = Date.now().toString(36).slice(-4);
     const judgeTitle = truncateTitle(`pilot-judge-${job.id}-${ts}`, 80);

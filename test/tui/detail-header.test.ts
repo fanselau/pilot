@@ -8,7 +8,7 @@ import {
   buildEstimatedCostHeaderLine,
 } from '../../src/tui/views/detail.js';
 import type {
-  DelegationPlan,
+  DelegationResult,
   Job,
   JobObservabilitySnapshot,
   TokenUsageBreakdown,
@@ -41,6 +41,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    notifyRoute: null,
     categories: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '2222222222222222222222222222222222222222',
@@ -50,12 +51,16 @@ function makeJob(overrides: Partial<Job> = {}): Job {
   };
 }
 
-function makeDelegationPlan(steps: Array<{ command: string; args: string }>): string {
-  const plan: DelegationPlan = {
-    steps,
+function makeDelegationResult(steps: Array<{ command: string; args: string }>): string {
+  // Build a DelegationResult with a plan-and-execute intent for the first phase step found
+  const firstPhaseStep = steps.find(s => s.command === 'execute-phase') ?? steps[0];
+  const phaseMatch = firstPhaseStep?.args?.match(/(\d+)/);
+  const phaseNumber = phaseMatch ? parseInt(phaseMatch[1], 10) : 45;
+  const result: DelegationResult = {
+    intent: { type: 'plan-and-execute', phaseNumber },
     reasoning: 'test delegation plan',
   };
-  return JSON.stringify(plan);
+  return JSON.stringify(result);
 }
 
 function totals(overrides: Partial<TokenUsageBreakdown> = {}): TokenUsageBreakdown {
@@ -113,15 +118,15 @@ describe('parseStepInfo', () => {
     expect(result.index).toBe('—');
   });
 
-  it('parses current step metadata from delegation plan', () => {
-    const plan = makeDelegationPlan([
+  it('parses current step metadata from delegation result', () => {
+    const plan = makeDelegationResult([
       { command: 'plan-phase', args: '45 --auto' },
       { command: 'execute-phase', args: '45 --auto' },
       { command: 'verify-phase', args: '45' },
     ]);
     const result = parseStepInfo(makeJob({ delegationPlan: plan, currentStep: 1 }));
-    expect(result.label).toContain('execute-phase');
-    expect(result.index).toBe('2/3');
+    expect(result.label).toContain('plan-and-execute');
+    expect(result.index).toBe('2');
   });
 });
 
@@ -179,7 +184,7 @@ describe('detail observability header helpers', () => {
 describe('buildHeaderLines observability contract', () => {
   it('renders requested/actual/estimated parity lines', () => {
     const job = makeJob({
-      delegationPlan: makeDelegationPlan([
+      delegationPlan: makeDelegationResult([
         { command: 'plan-phase', args: '45 --auto' },
         { command: 'execute-phase', args: '45 --auto' },
       ]),
@@ -188,7 +193,8 @@ describe('buildHeaderLines observability contract', () => {
 
     const lines = buildHeaderLines(job, 120, {}, makeSnapshot());
     expect(lines[0]).toContain('#ab12');
-    expect(lines[3]).toContain('Step 2/2');
+    // Step display uses intent type now, not step count
+    expect(lines[3]).toContain('Step');
     expect(lines[4]).toContain('Tokens: live');
     expect(lines[5]).toContain('Requested: balanced/hybrid');
     expect(lines[6]).toContain('Actual: live');
