@@ -13,6 +13,7 @@
 import { mkdir, symlink, readlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
+import { ensureAutonomousGsdConfig } from './gsd-config.js';
 import { errMsg } from '../util/errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -214,6 +215,14 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     const toolsCjs = path.join(opencodeDir, 'get-shit-done', 'bin', 'gsd-tools.cjs');
     if (!(await exists(toolsCjs))) {
       result.errors.push('gsd-tools.cjs not found after installation — installer may have failed');
+    }
+
+    try {
+      await ensureAutonomousGsdConfig(absDir);
+      result.created.push('.planning/config.json (autonomous defaults enforced)');
+    } catch (err: unknown) {
+      const msg = errMsg(err);
+      result.errors.push(`Failed to enforce autonomous .planning/config.json: ${msg}`);
     }
   }
 
