@@ -1,16 +1,17 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 64
+## Current Phase: 65
 
 ## Current Position
 
-Phase: 64 (GSD Installation Switch — Replace pilot-gsd with Vanilla GSD)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-15 - Completed 64-03-PLAN.md (test suite updated for upstream installer workflow)
+Phase: 65 (GSD Config Pre-seeding for Autonomous Execution)
+**Next Phase:** TBD (Phase 65 currently in progress)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-15 - Completed 65-01-PLAN.md (autonomous config lifecycle helper + tests)
 
-Progress: █████████████████████ 72/76 plans (95%)
+Progress: ███████████████████░░ 73/79 plans (92%)
 
 ## Project Reference
 
@@ -297,6 +298,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 62 added: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
 - Phase 63 added: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
 - Phase 64 added: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
+- Phase 65 added: GSD Config Pre-seeding for Autonomous Execution
 
 ## Decisions
 
@@ -757,9 +759,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 64-02 | verifySetup() accepts real directories as valid GSD state (not requiring symlinks) | Post-migration projects have real dirs; symlinks are legacy pilot-gsd pattern |
 | 64-03 | vi.importActual incompatible with bun — use direct module imports in mocks | bun's mock system doesn't support vi.importActual; spread from direct import instead |
 | 64-03 | Installer timeout test uses exitCode:null (not throw) — matches reject:false execa behavior | With reject:false, execa returns error result not exception; null != 0 triggers error path |
+| 65-01 | Preserve user values via deep merge, then enforce explicit PILOT_WINS paths | Keeps custom project config intact while guaranteeing autonomous safety gates |
+| 65-01 | Lock `.planning/config.json` directly with proper-lockfile retries | Prevents concurrent ensure calls from producing torn writes or lock contention failures |
+| 65-01 | Missing/invalid config is treated as empty object before reseeding | Makes lifecycle helper idempotent and self-healing for malformed config states |
 
 ## Session Continuity
 
-Last session: 2026-03-15 20:24 UTC
-Stopped at: Completed 64-03-PLAN.md (Phase 64 complete)
+Last session: 2026-03-15 21:11 UTC
+Stopped at: Completed 65-01-PLAN.md
 Resume file: None
