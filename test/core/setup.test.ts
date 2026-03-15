@@ -15,7 +15,9 @@ import path from 'node:path';
 // ── Mock execa ──────────────────────────────────────────────────────────────
 // Default: installer succeeds, git init succeeds
 
-const mockExeca = vi.fn();
+const { mockExeca } = vi.hoisted(() => ({
+  mockExeca: vi.fn(),
+}));
 
 vi.mock('execa', () => ({
   execa: mockExeca,
@@ -211,6 +213,106 @@ describe('setupProject — refresh mode', () => {
     expect(content).not.toHaveProperty('custom');
     expect(content).toHaveProperty('permission');
     expect(refreshResult.created.some(c => c.includes('force-overwritten'))).toBe(true);
+  });
+});
+
+// ── Tests: Autonomous .planning/config.json enforcement ────────────────────
+
+describe('setupProject — autonomous planning config enforcement', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-setup-planning-config-'));
+    mockExeca.mockImplementation(makeSuccessfulExecaMock());
+    await writeFile(path.join(tmpDir, 'package.json'), '{"name":"test"}', 'utf8');
+  });
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('creates .planning/config.json with required autonomous keys on fresh setup', async () => {
+    const result = await setupProject(tmpDir);
+    expect(result.errors.filter(e => !e.includes('Shell exposure'))).toHaveLength(0);
+
+    const planningConfigPath = path.join(tmpDir, '.planning', 'config.json');
+    const config = JSON.parse(await readFile(planningConfigPath, 'utf8')) as Record<string, unknown>;
+    const workflow = config.workflow as Record<string, unknown>;
+
+    expect(config.mode).toBe('yolo');
+    expect(config.model_profile).toBe('balanced');
+    expect(workflow.auto_advance).toBe(true);
+    expect(workflow.node_repair).toBe(true);
+    expect(workflow.ui_safety_gate).toBe(false);
+    expect(result.created.some(c => c.includes('.planning/config.json'))).toBe(true);
+  });
+
+  it('preserves non-critical custom planning keys during setup refresh', async () => {
+    await mkdir(path.join(tmpDir, '.planning'), { recursive: true });
+    await writeFile(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify(
+        {
+          custom_top_level: 'keep-me',
+          planning: {
+            custom_planning_key: 'keep-me-too',
+          },
+          workflow: {
+            research: false,
+            custom_workflow_key: 'keep-me-three',
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    );
+
+    const result = await setupProject(tmpDir, { refresh: true });
+    expect(result.errors.filter(e => !e.includes('Shell exposure'))).toHaveLength(0);
+
+    const config = JSON.parse(await readFile(path.join(tmpDir, '.planning', 'config.json'), 'utf8')) as Record<string, unknown>;
+    const planning = config.planning as Record<string, unknown>;
+    const workflow = config.workflow as Record<string, unknown>;
+
+    expect(config.custom_top_level).toBe('keep-me');
+    expect(planning.custom_planning_key).toBe('keep-me-too');
+    expect(workflow.custom_workflow_key).toBe('keep-me-three');
+    expect(workflow.research).toBe(false);
+  });
+
+  it('repairs drifted PILOT_WINS keys back to safe values during setup', async () => {
+    await mkdir(path.join(tmpDir, '.planning'), { recursive: true });
+    await writeFile(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify(
+        {
+          mode: 'interactive',
+          workflow: {
+            auto_advance: false,
+            node_repair: false,
+            ui_safety_gate: true,
+            custom_workflow_key: 'still-preserved',
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    );
+
+    const result = await setupProject(tmpDir);
+    expect(result.errors.filter(e => !e.includes('Shell exposure'))).toHaveLength(0);
+
+    const config = JSON.parse(await readFile(path.join(tmpDir, '.planning', 'config.json'), 'utf8')) as Record<string, unknown>;
+    const workflow = config.workflow as Record<string, unknown>;
+
+    expect(config.mode).toBe('yolo');
+    expect(workflow.auto_advance).toBe(true);
+    expect(workflow.node_repair).toBe(true);
+    expect(workflow.ui_safety_gate).toBe(false);
+    expect(workflow.custom_workflow_key).toBe('still-preserved');
   });
 });
 
