@@ -204,6 +204,25 @@ export interface DelegationResult {
   reasoning: string;
 }
 
+// ── Session State Detection (Phase 67) ────────────────────────────────────
+
+/**
+ * Deterministic session state derived from the opencode DB part table.
+ *
+ * - 'done'           — step-finish with reason 'stop' or 'length'
+ * - 'working'        — session is actively processing (no blocking state)
+ * - 'hung-on-prompt' — question tool has no result (awaiting user input)
+ * - 'hung-on-tool'   — non-question tool has no result (possibly stuck)
+ * - 'crashed'        — PID is dead with no step-finish present
+ */
+export type SessionState = 'done' | 'working' | 'hung-on-prompt' | 'hung-on-tool' | 'crashed';
+
+export interface SessionStateResult {
+  state: SessionState;
+  pendingToolName?: string;    // tool name when hung-on-prompt or hung-on-tool
+  pendingToolContent?: string; // question content for debugging (truncated)
+}
+
 // ── Sessions (from opencode DB) ───────────────────────────────────────────
 
 export interface SessionInfo {

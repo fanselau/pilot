@@ -21,6 +21,7 @@ import {
   getSessionModelsById,
   getSessionModelsRecursive,
   getAssistantMessageCount,
+  getSessionState,
   _resetDbCache,
   _setTestDb,
 } from '../../src/core/opencode-db.js';
@@ -900,6 +901,140 @@ describe('getAssistantMessageCount', () => {
     // Restore test DB for cleanup
     _resetDbCache();
     _setTestDb(db);
+  });
+});
+
+// ── getSessionState ────────────────────────────────────────────────────────
+
+describe('getSessionState', () => {
+  it("returns 'done' when step-finish has reason='stop'", () => {
+    insertSession(db, 'sess1', 'done-stop-session', 1000, 3000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'p1', 'msg1', 'sess1', 1000, { type: 'step-start' });
+    insertPart(db, 'p2', 'msg1', 'sess1', 2000, { type: 'text', text: 'Done!' });
+    insertPart(db, 'p3', 'msg1', 'sess1', 3000, { type: 'step-finish', reason: 'stop' });
+
+    const result = getSessionState('sess1');
+    expect(result.state).toBe('done');
+  });
+
+  it("returns 'done' when step-finish has reason='length'", () => {
+    insertSession(db, 'sess2', 'done-length-session', 1000, 2000);
+    insertMessage(db, 'msg2', 'sess2', 1000, { role: 'assistant' });
+    insertPart(db, 'p4', 'msg2', 'sess2', 1000, { type: 'step-start' });
+    insertPart(db, 'p5', 'msg2', 'sess2', 2000, { type: 'step-finish', reason: 'length' });
+
+    const result = getSessionState('sess2');
+    expect(result.state).toBe('done');
+  });
+
+  it("returns 'hung-on-prompt' when question tool has no result", () => {
+    insertSession(db, 'sess3', 'hung-prompt-session', 1000, 2000);
+    insertMessage(db, 'msg3', 'sess3', 1000, { role: 'assistant' });
+    insertPart(db, 'p6', 'msg3', 'sess3', 1000, { type: 'step-start' });
+    insertPart(db, 'p7', 'msg3', 'sess3', 2000, {
+      type: 'tool',
+      tool: 'question',
+      state: { status: 'running', input: { question: 'What should I do next?' } },
+    });
+
+    const result = getSessionState('sess3');
+    expect(result.state).toBe('hung-on-prompt');
+    expect(result.pendingToolName).toBe('question');
+    expect(result.pendingToolContent).toContain('What should I do next?');
+  });
+
+  it("returns 'hung-on-tool' when non-question tool has no result", () => {
+    insertSession(db, 'sess4', 'hung-tool-session', 1000, 2000);
+    insertMessage(db, 'msg4', 'sess4', 1000, { role: 'assistant' });
+    insertPart(db, 'p8', 'msg4', 'sess4', 1000, { type: 'step-start' });
+    insertPart(db, 'p9', 'msg4', 'sess4', 2000, {
+      type: 'tool',
+      tool: 'bash',
+      state: { status: 'running', input: { command: 'npm run build' } },
+    });
+
+    const result = getSessionState('sess4');
+    expect(result.state).toBe('hung-on-tool');
+    expect(result.pendingToolName).toBe('bash');
+  });
+
+  it("returns 'working' when tool call is completed and no step-finish", () => {
+    insertSession(db, 'sess5', 'working-session', 1000, 2000);
+    insertMessage(db, 'msg5', 'sess5', 1000, { role: 'assistant' });
+    insertPart(db, 'p10', 'msg5', 'sess5', 1000, { type: 'step-start' });
+    insertPart(db, 'p11', 'msg5', 'sess5', 2000, {
+      type: 'tool',
+      tool: 'bash',
+      state: { status: 'completed', input: { command: 'ls' }, output: 'file1\nfile2' },
+    });
+
+    const result = getSessionState('sess5');
+    expect(result.state).toBe('working');
+  });
+
+  it("returns 'working' when step-finish has reason='tool-calls' and there's a completed tool", () => {
+    insertSession(db, 'sess6', 'working-toolcalls-session', 1000, 3000);
+    insertMessage(db, 'msg6', 'sess6', 1000, { role: 'assistant' });
+    insertPart(db, 'p12', 'msg6', 'sess6', 1000, { type: 'step-start' });
+    insertPart(db, 'p13', 'msg6', 'sess6', 2000, {
+      type: 'tool',
+      tool: 'read',
+      state: { status: 'completed', input: { filePath: '/tmp/foo' }, output: 'content' },
+    });
+    insertPart(db, 'p14', 'msg6', 'sess6', 3000, { type: 'step-finish', reason: 'tool-calls' });
+
+    const result = getSessionState('sess6');
+    expect(result.state).toBe('working');
+  });
+
+  it("returns 'crashed' when PID is dead and no step-finish exists", () => {
+    insertSession(db, 'sess7', 'crashed-session', 1000, 2000);
+    insertMessage(db, 'msg7', 'sess7', 1000, { role: 'user' });
+    insertPart(db, 'p15', 'msg7', 'sess7', 1000, { type: 'text', text: 'Hello' });
+    insertMessage(db, 'msg8', 'sess7', 2000, { role: 'assistant' });
+    insertPart(db, 'p16', 'msg8', 'sess7', 2000, { type: 'text', text: 'Working on it...' });
+    // No step-finish — simulate PID dead
+
+    const result = getSessionState('sess7', false); // pidAlive: false
+    expect(result.state).toBe('crashed');
+  });
+
+  it("returns 'working' with no step-finish but PID alive", () => {
+    insertSession(db, 'sess8', 'working-alive-session', 1000, 2000);
+    insertMessage(db, 'msg9', 'sess8', 1000, { role: 'assistant' });
+    insertPart(db, 'p17', 'msg9', 'sess8', 1000, { type: 'text', text: 'Computing...' });
+    // No step-finish, PID is alive
+
+    const result = getSessionState('sess8', true); // pidAlive: true (default)
+    expect(result.state).toBe('working');
+  });
+
+  it("returns 'done' for nonexistent session (safe default)", () => {
+    const result = getSessionState('nonexistent-session-id');
+    expect(result.state).toBe('done');
+  });
+
+  it('picks latest pending tool, not older completed tools', () => {
+    insertSession(db, 'sess9', 'latest-pending-session', 1000, 3000);
+    insertMessage(db, 'msg10', 'sess9', 1000, { role: 'assistant' });
+    insertPart(db, 'p18', 'msg10', 'sess9', 1000, { type: 'step-start' });
+    // Older completed bash tool
+    insertPart(db, 'p19', 'msg10', 'sess9', 2000, {
+      type: 'tool',
+      tool: 'bash',
+      state: { status: 'completed', input: { command: 'ls' }, output: 'files' },
+    });
+    // Newer pending question tool
+    insertPart(db, 'p20', 'msg10', 'sess9', 3000, {
+      type: 'tool',
+      tool: 'question',
+      state: { status: 'running', input: { question: 'Confirm?' } },
+    });
+
+    const result = getSessionState('sess9');
+    expect(result.state).toBe('hung-on-prompt');
+    expect(result.pendingToolName).toBe('question');
   });
 });
 
