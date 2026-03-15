@@ -296,6 +296,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 61 added: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
 - Phase 62 added: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
 - Phase 63 added: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
+- Phase 64 added: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
 
 ## Decisions
 

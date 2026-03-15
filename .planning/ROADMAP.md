@@ -1108,3 +1108,15 @@ Wave structure:
 
 **Details:**
 Read `/home/luca/.openclaw/workspace/requirements/pilot-phase-63-step-first-branch-blocks-and-nested-child-detail-for-web-and-tui.md` for full spec.
+
+### Phase 64: GSD Installation Switch — Replace pilot-gsd with Vanilla GSD
+
+**Goal:** [To be planned]
+**Depends on:** Phase 63
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 64 to break down)
+
+**Details:**
+[To be added during planning]
