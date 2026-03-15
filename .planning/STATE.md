@@ -7,11 +7,11 @@
 
 Phase: 65 (GSD Config Pre-seeding for Autonomous Execution)
 **Next Phase:** TBD (Phase 65 currently in progress)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-15 - Completed 65-02-PLAN.md (setup lifecycle integration + regression coverage)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-15 - Completed 65-03-PLAN.md (runner runtime config assertion + lifecycle reapply coverage)
 
-Progress: ████████████████████░ 74/79 plans (94%)
+Progress: ████████████████████░ 75/79 plans (95%)
 
 ## Project Reference
 
@@ -765,9 +765,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 65-02 | setupProject enforces autonomous planning config via ensureAutonomousGsdConfig() after Node installer flow | Guarantees setup refreshes and fresh runs both apply centralized autonomous policy without duplicating merge logic |
 | 65-02 | setup keeps autonomous config enforcement failures in SetupResult.errors without aborting remaining setup steps | Preserves existing setup error semantics while still surfacing autonomous config problems clearly |
 | 65-02 | setup tests use vi.hoisted execa mock wiring | Keeps fallback vitest verification deterministic when bun is unavailable |
+| 65-03 | spawnAndWait asserts ensureAutonomousGsdConfig() before every opencode launch | Enforces autonomous config across all runner command paths, including judge/verify/pilot-prefixed sessions |
+| 65-03 | new-project step completion triggers an immediate config reapply hook | Repairs `.planning` recreation flows before downstream lifecycle steps continue |
+| 65-03 | runner recovery tests assert helper/spawn call ordering and assertion-failure behavior | Guards against regressions that could reintroduce interactive drift or silent launch continuation |
 
 ## Session Continuity
 
-Last session: 2026-03-15 21:17 UTC
-Stopped at: Completed 65-02-PLAN.md
+Last session: 2026-03-15 21:21 UTC
+Stopped at: Completed 65-03-PLAN.md
 Resume file: None
