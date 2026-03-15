@@ -38,6 +38,8 @@ const mocks = vi.hoisted(() => ({
   getSessionModelsRecursive: vi.fn<(sessionId: string) => string[]>(() => []),
   getSessionModels: vi.fn<(sessionTitle: string) => string[]>(() => []),
   getAssistantMessageCount: vi.fn<(sessionId: string) => number>(() => 0),
+  isSessionDone: vi.fn<(sessionId: string) => boolean>(() => true),
+  ensureAutonomousGsdConfig: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../../src/core/db.js', () => ({
@@ -81,11 +83,15 @@ vi.mock('../../src/core/callback.js', () => ({
 vi.mock('../../src/core/opencode-db.js', () => ({
   findSessionByTitle: mocks.findSessionByTitle,
   exportSessionFromDb: vi.fn(() => ({ messages: [] })),
-  isSessionDone: vi.fn(() => false),
+  isSessionDone: mocks.isSessionDone,
   getLastMessage: vi.fn(() => null),
   getSessionModelsRecursive: mocks.getSessionModelsRecursive,
   getSessionModels: mocks.getSessionModels,
   getAssistantMessageCount: mocks.getAssistantMessageCount,
+}));
+
+vi.mock('../../src/core/gsd-config.js', () => ({
+  ensureAutonomousGsdConfig: mocks.ensureAutonomousGsdConfig,
 }));
 
 vi.mock('../../src/core/models.js', () => ({
@@ -115,7 +121,7 @@ vi.mock('../../src/core/config.js', () => ({
 }));
 
 import { execa } from 'execa';
-import { createRunner } from '../../src/core/runner.js';
+import { createRunner, _resetSpawnRateLimit } from '../../src/core/runner.js';
 
 const mockExeca = vi.mocked(execa);
 
@@ -140,8 +146,25 @@ function mockRecoveryGit(options: {
     command: string,
     args: string[],
   ) => {
+    if (command === '/usr/local/bin/opencode') {
+      const proc = {
+        pid: 4321,
+        unref: vi.fn(),
+        catch: vi.fn(() => Promise.resolve()),
+      };
+      return proc as unknown as Awaited<ReturnType<typeof execa>>;
+    }
+
+    if (command === 'systemd-run') {
+      return execaResult(1, '');
+    }
+
+    if (command === 'pgrep') {
+      return execaResult(1, '');
+    }
+
     if (command !== 'git') {
-      throw new Error(`Unexpected command: ${command}`);
+      return execaResult(0, '');
     }
 
     const argv = args;
@@ -268,10 +291,20 @@ async function launchJob(job: Job): Promise<void> {
   await launch.launch(job);
 }
 
+async function launchJobWithPollInterval(job: Job, pollInterval: number): Promise<void> {
+  const runner = createRunner({ once: true, pollInterval });
+  const launch = runner as unknown as { launch: (jobArg: Job) => Promise<void> };
+  await launch.launch(job);
+}
+
 describe('runner recovery preflight and checkpoint capture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetSpawnRateLimit();
     mocks.delegate.mockResolvedValue({ steps: [], reasoning: 'no-op plan' });
+    mocks.isSessionDone.mockReturnValue(true);
+    mocks.ensureAutonomousGsdConfig.mockResolvedValue(undefined);
+    mocks.getJob.mockImplementation((id: string) => (id === 'ab12' ? makeJob() : null));
   });
 
   afterEach(() => {
@@ -378,5 +411,86 @@ describe('runner recovery preflight and checkpoint capture', () => {
 
     expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
     expect(mocks.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('asserts autonomous config before spawning step sessions', async () => {
+    const projectDir = process.cwd();
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-pre-spawn',
+      headCommit: 'head-pre-spawn',
+    });
+    mocks.delegate.mockResolvedValue({
+      steps: [{ command: 'plan-phase', args: '65' }],
+      reasoning: 'single step',
+    });
+    mocks.findSessionByTitle.mockReturnValue('sess-pre-spawn');
+
+    await launchJobWithPollInterval(makeJob({ project: projectDir }), 0);
+
+    expect(mocks.ensureAutonomousGsdConfig).toHaveBeenCalledWith(projectDir);
+    const opencodeCallIndex = mockExeca.mock.calls.findIndex(([command]) => command === '/usr/local/bin/opencode');
+    expect(opencodeCallIndex).toBeGreaterThanOrEqual(0);
+    const opencodeSpawnOrder = mockExeca.mock.invocationCallOrder[opencodeCallIndex];
+    expect(mocks.ensureAutonomousGsdConfig.mock.invocationCallOrder[0]).toBeLessThan(opencodeSpawnOrder);
+  });
+
+  it('reapplies autonomous config after new-project before next step spawn', async () => {
+    const projectDir = process.cwd();
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-new-project',
+      headCommit: 'head-new-project',
+    });
+    mocks.delegate.mockResolvedValue({
+      steps: [
+        { command: 'new-project', args: 'my-project' },
+        { command: 'plan-phase', args: '65' },
+      ],
+      reasoning: 'new project then continue',
+    });
+    mocks.findSessionByTitle.mockReturnValue('sess-new-project');
+
+    await launchJobWithPollInterval(makeJob({ project: projectDir }), 0);
+
+    expect(mocks.ensureAutonomousGsdConfig).toHaveBeenCalledTimes(3);
+    const opencodeCallIndexes = mockExeca.mock.calls
+      .map((call, index) => ({ command: call[0], index }))
+      .filter(({ command }) => command === '/usr/local/bin/opencode')
+      .map(({ index }) => index);
+    expect(opencodeCallIndexes).toHaveLength(2);
+
+    const firstSpawnOrder = mockExeca.mock.invocationCallOrder[opencodeCallIndexes[0]];
+    const secondSpawnOrder = mockExeca.mock.invocationCallOrder[opencodeCallIndexes[1]];
+    const ensureOrders = mocks.ensureAutonomousGsdConfig.mock.invocationCallOrder;
+
+    expect(ensureOrders[0]).toBeLessThan(firstSpawnOrder);
+    expect(ensureOrders[1]).toBeGreaterThan(firstSpawnOrder);
+    expect(ensureOrders[1]).toBeLessThan(secondSpawnOrder);
+  });
+
+  it('marks job failed when config assertion throws before spawn', async () => {
+    const projectDir = process.cwd();
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-assertion-fail',
+      headCommit: 'head-assertion-fail',
+    });
+    mocks.delegate.mockResolvedValue({
+      steps: [{ command: 'plan-phase', args: '65' }],
+      reasoning: 'single step',
+    });
+    mocks.ensureAutonomousGsdConfig.mockRejectedValueOnce(new Error('config assertion failed'));
+
+    await launchJobWithPollInterval(makeJob({ project: projectDir }), 0);
+
+    expect(mocks.markFailed).toHaveBeenCalledTimes(1);
+    expect(mocks.markCompleted).not.toHaveBeenCalled();
   });
 });
