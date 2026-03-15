@@ -1,17 +1,16 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 65
+## Current Phase: 66
 
 ## Current Position
 
-Phase: 65 (GSD Config Pre-seeding for Autonomous Execution)
-**Next Phase:** Phase 66 (Delegation Pipeline Redesign — Intent-Based Architecture)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-15 - Completed 65-03-PLAN.md (runner runtime config assertion + lifecycle reapply coverage)
+Phase: 66 (Delegation Pipeline Redesign — Intent-Based Architecture)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-15 - Completed 66-01-PLAN.md (DelegationIntent types + delegate.ts rewrite + delegation prompt)
 
-Progress: ████████████████████░ 75/79 plans (95%)
+Progress: ████████████████████░ 76/82 plans (93%)
 
 ## Project Reference
 
@@ -163,6 +162,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
 - **Status:** complete (5/5 plans, verified ✓)
+
+### Phase 66: Delegation Pipeline Redesign — Intent-Based Architecture
+- **Status:** in progress (1/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -769,9 +771,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 65-03 | spawnAndWait asserts ensureAutonomousGsdConfig() before every opencode launch | Enforces autonomous config across all runner command paths, including judge/verify/pilot-prefixed sessions |
 | 65-03 | new-project step completion triggers an immediate config reapply hook | Repairs `.planning` recreation flows before downstream lifecycle steps continue |
 | 65-03 | runner recovery tests assert helper/spawn call ordering and assertion-failure behavior | Guards against regressions that could reintroduce interactive drift or silent launch continuation |
+| 66-01 | Pass delegation prompt as opencode run message (not --command gsd-delegate) | opencode run takes positional message args; no --prompt flag exists |
+| 66-01 | Load delegate.md via readFileSync(import.meta.url) at module init | Reliable path resolution that works in both dev and production dist |
+| 66-01 | Two-attempt parse retry with error injection | First parse failure → inject error context → one more attempt → fail with doctor hint |
 
 ## Session Continuity
 
-Last session: 2026-03-15 21:21 UTC
-Stopped at: Completed 65-03-PLAN.md
+Last session: 2026-03-15 21:55 UTC
+Stopped at: Completed 66-01-PLAN.md
 Resume file: None
