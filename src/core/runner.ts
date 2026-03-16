@@ -1050,16 +1050,18 @@ class Runner {
     process.stderr.write(dim(`Patching agent models: ${job.modelProfile}/${providerMode}`) + '\n');
     const models = resolveAllAgentModels(job.modelProfile, providerMode);
     const summary = patchAgentFrontmatter(projectDir, models);
+    const fallbackAgents = Array.isArray(summary?.fallback) ? summary.fallback : [];
+    const skippedAgents = Array.isArray(summary?.skipped) ? summary.skipped : [];
 
-    if (summary.fallback.length > 0) {
+    if (fallbackAgents.length > 0) {
       process.stderr.write(
-        `[runner] Agent model fallback to inherit (${summary.fallback.length}): ${summary.fallback.join(', ')}\n`,
+        `[runner] Agent model fallback to inherit (${fallbackAgents.length}): ${fallbackAgents.join(', ')}\n`,
       );
     }
 
-    if (summary.skipped.length > 0) {
+    if (skippedAgents.length > 0) {
       process.stderr.write(
-        `[runner] Warning: skipped agent model patch (${summary.skipped.length}) due to missing/invalid frontmatter: ${summary.skipped.join(', ')}\n`,
+        `[runner] Warning: skipped agent model patch (${skippedAgents.length}) due to missing/invalid frontmatter: ${skippedAgents.join(', ')}\n`,
       );
     }
   }
