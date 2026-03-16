@@ -45,10 +45,27 @@ Use `pilot init --yes` to accept defaults non-interactively, or `pilot init --fo
 pilot setup ~/dev/myapp --owner main
 ```
 
-This registers the project in Pilot's database with you as the owner. It creates the necessary symlinks and configuration for the project to work with the pipeline.
+This registers the project in Pilot's database with you as the owner. It runs upstream `get-shit-done-cc --opencode --local`, validates sentinels (for example `gsd-help.md`), and creates/merges the local project config required by the pipeline.
 
 - `--owner` sets the agent ID that gets notified on job completion/failure
 - Always use full project paths, never relative
+
+If setup drift is detected later, repair with:
+
+```bash
+pilot setup ~/dev/myapp --refresh
+```
+
+### 2.5 Autonomous config pre-seeding (important)
+
+Pilot enforces autonomous-safe defaults in each managed project's `.planning/config.json` so execution does not block on interactive prompts.
+
+Key enforced defaults include:
+- `mode: yolo`
+- `workflow.auto_advance: true`
+- `workflow.node_repair: true`
+
+Pilot deep-merges existing config, then applies required "Pilot wins" overrides for safety-critical keys.
 
 ### 3. Validate Health
 
@@ -130,9 +147,9 @@ The `--provider` flag controls which AI models are used:
 
 | Mode | What It Does | When to Use |
 |------|-------------|-------------|
-| `hybrid` | Claude for coding, Codex for review/planning | Default — best quality/cost balance |
-| `claude-only` | All steps use Claude models | When you need Claude-specific capabilities |
-| `openai-only` | All steps use OpenAI/Codex models | When using Codex for everything |
+| `hybrid` | Build/orchestration agents run on Claude, check/judge scopes run on OpenAI GPT-5.4 | Cross-model checks and balanced cost/quality |
+| `claude-only` | All agents/scopes resolve to Claude mappings | Standard Claude-only operation |
+| `openai-only` | All agents/scopes resolve to OpenAI GPT-5.4 mappings | OpenAI-only operation |
 
 ```bash
 pilot add ~/dev/myapp requirements/feat.md --provider claude-only
@@ -142,13 +159,13 @@ pilot add ~/dev/myapp requirements/feat.md --provider claude-only
 
 The `--profile` flag controls model tier selection across pipeline steps:
 
-| Profile | Delegation | Planning | Execution | Research | Verification |
-|---------|-----------|----------|-----------|----------|--------------|
-| `quality` | opus | opus | opus | opus | sonnet |
-| `balanced` *(default)* | opus | opus | sonnet | sonnet | sonnet |
-| `budget` | sonnet | sonnet | sonnet | haiku | haiku |
+| Profile | Typical Behavior |
+|---------|------------------|
+| `quality` | Highest-cost/highest-capability mappings (more Opus/high-variant usage) |
+| `balanced` *(default)* | Mixed quality/cost mappings intended for day-to-day runs |
+| `budget` | Lower-cost mappings for lighter workloads |
 
-Delegation always gets the planner tier (opus for balanced/quality) because it makes strategic decisions about how to execute the work.
+Exact model IDs and variants are resolved by Pilot's model tables at runtime (`pilot models show`) and then patched into `.opencode/agents/gsd-*.md` frontmatter per job.
 
 ```bash
 pilot add ~/dev/myapp requirements/feat.md --profile quality
@@ -193,6 +210,26 @@ pilot add ~/dev/myapp requirements/feat.md --dry-run
 ```
 
 Shows the detected scope, provider mode, profile, and estimated execution plan.
+
+### Intent lifecycle (critical mental model)
+
+Pilot does **not** execute a step array from delegation output. Delegation produces one typed intent, and the runner owns the lifecycle logic for that intent.
+
+Canonical intent types:
+- `quick`
+- `plan-and-execute`
+- `execute-only`
+- `audit-milestone`
+
+Operationally: delegation decides intent, runner executes the corresponding command flow, and judge/verification policy decides retry or terminal outcome.
+
+### Model frontmatter patching
+
+Before launches, Pilot patches `model` and optional `variant` fields in installed GSD agent frontmatter (`.opencode/agents/gsd-*.md`) based on resolved provider mode + profile.
+
+- Mapped agents get explicit model assignments.
+- Unmapped agents fall back to `model: inherit`.
+- This keeps routing deterministic even if upstream agent files change.
 
 ## Monitoring
 
@@ -271,6 +308,21 @@ pilot retry <id>
 pilot project ~/dev/myapp --unblock
 ```
 
+### Verification retry flow and lineage
+
+Phase verification outcomes can auto-retry based on job retry budget and failure fingerprint logic.
+
+- Retry budget is set at queue time (`--retries <n>` or `--no-retry`).
+- Same-fingerprint failures escalate immediately instead of burning all retries.
+- Retry history is persisted and visible to operators.
+
+Inspect lineage with:
+
+```bash
+pilot info <id>         # attempt counters and retry context
+pilot log <id> --chain  # full chain across attempts
+```
+
 ### Daemon Died
 
 ```bash
@@ -316,7 +368,7 @@ pilot add ~/dev/myapp requirements/feat.md
 On job completion or failure, the runner POSTs to OpenClaw's webhook endpoint. You receive a message with:
 - Job ID and status (completed/failed)
 - Project path and description
-- Verdict (succeeded/failed/doubting) with confidence score
+- Verdict (`pass`/`fail`/`partial`, with legacy values still parseable) and confidence score
 - Link to review the build log
 
 ## Writing Good Requirements
@@ -459,7 +511,7 @@ Always stop before restarting. The daemon uses a lock file to prevent multiple i
 | `pilot setup <dir> --owner <agentId>` | Register project |
 | `pilot service start\|stop\|status` | Daemon management |
 | `pilot init` | First-time setup |
-| `pilot update` | Update GSD definitions |
+| `pilot update` | Update upstream GSD package and refresh projects |
 | `pilot doctor` | Health check |
 | `pilot gc` | Clean old jobs |
 | `pilot skills list` | List installed skills |
