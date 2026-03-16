@@ -1050,7 +1050,19 @@ class Runner {
     const providerMode = job.providerMode ?? 'claude-only';
     process.stderr.write(dim(`Patching agent models: ${job.modelProfile}/${providerMode}`) + '\n');
     const models = resolveAllAgentModels(job.modelProfile, providerMode);
-    patchAgentFrontmatter(projectDir, models);
+    const summary = patchAgentFrontmatter(projectDir, models);
+
+    if (summary.fallback.length > 0) {
+      process.stderr.write(
+        `[runner] Agent model fallback to inherit (${summary.fallback.length}): ${summary.fallback.join(', ')}\n`,
+      );
+    }
+
+    if (summary.skipped.length > 0) {
+      process.stderr.write(
+        `[runner] Warning: skipped agent model patch (${summary.skipped.length}) due to missing/invalid frontmatter: ${summary.skipped.join(', ')}\n`,
+      );
+    }
   }
 
   /**
