@@ -110,3 +110,53 @@ Post-remediation verification:
 - Root manifests: fork-clean.
 - Managed project opencode configs: fork-key clean.
 - User config: fork-era key removed and verified clean.
+
+## Task 3 - External and documentation residue evidence
+
+### Local residue files (`GSD-REFERENCE.md`, `MEMORY.md`, `memory/`)
+
+Checks:
+
+- `rg -n --hidden "pilot-gsd|PILOT_GSD_DIR" GSD-REFERENCE.md MEMORY.md memory 2>/dev/null || true`
+- Existence checks for `GSD-REFERENCE.md`, `MEMORY.md`, and `memory/`
+
+Result:
+
+- `GSD-REFERENCE.md`: not present in repository.
+- `MEMORY.md`: not present in repository.
+- `memory/`: not present in repository.
+- No local residue remediation required for these targets.
+
+### External repository deprecation/archive
+
+Pre-check:
+
+- `gh repo view fanselau/pilot-gsd --json name,isArchived,url`
+- Result: `{"name":"pilot-gsd","isArchived":false,"url":"https://github.com/fanselau/pilot-gsd"}`
+
+Automation attempt:
+
+- `gh repo archive fanselau/pilot-gsd --yes`
+- Result: `GraphQL: Resource not accessible by personal access token (archiveRepository)`
+
+Post-check:
+
+- `gh repo view fanselau/pilot-gsd --json name,isArchived,url`
+- Result: `isArchived=false` (unchanged)
+
+Manual follow-up required:
+
+1. Repository owner/admin must archive `https://github.com/fanselau/pilot-gsd` using an admin-authorized token/session.
+2. Add a deprecation notice in repo settings/README pointing users to upstream `get-shit-done-cc` and current GSD docs.
+3. Re-run `gh repo view fanselau/pilot-gsd --json name,isArchived,url` and capture `isArchived=true` as closure evidence.
+
+### Task 3 status
+
+- Local docs/memory residue: clear (targets absent).
+- External archive requirement: **pending owner action** (permission-gated).
+
+## Plan 72-05 audit conclusion
+
+- Migration-order gate: executed and currently blocked by project-level migration failures.
+- Config/manifests: audited; root/project clean; user config remediated.
+- External deprecation: attempted via CLI; blocked by GitHub archive permissions with explicit follow-up recorded.
