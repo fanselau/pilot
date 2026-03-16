@@ -27,6 +27,7 @@ const JUDGE_PROMPT = readFileSync(JUDGE_PROMPT_PATH, 'utf8');
 import { getConfig, resolveProjectDir } from './config.js';
 import { ensureAutonomousGsdConfig } from './gsd-config.js';
 import {
+  markRunning,
   markCompleted,
   markFailed,
   markStale,
@@ -49,6 +50,9 @@ import {
   updateJobRecoveryHead,
   incrementHungCount,
   incrementRetryCount,
+  updateRetryHint,
+  updateLastFailureFingerprint,
+  getRetryAttempts,
   canRetry,
   isSameHungReason,
 } from './db.js';
@@ -225,6 +229,13 @@ function normalizeFailureFingerprint(fingerprint: string[] | undefined): string[
     .map(item => item.trim())
     .filter(item => item.length > 0);
   return cleaned.length > 0 ? cleaned : null;
+}
+
+function isSameFailureFingerprint(previous: string[] | null, current: string[] | null): boolean {
+  if (!previous || !current) return false;
+  if (previous.length === 0 || current.length === 0) return false;
+  if (previous.length !== current.length) return false;
+  return previous.every((item, index) => item === current[index]);
 }
 
 /**
@@ -725,6 +736,11 @@ class Runner {
       // Step 2: Route intent
       await this.executeIntent(job, projectDir, result);
 
+      const latestJobState = getJob(job.id);
+      if (!latestJobState || latestJobState.status !== 'running') {
+        return;
+      }
+
       // Completion
       await this.captureRecoveryHead(job.id, projectDir);
       this.collectActualModels(job.id);
@@ -903,43 +919,135 @@ class Runner {
     projectDir: string,
     intent: Extract<DelegationIntent, { type: 'plan-and-execute' }>,
   ): Promise<void> {
-    let stepIdx = job.currentStep;
-    let phaseNumber = intent.phaseNumber;
+    let activeJob = job;
+    let activeIntent = intent;
 
-    // If this requires adding a new phase first
-    if (intent.addPhaseTitle) {
-      const addTitle = intent.addPhaseTitle;
-      const addArgs = intent.prdPath
-        ? `"${addTitle}" @${intent.prdPath}`
-        : `"${addTitle}"`;
-      await this.runGsdStep(job, projectDir, 'add-phase', addArgs, stepIdx++);
+    while (true) {
+      let stepIdx = activeJob.currentStep;
+      let phaseNumber = activeIntent.phaseNumber;
 
-      // CRITICAL: Re-read .planning/phases/ to get the actual created phase number.
-      // The delegation-predicted phaseNumber may differ from what GSD created.
-      const phasesDir = path.join(projectDir, '.planning', 'phases');
-      const actualPhaseNumber = getNextPhaseNumber(phasesDir) - 1; // getNextPhaseNumber returns N+1
-      if (actualPhaseNumber > 0 && actualPhaseNumber !== phaseNumber) {
-        process.stderr.write(
-          `[runner] Phase number adjusted: predicted=${phaseNumber}, actual=${actualPhaseNumber}\n`,
-        );
-        phaseNumber = actualPhaseNumber;
+      // If this requires adding a new phase first
+      if (activeIntent.addPhaseTitle) {
+        const addTitle = activeIntent.addPhaseTitle;
+        const addArgs = activeIntent.prdPath
+          ? `"${addTitle}" @${activeIntent.prdPath}`
+          : `"${addTitle}"`;
+        await this.runGsdStep(activeJob, projectDir, 'add-phase', addArgs, stepIdx++);
+
+        // CRITICAL: Re-read .planning/phases/ to get the actual created phase number.
+        // The delegation-predicted phaseNumber may differ from what GSD created.
+        const phasesDir = path.join(projectDir, '.planning', 'phases');
+        const actualPhaseNumber = getNextPhaseNumber(phasesDir) - 1; // getNextPhaseNumber returns N+1
+        if (actualPhaseNumber > 0 && actualPhaseNumber !== phaseNumber) {
+          process.stderr.write(
+            `[runner] Phase number adjusted: predicted=${phaseNumber}, actual=${actualPhaseNumber}\n`,
+          );
+          phaseNumber = actualPhaseNumber;
+        }
       }
+
+      // Plan phase
+      const planArgs = activeIntent.prdPath
+        ? `${phaseNumber} @${activeIntent.prdPath}${activeIntent.isGapClosure ? ' --gaps' : ''}`
+        : `${phaseNumber}${activeIntent.isGapClosure ? ' --gaps' : ''}`;
+      await this.runGsdStep(activeJob, projectDir, 'plan-phase', planArgs, stepIdx++);
+
+      // Execute phase
+      const executeArgs = activeIntent.isGapClosure ? `${phaseNumber} --gaps-only` : `${phaseNumber}`;
+      await this.runGsdStep(activeJob, projectDir, 'execute-phase', executeArgs, stepIdx++);
+
+      // Judge after execute-phase
+      const verificationFailure = await this.runJudgeAndHandleResult(activeJob, projectDir, phaseNumber, stepIdx);
+      if (!verificationFailure) {
+        return;
+      }
+
+      const retryState = this.scheduleVerificationRetry(
+        activeJob.id,
+        phaseNumber,
+        activeIntent.prdPath ?? undefined,
+        verificationFailure,
+      );
+      activeJob = retryState.job;
+      activeIntent = retryState.intent;
+    }
+  }
+
+  private scheduleVerificationRetry(
+    jobId: string,
+    phaseNumber: number,
+    prdPath: string | undefined,
+    verificationFailure: RetryableVerificationFailure,
+  ): {
+    job: Job;
+    intent: Extract<DelegationIntent, { type: 'plan-and-execute' }>;
+  } {
+    const freshJob = getJob(jobId);
+    if (!freshJob) {
+      throw new Error(`Verification retry failed: job ${jobId} no longer exists`);
     }
 
-    // Plan phase
-    const planArgs = intent.prdPath
-      ? `${phaseNumber} @${intent.prdPath}${intent.isGapClosure ? ' --gaps' : ''}`
-      : `${phaseNumber}${intent.isGapClosure ? ' --gaps' : ''}`;
-    await this.runGsdStep(job, projectDir, 'plan-phase', planArgs, stepIdx++);
-
-    // Execute phase
-    await this.runGsdStep(job, projectDir, 'execute-phase', `${phaseNumber}`, stepIdx++);
-
-    // Judge after execute-phase
-    const verificationFailure = await this.runJudgeAndHandleResult(job, projectDir, phaseNumber, stepIdx);
-    if (verificationFailure) {
-      throw new Error(verificationFailure.reason);
+    if (isSameFailureFingerprint(freshJob.lastFailureFingerprint, verificationFailure.failureFingerprint)) {
+      const summary = this.buildRetryAttemptSummary(jobId, verificationFailure);
+      throw new Error(`Escalated repeated verification fingerprint for phase ${phaseNumber}. ${summary}`);
     }
+
+    if (!canRetry(jobId)) {
+      const summary = this.buildRetryAttemptSummary(jobId, verificationFailure);
+      throw new Error(`Retry budget exhausted for phase ${phaseNumber}. ${summary}`);
+    }
+
+    updateRetryHint(jobId, verificationFailure.retryHint);
+    updateLastFailureFingerprint(jobId, verificationFailure.failureFingerprint);
+
+    const retryContext = verificationFailure.retryHint
+      ? `${verificationFailure.retryRecommendation}: ${verificationFailure.retryHint}`
+      : verificationFailure.retryRecommendation;
+
+    const nextRetry = freshJob.retryCount + 1;
+    this.log(
+      `Verification retry ${nextRetry}/${freshJob.retryBudget} for ${jobId}: strategy=${verificationFailure.retryRecommendation}`,
+    );
+
+    const resetApplied = resetToPending(jobId, retryContext);
+    if (!resetApplied) {
+      throw new Error(`Verification retry failed: could not reset ${jobId} to pending`);
+    }
+
+    markRunning(jobId);
+    incrementRetryCount(jobId);
+
+    const strategyIntent: Extract<DelegationIntent, { type: 'plan-and-execute' }> = {
+      type: 'plan-and-execute',
+      phaseNumber,
+      prdPath,
+      isGapClosure: verificationFailure.retryRecommendation === 'retry-resume',
+    };
+
+    const retryJob = getJob(jobId);
+    if (!retryJob) {
+      throw new Error(`Verification retry failed: missing refreshed job state for ${jobId}`);
+    }
+
+    return {
+      job: retryJob,
+      intent: strategyIntent,
+    };
+  }
+
+  private buildRetryAttemptSummary(
+    jobId: string,
+    verificationFailure: RetryableVerificationFailure,
+  ): string {
+    const attempts = getRetryAttempts(jobId);
+    const archived = attempts.map((attempt) => {
+      const fingerprint = attempt.failureFingerprint?.join('|') ?? 'none';
+      return `attempt ${attempt.attemptNumber}:${attempt.retryStrategy ?? 'none'}:${fingerprint}`;
+    });
+    const currentFingerprint = verificationFailure.failureFingerprint?.join('|') ?? 'none';
+    const current = `current:${verificationFailure.retryRecommendation}:${currentFingerprint}`;
+
+    return `attempts=${[...archived, current].join(', ')}`;
   }
 
   private async handleExecuteOnly(
@@ -1000,7 +1108,7 @@ class Runner {
 
   /**
    * Run judge after execute-phase and handle the result.
-   * On judge failure: stores verdict and throws (runner-internal gap closure is done at job-retry level).
+   * Returns retry metadata for non-pass verdicts so caller can orchestrate retries.
    */
   private async runJudgeAndHandleResult(
     job: Job,
@@ -1207,7 +1315,7 @@ class Runner {
   /**
    * Spawn a judge session to evaluate a completed execute-phase step.
    * Uses the inline prompt from src/prompts/judge.md with evidence context injected.
-   * Returns null on any failure (benefit of doubt — mark as completed).
+   * Returns null when judge output cannot be parsed or retrieved.
    *
    * Extracts JSON verdict from the last assistant message of the judge session.
    * Same pattern as delegation JSON extraction in delegate.ts.
@@ -1254,11 +1362,11 @@ class Runner {
     } catch (err) {
       const msg = errMsg(err);
       if (msg.includes('timed out')) {
-        process.stderr.write(`[runner] Judge timed out after 15m for ${judgeTitle} — benefit of doubt\n`);
+        process.stderr.write(`[runner] Judge timed out after 15m for ${judgeTitle}\n`);
       } else {
         process.stderr.write(`[runner] Judge session failed: ${msg}\n`);
       }
-      return null; // Benefit of doubt on spawn failure or timeout
+      return null;
     }
 
     // Extract JSON from judge session output (same pattern as delegation)
@@ -1283,7 +1391,7 @@ class Runner {
       process.stderr.write(`[runner] runJudge: session export failed for ${judgeTitle}: ${errMsg(err)}\n`);
     }
 
-    return null; // Benefit of doubt
+    return null;
   }
 
   /**
