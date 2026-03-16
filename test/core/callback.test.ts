@@ -49,6 +49,12 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 2,
+    retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -330,5 +336,35 @@ describe('notifyJobCompletion', () => {
     const nextStepLine = prompt.split('\n').find(l => l.startsWith('next_step:'));
     expect(nextStepLine).toContain('pilot log ab12');
     expect(nextStepLine).toContain('pilot retry ab12');
+  });
+
+  it('hung failure prompt includes session title from sessionTitles', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Retry budget exhausted after interactive-prompt hang (tool: question, session: my-phase-session)',
+      hungCount: 3,
+      lastHungReason: 'interactive-prompt',
+      sessionTitles: JSON.stringify(['first-session', 'my-phase-session']),
+    }));
+
+    // Hung enrichment section present
+    expect(prompt).toContain('hung_reason: interactive-prompt');
+    expect(prompt).toContain('hung_count: 3');
+    expect(prompt).toContain('session_title: my-phase-session');
+    expect(prompt).toContain('interactive input');
+  });
+
+  it('hung failure prompt handles null sessionTitles gracefully', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Retry budget exhausted after stuck-tool hang (tool: bash, session: build-session)',
+      hungCount: 2,
+      lastHungReason: 'stuck-tool',
+      sessionTitles: null,
+    }));
+
+    expect(prompt).toContain('hung_reason: stuck-tool');
+    expect(prompt).toContain('hung_count: 2');
+    expect(prompt).not.toContain('session_title:');
   });
 });
