@@ -41,6 +41,9 @@ let mockEnsureShellExposureResult: typeof mockShellExposureResult = {
 };
 let mockShellExposureError: Error | null = null;
 
+const mockCheckAgentsMdExists = vi.fn();
+const mockSpawnAgentsMdSession = vi.fn();
+
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock('../../src/core/delegate.js', () => ({
@@ -56,6 +59,11 @@ vi.mock('../../src/core/shell-exposure.js', () => ({
     if (mockShellExposureError) throw mockShellExposureError;
     return mockEnsureShellExposureResult;
   },
+}));
+
+vi.mock('../../src/core/agents-md.js', () => ({
+  checkAgentsMdExists: (...args: unknown[]) => mockCheckAgentsMdExists(...args),
+  spawnAgentsMdSession: (...args: unknown[]) => mockSpawnAgentsMdSession(...args),
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -198,6 +206,8 @@ beforeEach(() => {
     ],
     fnmNote: 'fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.',
   };
+  mockCheckAgentsMdExists.mockResolvedValue(true);
+  mockSpawnAgentsMdSession.mockResolvedValue('AGENTS.md looks healthy');
   exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
     throw new Error('process.exit called');
   }) as never);
@@ -462,6 +472,23 @@ describe('doctor system health — shell exposure checks', () => {
     expect(fnmCheck).toBeDefined();
     expect(fnmCheck!.status).toBe('pass');
     expect(fnmCheck!.detail).toBe('fnm is not exposed in plain shells — node and pnpm are the supported interface for non-interactive contexts.');
+  });
+});
+
+describe('doctor project health — AGENTS operation contract', () => {
+  it('invokes AGENTS health session via operation-based args', async () => {
+    await doctorCommand('/tmp/project', false, false);
+
+    expect(mockSpawnAgentsMdSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'health',
+        timeoutMs: 90_000,
+      }),
+    );
+
+    const sessionArg = mockSpawnAgentsMdSession.mock.calls[0]?.[0] as { command?: string };
+    expect(sessionArg.command).toBeUndefined();
+    expect(JSON.stringify(sessionArg)).not.toContain('gsd-setup-agents');
   });
 });
 

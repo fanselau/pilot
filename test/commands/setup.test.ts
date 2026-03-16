@@ -57,6 +57,24 @@ vi.mock('../../src/core/db.js', () => ({
   getProject: vi.fn(),
 }));
 
+// ── Mock node:readline for TTY prompt paths ─────────────────────────────
+
+const mockReadlineQuestion = vi.fn((question: string, cb: (answer: string) => void) => {
+  if (question.includes('Generate one?')) {
+    cb('y');
+    return;
+  }
+  cb('n');
+});
+const mockReadlineClose = vi.fn();
+
+vi.mock('node:readline', () => ({
+  createInterface: vi.fn(() => ({
+    question: mockReadlineQuestion,
+    close: mockReadlineClose,
+  })),
+}));
+
 // ── Mock node:fs so existsSync returns true (skips config init trigger) ──
 
 vi.mock('node:fs', async () => {
@@ -98,6 +116,8 @@ beforeEach(() => {
   outputLines.length = 0;
   jsonMode = false;
   vi.clearAllMocks();
+  mockReadlineQuestion.mockClear();
+  mockReadlineClose.mockClear();
 
   originalProcessExit = process.exit;
   process.exit = vi.fn(((code?: number) => {
@@ -312,5 +332,26 @@ describe('setup AGENTS.md prompt', () => {
     expect(process.exit).not.toHaveBeenCalled();
 
     stderrSpy.mockRestore();
+  });
+
+  it('when AGENTS.md missing in TTY mode, invokes setup operation without legacy command args', async () => {
+    (process.stdin as StdinWithTTY).isTTY = true;
+    mockCheckAgentsMdExists.mockResolvedValue(false);
+    mockSpawnAgentsMdSession.mockResolvedValue('Generated AGENTS.md content');
+    mockRecommendDefaultSkills.mockReturnValue({
+      skills: [],
+      detectedStack: { items: [], signals: {} },
+    });
+
+    await setupCommand('/tmp/my-project', {});
+
+    expect(mockSpawnAgentsMdSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'setup',
+      }),
+    );
+    const sessionArg = mockSpawnAgentsMdSession.mock.calls[0]?.[0] as { command?: string };
+    expect(sessionArg.command).toBeUndefined();
+    expect(JSON.stringify(sessionArg)).not.toContain('gsd-setup-agents');
   });
 });
