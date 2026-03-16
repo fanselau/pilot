@@ -282,6 +282,23 @@ describe('judge verdict edge cases', () => {
     expect(result).not.toBeNull();
     expect(result!.verdict).toBe('pass');
   });
+
+  it('parseJudgeVerdict preserves explicit null retry metadata on fail verdicts', () => {
+    const result = parseJudgeVerdict(JSON.stringify({
+      verdict: 'fail',
+      confidence: 55,
+      reason: 'Judge could not build a stable fingerprint',
+      retryRecommendation: 'retry-full',
+      retryHint: null,
+      failureFingerprint: null,
+    }));
+
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('fail');
+    expect(result!.retryRecommendation).toBe('retry-full');
+    expect(result!.retryHint).toBeNull();
+    expect(result!.failureFingerprint).toBeNull();
+  });
 });
 
 // ── runner dispatch wiring ─────────────────────────────────────────────────
