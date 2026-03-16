@@ -103,6 +103,8 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     skipGracePeriod: false,
     retryBudget: 3,
     retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
     hungCount: 0,
     lastHungReason: null,
     ...overrides,
@@ -202,6 +204,7 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('What happened: Undo checkpoints look compatible.');
     expect(output).toContain('What next: Run pilot undo ab12 --dry-run to preview rollback.');
     expect(output).toContain('Run profile: balanced/hybrid · attempts 1');
+    expect(output).toContain('Attempt: Attempt 1/4');
     expect(output).toContain('Retryability: retry-unavailable (retry-unavailable)');
     expect(output).toContain('Undo safety: undo:safe (undo-safe)');
     expect(output).toContain('Recovery');
@@ -238,6 +241,7 @@ describe('infoCommand recovery visibility', () => {
     expect(payload).toHaveProperty('failureContext');
     expect(payload).toHaveProperty('triage');
     expect(payload).toHaveProperty('recovery');
+    expect(payload).toHaveProperty('retryLineage');
     expect(payload.triage).toMatchObject({
       providerProfile: 'balanced/hybrid',
       attempts: 1,
@@ -256,6 +260,14 @@ describe('infoCommand recovery visibility', () => {
       tag: 'undo:guarded-newer-work',
       relation: 'newer-work-exists',
       blockedByNewerWork: true,
+    });
+    expect(payload.retryLineage).toMatchObject({
+      attempt: 1,
+      totalAttempts: 4,
+      display: 'Attempt 1/4',
+      retryBudget: 3,
+      retryCount: 0,
+      retryHint: null,
     });
     expect(payload.recovery.guidance).toContain('Undo blocked by newer work');
     expect(payload.observability).toMatchObject({
@@ -344,6 +356,22 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('Failure reason: semantic-check: tests failed');
     expect(output).toContain('Completed before failure: 1/2');
     expect(output).toContain('Retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
+  });
+
+  it('shows retry hint and derived attempt lineage for retried jobs', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        retryBudget: 2,
+        retryCount: 1,
+        retryHint: 'retry-resume: Resume from plan 03',
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Attempt: Attempt 2/3');
+    expect(output).toContain('Retry hint: retry-resume: Resume from plan 03');
   });
 
   it('shows no-op and guarded undo states in triage summary context', async () => {

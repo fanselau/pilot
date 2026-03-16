@@ -4,11 +4,13 @@ import type { Job, JobStep, JobObservabilitySnapshot } from '../../src/core/type
 const mockGetJob = vi.fn();
 const mockGetQueue = vi.fn();
 const mockGetJobSteps = vi.fn();
+const mockGetRetryAttempts = vi.fn();
 
 vi.mock('../../src/core/db.js', () => ({
   getJob: (...args: unknown[]) => mockGetJob(...args),
   getQueue: (...args: unknown[]) => mockGetQueue(...args),
   getJobSteps: (...args: unknown[]) => mockGetJobSteps(...args),
+  getRetryAttempts: (...args: unknown[]) => mockGetRetryAttempts(...args),
 }));
 
 const mockFindSessionByTitle = vi.fn();
@@ -85,6 +87,12 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 2,
+    retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -105,6 +113,15 @@ function makeStep(overrides: Partial<JobStep> = {}): JobStep {
     completedAt: '2026-03-07T00:02:00Z',
     durationMs: 60_000,
     ...overrides,
+  };
+}
+
+function makeTextPart(text: string, createdAt: number) {
+  return {
+    type: 'text' as const,
+    role: 'assistant' as const,
+    text,
+    createdAt,
   };
 }
 
@@ -166,6 +183,7 @@ describe('logCommand --summary', () => {
     mockGetQueue.mockReturnValue([]);
     mockGetJob.mockReturnValue(makeJob());
     mockGetJobSteps.mockReturnValue([]);
+    mockGetRetryAttempts.mockReturnValue([]);
     mockFindSessionByTitle.mockReturnValue(null);
     mockGetSessionParts.mockReturnValue([]);
     mockGetChildSessions.mockReturnValue([]);
@@ -307,5 +325,99 @@ describe('logCommand --summary', () => {
     expect(output).toContain('step: no step metadata recorded');
     expect(output).toContain('commit delta: changed');
     expect(mockGetSessionParts).not.toHaveBeenCalled();
+  });
+});
+
+describe('logCommand retry chain rendering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockJsonMode = false;
+
+    mockGetQueue.mockReturnValue([]);
+    mockGetJob.mockReturnValue(
+      makeJob({
+        retryBudget: 2,
+        retryCount: 1,
+        retryHint: 'retry-full: Full rerun after stale verification evidence',
+        sessionTitles: JSON.stringify(['attempt-2-execute']),
+      }),
+    );
+    mockGetJobSteps.mockReturnValue([]);
+    mockGetRetryAttempts.mockReturnValue([
+      {
+        id: 1,
+        jobId: 'ab12',
+        attemptNumber: 1,
+        sessionTitles: ['attempt-1-execute'],
+        retryStrategy: 'retry-resume',
+        retryHint: 'Resume from missing summary checks',
+        failureFingerprint: ['missing-summary'],
+        archivedAt: '2026-03-07T00:03:00Z',
+      },
+    ]);
+
+    const sessionIds: Record<string, string> = {
+      'attempt-1-execute': 'sess-attempt-1',
+      'attempt-2-execute': 'sess-attempt-2',
+    };
+    mockFindSessionByTitle.mockImplementation((title: string) => sessionIds[title] ?? null);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-attempt-1') {
+        return [makeTextPart('archived attempt output', 1_000)];
+      }
+      if (sessionId === 'sess-attempt-2') {
+        return [makeTextPart('current attempt output', 2_000)];
+      }
+      return [];
+    });
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 0, output: 0, reasoning: 0 });
+    mockBuildJobObservability.mockReturnValue(makeObservability());
+  });
+
+  it('renders archived and current attempt sections when --chain is enabled', async () => {
+    await logCommand('ab12', { chain: true });
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('── Attempt 1 (retry-resume) ──');
+    expect(output).toContain('hint: Resume from missing summary checks');
+    expect(output).toContain('── Attempt 2 (current) ──');
+    expect(output).toContain('archived attempt output');
+    expect(output).toContain('current attempt output');
+  });
+
+  it('keeps default output focused on current attempt without --chain', async () => {
+    await logCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(mockGetRetryAttempts).not.toHaveBeenCalled();
+    expect(output).not.toContain('── Attempt 1');
+    expect(output).not.toContain('archived attempt output');
+    expect(output).toContain('current attempt output');
+  });
+
+  it('adds attempt-group metadata in JSON mode when chain is enabled', async () => {
+    mockJsonMode = true;
+
+    await logCommand('ab12', { chain: true, json: true });
+
+    expect(mockOutputJson).toHaveBeenCalledTimes(1);
+    const payload = mockOutputJson.mock.calls[0][0];
+    expect(payload.chain).toMatchObject({
+      enabled: true,
+    });
+    expect(payload.chain.attempts).toHaveLength(2);
+    expect(payload.chain.attempts[0]).toMatchObject({
+      attempt: 1,
+      source: 'archived',
+      retryStrategy: 'retry-resume',
+      retryHint: 'Resume from missing summary checks',
+    });
+    expect(payload.chain.attempts[1]).toMatchObject({
+      attempt: 2,
+      source: 'current',
+      retryHint: 'retry-full: Full rerun after stale verification evidence',
+    });
   });
 });
