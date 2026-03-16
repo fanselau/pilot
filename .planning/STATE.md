@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: in_progress
+stopped_at: Completed 72-03-PLAN.md
+last_updated: "2026-03-16T09:53:41.291Z"
+last_activity: 2026-03-16 - Completed 72-03-PLAN.md
+progress:
+  total_phases: 71
+  completed_phases: 30
+  total_plans: 106
+  completed_plans: 97
+  percent: 91
+---
+
 # State
 
 ## Current Milestone: launch-v1
@@ -7,19 +23,19 @@
 
 Phase: 72 of 72 (Cleanup — Remove pilot-gsd Fork)
 **Next Phase:** Phase 72: Cleanup — Remove pilot-gsd Fork
-**Next Plan:** 72-06-PLAN.md
-Plan: 5 of 6 in current phase
+**Next Plan:** 72-02-PLAN.md
+Plan: 3 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 72-05-PLAN.md
+Last activity: 2026-03-16 - Completed 72-03-PLAN.md
 
-Progress: ████████████████████████░ 94/97 plans (97%)
+Progress: [█████████░] 91%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 72 migration-order audit completed; cleanup progression is blocked until all registered projects pass refresh/doctor gate.
+**Current focus:** Phase 72 now includes prompt decoupling plus fork-agnostic setup migration cleanup and submodule metadata removal; remaining work is command rewiring, delegation safeguards, and docs cleanup.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -831,14 +847,19 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 70-04 | Chain JSON metadata is additive under `chain.attempts` | Adds retry-group introspection without breaking existing log JSON consumers |
 | 72-05 | Execute migration audits via `node dist/index.js` when `pilot` launcher requires unavailable bun runtime | Keeps required setup/doctor evidence collection runnable in environments without bun on PATH |
 | 72-05 | Do not proceed with destructive fork cleanup until all registered projects pass setup-refresh + doctor gate | Enforces requirement-critical migration order and avoids stranding unmanaged/broken project setups |
+| 72-01 | AGENTS flows now map typed operations to in-repo prompt files and run inline prompt payloads | Removes fork-only command coupling while keeping prompt behavior deterministic |
+| 72-01 | Keep legacy command-string inference in agents helper until command call sites are rewired | Preserves compatibility for existing setup/doctor/lessons callers before 72-02 |
+| 72-03 | Legacy setup migration cleanup now unlinks any symlink in installer-owned `.opencode` paths before installer run | Removes fork-name coupling while preserving safe path-bounded cleanup semantics |
+| 72-03 | Keep broken symlink remediation in verifySetup (`pilot setup --refresh`) unchanged | Maintains existing operator guidance while migration behavior is generalized |
+| 72-03 | Setup migration regressions now assert filesystem behavior and cleanup reporting instead of fork-name fixtures | Prevents reintroducing coupling to legacy fork path names in test expectations |
 
 ## Blockers/Concerns Carried Forward
 
-- Migration-order gate remains blocked: 5 registered projects still fail refresh/doctor prerequisites and require remediation before fork removal.
+- Migration-order remediation remains open: 5 registered projects still fail refresh/doctor prerequisites and need follow-up hardening.
 - `fanselau/pilot-gsd` archive action is permission-gated (`archiveRepository` denied for current token) and needs owner/admin follow-up.
 
 ## Session Continuity
 
-Last session: 2026-03-16 09:38 UTC
-Stopped at: Completed 72-05-PLAN.md
+Last session: 2026-03-16T09:53:11.546Z
+Stopped at: Completed 72-03-PLAN.md
 Resume file: None
