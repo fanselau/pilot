@@ -28,7 +28,7 @@
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc",
-    "postbuild": "node -e \"const f=require(\\\"fs\\\");let c=f.readFileSync(\\\"dist/index.js\\\",\\\"utf8\\\");c=c.replace(/^#!.*\\\\n/,\\\"\\\");f.writeFileSync(\\\"dist/index.js\\\",\\\"#!/usr/bin/env bun\\\\n\\\"+c);f.chmodSync(\\\"dist/index.js\\\",0o755);\"",
+    "postbuild": "mkdir -p dist/prompts && cp src/prompts/*.md dist/prompts/ && node -e \"const f=require(\\\"fs\\\");let c=f.readFileSync(\\\"dist/index.js\\\",\\\"utf8\\\");c=c.replace(/^#!.*\\\\n/,\\\"\\\");f.writeFileSync(\\\"dist/index.js\\\",\\\"#!/usr/bin/env bun\\\\n\\\"+c);f.chmodSync(\\\"dist/index.js\\\",0o755);\"",
     "dev": "bun run src/index.ts",
     "test": "vitest run",
     "test:run": "NODE_OPTIONS='--max-old-space-size=2048' vitest run",

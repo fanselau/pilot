@@ -6,10 +6,11 @@
 ## Current Position
 
 Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
+**Next Phase:** Phase 71: Full Milestone Lifecycle — Audit, Gap Closure, Completion
 **Next Plan:** None (phase complete)
 Plan: 4 of 4 in current phase
 Status: Phase complete
-Last activity: 2026-03-16 - Completed 70-04-PLAN.md
+Last activity: 2026-03-16 - Completed quick task 086: Fix Phase 65 verification gaps (3 test suite errors)
 
 Progress: ████████████████████████░ 93/97 plans (96%)
 
@@ -250,6 +251,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 083 | Pilot Web UI mobile responsiveness — responsive padding, Coss useIsMobile, session-overview card fallback, timeline flex-wrap | 2026-03-13 | cb0dbe8 | [083-pilot-web-ui-mobile-responsiveness-and-n](./quick/083-pilot-web-ui-mobile-responsiveness-and-n/) |
 | 084 | Fix child session drill-in navigation — reset SessionActivity pagination on sessionId change, key-based remount, multi-child fork card uniqueness tests | 2026-03-14 | e86a5b4 | [084-quick-follow-up-subjob-navigation-must-r](./quick/084-quick-follow-up-subjob-navigation-must-r/) |
 | 085 | Quick follow-up - update README and docs for new Pilot web UI features | 2026-03-14 | 5e5b319 | [085-quick-follow-up-update-readme-and-docs-f](./quick/085-quick-follow-up-update-readme-and-docs-f/) |
+| 086 | Fix 3 test files with vi.mock hoisting bugs — importOriginal for doctor, self-contained execa mock for update, toast path alias mock for actions | 2026-03-16 | 1ae7231 | [086-fix-phase-65-verification-gaps-3-test-su](./quick/086-fix-phase-65-verification-gaps-3-test-su/) |
 
 ## Accumulated Context
 
@@ -316,6 +318,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 68 added: Judge System — Move Into Pilot
 - Phase 69 added: Model System — Agent Frontmatter Patching
 - Phase 70 added: Phase Auto-Retry on Verification Failure
+- Phase 71 added: Full Milestone Lifecycle — Audit, Gap Closure, Completion
 
 ## Decisions
 
