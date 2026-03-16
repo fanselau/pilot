@@ -6,7 +6,7 @@
 ## Current Position
 
 Phase: 69 (Model System — Agent Frontmatter Patching)
-**Next Phase:** Select next roadmap in-progress plan (phase 50/51/61)
+**Next Phase:** Phase 70 (Phase Auto-Retry on Verification Failure)
 Plan: 3 of 3 in current phase
 Status: Phase complete
 Last activity: 2026-03-16 - Completed 69-03-PLAN.md
@@ -315,6 +315,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 67 added: Session Blocker Handling — DB-Based Hung Detection
 - Phase 68 added: Judge System — Move Into Pilot
 - Phase 69 added: Model System — Agent Frontmatter Patching
+- Phase 70 added: Phase Auto-Retry on Verification Failure
 
 ## Decisions
 

@@ -1260,3 +1260,15 @@ Wave structure:
 
 **Details:**
 Read `requirements/gsd-06-model-frontmatter.md` and `.planning/phases/69-model-system-agent-frontmatter-patching/69-RESEARCH.md`.
+
+### Phase 70: Phase Auto-Retry on Verification Failure
+
+**Goal:** [To be planned]
+**Depends on:** Phase 69
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 70 to break down)
+
+**Details:**
+[To be added during planning]
