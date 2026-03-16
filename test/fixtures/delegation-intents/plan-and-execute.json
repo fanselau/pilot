@@ -1,0 +1,9 @@
+{
+  "intent": {
+    "type": "plan-and-execute",
+    "phaseNumber": 72,
+    "prdPath": "requirements/gsd-09-cleanup.md",
+    "addPhaseTitle": "Cleanup Residual Fork Coupling"
+  },
+  "reasoning": "The requirement introduces new cleanup scope, so create a dedicated phase then run plan and execute in sequence."
+}

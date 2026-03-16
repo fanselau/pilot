@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Job } from '../../src/core/types.js';
 import { resolveTopLevelModel } from '../../src/core/models.js';
 
@@ -116,21 +119,42 @@ function makeTestJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 2,
+    retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
+}
+
+const FIXTURE_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'fixtures',
+  'delegation-intents',
+);
+
+function loadDelegationIntentFixture(filename: string): string {
+  return readFileSync(path.join(FIXTURE_DIR, filename), 'utf8');
+}
+
+function asJsonCodeBlock(json: string): string {
+  return `\`\`\`json\n${json}\n\`\`\``;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('parseIntentOutput', () => {
   it('parses quick intent from JSON code block', () => {
-    const content = '```json\n{"intent":{"type":"quick","description":"Fix the bug"},"reasoning":"Quick task"}\n```';
+    const content = asJsonCodeBlock(loadDelegationIntentFixture('quick.json'));
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('quick');
     if (result.intent.type === 'quick') {
-      expect(result.intent.description).toBe('Fix the bug');
+      expect(result.intent.description).toBe('Fix stale mobile notification toast behavior');
     }
-    expect(result.reasoning).toBe('Quick task');
+    expect(result.reasoning).toContain('Scoped fix with uncertain reproduction');
   });
 
   it('parses quick intent with flags', () => {
@@ -170,13 +194,13 @@ describe('parseIntentOutput', () => {
   });
 
   it('parses plan-and-execute intent with all fields', () => {
-    const content = '```json\n{"intent":{"type":"plan-and-execute","phaseNumber":42,"prdPath":"requirements/feature.md","addPhaseTitle":"Feature Name"},"reasoning":"New phase"}\n```';
+    const content = asJsonCodeBlock(loadDelegationIntentFixture('plan-and-execute.json'));
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('plan-and-execute');
     if (result.intent.type === 'plan-and-execute') {
-      expect(result.intent.phaseNumber).toBe(42);
-      expect(result.intent.prdPath).toBe('requirements/feature.md');
-      expect(result.intent.addPhaseTitle).toBe('Feature Name');
+      expect(result.intent.phaseNumber).toBe(72);
+      expect(result.intent.prdPath).toBe('requirements/gsd-09-cleanup.md');
+      expect(result.intent.addPhaseTitle).toBe('Cleanup Residual Fork Coupling');
     }
   });
 
@@ -191,20 +215,20 @@ describe('parseIntentOutput', () => {
   });
 
   it('parses execute-only intent', () => {
-    const content = '{"intent":{"type":"execute-only","phaseNumber":17},"reasoning":"Plans exist but incomplete"}';
+    const content = loadDelegationIntentFixture('execute-only.json');
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('execute-only');
     if (result.intent.type === 'execute-only') {
-      expect(result.intent.phaseNumber).toBe(17);
+      expect(result.intent.phaseNumber).toBe(72);
     }
   });
 
   it('parses audit-milestone intent', () => {
-    const content = '{"intent":{"type":"audit-milestone","version":"launch-v1"},"reasoning":"All phases complete"}';
+    const content = loadDelegationIntentFixture('audit-milestone.json');
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('audit-milestone');
     if (result.intent.type === 'audit-milestone') {
-      expect(result.intent.version).toBe('launch-v1');
+      expect(result.intent.version).toBe('cleanup-phase-72');
     }
   });
 

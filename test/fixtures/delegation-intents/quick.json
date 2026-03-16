@@ -1,0 +1,10 @@
+{
+  "intent": {
+    "type": "quick",
+    "description": "Fix stale mobile notification toast behavior",
+    "flags": [
+      "research"
+    ]
+  },
+  "reasoning": "Scoped fix with uncertain reproduction path, so quick execution with research flag is appropriate."
+}

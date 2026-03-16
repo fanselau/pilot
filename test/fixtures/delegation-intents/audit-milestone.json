@@ -1,0 +1,7 @@
+{
+  "intent": {
+    "type": "audit-milestone",
+    "version": "cleanup-phase-72"
+  },
+  "reasoning": "All required phase plans are complete; perform milestone audit and closure checks."
+}
