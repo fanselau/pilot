@@ -8,7 +8,7 @@
  *   - Config file loading: loadConfigFile reads ~/.pilot/config.json
  *   - Resolution order: env var > config file > default
  *   - Missing config file = silent (null), malformed = error, invalid values = error
- *   - getConfigFileDefaults() returns modelProfile, providerMode, scope
+ *   - getConfigFileDefaults() returns modelProfile, providerMode, scope, retryBudget
  *   - getConfigSource() returns source for each config key
  *   - _resetConfigCache() for test isolation
  */
@@ -520,6 +520,7 @@ describe('getConfigFileDefaults', () => {
     expect(defaults.modelProfile).toBe('balanced');
     expect(defaults.providerMode).toBe('claude-only');
     expect(defaults.scope).toBeNull();
+    expect(defaults.retryBudget).toBe(2);
   });
 
   it('returns config file values for modelProfile and providerMode', () => {
@@ -535,6 +536,7 @@ describe('getConfigFileDefaults', () => {
     expect(defaults.modelProfile).toBe('quality');
     expect(defaults.providerMode).toBe('hybrid');
     expect(defaults.scope).toBe('phase');
+    expect(defaults.retryBudget).toBe(2);
   });
 
   it('returns partial defaults when only some are set in config', () => {
@@ -548,6 +550,29 @@ describe('getConfigFileDefaults', () => {
     expect(defaults.modelProfile).toBe('budget');
     expect(defaults.providerMode).toBe('claude-only'); // default
     expect(defaults.scope).toBeNull(); // default
+    expect(defaults.retryBudget).toBe(2); // default
+  });
+
+  it('returns retryBudget from defaults.retry_budget', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: {
+        retry_budget: 5,
+      },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.retryBudget).toBe(5);
+  });
+
+  it('accepts defaults.retryBudget as compatibility alias', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: {
+        retryBudget: 4,
+      },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.retryBudget).toBe(4);
   });
 });
 
@@ -672,6 +697,22 @@ describe('config file validation edge cases', () => {
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
     expect(() => loadConfigFile()).toThrowError(/sessionMaxMb/i);
+  });
+
+  it('throws on defaults.retry_budget < 0', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { retry_budget: -1 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/retry_budget/i);
+  });
+
+  it('throws on non-integer defaults.retry_budget', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { retry_budget: 1.5 },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => loadConfigFile()).toThrowError(/retry_budget/i);
   });
 
   it('allows empty config file (empty object)', () => {

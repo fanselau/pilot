@@ -29,6 +29,8 @@ export interface ConfigFileSchema {
     providerMode?: string;  // accepts built-in modes + custom user-defined modes from provider_modes table
     notifyTarget?: string | null;
     scope?: 'quick' | 'phase' | 'milestone' | null;
+    retry_budget?: number;
+    retryBudget?: number;
   };
   notifications?: {
     openclawHooksUrl?: string | null;
@@ -50,6 +52,7 @@ export interface ConfigFileDefaults {
   modelProfile: 'quality' | 'balanced' | 'budget';
   providerMode: string;  // accepts built-in modes + custom user-defined modes
   scope: 'quick' | 'phase' | 'milestone' | null;
+  retryBudget: number;
 }
 
 export interface PilotConfig {

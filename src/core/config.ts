@@ -75,6 +75,15 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
     }
   }
 
+  /** Validate that a value is a non-negative integer. */
+  function assertNonNegativeInteger(keyPath: string, value: unknown): void {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+      throw new Error(
+        `Invalid config value in ${filePath}: ${keyPath} must be an integer >= 0, got ${JSON.stringify(value)}`,
+      );
+    }
+  }
+
   // ── logging ──
   if (config.logging && typeof config.logging === 'object') {
     const logging = config.logging as Record<string, unknown>;
@@ -100,6 +109,11 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
     }
     if (defaults.scope !== undefined && defaults.scope !== null) {
       assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'milestone']);
+    }
+
+    const retryBudgetRaw = defaults.retry_budget ?? defaults.retryBudget;
+    if (retryBudgetRaw !== undefined && retryBudgetRaw !== null) {
+      assertNonNegativeInteger('defaults.retry_budget', retryBudgetRaw);
     }
   }
 
@@ -280,6 +294,7 @@ function getConfigFileDefaults(): ConfigFileDefaults {
     modelProfile: fileConfig?.defaults?.modelProfile ?? 'balanced',
     providerMode: fileConfig?.defaults?.providerMode ?? 'claude-only',
     scope: fileConfig?.defaults?.scope ?? null,
+    retryBudget: fileConfig?.defaults?.retry_budget ?? fileConfig?.defaults?.retryBudget ?? 2,
   };
 }
 
