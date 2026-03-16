@@ -388,6 +388,136 @@ describe('patchAgentFrontmatter', () => {
     expect(summary.patched).toContain('gsd-executor');
   });
 
+  it('discovers all gsd files and applies inherit fallback for every missing mapping', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    const plannerFile = path.join(agentDir, 'gsd-planner.md');
+    writeFileSync(plannerFile, ['---', 'name: gsd-planner', 'model: inherit', '---', '', '# Planner'].join('\n'), 'utf8');
+
+    const verifierFile = path.join(agentDir, 'gsd-verifier.md');
+    writeFileSync(
+      verifierFile,
+      ['---', 'name: gsd-verifier', 'model: openai/gpt-5.4', 'variant: high', '---', '', '# Verifier'].join('\n'),
+      'utf8',
+    );
+
+    const checkerFile = path.join(agentDir, 'gsd-custom-checker.md');
+    writeFileSync(
+      checkerFile,
+      ['---', 'name: gsd-custom-checker', 'model: openai/gpt-5.4', 'variant: low', '---', '', '# Checker'].join('\n'),
+      'utf8',
+    );
+
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' },
+    });
+
+    expect(summary.fallback).toEqual(['gsd-custom-checker', 'gsd-verifier']);
+
+    const verifierContent = readFileSync(verifierFile, 'utf8');
+    expect(verifierContent).toContain('model: inherit');
+    expect(verifierContent).not.toContain('variant:');
+
+    const checkerContent = readFileSync(checkerFile, 'utf8');
+    expect(checkerContent).toContain('model: inherit');
+    expect(checkerContent).not.toContain('variant:');
+  });
+
+  it('preserves non-model frontmatter fields and body while patching model fields', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    const body = ['# Researcher', '', 'Keeps detailed research notes.', '', '- point-a', '- point-b'].join('\n');
+    const filePath = path.join(agentDir, 'gsd-phase-researcher.md');
+    writeFileSync(
+      filePath,
+      [
+        '---',
+        'name: gsd-phase-researcher',
+        'description: Handles phased investigations',
+        'temperature: 0.2',
+        'tools:',
+        '  - Read',
+        '  - Grep',
+        'model: openai/gpt-5.4',
+        'variant: high',
+        '---',
+        '',
+        body,
+      ].join('\n'),
+      'utf8',
+    );
+
+    patchAgentFrontmatter(projectDir, {
+      'gsd-phase-researcher': { model: 'anthropic/claude-sonnet-4-6' },
+    });
+    const content = readFileSync(filePath, 'utf8');
+
+    expect(content).toContain('name: gsd-phase-researcher');
+    expect(content).toContain('description: Handles phased investigations');
+    expect(content).toContain('temperature: 0.2');
+    expect(content).toContain('tools:');
+    expect(content).toContain('- Read');
+    expect(content).toContain('- Grep');
+    expect(content).toContain('model: anthropic/claude-sonnet-4-6');
+    expect(content).not.toContain('variant:');
+    expect(content).toContain(body);
+  });
+
+  it('skips invalid/no-frontmatter files and still patches valid ones without throwing', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    writeFileSync(path.join(agentDir, 'gsd-no-frontmatter.md'), '# No frontmatter\n', 'utf8');
+    writeFileSync(path.join(agentDir, 'gsd-invalid.md'), ['---', 'name: [oops', '---', '', '# Invalid'].join('\n'), 'utf8');
+
+    const validFile = path.join(agentDir, 'gsd-valid.md');
+    writeFileSync(validFile, ['---', 'name: gsd-valid', 'model: inherit', '---', '', '# Valid'].join('\n'), 'utf8');
+
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-valid': { model: 'openai/gpt-5.4', variant: 'medium' },
+    });
+
+    expect(summary.skipped).toEqual(['gsd-invalid', 'gsd-no-frontmatter']);
+    expect(summary.patched).toContain('gsd-valid');
+    expect(readFileSync(validFile, 'utf8')).toContain('model: openai/gpt-5.4');
+  });
+
+  it('is idempotent when patching with the same model map twice', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    const plannerFile = path.join(agentDir, 'gsd-planner.md');
+    writeFileSync(
+      plannerFile,
+      ['---', 'name: gsd-planner', 'model: openai/gpt-5.4', 'variant: high', '---', '', '# Planner'].join('\n'),
+      'utf8',
+    );
+
+    patchAgentFrontmatter(projectDir, {
+      'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' },
+    });
+    const firstPass = readFileSync(plannerFile, 'utf8');
+
+    const secondSummary = patchAgentFrontmatter(projectDir, {
+      'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' },
+    });
+    const secondPass = readFileSync(plannerFile, 'utf8');
+
+    expect(secondPass).toBe(firstPass);
+    expect(secondSummary).toEqual({
+      patched: [],
+      unchanged: ['gsd-planner'],
+      skipped: [],
+      fallback: [],
+    });
+  });
+
   it('skips files with missing or invalid frontmatter safely', () => {
     const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
     const agentDir = path.join(projectDir, '.opencode', 'agents');
