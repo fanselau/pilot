@@ -12,14 +12,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock state ──────────────────────────────────────────────────────────────
 
-const mockExeca = vi.fn();
-
 let mockProjects: Array<{ path: string; status: string; owner?: string | null; notifyOpenClawRoute?: unknown }> = [];
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
 vi.mock('execa', () => ({
-  execa: mockExeca,
+  execa: vi.fn(),
 }));
 
 vi.mock('../../src/core/db.js', () => ({
@@ -50,7 +48,11 @@ vi.mock('../../src/util/colors.js', () => ({
 
 // ── Import after mocks ───────────────────────────────────────────────────────
 
+import { execa } from 'execa';
 import { updateCommand } from '../../src/commands/update.js';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockExeca = execa as any as ReturnType<typeof vi.fn>;
 
 // ── Setup ────────────────────────────────────────────────────────────────────
 

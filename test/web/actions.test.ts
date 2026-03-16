@@ -11,6 +11,13 @@ vi.mock('~/lib/server-fns', () => ({
   unblockProjectFn: vi.fn(),
 }));
 
+// Mock ~/components/ui/toast — vitest has no `~` path alias so this must be mocked.
+vi.mock('~/components/ui/toast', () => ({
+  toastManager: {
+    add: vi.fn(),
+  },
+}));
+
 import {
   resolveActions,
   ACTION_REGISTRY,
