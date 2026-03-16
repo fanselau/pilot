@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseDocument } from 'yaml';
+import { isMap, parseDocument } from 'yaml';
 import { getModelEntry, getAllEntriesForModeAndProfile } from './model-store.js';
 import type { ModelEntry, ModelProfile, ProviderMode, DynamicProviderMode } from './types.js';
 
@@ -20,6 +20,14 @@ type FrontmatterParts = {
   frontmatter: string;
   body: string;
   newline: '\n' | '\r\n';
+  separator: '' | '\n' | '\r\n';
+};
+
+type AgentFrontmatterPatchSummary = {
+  patched: string[];
+  unchanged: string[];
+  skipped: string[];
+  fallback: string[];
 };
 
 const GSD_AGENT_FILENAME_PATTERN = /^gsd-.*\.md$/;
@@ -222,12 +230,13 @@ function splitFrontmatter(content: string): FrontmatterParts | null {
     frontmatter: match[2],
     body: content.slice(match[0].length),
     newline,
+    separator: match[3] as FrontmatterParts['separator'],
   };
 }
 
 function parseFrontmatterDocument(frontmatter: string) {
   const doc = parseDocument(frontmatter);
-  if (doc.errors.length > 0) {
+  if (doc.errors.length > 0 || !isMap(doc.contents)) {
     return null;
   }
   return doc;
@@ -242,70 +251,70 @@ function patchModelFields(doc: ReturnType<typeof parseDocument>, entry: ModelEnt
   doc.delete('variant');
 }
 
-function patchAgentFrontmatter(projectDir: string, models: Record<string, ModelEntry>): void {
-  for (const [agentName, entry] of Object.entries(models)) {
-    const agentPath = path.join(projectDir, '.opencode', 'agents', `${agentName}.md`);
+function patchAgentFrontmatter(projectDir: string, models: Record<string, ModelEntry>): AgentFrontmatterPatchSummary {
+  const summary: AgentFrontmatterPatchSummary = {
+    patched: [],
+    unchanged: [],
+    skipped: [],
+    fallback: [],
+  };
+
+  for (const agentPath of discoverAgentFiles(projectDir)) {
+    const agentName = path.basename(agentPath, '.md');
 
     let content: string;
     try {
       content = readFileSync(agentPath, 'utf8');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        summary.skipped.push(agentName);
         continue;
       }
       throw err;
     }
 
-    const match = content.match(/^(---\r?\n)([\s\S]*?)(\r?\n---\r?\n?)/);
-    if (!match) {
+    const parts = splitFrontmatter(content);
+    if (!parts) {
+      summary.skipped.push(agentName);
       continue;
     }
 
-    const newline = content.includes('\r\n') ? '\r\n' : '\n';
-    const currentFrontmatter = match[2];
-    const frontmatterLines = currentFrontmatter.split(/\r?\n/);
-    const modelLine = `model: "${entry.model}"`;
-
-    // Update or insert model line
-    const existingModelIndex = frontmatterLines.findIndex((line) => /^\s*model\s*:/.test(line));
-    if (existingModelIndex >= 0) {
-      frontmatterLines[existingModelIndex] = modelLine;
-    } else {
-      const descriptionIndex = frontmatterLines.findIndex((line) => /^\s*description\s*:/.test(line));
-      if (descriptionIndex >= 0) {
-        frontmatterLines.splice(descriptionIndex + 1, 0, modelLine);
-      } else {
-        frontmatterLines.push(modelLine);
-      }
+    const doc = parseFrontmatterDocument(parts.frontmatter);
+    if (!doc) {
+      summary.skipped.push(agentName);
+      continue;
     }
 
-    // Update or insert/remove variant line
-    const existingVariantIndex = frontmatterLines.findIndex((line) => /^\s*variant\s*:/.test(line));
-    if (entry.variant) {
-      const variantLine = `variant: "${entry.variant}"`;
-      if (existingVariantIndex >= 0) {
-        frontmatterLines[existingVariantIndex] = variantLine;
-      } else {
-        // Insert after model line
-        const modelIdx = frontmatterLines.findIndex((line) => /^\s*model\s*:/.test(line));
-        if (modelIdx >= 0) {
-          frontmatterLines.splice(modelIdx + 1, 0, variantLine);
-        } else {
-          frontmatterLines.push(variantLine);
-        }
-      }
-    } else if (existingVariantIndex >= 0) {
-      // Remove existing variant line when entry has no variant
-      frontmatterLines.splice(existingVariantIndex, 1);
+    const fromMap = Object.hasOwn(models, agentName);
+    const entry = fromMap ? models[agentName] : { model: 'inherit' };
+    if (!fromMap) {
+      summary.fallback.push(agentName);
     }
 
-    const updatedFrontmatter = frontmatterLines.join(newline);
-    const updatedContent = `${match[1]}${updatedFrontmatter}${match[3]}${content.slice(match[0].length)}`;
+    patchModelFields(doc, entry);
 
-    if (updatedContent !== content) {
-      writeFileSync(agentPath, updatedContent, 'utf8');
+    const renderedFrontmatter = String(doc)
+      .trimEnd()
+      .replace(/\r?\n/g, parts.newline);
+    const updatedContent = `---${parts.newline}${renderedFrontmatter}${parts.newline}---${parts.separator}${parts.body}`;
+
+    if (updatedContent === content) {
+      summary.unchanged.push(agentName);
+      continue;
     }
+
+    writeFileSync(agentPath, updatedContent, 'utf8');
+    summary.patched.push(agentName);
   }
+
+  return summary;
 }
 
-export { resolveAgentModel, resolveAllAgentModels, resolveTopLevelModel, patchAgentFrontmatter, AGENT_MODELS };
+export {
+  resolveAgentModel,
+  resolveAllAgentModels,
+  resolveTopLevelModel,
+  patchAgentFrontmatter,
+  AGENT_MODELS,
+  type AgentFrontmatterPatchSummary,
+};

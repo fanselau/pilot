@@ -9,6 +9,10 @@ import type { ModelProfile, ProviderMode } from '../../src/core/types.js';
 
 const isScopeKey = (key: string) => key.startsWith('_top:');
 
+beforeEach(() => {
+  _getTestDb();
+});
+
 describe('resolveAgentModel', () => {
   it('resolves all agent/profile/provider combinations from AGENT_MODELS', () => {
     const profiles: ModelProfile[] = ['quality', 'balanced', 'budget'];
@@ -200,10 +204,20 @@ describe('patchAgentFrontmatter', () => {
       'utf8',
     );
 
-    patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.2-codex', variant: 'high' } });
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-planner': { model: 'openai/gpt-5.2-codex', variant: 'high' },
+    });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('description: Planner agent\nmodel: "openai/gpt-5.2-codex"\nvariant: "high"\n---');
+    expect(content).toContain('description: Planner agent');
+    expect(content).toMatch(/model:\s+openai\/gpt-5\.2-codex/);
+    expect(content).toMatch(/variant:\s+high/);
+    expect(summary).toEqual({
+      patched: ['gsd-planner'],
+      unchanged: [],
+      skipped: [],
+      fallback: [],
+    });
   });
 
   it('updates existing model line', () => {
@@ -226,20 +240,30 @@ describe('patchAgentFrontmatter', () => {
       'utf8',
     );
 
-    patchAgentFrontmatter(projectDir, { 'gsd-executor': { model: 'anthropic/claude-opus-4-6' } });
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-executor': { model: 'anthropic/claude-opus-4-6' },
+    });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('model: "anthropic/claude-opus-4-6"');
-    expect(content).not.toContain('model: "anthropic/claude-haiku-4-5"');
+    expect(content).toMatch(/model:\s+"?anthropic\/claude-opus-4-6"?/);
+    expect(content).not.toMatch(/model:\s+"?anthropic\/claude-haiku-4-5"?/);
+    expect(summary.patched).toEqual(['gsd-executor']);
   });
 
-  it('skips missing agent files without throwing', () => {
+  it('does not throw when model map includes agents without files', () => {
     const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
     mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
 
-    expect(() => {
-      patchAgentFrontmatter(projectDir, { 'gsd-verifier': { model: 'openai/gpt-4.1-mini' } });
-    }).not.toThrow();
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-verifier': { model: 'openai/gpt-4.1-mini' },
+    });
+
+    expect(summary).toEqual({
+      patched: [],
+      unchanged: [],
+      skipped: [],
+      fallback: [],
+    });
   });
 
   it('writes variant line in frontmatter when entry has variant', () => {
@@ -264,8 +288,8 @@ describe('patchAgentFrontmatter', () => {
     patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' } });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('model: "openai/gpt-5.4"');
-    expect(content).toContain('variant: "high"');
+    expect(content).toContain('model: openai/gpt-5.4');
+    expect(content).toContain('variant: high');
   });
 
   it('removes existing variant line when entry has no variant', () => {
@@ -289,11 +313,10 @@ describe('patchAgentFrontmatter', () => {
       'utf8',
     );
 
-    // Entry without variant — should remove existing variant line
     patchAgentFrontmatter(projectDir, { 'gsd-executor': { model: 'anthropic/claude-sonnet-4-6' } });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('model: "anthropic/claude-sonnet-4-6"');
+    expect(content).toMatch(/model:\s+"?anthropic\/claude-sonnet-4-6"?/);
     expect(content).not.toContain('variant:');
   });
 
@@ -321,8 +344,65 @@ describe('patchAgentFrontmatter', () => {
     patchAgentFrontmatter(projectDir, { 'gsd-planner': { model: 'openai/gpt-5.4', variant: 'high' } });
     const content = readFileSync(filePath, 'utf8');
 
-    expect(content).toContain('variant: "high"');
-    expect(content).not.toContain('variant: "low"');
+    expect(content).toMatch(/variant:\s+"?high"?/);
+    expect(content).not.toMatch(/variant:\s+"?low"?/);
+  });
+
+  it('uses inherit fallback for discovered agents missing from model map', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    const mappedFile = path.join(agentDir, 'gsd-executor.md');
+    writeFileSync(
+      mappedFile,
+      ['---', 'name: gsd-executor', 'model: inherit', '---', '', '# Executor'].join('\n'),
+      'utf8',
+    );
+
+    const fallbackFile = path.join(agentDir, 'gsd-custom-checker.md');
+    writeFileSync(
+      fallbackFile,
+      [
+        '---',
+        'name: gsd-custom-checker',
+        'description: Custom checker',
+        'model: openai/gpt-5.4',
+        'variant: high',
+        '---',
+        '',
+        '# Checker',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const summary = patchAgentFrontmatter(projectDir, {
+      'gsd-executor': { model: 'anthropic/claude-opus-4-6' },
+    });
+
+    const fallbackContent = readFileSync(fallbackFile, 'utf8');
+    expect(fallbackContent).toContain('model: inherit');
+    expect(fallbackContent).not.toContain('variant:');
+    expect(summary.fallback).toEqual(['gsd-custom-checker']);
+    expect(summary.patched).toContain('gsd-custom-checker');
+    expect(summary.patched).toContain('gsd-executor');
+  });
+
+  it('skips files with missing or invalid frontmatter safely', () => {
+    const projectDir = mkdtempSync(path.join(os.tmpdir(), 'pilot-models-'));
+    const agentDir = path.join(projectDir, '.opencode', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+
+    const noFrontmatter = path.join(agentDir, 'gsd-no-frontmatter.md');
+    writeFileSync(noFrontmatter, '# No frontmatter here\n', 'utf8');
+
+    const invalidFrontmatter = path.join(agentDir, 'gsd-invalid.md');
+    writeFileSync(invalidFrontmatter, ['---', 'name: [oops', '---', '', '# Invalid'].join('\n'), 'utf8');
+
+    expect(() => {
+      const summary = patchAgentFrontmatter(projectDir, {});
+      expect(summary.skipped).toEqual(['gsd-invalid', 'gsd-no-frontmatter']);
+    }).not.toThrow();
   });
 });
 
