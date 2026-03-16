@@ -17,8 +17,13 @@
 import { execa } from 'execa';
 import lockfile from 'proper-lockfile';
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync, watch as fsWatch } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { homedir } from 'node:os';
+
+// Load judge prompt from src/prompts/judge.md at module load time
+const JUDGE_PROMPT_PATH = fileURLToPath(new URL('../prompts/judge.md', import.meta.url));
+const JUDGE_PROMPT = readFileSync(JUDGE_PROMPT_PATH, 'utf8');
 import { getConfig, resolveProjectDir } from './config.js';
 import { ensureAutonomousGsdConfig } from './gsd-config.js';
 import {
@@ -125,6 +130,65 @@ async function hasSystemdRunUser(): Promise<boolean> {
 function _resetSystemdRunCache(): void {
   _systemdRunAvailable = null;
   _systemdRunWarned = false;
+}
+
+// ── Verification evidence readers ─────────────────────────────────────────
+
+/**
+ * Read VERIFICATION.md files from the phase directory.
+ * Returns aggregated content string, or null if none found.
+ * Files must be >100 bytes to count as valid evidence.
+ */
+function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
+  try {
+    const phasesDir = path.join(projectDir, '.planning', 'phases');
+    const dirs = readdirSync(phasesDir).filter(d => d.startsWith(`${phaseNumber}-`));
+    const contents: string[] = [];
+    for (const dir of dirs) {
+      try {
+        const files = readdirSync(path.join(phasesDir, dir)).filter(f => f.endsWith('-VERIFICATION.md'));
+        for (const file of files) {
+          const content = readFileSync(path.join(phasesDir, dir, file), 'utf8');
+          if (content.length > 100) {
+            contents.push(`## ${file}\n\n${content}`);
+          }
+        }
+      } catch {
+        // Skip unreadable phase directories
+      }
+    }
+    return contents.length > 0 ? contents.join('\n\n---\n\n') : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read VALIDATION.md files (Nyquist output) from the phase directory.
+ * Returns aggregated content string, or null if none found.
+ */
+function readValidationEvidence(projectDir: string, phaseNumber: number): string | null {
+  try {
+    const phasesDir = path.join(projectDir, '.planning', 'phases');
+    const dirs = readdirSync(phasesDir).filter(d => d.startsWith(`${phaseNumber}-`));
+    const contents: string[] = [];
+    for (const dir of dirs) {
+      try {
+        const files = readdirSync(path.join(phasesDir, dir)).filter(f => f.endsWith('-VALIDATION.md'));
+        for (const file of files) {
+          const content = readFileSync(path.join(phasesDir, dir, file), 'utf8');
+          if (content.length > 0) {
+            contents.push(`## ${file}\n\n${content}`);
+          }
+        }
+      } catch {
+        // Skip unreadable phase directories
+      }
+    }
+    return contents.length > 0 ? contents.join('\n\n---\n\n') : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Dynamic maxParallel ───────────────────────────────────────────────────
@@ -1048,7 +1112,8 @@ class Runner {
   }
 
   /**
-   * Spawn gsd-judge to evaluate a completed execute-phase step.
+   * Spawn a judge session to evaluate a completed execute-phase step.
+   * Uses the inline prompt from src/prompts/judge.md with evidence context injected.
    * Returns null on any failure (benefit of doubt — mark as completed).
    *
    * Extracts JSON verdict from the last assistant message of the judge session.
@@ -1061,11 +1126,38 @@ class Runner {
     const judgeTitle = truncateTitle(`pilot-judge-${job.id}-${ts}`, 80);
     updateSessionTitles(job.id, [judgeTitle]);
 
+    // Gather evidence from disk
+    const verificationContent = readVerificationEvidence(projectDir, phaseNumber);
+    const validationContent = readValidationEvidence(projectDir, phaseNumber);
+
+    // Build inline prompt with evidence context
+    let evidenceSection = '\n\n---\n\n## Evidence Context\n\n';
+    evidenceSection += `**Job ID:** ${job.id}\n`;
+    evidenceSection += `**Phase:** ${phaseNum}\n`;
+    evidenceSection += `**Project:** ${projectDir}\n\n`;
+
+    if (verificationContent) {
+      evidenceSection += `### VERIFICATION.md (Primary Evidence)\n\n${verificationContent}\n\n`;
+    } else {
+      evidenceSection += `### VERIFICATION.md: NOT AVAILABLE\n\nNo valid VERIFICATION.md found. Use transcript-only evidence. Default to "partial" with confidence ≤ 40 if evidence is insufficient.\n\n`;
+    }
+
+    if (validationContent) {
+      evidenceSection += `### VALIDATION.md (Nyquist Output)\n\n${validationContent}\n\n`;
+    }
+
+    evidenceSection += `### Additional Evidence Commands\n`;
+    evidenceSection += `- Run \`pilot log ${job.id} --last 50\` for execution transcript\n`;
+    evidenceSection += `- Run \`git log --oneline -20\` for recent commits\n`;
+    evidenceSection += `- Glob \`.planning/phases/${phaseNum}-*/*-SUMMARY.md\` for summaries\n`;
+
+    const fullPrompt = JUDGE_PROMPT + evidenceSection;
+
     // Cap judge at 15 minutes
     const judgeTimeoutMs = 15 * 60 * 1000;
 
     try {
-      await this.spawnAndWait(projectDir, 'gsd-judge', `${job.id} ${phaseNum}`, judgeTitle, judgeTimeoutMs);
+      await this.spawnAndWait(projectDir, 'judge', '', judgeTitle, judgeTimeoutMs, fullPrompt);
     } catch (err) {
       const msg = errMsg(err);
       if (msg.includes('timed out')) {
@@ -1104,6 +1196,10 @@ class Runner {
   /**
    * Spawn an opencode session and wait for it to complete.
    * Runs pre-spawn safety checks, then polls opencode's SQLite DB for session completion.
+   *
+   * When `inlinePrompt` is provided, spawns with the prompt as a positional argument
+   * (no --command flag) — same as delegation. Used for judge sessions.
+   * When omitted, uses --command gsdCommand with args — standard GSD step pattern.
    */
   private async spawnAndWait(
     cwd: string,
@@ -1111,6 +1207,7 @@ class Runner {
     args: string,
     title: string,
     timeoutOverrideMs?: number,
+    inlinePrompt?: string,
   ): Promise<void> {
     const config = getConfig();
     const opencodeBin = resolveOpencodeBinary();
@@ -1148,29 +1245,43 @@ class Runner {
     await ensureAutonomousGsdConfig(cwd);
 
     // Resolve top-level model for --model flag
-    // Judge/verify sessions use 'judge' scope (cheap tier); all others use job scope from activeJobs
-    const isJudge = command === 'gsd-judge';
+    // Judge sessions (inlinePrompt provided) use 'judge' scope; all others use job scope from activeJobs
+    const isJudge = inlinePrompt !== undefined;
     const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
     const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
     const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
     const { model: topLevelModel, variant } = resolveTopLevelModel(scope, profile, providerMode);
-    const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
     process.stderr.write(dim(`Top-level model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}`) + '\n');
 
-    const opencodeCmdArgs: string[] = [
-      'run',
-      '--format', 'default',
-      '--model', topLevelModel,
-      ...(variant ? ['--variant', variant] : []),
-      '--title', title,
-      '--command', gsdCommand,
-      // Pass args as a single positional string. NEVER use -- separator
-      // (causes arg.includes error on numeric args in opencode).
-      // To avoid opencode's yargs swallowing --flags, the delegate module
-      // ensures args never START with -- (puts content before flags).
-      ...(args ? [args] : []),
-    ];
+    let opencodeCmdArgs: string[];
+    if (inlinePrompt !== undefined) {
+      // Inline prompt mode (judge): pass prompt as positional arg — no --command flag
+      opencodeCmdArgs = [
+        'run',
+        '--format', 'default',
+        '--model', topLevelModel,
+        ...(variant ? ['--variant', variant] : []),
+        '--title', title,
+        inlinePrompt,
+      ];
+    } else {
+      // Command mode (standard GSD steps): use --command flag
+      const gsdCommand = command.startsWith('gsd-') || command.startsWith('pilot-') ? command : `gsd-${command}`;
+      opencodeCmdArgs = [
+        'run',
+        '--format', 'default',
+        '--model', topLevelModel,
+        ...(variant ? ['--variant', variant] : []),
+        '--title', title,
+        '--command', gsdCommand,
+        // Pass args as a single positional string. NEVER use -- separator
+        // (causes arg.includes error on numeric args in opencode).
+        // To avoid opencode's yargs swallowing --flags, the delegate module
+        // ensures args never START with -- (puts content before flags).
+        ...(args ? [args] : []),
+      ];
+    }
 
     const useSystemdRun = await hasSystemdRunUser();
     let proc;
