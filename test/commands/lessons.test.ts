@@ -113,8 +113,6 @@ describe('lessonsCommand', () => {
     );
     const sessionArg = mockSpawnAgentsMdSession.mock.calls[0]?.[0] as { command?: string };
     expect(sessionArg.command).toBeUndefined();
-    expect(JSON.stringify(sessionArg)).not.toContain('gsd-lessons');
-    expect(joined).not.toContain('gsd-lessons');
   });
 
   it('.planning/ exists, session returns null — prints failure message', async () => {

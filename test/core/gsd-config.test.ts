@@ -26,7 +26,7 @@ describe('ensureAutonomousGsdConfig', () => {
   let projectDir: string;
 
   beforeEach(async () => {
-    projectDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-gsd-config-'));
+    projectDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-config-'));
   });
 
   afterEach(async () => {

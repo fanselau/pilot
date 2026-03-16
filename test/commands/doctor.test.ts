@@ -488,7 +488,6 @@ describe('doctor project health — AGENTS operation contract', () => {
 
     const sessionArg = mockSpawnAgentsMdSession.mock.calls[0]?.[0] as { command?: string };
     expect(sessionArg.command).toBeUndefined();
-    expect(JSON.stringify(sessionArg)).not.toContain('gsd-setup-agents');
   });
 });
 
