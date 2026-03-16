@@ -1200,3 +1200,43 @@ Wave structure:
 
 **Details:**
 Read requirements/gsd-04b-session-blocker-handling.md for full spec.
+
+### Phase 68: Judge System — Move Into Pilot
+
+**Goal:** Move judge prompts from pilot-gsd fork into Pilot's codebase (`src/prompts/judge.md`), merge two divergent judge formats into one canonical format with `pass`/`fail`/`partial` verdicts, add `retryRecommendation`/`retryHint`/`failureFingerprint` fields to the verdict, and update the runner to use inline prompt sessions instead of `--command gsd-judge`.
+**Depends on:** Phase 67
+**Requirements:** PRMT-01, PRMT-02, PRMT-03, PRMT-04, PRMT-05, PRMT-06, PRMT-07, RNIN-01, RNIN-02, RNIN-03, RNIN-04, RNIN-05, RNIN-06, RNIN-07, TYPE-01, TYPE-02, TYPE-03, TYPE-04, TYPE-05, TYPE-06, SGUI-01, SGUI-02, SGUI-03, SGUI-04, MODL-01, MODL-02, MODL-03, CLEN-01, CLEN-02, CLEN-03, CLEN-04
+**Plans:** 4 plans
+
+Plans:
+- [ ] 68-01-PLAN.md — Judge prompt: merge gsd-judge.md + pilot-judge.md into `src/prompts/judge.md` with canonical verdict schema
+- [ ] 68-02-PLAN.md — Type updates: extend JudgeVerdict, ParsedJudgeVerdictPayload, JudgeSignal with retryRecommendation/retryHint/failureFingerprint; update VERDICT_TO_OUTCOME for pass/fail/partial
+- [ ] 68-03-PLAN.md — Runner integration: rewrite runJudge() to use inline prompt, load VERIFICATION.md + VALIDATION.md as evidence, remove --command gsd-judge path
+- [ ] 68-04-PLAN.md — Tests + cleanup: update all judge-related tests for new verdict format, remove gsd-judge/pilot-judge from pilot-gsd, verify backward compat
+
+**Success Criteria:**
+- Single canonical judge prompt exists at `src/prompts/judge.md`
+- Judge produces verdicts with `pass`/`fail`/`partial` values (not `succeeded`/`failed`/`doubting`)
+- Verdict JSON includes `retryRecommendation` (`'retry-resume'`/`'retry-full'`/`'none'`), `retryHint`, and `failureFingerprint` fields
+- `runJudge()` loads prompt from `src/prompts/judge.md` and passes as inline prompt (same pattern as delegation)
+- Judge reads VERIFICATION.md from disk as primary evidence; falls back to transcript when absent
+- VERIFICATION.md validated: must be >100 bytes and contain expected headers
+- When no VERIFICATION.md, judge defaults to `partial` with confidence ≤ 40
+- VALIDATION.md (Nyquist) read when present for richer verdicts
+- `VERDICT_TO_OUTCOME` handles `pass`/`fail`/`partial` values correctly
+- `JudgeSignal` exposes `retryRecommendation`, `retryHint`, `failureFingerprint`
+- Judge badge shows `judge:partial 35%` format for partial verdicts
+- Legacy verdict values (`succeeded`/`failed`/`doubting`) still parse correctly for backward compat
+- Judge model uses `_top:judge` scope — GPT-5.4 in hybrid/openai-only modes
+- No more `--command gsd-judge` calls from runner
+- `gsd-judge` and `pilot-judge` commands removed or deprecated in pilot-gsd
+- All existing tests pass with no regressions
+
+Wave structure:
+- Wave 1: 68-01 (judge prompt — standalone, no code changes)
+- Wave 2: 68-02 (type updates, depends on 68-01 for verdict schema clarity)
+- Wave 3: 68-03 (runner rewrite, depends on 68-01 + 68-02)
+- Wave 4: 68-04 (tests + cleanup, depends on all above)
+
+**Details:**
+Read requirements/gsd-05-judge-move.md for full spec.

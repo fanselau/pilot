@@ -1,23 +1,23 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 67
+## Current Phase: 68
 
 ## Current Position
 
-Phase: 67 (Session Blocker Handling — DB-Based Hung Detection)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-03-16 - Completed 67-04-PLAN.md (retry budget, escalation, hung session pipeline)
+Phase: 68 (Judge System — Move Into Pilot)
+Plan: 0 of 4 in current phase
+Status: Planning complete, ready for execution
+Last activity: 2026-03-16 - Created planning docs for Phase 68
 
-Progress: ██████████████████████ 82/86 plans (95%)
+Progress: ██████████████████████ 82/90 plans (91%)
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-20)
+See: .planning/PROJECT.md (updated 2026-03-16)
 
-**Core value:** Reliable autonomous orchestration of AI development sessions
-**Current focus:** Docs now reflect shipped web UI operator workflow (dashboard triage, step-aware timeline inspection, child/session drill-in, and action surfaces).
+**Core value:** Judge verdicts must include actionable retry recommendations and failure fingerprints so the runner can make intelligent retry decisions.
+**Current focus:** Move judge prompts into Pilot codebase, merge formats, enrich verdict with retry fields.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -169,6 +169,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ### Phase 67: Session Blocker Handling — DB-Based Hung Detection
 - **Status:** complete (4/4 plans)
 
+### Phase 68: Judge System — Move Into Pilot
+- **Status:** planned (0/4 plans complete)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -306,6 +309,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - Phase 65 added: GSD Config Pre-seeding for Autonomous Execution
 - Phase 66 added: Delegation Pipeline Redesign — Intent-Based Architecture
 - Phase 67 added: Session Blocker Handling — DB-Based Hung Detection
+- Phase 68 added: Judge System — Move Into Pilot
 
 ## Decisions
 
