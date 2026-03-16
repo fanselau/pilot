@@ -383,8 +383,8 @@ describe('setupProject — migration cleanup', () => {
 
     const result = await setupProject(tmpDir);
 
-    // Should report removal of the pilot-gsd symlink
-    expect(result.created.some(c => c.includes('pilot-gsd'))).toBe(true);
+    // Should report removal of a legacy symlink in installer-owned paths
+    expect(result.created.some(c => c.includes('Removed legacy symlink'))).toBe(true);
 
     await rm(fakeTarget, { recursive: true, force: true });
   });

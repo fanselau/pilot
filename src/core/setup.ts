@@ -5,12 +5,12 @@
  * in the project directory, generating the permissive opencode.json config,
  * and ensuring .gitignore and git are set up.
  *
- * Migration: detects and removes old pilot-gsd symlinks before running installer.
+ * Migration: detects and removes legacy installer-owned symlinks before running installer.
  *
  * Pure core module — no UI dependencies.
  */
 
-import { mkdir, symlink, readlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
+import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, realpath, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
 import { ensureAutonomousGsdConfig } from './gsd-config.js';
@@ -132,27 +132,24 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     return result;
   }
 
-  // 3. Migration cleanup: remove old pilot-gsd symlinks before running installer
+  // 3. Migration cleanup: remove legacy installer-owned symlinks before running installer
   //    This ensures the installer can create real directories/files in their place.
 
-  // 3a. Directory-level symlinks in .opencode/ that point to pilot-gsd
+  // 3a. Directory-level symlinks in installer-owned .opencode/ paths
   for (const name of ['command', 'agents', 'get-shit-done']) {
     const linkPath = path.join(opencodeDir, name);
     try {
       const linkStats = await lstat(linkPath);
       if (linkStats.isSymbolicLink()) {
-        const target = await readlink(linkPath);
-        if (target.includes('pilot-gsd')) {
-          await unlink(linkPath);
-          result.created.push(`Removed old pilot-gsd symlink: .opencode/${name}/`);
-        }
+        await unlink(linkPath);
+        result.created.push(`Removed legacy symlink: .opencode/${name}/`);
       }
     } catch {
       // Path doesn't exist or can't be stat'd — nothing to clean up
     }
   }
 
-  // 3b. File-level symlinks inside .opencode/command/ or .opencode/agents/ that point to pilot-gsd
+  // 3b. File-level symlinks inside installer-owned directories
   for (const dirName of ['command', 'agents']) {
     const subDir = path.join(opencodeDir, dirName);
     try {
@@ -165,10 +162,7 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
           try {
             const entryStats = await lstat(entryPath);
             if (entryStats.isSymbolicLink()) {
-              const target = await readlink(entryPath);
-              if (target.includes('pilot-gsd')) {
-                await unlink(entryPath);
-              }
+              await unlink(entryPath);
             }
           } catch {
             // Can't stat entry — skip
