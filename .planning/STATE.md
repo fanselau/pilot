@@ -6,19 +6,19 @@
 ## Current Position
 
 Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
-**Next Plan:** 70-02-PLAN.md
-Plan: 2 of 4 in current phase
+**Next Plan:** 70-04-PLAN.md
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 70-03-PLAN.md
+Last activity: 2026-03-16 - Completed 70-02-PLAN.md
 
-Progress: ████████████████████████░ 91/97 plans (94%)
+Progress: ████████████████████████░ 92/97 plans (95%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Persist retry budget metadata and attempt lineage so phase-level auto-retry survives runner restarts.
+**Current focus:** Complete remaining phase-70 operator visibility so retry lineage and context are easy to inspect.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -814,11 +814,14 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 69-03 | runner recovery quick-intent test enforces single patchAgentFrontmatter invocation per launch | Guards launch path against duplicate per-step patch regression |
 | 70-01 | addJob persists retry_budget explicitly with default 2 (optional override) | Enforces new retry policy consistently even on legacy DBs with older column defaults |
 | 70-01 | resetToPending archives attempt metadata before clearing live session/job-step state | Preserves retry lineage for future info/log chain surfaces without reviving terminal jobs |
+| 70-02 | Null/partial/non-pass judge outcomes are always retryable; only pass/succeeded is terminal pass | Removes benefit-of-doubt/pass-by-confidence shortcuts that bypass phase retry policy |
+| 70-02 | retry-resume requires well-formed VERIFICATION evidence (>100 bytes + required structure), otherwise force retry-full | Prevents malformed evidence from driving unsafe gap-only retries |
+| 70-02 | Same failure fingerprint escalates before retry_count increments | Avoids burning remaining retry budget on identical consecutive verification failures |
 | 70-03 | retry budget resolution order is --retries > --no-retry (0) > config default > hard fallback 2 | Guarantees deterministic queue-time policy across operator overrides and install defaults |
 | 70-03 | config accepts defaults.retry_budget plus retryBudget alias | Keeps config migration tolerant while prioritizing documented snake_case contract |
 
 ## Session Continuity
 
-Last session: 2026-03-16 03:33 UTC
-Stopped at: Completed 70-03-PLAN.md (retry budget config/CLI wiring + regression coverage)
+Last session: 2026-03-16 03:38 UTC
+Stopped at: Completed 70-02-PLAN.md (runner verification auto-retry orchestration + regression coverage)
 Resume file: None
