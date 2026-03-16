@@ -38,8 +38,8 @@ The entire queue lives in a local SQLite database (`~/.pilot/pilot.db`). There a
 ## Quick Start
 
 ```bash
-# Clone with submodules (includes pilot-gsd command definitions)
-git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
+# Clone repository
+git clone https://github.com/lucafanselau/pilot.git
 cd pilot
 
 # Install dependencies and build
@@ -100,35 +100,13 @@ pilot service start
 - **Build tools** — `build-essential`, `python3` (for compiling `better-sqlite3`)
 - **Linux** — required for daemon mode, memory management, and cgroups. Basic job running may work on macOS.
 
-### Setting up pilot-gsd
+### GSD command installation model
 
-pilot-gsd contains the GSD command definitions (agent prompts and workflows) and is included as a git submodule.
+Pilot uses upstream `get-shit-done-cc` for GSD command installation.
 
-If you cloned without `--recurse-submodules`, initialize it:
-
-```bash
-git submodule update --init
-```
-
-Alternatively, clone with submodules in one step:
-
-```bash
-git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
-```
-
-If you want pilot-gsd in a separate location (e.g. shared across multiple checkouts), clone it to your home directory:
-
-```bash
-git clone https://github.com/lucafanselau/pilot-gsd.git ~/pilot-gsd
-```
-
-Or set a custom path:
-
-```bash
-export PILOT_GSD_DIR=/path/to/pilot-gsd
-```
-
-See the [pilot-gsd](https://github.com/lucafanselau/pilot-gsd) repository for more details.
+- `pilot setup <dir>` runs `get-shit-done-cc --opencode --local` inside the target project.
+- `pilot update` updates `get-shit-done-cc` in the Pilot repo and re-runs the installer for each registered project.
+- `pilot setup --refresh` is the standard repair path when sentinels like `gsd-help.md` are missing.
 
 ### Verify your setup
 
@@ -136,7 +114,7 @@ See the [pilot-gsd](https://github.com/lucafanselau/pilot-gsd) repository for mo
 pilot doctor
 ```
 
-Checks opencode binary, pilot-gsd, system memory, cgroups v2, and user lingering.
+Checks opencode binary, `get-shit-done-cc`, system memory, cgroups v2, and user lingering.
 
 > For the complete installation walkthrough — including environment variables, AI provider setup, notification configuration, and daemon mode — see **[Getting Started Guide](docs/GETTING-STARTED.md)**.
 
@@ -197,7 +175,7 @@ Safety model:
 
 ### Delegation AI
 
-Before executing, Pilot spawns a short AI session that reads your project's `.planning/` directory and decides the exact sequence of [GSD](https://github.com/lucafanselau/pilot-gsd) commands to run — `add-phase`, `plan-phase`, `execute-phase`, `verify-phase`, and so on. This replaces fragile regex-based plan parsing.
+Before executing, Pilot spawns a short AI session that reads your project's `.planning/` directory and emits a typed intent (`quick`, `plan-and-execute`, `execute-only`, or `audit-milestone`). The runner then invokes upstream-installed GSD commands (`add-phase`, `plan-phase`, `execute-phase`, `verify-phase`, etc.) from that intent contract. This replaces fragile regex-based plan parsing.
 
 ### Skills system
 
@@ -229,11 +207,11 @@ pilot add my-project "Build the dashboard" --categories frontend,ui-design
 
 ### AI judge
 
-After each `execute-phase` step, Pilot spawns a lightweight judge session that evaluates the execution results. The judge returns a structured verdict:
+After each `execute-phase` step, Pilot spawns a lightweight judge session that evaluates execution results against evidence (`VERIFICATION.md` and transcript context). The judge returns a structured verdict:
 
 ```json
 {
-  "verdict": "succeeded",
+  "verdict": "pass",
   "confidence": 85,
   "reason": "All planned changes implemented, tests pass, no regressions detected."
 }
@@ -241,10 +219,9 @@ After each `execute-phase` step, Pilot spawns a lightweight judge session that e
 
 | Verdict | Confidence | Action |
 |---------|-----------|--------|
-| `succeeded` | any | Job continues |
-| `doubting` | ≥ 50 | Treated as pass, job continues |
-| `doubting` | < 50 | Job fails with reason |
-| `failed` | any | Job fails with reason |
+| `pass` | any | Job continues |
+| `partial` | retry policy | Retry or fail based on retry budget and fingerprint logic |
+| `fail` | retry policy | Retry or fail based on retry budget and fingerprint logic |
 
 The verdict, confidence score, and reason are included in completion notifications (webhooks and Telegram), so you know at a glance whether the AI is confident in its own work.
 
@@ -402,11 +379,11 @@ Notifications are optional. Without configuration, check job results via `pilot 
 
 | Command | Description |
 |---------|-------------|
-| `pilot setup <dir>` | Set up project for Pilot (links pilot-gsd). Flags: `--verify`, `--owner <agentId>`, `--update` |
+| `pilot setup <dir>` | Set up project for Pilot (installs GSD commands via upstream installer). Flags: `--verify`, `--refresh`, `--force`, `--skip-skills`, `--owner <agentId>`, `--update` |
 | `pilot projects` | List all registered managed projects. Flag: `--blocked` |
 | `pilot project <path>` | Show or manage a project. Flags: `--block <reason>`, `--unblock`, `--owner <agentId>`, `--jobs` |
 | `pilot unblock <project>` | Unblock a blocked project |
-| `pilot update` | Update pilot-gsd command definitions |
+| `pilot update` | Update upstream `get-shit-done-cc` and refresh registered projects |
 | `pilot config` | Show resolved configuration and env vars |
 | `pilot doctor` | Health check: binary, DB, disk, memory |
 | `pilot service <action>` | Daemon management: `install`, `start`, `stop`, `status` |
@@ -469,7 +446,7 @@ Every command accepts `--json` for machine-readable output and `--verbose` / `-v
          ┌────────────────────────┐
          │  Delegation AI         │
          │  Reads .planning/      │
-         │  Outputs step plan     │
+         │  Outputs typed intent  │
          └────────────┬───────────┘
                       │ per step
                       ▼
@@ -483,8 +460,8 @@ Every command accepts `--json` for machine-readable output and `--verbose` / `-v
          ┌────────────────────────┐
          │  AI Judge              │
          │  Evaluates execution   │
-         │  succeeded / failed /  │
-         │  doubting + confidence │
+         │  pass / fail / partial │
+         │  + confidence          │
          └────────────┬───────────┘
                       │
                       ▼
@@ -513,7 +490,6 @@ Pilot is configured via environment variables and an optional config file (`~/.p
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILOT_PROJECT_DIR` | `~/dev` | Root directory containing your projects |
-| `PILOT_GSD_DIR` | `./pilot-gsd` (relative to pilot install) | Path to the pilot-gsd command definitions repo |
 | `PILOT_MAX_PARALLEL` | auto | Max concurrent jobs (auto-detected from RAM: 1-4) |
 | `PILOT_SESSION_MEMORY_MAX_MB` | `8192` | Per-session systemd memory limit (MB) |
 | `PILOT_RESERVED_MEMORY_MB` | `4096` | RAM reserved for OS before dynamic parallel calc (MB) |
@@ -555,7 +531,7 @@ When the runner launches a job, it writes `.planning/config.json` into the proje
 
 - **Bun >= 1.x** — primary runtime (the CLI shebang targets `bun`)
 - **[opencode](https://opencode.ai)** — the AI coding agent that executes work
-- **[pilot-gsd](https://github.com/lucafanselau/pilot-gsd)** — GSD command definitions (agent prompts, workflows)
+- **[get-shit-done-cc](https://www.npmjs.com/package/get-shit-done-cc)** — upstream GSD command installer used by `pilot setup` and `pilot update`
 - **Linux** — some features use `/proc` for memory checks and systemd for service management
 
 > [!IMPORTANT]

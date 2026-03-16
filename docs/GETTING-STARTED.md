@@ -58,7 +58,7 @@ python3 --version
 
 ### Git
 
-Required for submodules and project setup.
+Required for project setup and repository operations.
 
 ```bash
 git --version
@@ -103,8 +103,8 @@ Pilot is designed for Linux. Several features depend on Linux-specific APIs:
 ## 2. Installation
 
 ```bash
-# Clone with submodules (includes pilot-gsd command definitions)
-git clone --recurse-submodules https://github.com/lucafanselau/pilot.git
+# Clone repository
+git clone https://github.com/lucafanselau/pilot.git
 cd pilot
 
 # Install dependencies
@@ -121,36 +121,30 @@ pilot --version
 pilot --help
 ```
 
-> [!NOTE]
-> If you cloned without `--recurse-submodules`, initialize the submodule:
-> ```bash
-> git submodule update --init
-> ```
+### GSD installation model
 
-### pilot-gsd resolution
+Pilot installs GSD commands from upstream `get-shit-done-cc` per project:
 
-Pilot finds the GSD command definitions using a 3-step fallback chain:
+1. `pilot setup <dir>` runs `get-shit-done-cc --opencode --local` in that project
+2. `pilot update` updates `get-shit-done-cc` in the Pilot repo, then re-runs installer for each registered project
+3. `pilot setup --refresh` is the standard repair path when GSD sentinels are missing
 
-1. **`PILOT_GSD_DIR` env var** — highest priority, use this for custom locations
-2. **`<pilot-root>/pilot-gsd/` submodule** — default after clone with `--recurse-submodules`
-3. **`~/pilot-gsd/` home directory fallback** — manual clone to `~/pilot-gsd/`
-
-Run `pilot doctor` to confirm GSD is found.
+Run `pilot doctor` (system) and `pilot doctor --project <path>` (project-level) to verify setup health.
 
 ---
 
 ## 3. Project Setup
 
-Before Pilot can run jobs against a project, you need to set it up with `pilot setup`. This creates the directory structure that opencode expects.
+Before Pilot can run jobs against a project, you need to set it up with `pilot setup`. This installs `.opencode` command assets and project config that opencode expects.
 
 ### What `pilot setup` does
 
 1. Creates the project directory (if it doesn't exist)
 2. Creates `.opencode/` directory inside the project
-3. Symlinks `.opencode/command/` to pilot-gsd `commands/`
-4. Symlinks `.opencode/agents/` to pilot-gsd `agents/`
-5. Symlinks `.opencode/get-shit-done/` to pilot-gsd `get-shit-done/`
-6. Generates `opencode.json` with full permissions (see below)
+3. Runs upstream installer: `get-shit-done-cc --opencode --local`
+4. Validates sentinel files like `.opencode/command/gsd-help.md`
+5. Enforces autonomous-safe `.planning/config.json` defaults
+6. Generates or merges `opencode.json` with full permissions (see below)
 7. Adds `.opencode/` to `.gitignore`
 8. Runs `git init` if the project isn't a git repository
 
@@ -175,12 +169,13 @@ Example output:
 
 ```
   ✓ Config directory          .opencode/ exists
-  ✓ .opencode/command         → /home/you/pilot-gsd/commands
-  ✓ .opencode/agents          → /home/you/pilot-gsd/agents
-  ✓ .opencode/get-shit-done   → /home/you/pilot-gsd/get-shit-done
+  ✓ .opencode/command         exists
+  ✓ .opencode/agents          exists
+  ✓ .opencode/get-shit-done   exists
+  ✓ gsd-help.md               GSD commands installed
   ✓ opencode.json             valid JSON
 
-  5 passed, 0 failed, 0 warnings
+  6 passed, 0 failed, 0 warnings
 ```
 
 ### opencode.json
@@ -224,16 +219,14 @@ All Pilot configuration is via `PILOT_*` environment variables. Every variable h
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILOT_PROJECT_DIR` | `~/dev` | Root directory containing your projects. When you run `pilot add my-project ...`, Pilot resolves `my-project` to `$PILOT_PROJECT_DIR/my-project`. |
-| `PILOT_GSD_DIR` | Auto-detected (env var > submodule > `~/pilot-gsd`) | Path to pilot-gsd command definitions. |
 
 ### Runner tuning
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILOT_MAX_PARALLEL` | Auto (1-4 based on RAM: <12GB=1, <32GB=2, <48GB=3, >=48GB=4) | Maximum concurrent jobs. The runner also dynamically adjusts based on available memory at spawn time. |
-| `PILOT_POLL_INTERVAL` | `5` | Seconds between queue poll cycles. |
-| `PILOT_DEFAULT_TIMEOUT` | `60` | Job timeout in minutes. After this, the session is flagged as timed out. |
-| `PILOT_STUCK_THRESHOLD` | `90` | Minutes before a session is flagged as stuck in status display. |
+
+Job timeout is configured per queue item via `pilot add --timeout <minutes>` (default `0`, meaning no timeout).
 
 ### Memory management
 
@@ -265,12 +258,9 @@ All Pilot configuration is via `PILOT_*` environment variables. Every variable h
 ```bash
 # Core paths
 PILOT_PROJECT_DIR=~/dev
-# PILOT_GSD_DIR=~/pilot-gsd  # Only needed if not using submodule
 
 # Runner tuning
 PILOT_MAX_PARALLEL=2
-PILOT_POLL_INTERVAL=5
-PILOT_DEFAULT_TIMEOUT=60
 
 # Memory management (defaults are good for 16-32GB machines)
 # PILOT_SESSION_MEMORY_MAX_MB=8192
@@ -340,7 +330,7 @@ Expected output (all checks should pass or warn):
   Pilot Doctor
 
   ✓ opencode binary    /home/you/.opencode/bin/opencode
-  ✓ pilot-gsd          /home/you/pilot-gsd
+  ✓ get-shit-done-cc   /home/you/dev/pilot/node_modules/.bin/get-shit-done-cc
   ✓ pilot dir          /home/you/.pilot
   ✓ memory             12345MB free
   ✓ cgroups v2         cgroup2 mounted
@@ -677,7 +667,7 @@ The `user lingering` and `cgroups v2` checks should show pass.
 
 ### How the daemon works
 
-- Polls the SQLite queue every `PILOT_POLL_INTERVAL` seconds (default: 5)
+- Polls the SQLite queue on a fixed internal interval (currently 5s)
 - Also watches `~/.pilot/pilot.db` for filesystem changes (instant wake on new jobs)
 - Auto-detects max parallel jobs based on available RAM
 - Enforces a 5-second minimum between spawns to prevent thundering herd
@@ -708,9 +698,9 @@ bun --version
 ~/.opencode/bin/opencode --version
 # Expected: version string
 
-# 3. pilot-gsd exists
-ls ~/pilot-gsd  # or ls ./pilot-gsd if using submodule
-# Expected: commands/ agents/ get-shit-done/ directories
+# 3. Verify GSD sentinels in project setup
+pilot setup ~/dev/my-project --verify
+# Expected: .opencode/command exists + gsd-help.md present
 
 # 4. System health check
 pilot doctor
@@ -737,24 +727,19 @@ Install opencode from [https://opencode.ai](https://opencode.ai). The binary sho
 chmod +x ~/.opencode/bin/opencode
 ```
 
-### "pilot-gsd not found"
+### "get-shit-done-cc not installed" or missing `gsd-help.md`
 
-If using git submodule:
+Ensure dependencies are installed in the Pilot repo:
 
 ```bash
-git submodule update --init
+bun install
 ```
 
-If using standalone install:
+Then refresh project setup:
 
 ```bash
-git clone https://github.com/lucafanselau/pilot-gsd.git ~/pilot-gsd
-```
-
-Or set a custom path:
-
-```bash
-export PILOT_GSD_DIR=/path/to/pilot-gsd
+pilot setup ~/dev/my-project --refresh
+pilot doctor --project ~/dev/my-project
 ```
 
 ### "better-sqlite3 build error"
