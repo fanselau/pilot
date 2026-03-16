@@ -10,7 +10,7 @@ Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
 **Next Plan:** None (phase complete)
 Plan: 4 of 4 in current phase
 Status: Phase complete
-Last activity: 2026-03-16 - Completed quick task 088: Fix Phase 67 session blocker handling — sessionTitle in hung notifications
+Last activity: 2026-03-16 - Completed quick task 089: Fix Phase 68 judge move verification gap — deprecate pilot-gsd judge commands, add evidence validation tests
 
 Progress: ████████████████████████░ 93/97 plans (96%)
 
@@ -254,6 +254,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 086 | Fix 3 test files with vi.mock hoisting bugs — importOriginal for doctor, self-contained execa mock for update, toast path alias mock for actions | 2026-03-16 | 1ae7231 | [086-fix-phase-65-verification-gaps-3-test-su](./quick/086-fix-phase-65-verification-gaps-3-test-su/) |
 | 087 | Fix Phase 66 delegation redesign verification — copy src/prompts/*.md to dist/prompts/ in postbuild | 2026-03-16 | a81366e | [087-fix-phase-66-delegation-redesign-verific](./quick/087-fix-phase-66-delegation-redesign-verific/) |
 | 088 | Fix Phase 67 session blocker handling — sessionTitle in hung notifications | 2026-03-16 | df5880b | [088-fix-phase-67-session-blocker-handling-ve](./quick/088-fix-phase-67-session-blocker-handling-ve/) |
+| 089 | Fix Phase 68 judge move verification gap — deprecate pilot-gsd judge commands, add evidence validation tests | 2026-03-16 | a719265 | [089-fix-phase-68-judge-move-verification-gap](./quick/089-fix-phase-68-judge-move-verification-gap/) |
 
 ## Accumulated Context
 
