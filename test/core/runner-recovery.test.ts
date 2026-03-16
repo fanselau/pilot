@@ -87,6 +87,7 @@ vi.mock('../../src/core/opencode-db.js', () => ({
   findSessionByTitle: mocks.findSessionByTitle,
   exportSessionFromDb: vi.fn(() => ({ messages: [] })),
   isSessionDone: mocks.isSessionDone,
+  getSessionState: vi.fn(() => ({ state: 'done' })),
   getLastMessage: vi.fn(() => null),
   getSessionModelsRecursive: mocks.getSessionModelsRecursive,
   getSessionModels: mocks.getSessionModels,
@@ -284,6 +285,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }

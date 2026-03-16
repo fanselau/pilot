@@ -42,6 +42,10 @@ import {
   getProject,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  incrementHungCount,
+  incrementRetryCount,
+  canRetry,
+  isSameHungReason,
 } from './db.js';
 import { delegate, resolveOpencodeBinary, getNextPhaseNumber, buildNewProjectArgs, buildQuickArgs } from './delegate.js';
 import {
@@ -597,32 +601,71 @@ class Runner {
       const completedJob = getJob(job.id);
       if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
     } catch (err) {
-      const error = errMsg(err);
-      await this.captureRecoveryHead(job.id, projectDir);
-      this.collectActualModels(job.id);
-      try {
-        markFailed(job.id, error);
-      } catch (markErr) {
-        process.stderr.write(`[runner] markFailed also failed for ${job.id}: ${errMsg(markErr)}\n`);
-      }
-      // Fire-and-forget callback to wake originating session
-      const failedJob = getJob(job.id);
-      if (failedJob) {
-        notifyJobCompletion(failedJob).catch(() => {});
+      if (err instanceof HungSessionError) {
+        // ── Hung session retry logic ─────────────────────────────────────
+        // Track the hang (increments hung_count and sets last_hung_reason)
+        const freshJob = getJob(job.id);
 
-        // If no direct callback agentId, notify the project owner (plain agent ID) instead
-        if (!failedJob.callbackSessionKey) {
-          const project = getProject(failedJob.project);
-          if (project?.owner) {
-            // Synthesize a job-like object addressed to the owner (project.owner is a plain agent ID)
-            const ownerNotifyJob = {
-              ...failedJob,
-              callbackSessionKey: project.owner,
-              error: `Job ${failedJob.id} failed and blocked project ${failedJob.project}.\n` +
-                     `Reason: ${error}\n` +
-                     `Actions: pilot retry ${failedJob.id}  ·  pilot unblock "${failedJob.project}"`,
-            };
-            notifyJobCompletion(ownerNotifyJob).catch(() => {});
+        // Same-error escalation: two consecutive hangs with same reason → immediate fail
+        if (freshJob && isSameHungReason(job.id, err.hungReason) && freshJob.hungCount >= 1) {
+          incrementHungCount(job.id, err.hungReason);
+          const escalateMsg = `Escalated: consecutive ${err.hungReason} hangs (tool: ${err.lastToolCall ?? 'unknown'})`;
+          this.log(`Same hung reason repeated for ${job.id}: ${err.hungReason} — escalating to failure`);
+          await this.captureRecoveryHead(job.id, projectDir);
+          this.collectActualModels(job.id);
+          markFailed(job.id, escalateMsg);
+          const escalatedJob = getJob(job.id);
+          if (escalatedJob) await notifyJobCompletion(escalatedJob);
+        } else if (canRetry(job.id)) {
+          // Budget available — silent retry
+          incrementHungCount(job.id, err.hungReason);
+          incrementRetryCount(job.id);
+          const freshJobForRetry = getJob(job.id);
+          this.log(`Hung retry ${(freshJobForRetry?.retryCount ?? 1)}/${(freshJobForRetry?.retryBudget ?? 3)} for ${job.id}: ${err.hungReason}`);
+          // Reset to pending for re-launch; for interactive-prompt on phase jobs: use gaps-if-progress hint
+          const hint = err.hungReason === 'interactive-prompt' ? 'gaps-if-progress' : undefined;
+          resetToPending(job.id, hint ? `Hung retry: ${err.hungReason} (tool: ${err.lastToolCall ?? 'unknown'}) — ${hint}` : `Hung retry: ${err.hungReason} (tool: ${err.lastToolCall ?? 'unknown'})`);
+          // Do NOT notify on retry — silent
+        } else {
+          // Budget exhausted
+          incrementHungCount(job.id, err.hungReason);
+          const budgetMsg = `Retry budget exhausted after ${err.hungReason} hang (tool: ${err.lastToolCall ?? 'unknown'})`;
+          this.log(`Retry budget exhausted for ${job.id} (budget: ${freshJob?.retryBudget ?? 3} retries)`);
+          await this.captureRecoveryHead(job.id, projectDir);
+          this.collectActualModels(job.id);
+          markFailed(job.id, budgetMsg);
+          const exhaustedJob = getJob(job.id);
+          if (exhaustedJob) await notifyJobCompletion(exhaustedJob);
+        }
+      } else {
+        // ── Generic error catch-all ──────────────────────────────────────
+        const error = errMsg(err);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        try {
+          markFailed(job.id, error);
+        } catch (markErr) {
+          process.stderr.write(`[runner] markFailed also failed for ${job.id}: ${errMsg(markErr)}\n`);
+        }
+        // Fire-and-forget callback to wake originating session
+        const failedJob = getJob(job.id);
+        if (failedJob) {
+          notifyJobCompletion(failedJob).catch(() => {});
+
+          // If no direct callback agentId, notify the project owner (plain agent ID) instead
+          if (!failedJob.callbackSessionKey) {
+            const project = getProject(failedJob.project);
+            if (project?.owner) {
+              // Synthesize a job-like object addressed to the owner (project.owner is a plain agent ID)
+              const ownerNotifyJob = {
+                ...failedJob,
+                callbackSessionKey: project.owner,
+                error: `Job ${failedJob.id} failed and blocked project ${failedJob.project}.\n` +
+                       `Reason: ${error}\n` +
+                       `Actions: pilot retry ${failedJob.id}  ·  pilot unblock "${failedJob.project}"`,
+              };
+              notifyJobCompletion(ownerNotifyJob).catch(() => {});
+            }
           }
         }
       }

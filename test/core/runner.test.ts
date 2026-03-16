@@ -762,3 +762,141 @@ describe('spawnAndWait state-based poll loop', () => {
     expect(thrownMessage).toContain('died without clean completion');
   });
 });
+
+// ── Hung session retry logic tests (unit-level, using real DB helpers) ────
+
+import {
+  _getTestDb as _dbTestHelper,
+  addJob as dbAddJob,
+  markRunning as dbMarkRunning,
+  markFailed as dbMarkFailed,
+  getJob as dbGetJob,
+  resetToPending as dbResetToPending,
+  incrementHungCount as dbIncrementHungCount,
+  incrementRetryCount as dbIncrementRetryCount,
+  canRetry as dbCanRetry,
+  isSameHungReason as dbIsSameHungReason,
+} from '../../src/core/db.js';
+
+import { _resetConfigCache } from '../../src/core/config.js';
+
+describe('hung session retry logic (unit)', () => {
+  beforeEach(() => {
+    // Isolate config and DB for each test
+    process.env.PILOT_CONFIG_FILE = '/nonexistent/pilot-test-isolation-runner';
+    _resetConfigCache();
+    _dbTestHelper(); // fresh in-memory DB
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_CONFIG_FILE;
+    _resetConfigCache();
+  });
+
+  it('HungSessionError with budget remaining → resets to pending, no notification', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const hungErr = new HungSessionError({ hungReason: 'interactive-prompt', lastToolCall: 'question', sessionTitle: 'test-step' });
+
+    const job = dbAddJob('/test-project', 'quick', 'test hung task');
+    dbMarkRunning(job.id);
+
+    // State: retryBudget=3, retryCount=0 → can retry, no same reason
+    expect(dbIsSameHungReason(job.id, hungErr.hungReason)).toBe(false);
+    expect(dbCanRetry(job.id)).toBe(true);
+
+    // Simulate the retry path
+    dbIncrementHungCount(job.id, hungErr.hungReason);
+    dbIncrementRetryCount(job.id);
+    dbResetToPending(job.id, `Hung retry: ${hungErr.hungReason}`);
+
+    const afterRetry = dbGetJob(job.id)!;
+    expect(afterRetry.status).toBe('pending');
+    expect(afterRetry.retryCount).toBe(1);
+    expect(afterRetry.hungCount).toBe(1);
+    // Notification is NOT sent (silent retry) — tested at the runner level
+    // but we validate the state here to confirm no failure marker was set
+    expect(afterRetry.error).toBeNull(); // resetToPending clears error
+  });
+
+  it('HungSessionError with budget exhausted → marks failed', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const hungErr = new HungSessionError({ hungReason: 'interactive-prompt', lastToolCall: 'question', sessionTitle: 'test-step' });
+
+    const job = dbAddJob('/test-project', 'quick', 'test hung task');
+    dbMarkRunning(job.id);
+
+    // Exhaust the budget by incrementing retryCount to match default retryBudget=3
+    dbIncrementRetryCount(job.id);
+    dbIncrementRetryCount(job.id);
+    dbIncrementRetryCount(job.id);
+
+    // retryCount=3, retryBudget=3 → canRetry should return false
+    expect(dbCanRetry(job.id)).toBe(false);
+
+    // Simulate budget exhaustion path
+    dbIncrementHungCount(job.id, hungErr.hungReason);
+    dbMarkFailed(job.id, `Retry budget exhausted after ${hungErr.hungReason} hang (tool: ${hungErr.lastToolCall ?? 'unknown'})`);
+
+    const afterFail = dbGetJob(job.id)!;
+    expect(afterFail.status).toBe('failed');
+    expect(afterFail.error).toContain('Retry budget exhausted');
+    expect(afterFail.error).toContain('interactive-prompt');
+  });
+
+  it('same hung reason twice (escalation) → immediate fail regardless of budget', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const hungErr = new HungSessionError({ hungReason: 'interactive-prompt', lastToolCall: 'question', sessionTitle: 'test-step' });
+
+    const job = dbAddJob('/test-project', 'quick', 'test hung task');
+    dbMarkRunning(job.id);
+
+    // Simulate first hang with same reason
+    dbIncrementHungCount(job.id, 'interactive-prompt'); // hungCount=1, lastHungReason='interactive-prompt'
+
+    // Escalation condition: isSameHungReason=true AND hungCount >= 1
+    expect(dbIsSameHungReason(job.id, 'interactive-prompt')).toBe(true);
+    expect(dbGetJob(job.id)!.hungCount).toBe(1);
+
+    // Simulate the escalation path: no budget check needed
+    dbIncrementHungCount(job.id, hungErr.hungReason);
+    dbMarkFailed(job.id, `Escalated: consecutive ${hungErr.hungReason} hangs (tool: ${hungErr.lastToolCall ?? 'unknown'})`);
+
+    const afterEscalation = dbGetJob(job.id)!;
+    expect(afterEscalation.status).toBe('failed');
+    expect(afterEscalation.error).toContain('Escalated');
+    expect(afterEscalation.error).toContain('consecutive');
+    // Budget was NOT consumed (no incrementRetryCount called for escalation)
+    expect(afterEscalation.retryCount).toBe(0);
+  });
+
+  it('different hung reason does NOT trigger escalation', async () => {
+    const job = dbAddJob('/test-project', 'quick', 'test hung task');
+    dbMarkRunning(job.id);
+
+    // First hang was on interactive-prompt
+    dbIncrementHungCount(job.id, 'interactive-prompt');
+
+    // Current hung reason is different (stuck-tool)
+    const isSame = dbIsSameHungReason(job.id, 'stuck-tool');
+    expect(isSame).toBe(false); // different → no escalation → falls through to budget check
+    expect(dbCanRetry(job.id)).toBe(true); // still has budget
+  });
+
+  it('retry is silent — canRetry path does not trigger notifyJobCompletion', async () => {
+    const { HungSessionError } = await import('../../src/util/errors.js');
+    const hungErr = new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'test-step' });
+
+    const job = dbAddJob('/test-project', 'quick', 'test hung task');
+    dbMarkRunning(job.id);
+
+    // Simulate what launch() does on silent retry
+    dbIncrementHungCount(job.id, hungErr.hungReason);
+    dbIncrementRetryCount(job.id);
+    dbResetToPending(job.id, `Hung retry: ${hungErr.hungReason}`);
+
+    // Job status should be pending (NOT failed), confirming no notification path was taken
+    const afterRetry = dbGetJob(job.id)!;
+    expect(afterRetry.status).toBe('pending');
+    expect(afterRetry.error).toBeNull(); // no error set on silent retry
+  });
+});

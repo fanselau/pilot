@@ -93,6 +93,19 @@ function buildDeliveryPrompt(job: Job): string {
     lines.push(`error: ${truncate(job.error, 300)}`);
   }
 
+  // Enrich notification for hung-session failures
+  const isHungFailure = job.error?.includes('Retry budget exhausted')
+    || (job.error?.includes('consecutive') && job.error?.includes('hangs'));
+  if (isHungFailure && failed) {
+    if (job.lastHungReason) {
+      lines.push(`hung_reason: ${job.lastHungReason}`);
+    }
+    lines.push(`hung_count: ${job.hungCount ?? 0}`);
+    lines.push('');
+    lines.push('This job failed because the AI session kept getting stuck waiting for interactive input.');
+    lines.push('The operator should check if the project has an interactive prompt or confirmation dialog that blocks automation.');
+  }
+
   lines.push(`next_step: ${nextStepGuidance(job)}`);
   lines.push('');
 
