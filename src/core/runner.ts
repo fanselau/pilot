@@ -2136,6 +2136,12 @@ function _resetSpawnRateLimit(): void {
 
 export { _resetSpawnRateLimit };
 
+/**
+ * Validate whether VERIFICATION.md content is well-formed.
+ * @internal — only for use in tests
+ */
+export { isWellFormedVerificationEvidence as _isWellFormedVerificationEvidence };
+
 export {
   hasSystemdRunUser,
   getDynamicMaxParallel,
