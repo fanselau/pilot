@@ -148,6 +148,15 @@ interface InfoFailureContext {
   retry: ReturnType<typeof buildRetryWhy>;
 }
 
+interface RetryLineage {
+  attempt: number;
+  totalAttempts: number;
+  display: string;
+  retryBudget: number;
+  retryCount: number;
+  retryHint: string | null;
+}
+
 function shortCommit(commit: string | null): string | null {
   return commit ? commit.slice(0, 12) : null;
 }
@@ -161,6 +170,19 @@ function formatCommitDisplay(commit: string | null): string {
 
 function normalizeSingleLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function buildRetryLineage(job: Job): RetryLineage {
+  const totalAttempts = Math.max(1, job.retryBudget + 1);
+  const attempt = Math.min(totalAttempts, Math.max(1, job.retryCount + 1));
+  return {
+    attempt,
+    totalAttempts,
+    display: `Attempt ${attempt}/${totalAttempts}`,
+    retryBudget: job.retryBudget,
+    retryCount: job.retryCount,
+    retryHint: job.retryHint,
+  };
 }
 
 function resolveCompactStep(steps: JobStep[]): InfoTriage['step'] {
@@ -480,6 +502,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
 
   const recovery = await buildRecoveryInfo(job);
   const triage = buildInfoTriage(job, steps, recovery);
+  const retryLineage = buildRetryLineage(job);
   const observability = buildJobObservability(job);
   const failureContext = buildFailureContext(job, steps, triage);
   const tokenTotals = observability.tokens.totals ?? {
@@ -503,6 +526,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       steps,
       sessions: sessionTokens,
       recovery,
+      retryLineage,
       resolvedModels,
       observability,
       failureContext,
@@ -530,6 +554,10 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   outputHuman(`  ${dim('What happened:')} ${triage.whatHappened}`);
   outputHuman(`  ${dim('What next:')} ${triage.whatNext}`);
   outputHuman(`  ${dim('Run profile:')} ${triage.providerProfile} · attempts ${triage.attempts}`);
+  outputHuman(`  ${dim('Attempt:')} ${retryLineage.display}`);
+  if (retryLineage.retryHint) {
+    outputHuman(`  ${dim('Retry hint:')} ${retryLineage.retryHint}`);
+  }
   if (triage.step) {
     outputHuman(`  ${dim('Current/final step:')} ${triage.step.kind} ${triage.step.index}/${triage.step.total} ${triage.step.command} [${triage.step.status}]`);
     if (triage.step.verdictSource || triage.step.verdictReason) {
