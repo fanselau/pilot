@@ -917,7 +917,6 @@ class Runner {
     const title = truncateTitle(`${job.project}-${command}-${job.id}-${ts}`, 80);
     this.activeJobs.set(job.id, { job, title });
     updateSessionTitles(job.id, [title]);
-    this.patchModelsForJob(job, projectDir);
 
     const rowId = recordStep(job.id, stepIdx, command, args, title);
     try {
