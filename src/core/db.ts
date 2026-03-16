@@ -283,7 +283,7 @@ function parseFailureFingerprint(value: string | null | undefined): string[] | n
   return [value];
 }
 
-interface DelegationPlanGuardResult {
+interface DelegationPayloadGuardResult {
   normalized: string | null;
   isLegacy: boolean;
 }
@@ -312,7 +312,7 @@ function isIntentPayload(value: unknown): value is DelegationResult {
   return typeof candidate.reasoning === 'string';
 }
 
-function guardDelegationPlanPayload(payload: string | null): DelegationPlanGuardResult {
+function guardDelegationPayload(payload: string | null): DelegationPayloadGuardResult {
   if (!payload) {
     return { normalized: null, isLegacy: false };
   }
@@ -332,7 +332,7 @@ function guardDelegationPlanPayload(payload: string | null): DelegationPlanGuard
 }
 
 function rowToJob(row: JobRow): Job {
-  const guardedPlan = guardDelegationPlanPayload(row.delegation_plan);
+  const guardedPlan = guardDelegationPayload(row.delegation_plan);
 
   return {
     id: row.id,
@@ -741,7 +741,7 @@ function claimNextLaunchable(queueGraceSeconds: number = 0): Job | null {
       WHERE id = ? AND status = 'pending'
     `);
 
-    const normalizeDelegationPlan = db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?');
+    const normalizeDelegationPayload = db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?');
 
     const markRunningClaim = db.prepare(`
       UPDATE jobs
@@ -756,14 +756,14 @@ function claimNextLaunchable(queueGraceSeconds: number = 0): Job | null {
       const row = selectNextLaunchable.get(queueGraceSeconds, queueGraceSeconds) as JobRow | undefined;
       if (!row) return null;
 
-      const guardedPlan = guardDelegationPlanPayload(row.delegation_plan);
+      const guardedPlan = guardDelegationPayload(row.delegation_plan);
       if (guardedPlan.isLegacy) {
         markLegacyPendingAsFailed.run(LEGACY_DELEGATION_PAYLOAD_BLOCK_REASON, row.id);
         continue;
       }
 
       if (guardedPlan.normalized !== row.delegation_plan) {
-        normalizeDelegationPlan.run(guardedPlan.normalized, row.id);
+        normalizeDelegationPayload.run(guardedPlan.normalized, row.id);
       }
 
       // Atomically mark as running within the same transaction
@@ -850,9 +850,9 @@ function getRecent(limit: number = 20): Job[] {
 /**
  * Store a delegation result as JSON string.
  */
-function updateDelegationPlan(id: string, plan: DelegationResult): void {
+function updateDelegationPayload(id: string, plan: DelegationResult): void {
   const db = getDb();
-  const guardedPlan = guardDelegationPlanPayload(JSON.stringify(plan));
+  const guardedPlan = guardDelegationPayload(JSON.stringify(plan));
   if (guardedPlan.isLegacy || !guardedPlan.normalized) {
     throw new Error(LEGACY_DELEGATION_PAYLOAD_BLOCK_REASON);
   }
@@ -1726,7 +1726,7 @@ export {
   reconcileStaleJobs,
   markStale,
   getRecent,
-  updateDelegationPlan,
+  updateDelegationPayload,
   advanceStep,
   bump,
   updateSessionTitles,

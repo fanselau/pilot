@@ -32,7 +32,7 @@ import {
   markFailed,
   markStale,
   cancel,
-  updateDelegationPlan,
+  updateDelegationPayload,
   advanceStep,
   getJob,
   updateSessionTitles,
@@ -731,7 +731,7 @@ class Runner {
       } catch (err) {
         throw new Error(`Delegation failed: ${errMsg(err)}`);
       }
-      updateDelegationPlan(job.id, result);
+      updateDelegationPayload(job.id, result);
 
       // Step 2: Route intent
       await this.executeIntent(job, projectDir, result);

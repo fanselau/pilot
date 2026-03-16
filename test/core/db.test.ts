@@ -20,7 +20,7 @@ import {
   retry,
   getQueue,
   getRecent,
-  updateDelegationPlan,
+  updateDelegationPayload,
   advanceStep,
   bump,
   updateSessionTitles,
@@ -473,9 +473,9 @@ describe('pilot.db', () => {
     });
   });
 
-  // ── updateDelegationPlan ──────────────────────────────────────────────
+  // ── updateDelegationPayload ───────────────────────────────────────────
 
-  describe('updateDelegationPlan', () => {
+  describe('updateDelegationPayload', () => {
     it('stores and retrieves JSON delegation result', () => {
       const job = addJob('proj', 'phase', 'build feature');
       const plan: DelegationResult = {
@@ -483,7 +483,7 @@ describe('pilot.db', () => {
         reasoning: 'Phase 3 needs planning then execution',
       };
 
-      updateDelegationPlan(job.id, plan);
+      updateDelegationPayload(job.id, plan);
       const updated = getJob(job.id);
       expect(updated!.delegationPlan).not.toBeNull();
 
@@ -497,7 +497,7 @@ describe('pilot.db', () => {
       const legacyPayload = [{ command: 'gsd-execute-phase', args: '3' }];
 
       expect(() => {
-        updateDelegationPlan(job.id, legacyPayload as unknown as DelegationResult);
+        updateDelegationPayload(job.id, legacyPayload as unknown as DelegationResult);
       }).toThrow('Legacy delegation payload blocked at runtime boundary');
 
       expect(getJob(job.id)!.delegationPlan).toBeNull();

@@ -33,7 +33,7 @@ vi.mock('../../src/core/db.js', () => ({
   markCompleted: vi.fn(),
   markFailed: vi.fn(),
   cancel: vi.fn(),
-  updateDelegationPlan: vi.fn(),
+  updateDelegationPayload: vi.fn(),
   advanceStep: vi.fn(),
   getJob: vi.fn(() => null),
   updateSessionTitles: vi.fn(),
