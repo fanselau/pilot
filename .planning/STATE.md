@@ -7,11 +7,11 @@
 
 Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
 **Next Plan:** 70-02-PLAN.md
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 70-01-PLAN.md
+Last activity: 2026-03-16 - Completed 70-03-PLAN.md
 
-Progress: ███████████████████████░░ 90/97 plans (93%)
+Progress: ████████████████████████░ 91/97 plans (94%)
 
 ## Project Reference
 
@@ -814,9 +814,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 69-03 | runner recovery quick-intent test enforces single patchAgentFrontmatter invocation per launch | Guards launch path against duplicate per-step patch regression |
 | 70-01 | addJob persists retry_budget explicitly with default 2 (optional override) | Enforces new retry policy consistently even on legacy DBs with older column defaults |
 | 70-01 | resetToPending archives attempt metadata before clearing live session/job-step state | Preserves retry lineage for future info/log chain surfaces without reviving terminal jobs |
+| 70-03 | retry budget resolution order is --retries > --no-retry (0) > config default > hard fallback 2 | Guarantees deterministic queue-time policy across operator overrides and install defaults |
+| 70-03 | config accepts defaults.retry_budget plus retryBudget alias | Keeps config migration tolerant while prioritizing documented snake_case contract |
 
 ## Session Continuity
 
-Last session: 2026-03-16 03:21 UTC
-Stopped at: Completed 70-01-PLAN.md (retry persistence foundation: schema/defaults, metadata helpers, attempt archive)
+Last session: 2026-03-16 03:33 UTC
+Stopped at: Completed 70-03-PLAN.md (retry budget config/CLI wiring + regression coverage)
 Resume file: None
