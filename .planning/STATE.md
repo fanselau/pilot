@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 72-03-PLAN.md
-last_updated: "2026-03-16T09:53:41.291Z"
-last_activity: 2026-03-16 - Completed 72-03-PLAN.md
+stopped_at: Completed 72-06-PLAN.md
+last_updated: "2026-03-16T10:00:59.526Z"
+last_activity: 2026-03-16 - Completed 72-06-PLAN.md
 progress:
   total_phases: 71
   completed_phases: 30
   total_plans: 106
-  completed_plans: 97
-  percent: 91
+  completed_plans: 98
+  percent: 92
 ---
 
 # State
@@ -23,19 +23,19 @@ progress:
 
 Phase: 72 of 72 (Cleanup — Remove pilot-gsd Fork)
 **Next Phase:** Phase 72: Cleanup — Remove pilot-gsd Fork
-**Next Plan:** 72-02-PLAN.md
-Plan: 3 of 6 in current phase
+**Next Plan:** 72-04-PLAN.md
+Plan: 5 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 72-03-PLAN.md
+Last activity: 2026-03-16 - Completed 72-06-PLAN.md
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 72 now includes prompt decoupling plus fork-agnostic setup migration cleanup and submodule metadata removal; remaining work is command rewiring, delegation safeguards, and docs cleanup.
+**Current focus:** Phase 72 delegation payload safeguards and fixture-backed contract audits are complete; remaining work is unresolved migration blockers and pending plan 72-04.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -849,9 +849,14 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 72-05 | Do not proceed with destructive fork cleanup until all registered projects pass setup-refresh + doctor gate | Enforces requirement-critical migration order and avoids stranding unmanaged/broken project setups |
 | 72-01 | AGENTS flows now map typed operations to in-repo prompt files and run inline prompt payloads | Removes fork-only command coupling while keeping prompt behavior deterministic |
 | 72-01 | Keep legacy command-string inference in agents helper until command call sites are rewired | Preserves compatibility for existing setup/doctor/lessons callers before 72-02 |
+| 72-02 | Setup/doctor/lessons command call sites now use operation args (`setup`, `health`, `lessons`) instead of fork command strings | Completes command-layer decoupling from `gsd-setup-agents` and `gsd-lessons` while preserving non-fatal UX |
+| 72-02 | Command regression tests now assert operation contracts and absence of legacy command payload keys | Prevents accidental reintroduction of fork-only command coupling in user-facing commands |
 | 72-03 | Legacy setup migration cleanup now unlinks any symlink in installer-owned `.opencode` paths before installer run | Removes fork-name coupling while preserving safe path-bounded cleanup semantics |
 | 72-03 | Keep broken symlink remediation in verifySetup (`pilot setup --refresh`) unchanged | Maintains existing operator guidance while migration behavior is generalized |
 | 72-03 | Setup migration regressions now assert filesystem behavior and cleanup reporting instead of fork-name fixtures | Prevents reintroducing coupling to legacy fork path names in test expectations |
+| 72-06 | delegation payload persistence now validates intent shape and blocks legacy step-array payloads at claim/write boundaries | Prevents fork-era payloads from silently entering active execution paths |
+| 72-06 | delegation parser intent coverage now uses canonical JSON fixtures for quick/plan-and-execute/execute-only/audit-milestone | Keeps contract examples realistic and stable while avoiding inline drift |
+| 72-06 | renamed persistence API/helpers from `*DelegationPlan*` to intent-payload naming | Makes `DelegationStep|DelegationPlan` contract-audit regex signal-only with zero false positives |
 
 ## Blockers/Concerns Carried Forward
 
@@ -860,6 +865,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-16T09:53:11.546Z
-Stopped at: Completed 72-03-PLAN.md
+Last session: 2026-03-16T10:00:15.452Z
+Stopped at: Completed 72-06-PLAN.md
 Resume file: None
