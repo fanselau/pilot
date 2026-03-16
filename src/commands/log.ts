@@ -11,7 +11,7 @@
  *   --delegation Show ONLY delegation session(s)
  */
 
-import { getJob, getQueue, getJobSteps } from '../core/db.js';
+import { getJob, getQueue, getJobSteps, getRetryAttempts } from '../core/db.js';
 import { buildJobWhy, buildRetryWhy } from '../core/job-introspection.js';
 import { buildJobObservability } from '../core/job-observability.js';
 import {
@@ -32,6 +32,7 @@ interface LogOptions {
   last?: number;
   verbose?: boolean;
   delegation?: boolean;
+  chain?: boolean;
   flat?: boolean;    // suppress child session expansion
   task?: number;     // show only the Nth child session (1-indexed)
 }
@@ -43,6 +44,14 @@ interface CategorizedSession {
   sessionId: string | null;
   type: 'delegation' | 'execution' | 'verify';
   command?: string;   // extracted command for execution sessions
+}
+
+interface AttemptSessionGroup {
+  attemptNumber: number;
+  source: 'archived' | 'current';
+  retryStrategy: string | null;
+  retryHint: string | null;
+  sessions: CategorizedSession[];
 }
 
 /**
@@ -76,6 +85,87 @@ function categorizeSessions(sessionTitles: string[]): CategorizedSession[] {
     }
 
     return { title, sessionId, type: 'execution' as const, command };
+  });
+}
+
+function parseSessionTitles(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
+      return parsed;
+    }
+  } catch {
+    // Treat malformed payloads as no sessions.
+  }
+  return [];
+}
+
+function deduplicateSessions(sessions: CategorizedSession[]): CategorizedSession[] {
+  const seenTitles = new Set<string>();
+  return sessions.filter((session) => {
+    if (seenTitles.has(session.title)) return false;
+    seenTitles.add(session.title);
+    return true;
+  });
+}
+
+function filterCurrentAttemptSessions(
+  sessions: CategorizedSession[],
+  steps: JobStep[],
+): CategorizedSession[] {
+  const uniqueSessions = deduplicateSessions(sessions);
+  const stepSessionTitles = new Set(
+    steps.filter((step) => step.sessionTitle).map((step) => step.sessionTitle!),
+  );
+  if (stepSessionTitles.size === 0) {
+    return uniqueSessions;
+  }
+
+  return uniqueSessions.filter(
+    (session) => session.type === 'delegation'
+      || session.type === 'verify'
+      || stepSessionTitles.has(session.title),
+  );
+}
+
+function resolveCurrentAttemptNumber(job: Job): number {
+  const totalAttempts = Math.max(1, job.retryBudget + 1);
+  return Math.min(totalAttempts, Math.max(1, job.retryCount + 1));
+}
+
+function buildAttemptSessionGroups(job: Job, steps: JobStep[], chainMode: boolean): AttemptSessionGroup[] {
+  const currentTitles = parseSessionTitles(job.sessionTitles);
+  const currentSessions = categorizeSessions(currentTitles);
+  const currentAttemptNumber = resolveCurrentAttemptNumber(job);
+  const currentGroup: AttemptSessionGroup = {
+    attemptNumber: currentAttemptNumber,
+    source: 'current',
+    retryStrategy: null,
+    retryHint: job.retryHint,
+    sessions: filterCurrentAttemptSessions(currentSessions, steps),
+  };
+
+  if (!chainMode) {
+    return [currentGroup];
+  }
+
+  const archivedGroups: AttemptSessionGroup[] = getRetryAttempts(job.id).map((attempt) => ({
+    attemptNumber: attempt.attemptNumber,
+    source: 'archived',
+    retryStrategy: attempt.retryStrategy,
+    retryHint: attempt.retryHint,
+    sessions: deduplicateSessions(categorizeSessions(attempt.sessionTitles ?? [])),
+  }));
+
+  return [...archivedGroups, currentGroup].sort((a, b) => {
+    if (a.attemptNumber !== b.attemptNumber) {
+      return a.attemptNumber - b.attemptNumber;
+    }
+    if (a.source === b.source) {
+      return 0;
+    }
+    return a.source === 'archived' ? -1 : 1;
   });
 }
 
@@ -651,36 +741,9 @@ async function logCommand(
     process.exit(1);
   }
 
-  // Get session titles for this job
-  let sessionTitles: string[] = [];
-  if (job.sessionTitles) {
-    try {
-      sessionTitles = JSON.parse(job.sessionTitles) as string[];
-    } catch {
-      sessionTitles = [];
-    }
-  }
-
-  // Categorize sessions
-  const allSessions = categorizeSessions(sessionTitles);
-
   // Get step records for this job
   const steps = getJobSteps(jobId);
-
-  // Deduplicate: remove duplicate session titles (can accumulate across retries)
-  // and if steps exist, only show execution sessions referenced by current steps
-  const seenTitles = new Set<string>();
-  const uniqueSessions = allSessions.filter((s) => {
-    if (seenTitles.has(s.title)) return false;
-    seenTitles.add(s.title);
-    return true;
-  });
-  const stepSessionTitles = new Set(
-    steps.filter((s) => s.sessionTitle).map((s) => s.sessionTitle!),
-  );
-  const deduplicatedSessions = stepSessionTitles.size > 0
-    ? uniqueSessions.filter((s) => s.type === 'delegation' || s.type === 'verify' || stepSessionTitles.has(s.title))
-    : uniqueSessions;
+  const attemptGroups = buildAttemptSessionGroups(job, steps, opts.chain === true);
 
   const summary = buildSummaryData(job, steps);
 
@@ -706,9 +769,13 @@ async function logCommand(
   }
 
   // Apply --delegation filter
-  const sessions = opts.delegation
-    ? deduplicatedSessions.filter((s) => s.type === 'delegation')
-    : deduplicatedSessions;
+  const filteredAttemptGroups = opts.delegation
+    ? attemptGroups.map((group) => ({
+      ...group,
+      sessions: group.sessions.filter((session) => session.type === 'delegation'),
+    }))
+    : attemptGroups;
+  const sessions = filteredAttemptGroups.flatMap((group) => group.sessions);
 
   // JSON mode
   if (isJsonMode()) {
@@ -748,6 +815,25 @@ async function logCommand(
         parts,
       })),
       tokenUsage: tokenUsageByStep,
+      ...(opts.chain
+        ? {
+          chain: {
+            enabled: true,
+            attempts: filteredAttemptGroups.map((group) => ({
+              attempt: group.attemptNumber,
+              source: group.source,
+              retryStrategy: group.retryStrategy,
+              retryHint: group.retryHint,
+              sessions: collectSessionParts(group.sessions).map(({ session, parts }) => ({
+                title: session.title,
+                type: session.type,
+                command: session.command,
+                parts,
+              })),
+            })),
+          },
+        }
+        : {}),
     });
     return;
   }
@@ -828,7 +914,10 @@ async function logCommand(
   }
 
   // "Waiting" state: job is running but no sessions yet
-  if (job.status === 'running' && (sessionTitles.length === 0 || sessions.every((s) => s.sessionId === null))) {
+  const currentAttemptSessions = filteredAttemptGroups
+    .filter((group) => group.source === 'current')
+    .flatMap((group) => group.sessions);
+  if (job.status === 'running' && (currentAttemptSessions.length === 0 || currentAttemptSessions.every((s) => s.sessionId === null))) {
     outputHuman(`  ${dim('Waiting for session to start...')}`);
     if (!opts.follow) {
       outputHuman('');
@@ -837,25 +926,30 @@ async function logCommand(
   }
 
   // Collect and render parts by session
-  const sessionData = collectSessionParts(sessions);
+  const groupedSessionData = filteredAttemptGroups.map((group) => ({
+    group,
+    sessionData: collectSessionParts(group.sessions),
+  }));
   let totalParts = 0;
 
-  for (const { session, parts } of sessionData) {
-    // Section header
-    if (sessions.length > 1 || session.type === 'delegation' || session.type === 'verify') {
-      let sectionLabel: string;
-      if (session.type === 'delegation') {
-        sectionLabel = `── Delegation ──`;
-      } else if (session.type === 'verify') {
-        sectionLabel = `── Verification ──`;
-      } else {
-        sectionLabel = `── Execution: ${session.command ?? 'unknown'} ──`;
+  for (const { group, sessionData } of groupedSessionData) {
+    if (opts.chain) {
+      const meta: string[] = [];
+      if (group.source === 'current') {
+        meta.push('current');
       }
-      outputHuman(`  ${dim(sectionLabel)}`);
+      if (group.retryStrategy) {
+        meta.push(group.retryStrategy);
+      }
+      const suffix = meta.length > 0 ? ` (${meta.join(', ')})` : '';
+      outputHuman(`  ${dim(`── Attempt ${group.attemptNumber}${suffix} ──`)}`);
+      if (group.retryHint) {
+        outputHuman(`  ${dim(`   hint: ${group.retryHint}`)}`);
+      }
       outputHuman('');
     }
 
-    if (parts.length === 0) {
+    if (sessionData.length === 0) {
       if (!opts.follow) {
         outputHuman(`  ${dim('(no activity yet)')}`);
         outputHuman('');
@@ -863,22 +957,46 @@ async function logCommand(
       continue;
     }
 
-    // Apply --last filter (per-session)
-    const displayParts = opts.last ? parts.slice(-opts.last) : parts;
-
-    for (const part of displayParts) {
-      const lines = formatPart(part, verbose);
-      for (const line of lines) {
-        outputHuman(line);
+    for (const { session, parts } of sessionData) {
+      // Section header
+      if (sessions.length > 1 || session.type === 'delegation' || session.type === 'verify') {
+        let sectionLabel: string;
+        if (session.type === 'delegation') {
+          sectionLabel = `── Delegation ──`;
+        } else if (session.type === 'verify') {
+          sectionLabel = `── Verification ──`;
+        } else {
+          sectionLabel = `── Execution: ${session.command ?? 'unknown'} ──`;
+        }
+        outputHuman(`  ${dim(sectionLabel)}`);
+        outputHuman('');
       }
 
-      // Expand child sessions for task parts (unless --flat)
-      if (!opts.flat && part.type === 'tool' && part.tool === 'task' && session.sessionId) {
-        renderChildSessions(session.sessionId, verbose, '    ');
+      if (parts.length === 0) {
+        if (!opts.follow) {
+          outputHuman(`  ${dim('(no activity yet)')}`);
+          outputHuman('');
+        }
+        continue;
       }
+
+      // Apply --last filter (per-session)
+      const displayParts = opts.last ? parts.slice(-opts.last) : parts;
+
+      for (const part of displayParts) {
+        const lines = formatPart(part, verbose);
+        for (const line of lines) {
+          outputHuman(line);
+        }
+
+        // Expand child sessions for task parts (unless --flat)
+        if (!opts.flat && part.type === 'tool' && part.tool === 'task' && session.sessionId) {
+          renderChildSessions(session.sessionId, verbose, '    ');
+        }
+      }
+      totalParts += displayParts.length;
+      outputHuman('');
     }
-    totalParts += displayParts.length;
-    outputHuman('');
   }
 
   if (totalParts === 0 && !opts.follow) {
@@ -893,9 +1011,11 @@ async function logCommand(
 
     // Track lastSeen per session
     const lastSeenMap = new Map<string, number>();
-    for (const { session, parts } of sessionData) {
-      if (session.sessionId && parts.length > 0) {
-        lastSeenMap.set(session.sessionId, parts[parts.length - 1].createdAt);
+    for (const groupData of groupedSessionData) {
+      for (const { session, parts } of groupData.sessionData) {
+        if (session.sessionId && parts.length > 0) {
+          lastSeenMap.set(session.sessionId, parts[parts.length - 1].createdAt);
+        }
       }
     }
 
@@ -913,14 +1033,10 @@ async function logCommand(
         break;
       }
       if (updatedJob?.sessionTitles) {
-        try {
-          currentTitles = JSON.parse(updatedJob.sessionTitles) as string[];
-        } catch {
-          currentTitles = sessionTitles;
-        }
+        currentTitles = parseSessionTitles(updatedJob.sessionTitles);
       }
 
-      const currentSessions = categorizeSessions(currentTitles);
+      const currentSessions = filterCurrentAttemptSessions(categorizeSessions(currentTitles), steps);
       const filteredSessions = opts.delegation
         ? currentSessions.filter((s) => s.type === 'delegation')
         : currentSessions;
