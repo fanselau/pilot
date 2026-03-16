@@ -6,12 +6,12 @@
 ## Current Position
 
 Phase: 69 (Model System — Agent Frontmatter Patching)
-**Next Phase:** Phase 69 (continue with 69-03-PLAN.md)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-16 - Completed 69-02-PLAN.md
+**Next Phase:** Select next roadmap in-progress plan (phase 50/51/61)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-16 - Completed 69-03-PLAN.md
 
-Progress: ████████████████████████░ 88/90 plans (98%)
+Progress: █████████████████████████ 89/90 plans (99%)
 
 ## Project Reference
 
@@ -174,7 +174,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 69: Model System — Agent Frontmatter Patching
-- **Status:** in progress (2/3 plans complete)
+- **Status:** complete (3/3 plans, verified ✓)
 
 ### Quick Tasks Completed
 
@@ -809,9 +809,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 69-01 | models tests reset to in-memory DB before each test | Prevents local persistent model-profile overrides from causing nondeterministic test expectations |
 | 69-02 | patchModelsForJob logs fallback/skipped summary details from patchAgentFrontmatter | Makes inherit fallback and malformed frontmatter outcomes observable to operators |
 | 69-02 | runGsdStep no longer re-patches agent files; launch() is sole patch point | Eliminates duplicate frontmatter patch churn per step while preserving launch guardrails |
+| 69-03 | regression tests now assert discovered-file fallback to inherit and idempotent parser-safe patching | Prevents silent reintroduction of stale mapped models or repeated content churn |
+| 69-03 | runner recovery quick-intent test enforces single patchAgentFrontmatter invocation per launch | Guards launch path against duplicate per-step patch regression |
 
 ## Session Continuity
 
-Last session: 2026-03-16 02:07 UTC
-Stopped at: Completed 69-02-PLAN.md (runner integration hardening + single patch point)
+Last session: 2026-03-16 02:16 UTC
+Stopped at: Completed 69-03-PLAN.md (regression coverage hardening for patch fallback and runner invocation)
 Resume file: None

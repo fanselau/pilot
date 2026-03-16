@@ -1243,6 +1243,7 @@ Read requirements/gsd-05-judge-move.md for full spec.
 
 ### Phase 69: Model System — Agent Frontmatter Patching
 
+**Status:** complete (3/3 plans, verified ✓)
 **Goal:** Harden model routing by making agent frontmatter patching parser-safe and file-driven: scan installed `.opencode/agents/gsd-*.md` files, patch only `model`/`variant` via YAML document mutation, and prevent stale model leakage with explicit `inherit` fallback for unmapped agents.
 **Depends on:** Phase 68
 **Plans:** 3 plans
@@ -1250,7 +1251,7 @@ Read requirements/gsd-05-judge-move.md for full spec.
 Plans:
 - [x] 69-01-PLAN.md — Parser-safe frontmatter patch foundation (YAML dependency, file scanning, inherit fallback)
 - [x] 69-02-PLAN.md — Runner integration hardening (single patch point per job + patch diagnostics)
-- [ ] 69-03-PLAN.md — Regression coverage for patching edge cases and runner invocation count
+- [x] 69-03-PLAN.md — Regression coverage for patching edge cases and runner invocation count
 
 Wave structure:
 - Wave 1: 69-01 (models patching foundation)
