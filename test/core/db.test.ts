@@ -1238,9 +1238,9 @@ describe('managed projects', () => {
   // ── Phase 67: hung session retry helpers ──────────────────────────────
 
   describe('retry budget fields on new jobs', () => {
-    it('new job has retryBudget=3, retryCount=0, hungCount=0, lastHungReason=null', () => {
+    it('new job has retryBudget=2, retryCount=0, hungCount=0, lastHungReason=null', () => {
       const job = addJob('/proj', 'quick', 'test job');
-      expect(job.retryBudget).toBe(3);
+      expect(job.retryBudget).toBe(2);
       expect(job.retryCount).toBe(0);
       expect(job.hungCount).toBe(0);
       expect(job.lastHungReason).toBeNull();

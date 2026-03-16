@@ -125,9 +125,11 @@ export interface Job {
   gitHeadCommit: string | null;
   startedDirty: boolean;
   skipGracePeriod: boolean;
-  // ── Retry budget (Phase 67) ─────────────────────────────────────────────
-  retryBudget: number;          // Total retries allowed (default 3). Shared between hung and judge-fail.
-  retryCount: number;           // How many retries consumed so far
+  // ── Retry budget (Phase 67/70) ──────────────────────────────────────────
+  retryBudget: number;           // Total retries allowed (default 2). Shared between hung and judge-fail.
+  retryCount: number;            // How many retries consumed so far
+  retryHint: string | null;      // Latest retry hint captured from judge/retry policy
+  lastFailureFingerprint: string[] | null; // Latest structured failure fingerprint for same-failure detection
   hungCount: number;            // How many times this job hung (for observability)
   lastHungReason: string | null; // Last hung reason for same-error detection
 }

@@ -57,7 +57,13 @@ CREATE TABLE IF NOT EXISTS jobs (
   git_base_commit TEXT,
   git_head_commit TEXT,
   started_dirty INTEGER NOT NULL DEFAULT 0,
-  skip_grace_period INTEGER NOT NULL DEFAULT 0
+  skip_grace_period INTEGER NOT NULL DEFAULT 0,
+  retry_budget INTEGER NOT NULL DEFAULT 2,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  retry_hint TEXT,
+  last_failure_fingerprint TEXT,
+  hung_count INTEGER NOT NULL DEFAULT 0,
+  last_hung_reason TEXT
 );
 `;
 
@@ -175,6 +181,8 @@ interface JobRow {
   skip_grace_period: number;
   retry_budget: number;
   retry_count: number;
+  retry_hint: string | null;
+  last_failure_fingerprint: string | null;
   hung_count: number;
   last_hung_reason: string | null;
 }
@@ -229,6 +237,21 @@ function rowToProject(row: ProjectRow): Project {
   };
 }
 
+function parseFailureFingerprint(value: string | null | undefined): string[] | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
+      return parsed;
+    }
+  } catch {
+    // Backward compatibility: treat non-JSON storage as a single fingerprint token.
+  }
+
+  return [value];
+}
+
 function rowToJob(row: JobRow): Job {
   return {
     id: row.id,
@@ -268,8 +291,10 @@ function rowToJob(row: JobRow): Job {
     gitHeadCommit: row.git_head_commit ?? null,
     startedDirty: row.started_dirty === 1,
     skipGracePeriod: row.skip_grace_period === 1,
-    retryBudget: row.retry_budget ?? 3,
+    retryBudget: row.retry_budget ?? 2,
     retryCount: row.retry_count ?? 0,
+    retryHint: row.retry_hint ?? null,
+    lastFailureFingerprint: parseFailureFingerprint(row.last_failure_fingerprint),
     hungCount: row.hung_count ?? 0,
     lastHungReason: row.last_hung_reason ?? null,
   };
@@ -303,8 +328,10 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE projects ADD COLUMN notify_openclaw_route TEXT DEFAULT NULL',
-    'ALTER TABLE jobs ADD COLUMN retry_budget INTEGER NOT NULL DEFAULT 3',
+    'ALTER TABLE jobs ADD COLUMN retry_budget INTEGER NOT NULL DEFAULT 2',
     'ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jobs ADD COLUMN retry_hint TEXT DEFAULT NULL',
+    'ALTER TABLE jobs ADD COLUMN last_failure_fingerprint TEXT DEFAULT NULL',
     'ALTER TABLE jobs ADD COLUMN hung_count INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN last_hung_reason TEXT DEFAULT NULL',
   ];
@@ -427,16 +454,20 @@ function addJob(
   timeout?: number,
   skipGracePeriod?: boolean,
   notifyRoute?: OpenClawDeliverRoute | null,
+  retryBudget?: number,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
   const defaults = getConfigFileDefaults();
   const profile = modelProfile ?? defaults.modelProfile;
   const provider = providerMode ?? defaults.providerMode;
+  const resolvedRetryBudget = Number.isFinite(retryBudget)
+    ? Math.max(0, Math.trunc(retryBudget as number))
+    : 2;
 
   db.prepare(`
-    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, skip_grace_period, notify_route)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, skip_grace_period, notify_route, retry_budget)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     project,
@@ -452,6 +483,7 @@ function addJob(
     timeout ?? 0,
     skipGracePeriod ? 1 : 0,
     notifyRoute ? JSON.stringify(notifyRoute) : null,
+    resolvedRetryBudget,
   );
 
   return getJob(id)!;
