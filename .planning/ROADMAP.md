@@ -1263,12 +1263,21 @@ Read `requirements/gsd-06-model-frontmatter.md` and `.planning/phases/69-model-s
 
 ### Phase 70: Phase Auto-Retry on Verification Failure
 
-**Goal:** [To be planned]
+**Goal:** Automatically retry phase jobs when verification/judge outcomes are retryable (`fail`/`partial`/null), using persisted retry budgets and fingerprint-based same-failure escalation, while surfacing retry lineage in CLI (`pilot info`, `pilot log --chain`).
 **Depends on:** Phase 69
-**Plans:** 0 plans
+**Status:** in progress (1/4 plans complete)
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 70 to break down)
+- [x] 70-01-PLAN.md — Retry persistence foundation (DB schema/helpers + attempt archive + DB tests)
+- [ ] 70-02-PLAN.md — Runner verification auto-retry orchestration (strategy routing, fingerprint escalation, terminal policy)
+- [ ] 70-03-PLAN.md — Queue-time retry controls (`defaults.retry_budget`, `pilot add --retries/--no-retry`, CLI wiring)
+- [ ] 70-04-PLAN.md — Operator visibility (`pilot info` attempt lineage + `pilot log --chain` across attempts)
+
+Wave structure:
+- Wave 1: 70-01 (persistence foundation)
+- Wave 2: 70-02 + 70-03 in parallel (runner policy + CLI/config controls, both depend on 70-01)
+- Wave 3: 70-04 (operator visibility, depends on 70-01 + 70-02 + 70-03)
 
 **Details:**
-[To be added during planning]
+Read `requirements/gsd-07-auto-retry.md` and `.planning/phases/70-phase-auto-retry-on-verification-failure/70-RESEARCH.md`.

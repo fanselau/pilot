@@ -1,24 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 69
+## Current Phase: 70
 
 ## Current Position
 
-Phase: 69 (Model System — Agent Frontmatter Patching)
-**Next Phase:** Phase 70 (Phase Auto-Retry on Verification Failure)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-16 - Completed 69-03-PLAN.md
+Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
+**Next Plan:** 70-02-PLAN.md
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-03-16 - Completed 70-01-PLAN.md
 
-Progress: █████████████████████████ 89/90 plans (99%)
+Progress: ███████████████████████░░ 90/97 plans (93%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Replace regex frontmatter mutation with parser-safe, file-driven patching + inherit fallback semantics.
+**Current focus:** Persist retry budget metadata and attempt lineage so phase-level auto-retry survives runner restarts.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -812,9 +812,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 69-02 | runGsdStep no longer re-patches agent files; launch() is sole patch point | Eliminates duplicate frontmatter patch churn per step while preserving launch guardrails |
 | 69-03 | regression tests now assert discovered-file fallback to inherit and idempotent parser-safe patching | Prevents silent reintroduction of stale mapped models or repeated content churn |
 | 69-03 | runner recovery quick-intent test enforces single patchAgentFrontmatter invocation per launch | Guards launch path against duplicate per-step patch regression |
+| 70-01 | addJob persists retry_budget explicitly with default 2 (optional override) | Enforces new retry policy consistently even on legacy DBs with older column defaults |
+| 70-01 | resetToPending archives attempt metadata before clearing live session/job-step state | Preserves retry lineage for future info/log chain surfaces without reviving terminal jobs |
 
 ## Session Continuity
 
-Last session: 2026-03-16 02:16 UTC
-Stopped at: Completed 69-03-PLAN.md (regression coverage hardening for patch fallback and runner invocation)
+Last session: 2026-03-16 03:21 UTC
+Stopped at: Completed 70-01-PLAN.md (retry persistence foundation: schema/defaults, metadata helpers, attempt archive)
 Resume file: None
