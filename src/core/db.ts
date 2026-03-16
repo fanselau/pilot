@@ -85,6 +85,24 @@ CREATE TABLE IF NOT EXISTS job_steps (
 );
 `;
 
+const CREATE_JOB_RETRY_ATTEMPTS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS job_retry_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id TEXT NOT NULL REFERENCES jobs(id),
+  attempt_number INTEGER NOT NULL,
+  session_titles TEXT,
+  retry_strategy TEXT,
+  retry_hint TEXT,
+  failure_fingerprint TEXT,
+  archived_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+const CREATE_JOB_RETRY_ATTEMPTS_INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS idx_job_retry_attempts_job_attempt
+ON job_retry_attempts (job_id, attempt_number, id);
+`;
+
 const CREATE_PROJECTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS projects (
   path TEXT PRIMARY KEY,
@@ -388,6 +406,8 @@ function openPilotDb(): DatabaseType {
   cachedDb!.pragma('busy_timeout = 5000');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_RETRY_ATTEMPTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_RETRY_ATTEMPTS_INDEX_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
@@ -417,6 +437,8 @@ function _getTestDb(): DatabaseType {
   cachedDb!.pragma('journal_mode = WAL');
   cachedDb!.exec(CREATE_TABLE_SQL);
   cachedDb!.exec(CREATE_JOB_STEPS_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_RETRY_ATTEMPTS_TABLE_SQL);
+  cachedDb!.exec(CREATE_JOB_RETRY_ATTEMPTS_INDEX_SQL);
   cachedDb!.exec(CREATE_PROJECTS_TABLE_SQL);
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
@@ -913,6 +935,41 @@ interface JobStepRow {
   duration_ms: number | null;
 }
 
+interface JobRetryAttemptRow {
+  id: number;
+  job_id: string;
+  attempt_number: number;
+  session_titles: string | null;
+  retry_strategy: string | null;
+  retry_hint: string | null;
+  failure_fingerprint: string | null;
+  archived_at: string;
+}
+
+export interface JobRetryAttempt {
+  id: number;
+  jobId: string;
+  attemptNumber: number;
+  sessionTitles: string[] | null;
+  retryStrategy: string | null;
+  retryHint: string | null;
+  failureFingerprint: string[] | null;
+  archivedAt: string;
+}
+
+function parseStringArray(value: string | null | undefined): string[] | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
+      return parsed;
+    }
+  } catch {
+    // Ignore parse errors and treat as missing data.
+  }
+  return null;
+}
+
 function rowToJobStep(row: JobStepRow): JobStep {
   return {
     id: row.id,
@@ -928,6 +985,19 @@ function rowToJobStep(row: JobStepRow): JobStep {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     durationMs: row.duration_ms,
+  };
+}
+
+function rowToJobRetryAttempt(row: JobRetryAttemptRow): JobRetryAttempt {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    attemptNumber: row.attempt_number,
+    sessionTitles: parseStringArray(row.session_titles),
+    retryStrategy: row.retry_strategy,
+    retryHint: row.retry_hint,
+    failureFingerprint: parseFailureFingerprint(row.failure_fingerprint),
+    archivedAt: row.archived_at,
   };
 }
 
@@ -1015,6 +1085,71 @@ function skipRemainingSteps(
   }
 }
 
+// ── Retry Metadata + Attempt Archive Helpers ───────────────────────────────
+
+function updateRetryHint(jobId: string, retryHint: string | null): void {
+  getDb().prepare('UPDATE jobs SET retry_hint = ? WHERE id = ?').run(retryHint, jobId);
+}
+
+function updateLastFailureFingerprint(jobId: string, fingerprint: string[] | null): void {
+  const serializedFingerprint = fingerprint ? JSON.stringify(fingerprint) : null;
+  getDb().prepare('UPDATE jobs SET last_failure_fingerprint = ? WHERE id = ?').run(serializedFingerprint, jobId);
+}
+
+function recordRetryAttempt(jobId: string, retryStrategy: string | null = null): JobRetryAttempt | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT id, attempts, session_titles, retry_hint, last_failure_fingerprint
+    FROM jobs
+    WHERE id = ?
+  `).get(jobId) as {
+    id: string;
+    attempts: number;
+    session_titles: string | null;
+    retry_hint: string | null;
+    last_failure_fingerprint: string | null;
+  } | undefined;
+
+  if (!row) return null;
+
+  const attemptNumber = Math.max(1, row.attempts ?? 0);
+  const insert = db.prepare(`
+    INSERT INTO job_retry_attempts (
+      job_id,
+      attempt_number,
+      session_titles,
+      retry_strategy,
+      retry_hint,
+      failure_fingerprint
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    row.id,
+    attemptNumber,
+    row.session_titles,
+    retryStrategy,
+    row.retry_hint,
+    row.last_failure_fingerprint,
+  );
+
+  const archived = db.prepare('SELECT * FROM job_retry_attempts WHERE id = ?').get(
+    Number(insert.lastInsertRowid),
+  ) as JobRetryAttemptRow;
+
+  return rowToJobRetryAttempt(archived);
+}
+
+function getRetryAttempts(jobId: string): JobRetryAttempt[] {
+  const rows = getDb().prepare(`
+    SELECT *
+    FROM job_retry_attempts
+    WHERE job_id = ?
+    ORDER BY attempt_number ASC, id ASC
+  `).all(jobId) as JobRetryAttemptRow[];
+
+  return rows.map(rowToJobRetryAttempt);
+}
+
 // ── Reset to Pending ──────────────────────────────────────────────────
 
 /**
@@ -1032,20 +1167,58 @@ function skipRemainingSteps(
  */
 function resetToPending(id: string, resumeHint?: string): boolean {
   const db = getDb();
-  const result = db.prepare(`
-    UPDATE jobs
-    SET status = 'pending',
-        started_at = NULL,
-        error = NULL,
-        current_step = 0,
-        session_titles = NULL,
-        resume_hint = ?
-    WHERE id = ? AND status = 'running'
-  `).run(resumeHint ?? null, id);
-  if (result.changes === 0) return false;
-  // Clean up step records only if we actually reset
-  db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
-  return true;
+
+  const reset = db.transaction((): boolean => {
+    const runningRow = db.prepare(`
+      SELECT id, attempts, session_titles, retry_hint, last_failure_fingerprint
+      FROM jobs
+      WHERE id = ? AND status = 'running'
+    `).get(id) as {
+      id: string;
+      attempts: number;
+      session_titles: string | null;
+      retry_hint: string | null;
+      last_failure_fingerprint: string | null;
+    } | undefined;
+
+    if (!runningRow) return false;
+
+    const attemptNumber = Math.max(1, runningRow.attempts ?? 0);
+    db.prepare(`
+      INSERT INTO job_retry_attempts (
+        job_id,
+        attempt_number,
+        session_titles,
+        retry_strategy,
+        retry_hint,
+        failure_fingerprint
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      runningRow.id,
+      attemptNumber,
+      runningRow.session_titles,
+      resumeHint ?? null,
+      runningRow.retry_hint,
+      runningRow.last_failure_fingerprint,
+    );
+
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'pending',
+          started_at = NULL,
+          error = NULL,
+          current_step = 0,
+          session_titles = NULL,
+          resume_hint = ?
+      WHERE id = ? AND status = 'running'
+    `).run(resumeHint ?? null, id);
+
+    db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
+    return true;
+  });
+
+  return reset();
 }
 
 // ── Hung Session Retry Helpers (Phase 67) ─────────────────────────────────
@@ -1487,6 +1660,10 @@ export {
   // Phase 67: hung session retry helpers
   incrementHungCount,
   incrementRetryCount,
+  updateRetryHint,
+  updateLastFailureFingerprint,
+  recordRetryAttempt,
+  getRetryAttempts,
   canRetry,
   isSameHungReason,
   resetRetryState,
