@@ -36,6 +36,8 @@ interface AddOptions {
   dryRun?: boolean;   // Show what would happen without queuing
   categories?: string; // Skill categories for this job (comma-separated string from CLI)
   startImmediately?: boolean; // Bypass queue grace wait for this job
+  retries?: number; // Retry budget override (integer >= 0)
+  retry?: boolean; // Commander --no-retry sets this to false
 }
 
 function parseCategoriesInput(raw: string | undefined): string[] | null {
@@ -164,6 +166,8 @@ async function addCommand(
   const modelProfile: ModelProfile = opts.profile
     ? validateProfile(opts.profile)
     : configDefaults.modelProfile;
+
+  const resolvedRetryBudget = resolveRetryBudget(opts, configDefaults.retryBudget);
 
   // Resolve provider mode: flag > config file default
   const providerMode = opts.provider
@@ -355,6 +359,7 @@ async function addCommand(
         opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
         true,
         notifyRouteSnapshot,
+        resolvedRetryBudget,
       )
       : addJob(
         resolvedProject,
@@ -369,6 +374,8 @@ async function addCommand(
         opts.notifyUrl,        // callbackUrl
         opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
         true,
+        undefined,
+        resolvedRetryBudget,
       ))
     : (notifyRouteSnapshot
       ? addJob(
@@ -385,6 +392,7 @@ async function addCommand(
         opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
         undefined,
         notifyRouteSnapshot,
+        resolvedRetryBudget,
       )
       : addJob(
         resolvedProject,
@@ -398,6 +406,9 @@ async function addCommand(
         resolvedNotifyKey,     // callbackSessionKey (resolved)
         opts.notifyUrl,        // callbackUrl
         opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+        undefined,
+        undefined,
+        resolvedRetryBudget,
       ));
 
   // Store categories on the job record if provided
@@ -429,10 +440,29 @@ async function addCommand(
   } else {
     outputHuman('  Start mode: waits for queue grace window before launch.');
   }
+  outputHuman(`  ${dim(`Retry budget: ${resolvedRetryBudget}`)}`);
   if (resolvedNotifyKey) {
     outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
   }
   outputHuman(`  ${dim('Run:')} pilot service start ${dim('to process queue')}`);
+}
+
+function resolveRetryBudget(opts: AddOptions, configRetryBudget: number): number {
+  if (opts.retries !== undefined) {
+    if (!Number.isInteger(opts.retries) || opts.retries < 0) {
+      process.stderr.write('Error: --retries must be a non-negative integer\n');
+      process.exit(2);
+    }
+    return opts.retries;
+  }
+
+  if (opts.retry === false) {
+    return 0;
+  }
+
+  return Number.isInteger(configRetryBudget) && configRetryBudget >= 0
+    ? configRetryBudget
+    : 2;
 }
 
 function validateProfile(value: string): ModelProfile {
