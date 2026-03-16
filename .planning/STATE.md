@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 68 (Judge System — Move Into Pilot)
-Plan: 0 of 4 in current phase
-Status: Planning complete, ready for execution
-Last activity: 2026-03-16 - Created planning docs for Phase 68
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-03-16 - Completed 68-01-PLAN.md
 
-Progress: ██████████████████████ 82/90 plans (91%)
+Progress: ███████████████████████ 83/90 plans (92%)
 
 ## Project Reference
 
@@ -170,7 +170,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - **Status:** complete (4/4 plans)
 
 ### Phase 68: Judge System — Move Into Pilot
-- **Status:** planned (0/4 plans complete)
+- **Status:** in progress (1/4 plans complete)
 
 ### Quick Tasks Completed
 
@@ -796,9 +796,13 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 67-04 | Escalation does NOT consume retry budget (no incrementRetryCount) | Direct fail path, not a retried attempt |
 | 67-04 | pilot retry (retry()) calls resetRetryState | Operator manual retry gets fresh budget — resets retryCount, hungCount, lastHungReason |
 | 67-04 | gaps-if-progress hint only for interactive-prompt hangs | Phase jobs need gap-closure retries after prompt hang; stuck-tool hangs don't |
+| 68-01 | Merged two judge prompts into ONE canonical format at src/prompts/judge.md | Two prompts with different formats creates drift; pilot-judge.md richer structure used as base |
+| 68-01 | Verdict values: pass/fail/partial (not succeeded/failed/doubting) | Cleaner, shorter, standard terminology |
+| 68-01 | retryRecommendation: string 'none'/'retry-resume'/'retry-full' (not null) | Explicit string safer than null for JSON parsing downstream |
+| 68-01 | Confidence ceiling ≤ 40 when VERIFICATION.md absent | Prevents false pass verdicts from transcript-only evidence |
 
 ## Session Continuity
 
-Last session: 2026-03-16 00:11 UTC
-Stopped at: Completed 67-04-PLAN.md (retry budget, escalation, hung session pipeline) — Phase 67 complete
+Last session: 2026-03-16 00:50 UTC
+Stopped at: Completed 68-01-PLAN.md (canonical judge prompt at src/prompts/judge.md)
 Resume file: None

@@ -1209,7 +1209,7 @@ Read requirements/gsd-04b-session-blocker-handling.md for full spec.
 **Plans:** 4 plans
 
 Plans:
-- [ ] 68-01-PLAN.md — Judge prompt: merge gsd-judge.md + pilot-judge.md into `src/prompts/judge.md` with canonical verdict schema
+- [x] 68-01-PLAN.md — Judge prompt: merge gsd-judge.md + pilot-judge.md into `src/prompts/judge.md` with canonical verdict schema
 - [ ] 68-02-PLAN.md — Type updates: extend JudgeVerdict, ParsedJudgeVerdictPayload, JudgeSignal with retryRecommendation/retryHint/failureFingerprint; update VERDICT_TO_OUTCOME for pass/fail/partial
 - [ ] 68-03-PLAN.md — Runner integration: rewrite runJudge() to use inline prompt, load VERIFICATION.md + VALIDATION.md as evidence, remove --command gsd-judge path
 - [ ] 68-04-PLAN.md — Tests + cleanup: update all judge-related tests for new verdict format, remove gsd-judge/pilot-judge from pilot-gsd, verify backward compat

@@ -1,13 +1,16 @@
 import type { Job } from './types.js';
 
-export type JudgeSignalOutcome = 'none' | 'pass' | 'fail' | 'doubt' | 'inconclusive';
+export type JudgeSignalOutcome = 'none' | 'pass' | 'fail' | 'partial' | 'doubt' | 'inconclusive';
 
-type JudgeVerdictValue = 'succeeded' | 'failed' | 'doubting';
+type JudgeVerdictValue = 'succeeded' | 'failed' | 'doubting' | 'pass' | 'fail' | 'partial';
 
 interface ParsedJudgeVerdictPayload {
   verdict: string | null;
   confidence: number | null;
   reason: string | null;
+  retryRecommendation: string | null;  // 'retry-resume' | 'retry-full' | 'none'
+  retryHint: string | null;
+  failureFingerprint: string[] | null;
 }
 
 export interface JudgeSignal {
@@ -16,12 +19,18 @@ export interface JudgeSignal {
   confidence: number | null;
   reason: string | null;
   verdict: string | null;
+  retryRecommendation: string | null;
+  retryHint: string | null;
+  failureFingerprint: string[] | null;
 }
 
 const VERDICT_TO_OUTCOME: Record<JudgeVerdictValue, Exclude<JudgeSignalOutcome, 'none' | 'inconclusive'>> = {
   succeeded: 'pass',
   failed: 'fail',
   doubting: 'doubt',
+  pass: 'pass',
+  fail: 'fail',
+  partial: 'partial',
 };
 
 function asText(value: unknown): string | null {
@@ -53,6 +62,11 @@ export function parseJudgeVerdictPayload(judgeVerdict: string | null): ParsedJud
       verdict: asText(parsed.verdict),
       confidence: normalizeConfidence(parsed.confidence),
       reason: asText(parsed.reason) ?? asText(parsed.summary),
+      retryRecommendation: asText(parsed.retryRecommendation),
+      retryHint: asText(parsed.retryHint),
+      failureFingerprint: Array.isArray(parsed.failureFingerprint)
+        ? (parsed.failureFingerprint as unknown[]).filter((s): s is string => typeof s === 'string')
+        : null,
     };
   } catch {
     return null;
@@ -77,6 +91,9 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       confidence: null,
       reason: null,
       verdict: null,
+      retryRecommendation: null,
+      retryHint: null,
+      failureFingerprint: null,
     };
   }
 
@@ -90,6 +107,9 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       confidence: null,
       reason: parsed?.reason ?? null,
       verdict: parsed?.verdict ?? null,
+      retryRecommendation: parsed?.retryRecommendation ?? null,
+      retryHint: parsed?.retryHint ?? null,
+      failureFingerprint: parsed?.failureFingerprint ?? null,
     };
   }
 
@@ -99,5 +119,8 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
     confidence: parsed.confidence,
     reason: parsed.reason,
     verdict: parsed.verdict,
+    retryRecommendation: parsed.retryRecommendation,
+    retryHint: parsed.retryHint,
+    failureFingerprint: parsed.failureFingerprint,
   };
 }
