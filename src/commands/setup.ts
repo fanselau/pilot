@@ -195,7 +195,7 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
 
           if (agentsAnswer.toLowerCase() !== 'n') {
             outputHuman(`  ${dim('Generating AGENTS.md...')}`);
-            const agentsResult = await spawnAgentsMdSession({ projectDir: absDir, command: 'gsd-setup-agents' });
+            const agentsResult = await spawnAgentsMdSession({ projectDir: absDir, operation: 'setup' });
 
             if (agentsResult !== null) {
               outputHuman(`  ${green('✓')} AGENTS.md generated — review before committing`);

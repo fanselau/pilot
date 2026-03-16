@@ -341,14 +341,13 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
           detail: `Not found — generate with: pilot setup ${projectPath}`,
         });
       } else {
-        // Spawn AI session for drift detection using haiku-tier (cheapest) model
-        // TODO: Replace 'gsd-setup-agents check' with actual health check command when available
-        // in the GSD package. The AI session should read AGENTS.md, package.json, and project structure
+        // Spawn AI session for drift detection using the AGENTS health operation.
+        // The AI session reads AGENTS.md, package.json, and project structure
         // to detect stale references, wrong versions, and deleted paths.
         try {
           const result = await spawnAgentsMdSession({
             projectDir: absPath,
-            command: 'gsd-setup-agents check',
+            operation: 'health',
             timeoutMs: 90_000,
           });
 
