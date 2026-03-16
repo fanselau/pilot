@@ -125,6 +125,11 @@ export interface Job {
   gitHeadCommit: string | null;
   startedDirty: boolean;
   skipGracePeriod: boolean;
+  // ── Retry budget (Phase 67) ─────────────────────────────────────────────
+  retryBudget: number;          // Total retries allowed (default 3). Shared between hung and judge-fail.
+  retryCount: number;           // How many retries consumed so far
+  hungCount: number;            // How many times this job hung (for observability)
+  lastHungReason: string | null; // Last hung reason for same-error detection
 }
 
 // ── Job Observability + Cost Estimation ───────────────────────────────────

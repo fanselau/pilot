@@ -42,6 +42,12 @@ import {
   updateProjectNotifyOpenClawRoute,
   blockProject,
   unblockProject,
+  // Phase 67 retry helpers
+  incrementHungCount,
+  incrementRetryCount,
+  canRetry,
+  isSameHungReason,
+  resetRetryState,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -1228,4 +1234,160 @@ describe('managed projects', () => {
       expect(job.timeout).toBe(0);
     });
   });
+
+  // ── Phase 67: hung session retry helpers ──────────────────────────────
+
+  describe('retry budget fields on new jobs', () => {
+    it('new job has retryBudget=3, retryCount=0, hungCount=0, lastHungReason=null', () => {
+      const job = addJob('/proj', 'quick', 'test job');
+      expect(job.retryBudget).toBe(3);
+      expect(job.retryCount).toBe(0);
+      expect(job.hungCount).toBe(0);
+      expect(job.lastHungReason).toBeNull();
+    });
+  });
+
+  describe('incrementHungCount', () => {
+    it('increments hung_count by 1 and sets last_hung_reason', () => {
+      const job = addJob('/proj', 'quick', 'hung test');
+      expect(job.hungCount).toBe(0);
+      expect(job.lastHungReason).toBeNull();
+
+      incrementHungCount(job.id, 'interactive-prompt');
+
+      const updated = getJob(job.id)!;
+      expect(updated.hungCount).toBe(1);
+      expect(updated.lastHungReason).toBe('interactive-prompt');
+    });
+
+    it('accumulates hung count on multiple calls', () => {
+      const job = addJob('/proj', 'quick', 'multi-hung');
+      incrementHungCount(job.id, 'interactive-prompt');
+      incrementHungCount(job.id, 'stuck-tool');
+
+      const updated = getJob(job.id)!;
+      expect(updated.hungCount).toBe(2);
+      expect(updated.lastHungReason).toBe('stuck-tool'); // last reason wins
+    });
+  });
+
+  describe('incrementRetryCount', () => {
+    it('increments retry_count by 1', () => {
+      const job = addJob('/proj', 'quick', 'retry test');
+      expect(job.retryCount).toBe(0);
+
+      incrementRetryCount(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.retryCount).toBe(1);
+    });
+
+    it('accumulates on multiple calls', () => {
+      const job = addJob('/proj', 'quick', 'multi-retry');
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.retryCount).toBe(2);
+    });
+  });
+
+  describe('canRetry', () => {
+    it('returns true when retry_count < retry_budget (0 < 3)', () => {
+      const job = addJob('/proj', 'quick', 'can retry');
+      expect(canRetry(job.id)).toBe(true);
+    });
+
+    it('returns false when retry_count equals retry_budget', () => {
+      const job = addJob('/proj', 'quick', 'budget exhausted');
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+
+      // retryCount=3, retryBudget=3 → cannot retry
+      expect(canRetry(job.id)).toBe(false);
+    });
+
+    it('returns false when retry_count exceeds retry_budget (defensive)', () => {
+      const job = addJob('/proj', 'quick', 'over budget');
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id); // 4 > 3
+
+      expect(canRetry(job.id)).toBe(false);
+    });
+
+    it('returns false for non-existent job id', () => {
+      expect(canRetry('xxxx')).toBe(false);
+    });
+  });
+
+  describe('isSameHungReason', () => {
+    it('returns true when last_hung_reason matches current reason', () => {
+      const job = addJob('/proj', 'quick', 'same reason');
+      incrementHungCount(job.id, 'interactive-prompt');
+
+      expect(isSameHungReason(job.id, 'interactive-prompt')).toBe(true);
+    });
+
+    it('returns false when last_hung_reason differs from current reason', () => {
+      const job = addJob('/proj', 'quick', 'different reason');
+      incrementHungCount(job.id, 'interactive-prompt');
+
+      expect(isSameHungReason(job.id, 'stuck-tool')).toBe(false);
+    });
+
+    it('returns false when last_hung_reason is null (no previous hang)', () => {
+      const job = addJob('/proj', 'quick', 'fresh job');
+      expect(isSameHungReason(job.id, 'interactive-prompt')).toBe(false);
+    });
+  });
+
+  describe('resetRetryState', () => {
+    it('clears retry_count, hung_count, and last_hung_reason', () => {
+      const job = addJob('/proj', 'quick', 'reset test');
+      incrementHungCount(job.id, 'interactive-prompt');
+      incrementRetryCount(job.id);
+      incrementRetryCount(job.id);
+
+      // Verify state before reset
+      const before = getJob(job.id)!;
+      expect(before.hungCount).toBe(1);
+      expect(before.retryCount).toBe(2);
+      expect(before.lastHungReason).toBe('interactive-prompt');
+
+      resetRetryState(job.id);
+
+      const after = getJob(job.id)!;
+      expect(after.retryCount).toBe(0);
+      expect(after.hungCount).toBe(0);
+      expect(after.lastHungReason).toBeNull();
+    });
+  });
+
+  describe('retry() resets retry state', () => {
+    it('pilot retry clears retry_count, hung_count, last_hung_reason', () => {
+      const job = addJob('/proj', 'quick', 'pilot retry test');
+      markRunning(job.id);
+      incrementHungCount(job.id, 'interactive-prompt');
+      incrementRetryCount(job.id);
+      markFailed(job.id, 'Retry budget exhausted after interactive-prompt hang');
+
+      // Before pilot retry
+      const before = getJob(job.id)!;
+      expect(before.retryCount).toBe(1);
+      expect(before.hungCount).toBe(1);
+      expect(before.lastHungReason).toBe('interactive-prompt');
+
+      retry(job.id);
+
+      const after = getJob(job.id)!;
+      expect(after.status).toBe('pending');
+      expect(after.retryCount).toBe(0);
+      expect(after.hungCount).toBe(0);
+      expect(after.lastHungReason).toBeNull();
+    });
+  });
+
 });

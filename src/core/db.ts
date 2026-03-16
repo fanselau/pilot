@@ -173,6 +173,10 @@ interface JobRow {
   git_head_commit: string | null;
   started_dirty: number;
   skip_grace_period: number;
+  retry_budget: number;
+  retry_count: number;
+  hung_count: number;
+  last_hung_reason: string | null;
 }
 
 interface ProjectRow {
@@ -264,6 +268,10 @@ function rowToJob(row: JobRow): Job {
     gitHeadCommit: row.git_head_commit ?? null,
     startedDirty: row.started_dirty === 1,
     skipGracePeriod: row.skip_grace_period === 1,
+    retryBudget: row.retry_budget ?? 3,
+    retryCount: row.retry_count ?? 0,
+    hungCount: row.hung_count ?? 0,
+    lastHungReason: row.last_hung_reason ?? null,
   };
 }
 
@@ -295,6 +303,10 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE projects ADD COLUMN notify_openclaw_route TEXT DEFAULT NULL',
+    'ALTER TABLE jobs ADD COLUMN retry_budget INTEGER NOT NULL DEFAULT 3',
+    'ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jobs ADD COLUMN hung_count INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jobs ADD COLUMN last_hung_reason TEXT DEFAULT NULL',
   ];
   for (const sql of migrations) {
     try {
@@ -520,6 +532,8 @@ function cancel(id: string): void {
 
 /**
  * Retry a failed job. Resets to pending, clears started_at/completed_at/error.
+ * Also resets retry tracking state (retry_count, hung_count, last_hung_reason)
+ * to give the job a fresh retry slate via `pilot retry`.
  */
 function retry(id: string): void {
   const db = getDb();
@@ -531,6 +545,8 @@ function retry(id: string): void {
   `).run(id);
   // Clean up step records from previous attempt
   db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
+  // Reset retry tracking so operator retry gets a fresh budget
+  resetRetryState(id);
 }
 
 /**
@@ -1000,6 +1016,64 @@ function resetToPending(id: string, resumeHint?: string): boolean {
   return true;
 }
 
+// ── Hung Session Retry Helpers (Phase 67) ─────────────────────────────────
+
+/**
+ * Increment the hung_count for a job and record the last_hung_reason.
+ * Called when spawnAndWait throws HungSessionError.
+ */
+function incrementHungCount(jobId: string, hungReason: string): void {
+  getDb().prepare(`
+    UPDATE jobs SET hung_count = hung_count + 1, last_hung_reason = ?
+    WHERE id = ?
+  `).run(hungReason, jobId);
+}
+
+/**
+ * Increment the retry_count for a job by 1.
+ * Called when the runner decides to retry a hung session.
+ */
+function incrementRetryCount(jobId: string): void {
+  getDb().prepare(`
+    UPDATE jobs SET retry_count = retry_count + 1
+    WHERE id = ?
+  `).run(jobId);
+}
+
+/**
+ * Check whether a job still has retry budget remaining.
+ * Returns true if retry_count < retry_budget, false otherwise.
+ */
+function canRetry(jobId: string): boolean {
+  const row = getDb().prepare(`
+    SELECT retry_count, retry_budget FROM jobs WHERE id = ?
+  `).get(jobId) as { retry_count: number; retry_budget: number } | undefined;
+  if (!row) return false;
+  return row.retry_count < row.retry_budget;
+}
+
+/**
+ * Check whether the last recorded hung reason matches the current reason.
+ * Used to detect two consecutive hangs of the same type (escalation condition).
+ */
+function isSameHungReason(jobId: string, currentReason: string): boolean {
+  const row = getDb().prepare(`
+    SELECT last_hung_reason FROM jobs WHERE id = ?
+  `).get(jobId) as { last_hung_reason: string | null } | undefined;
+  return row?.last_hung_reason === currentReason;
+}
+
+/**
+ * Reset retry tracking state for a job (retry_count, hung_count, last_hung_reason).
+ * Called by `pilot retry` CLI to give the job a fresh retry slate.
+ */
+function resetRetryState(jobId: string): void {
+  getDb().prepare(`
+    UPDATE jobs SET retry_count = 0, hung_count = 0, last_hung_reason = NULL
+    WHERE id = ?
+  `).run(jobId);
+}
+
 /**
  * Store judge verdict JSON string on a job.
  */
@@ -1378,4 +1452,10 @@ export {
   deleteOldJobs,
   countOldJobs,
   vacuumDb,
+  // Phase 67: hung session retry helpers
+  incrementHungCount,
+  incrementRetryCount,
+  canRetry,
+  isSameHungReason,
+  resetRetryState,
 };
