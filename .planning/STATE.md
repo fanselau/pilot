@@ -1,23 +1,24 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 68
+## Current Phase: 69
 
 ## Current Position
 
-Phase: 68 (Judge System — Move Into Pilot)
-Plan: 2 of 4 in current phase
+Phase: 69 (Model System — Agent Frontmatter Patching)
+**Next Phase:** Phase 69 (continue with 69-02-PLAN.md)
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 68-02-PLAN.md
+Last activity: 2026-03-16 - Completed 69-01-PLAN.md
 
-Progress: ████████████████████████ 84/90 plans (93%)
+Progress: ████████████████████████░ 87/90 plans (97%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
-**Core value:** Judge verdicts must include actionable retry recommendations and failure fingerprints so the runner can make intelligent retry decisions.
-**Current focus:** Move judge prompts into Pilot codebase, merge formats, enrich verdict with retry fields.
+**Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
+**Current focus:** Replace regex frontmatter mutation with parser-safe, file-driven patching + inherit fallback semantics.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -170,7 +171,10 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - **Status:** complete (4/4 plans)
 
 ### Phase 68: Judge System — Move Into Pilot
-- **Status:** in progress (1/4 plans complete)
+- **Status:** complete (4/4 plans, verified ✓)
+
+### Phase 69: Model System — Agent Frontmatter Patching
+- **Status:** in progress (1/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -310,6 +314,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 66 added: Delegation Pipeline Redesign — Intent-Based Architecture
 - Phase 67 added: Session Blocker Handling — DB-Based Hung Detection
 - Phase 68 added: Judge System — Move Into Pilot
+- Phase 69 added: Model System — Agent Frontmatter Patching
 
 ## Decisions
 
@@ -800,9 +805,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 68-01 | Verdict values: pass/fail/partial (not succeeded/failed/doubting) | Cleaner, shorter, standard terminology |
 | 68-01 | retryRecommendation: string 'none'/'retry-resume'/'retry-full' (not null) | Explicit string safer than null for JSON parsing downstream |
 | 68-01 | Confidence ceiling ≤ 40 when VERIFICATION.md absent | Prevents false pass verdicts from transcript-only evidence |
+| 69-01 | patchAgentFrontmatter iterates discovered gsd-*.md files and falls back unmapped agents to inherit | Prevents stale model leakage when provider mode maps are partial or new agents appear upstream |
+| 69-01 | models tests reset to in-memory DB before each test | Prevents local persistent model-profile overrides from causing nondeterministic test expectations |
 
 ## Session Continuity
 
-Last session: 2026-03-16 00:55 UTC
-Stopped at: Completed 68-02-PLAN.md (extended judge types with dual-format verdicts and retry fields)
+Last session: 2026-03-16 01:56 UTC
+Stopped at: Completed 69-01-PLAN.md (parser-safe, file-driven frontmatter patching foundation)
 Resume file: None

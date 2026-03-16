@@ -1210,9 +1210,9 @@ Read requirements/gsd-04b-session-blocker-handling.md for full spec.
 
 Plans:
 - [x] 68-01-PLAN.md — Judge prompt: merge gsd-judge.md + pilot-judge.md into `src/prompts/judge.md` with canonical verdict schema
-- [ ] 68-02-PLAN.md — Type updates: extend JudgeVerdict, ParsedJudgeVerdictPayload, JudgeSignal with retryRecommendation/retryHint/failureFingerprint; update VERDICT_TO_OUTCOME for pass/fail/partial
-- [ ] 68-03-PLAN.md — Runner integration: rewrite runJudge() to use inline prompt, load VERIFICATION.md + VALIDATION.md as evidence, remove --command gsd-judge path
-- [ ] 68-04-PLAN.md — Tests + cleanup: update all judge-related tests for new verdict format, remove gsd-judge/pilot-judge from pilot-gsd, verify backward compat
+- [x] 68-02-PLAN.md — Type updates: extend JudgeVerdict, ParsedJudgeVerdictPayload, JudgeSignal with retryRecommendation/retryHint/failureFingerprint; update VERDICT_TO_OUTCOME for pass/fail/partial
+- [x] 68-03-PLAN.md — Runner integration: rewrite runJudge() to use inline prompt, load VERIFICATION.md + VALIDATION.md as evidence, remove --command gsd-judge path
+- [x] 68-04-PLAN.md — Tests + cleanup: update all judge-related tests for new verdict format, remove gsd-judge/pilot-judge from pilot-gsd, verify backward compat
 
 **Success Criteria:**
 - Single canonical judge prompt exists at `src/prompts/judge.md`
@@ -1240,3 +1240,22 @@ Wave structure:
 
 **Details:**
 Read requirements/gsd-05-judge-move.md for full spec.
+
+### Phase 69: Model System — Agent Frontmatter Patching
+
+**Goal:** Harden model routing by making agent frontmatter patching parser-safe and file-driven: scan installed `.opencode/agents/gsd-*.md` files, patch only `model`/`variant` via YAML document mutation, and prevent stale model leakage with explicit `inherit` fallback for unmapped agents.
+**Depends on:** Phase 68
+**Plans:** 3 plans
+
+Plans:
+- [x] 69-01-PLAN.md — Parser-safe frontmatter patch foundation (YAML dependency, file scanning, inherit fallback)
+- [ ] 69-02-PLAN.md — Runner integration hardening (single patch point per job + patch diagnostics)
+- [ ] 69-03-PLAN.md — Regression coverage for patching edge cases and runner invocation count
+
+Wave structure:
+- Wave 1: 69-01 (models patching foundation)
+- Wave 2: 69-02 (runner integration, depends on 69-01)
+- Wave 3: 69-03 (tests, depends on 69-01 + 69-02)
+
+**Details:**
+Read `requirements/gsd-06-model-frontmatter.md` and `.planning/phases/69-model-system-agent-frontmatter-patching/69-RESEARCH.md`.
