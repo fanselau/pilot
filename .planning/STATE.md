@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: 67 (Session Blocker Handling — DB-Based Hung Detection)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-03-16 - Completed 67-03-PLAN.md (spawnAndWait state-based poll loop integration)
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-03-16 - Completed 67-04-PLAN.md (retry budget, escalation, hung session pipeline)
 
-Progress: █████████████████████░ 81/86 plans (94%)
+Progress: ██████████████████████ 82/86 plans (95%)
 
 ## Project Reference
 
@@ -167,7 +167,7 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 67: Session Blocker Handling — DB-Based Hung Detection
-- **Status:** in progress (1/4 plans complete)
+- **Status:** complete (4/4 plans)
 
 ### Quick Tasks Completed
 
@@ -788,9 +788,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 | 67-02 | killHungSession is private on Runner (not exported) | Only the poll loop integration (Plan 03) calls it; no reason to export |
 | 67-02 | Both timeout paths in spawnAndWait() fixed for orphan bug | sessionFound=false and timeout expiry both call killHungSession before throw |
 | 67-02 | log() private helper added to Runner | Consistent [runner] prefix without repeating process.stderr.write boilerplate |
+| 67-04 | Escalation requires hungCount>=1 before checking isSameHungReason | First hang is never an escalation — no prior hang to compare against |
+| 67-04 | Escalation does NOT consume retry budget (no incrementRetryCount) | Direct fail path, not a retried attempt |
+| 67-04 | pilot retry (retry()) calls resetRetryState | Operator manual retry gets fresh budget — resets retryCount, hungCount, lastHungReason |
+| 67-04 | gaps-if-progress hint only for interactive-prompt hangs | Phase jobs need gap-closure retries after prompt hang; stuck-tool hangs don't |
 
 ## Session Continuity
 
-Last session: 2026-03-16 00:01 UTC
-Stopped at: Completed 67-03-PLAN.md (spawnAndWait state-based poll loop integration)
+Last session: 2026-03-16 00:11 UTC
+Stopped at: Completed 67-04-PLAN.md (retry budget, escalation, hung session pipeline) — Phase 67 complete
 Resume file: None
