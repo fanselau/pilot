@@ -2,7 +2,7 @@
  * Tests for core/setup.ts — upstream installer-based setup behavior.
  *
  * Tests use real temp directories with mocked execa to simulate the
- * get-shit-done-cc installer. Covers: fresh install, refresh, migration
+ * get-shit-done-cc installer. Covers: fresh install, refresh, legacy-symlink
  * cleanup, no-package.json skip, installer failure, installer timeout,
  * and verifySetup with real directories.
  */
@@ -332,58 +332,57 @@ describe('setupProject — migration cleanup', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('removes old pilot-gsd symlinks in .opencode/ before running installer', async () => {
-    // Create .opencode/ with old-style pilot-gsd directory symlinks
+  it('removes legacy symlinks in installer-owned .opencode paths before installer run', async () => {
+    // Create .opencode/ with legacy directory symlinks in installer-owned paths
     const opencodeDir = path.join(tmpDir, '.opencode');
     await mkdir(opencodeDir, { recursive: true });
 
-    // Create fake pilot-gsd target directories
-    const fakePilotGsd = await mkdtemp(path.join(os.tmpdir(), 'fake-pilot-gsd-'));
-    await mkdir(path.join(fakePilotGsd, 'commands'), { recursive: true });
-    await mkdir(path.join(fakePilotGsd, 'agents'), { recursive: true });
+    // Create fake legacy target directories
+    const fakeLegacyRoot = await mkdtemp(path.join(os.tmpdir(), 'legacy-opencode-target-'));
+    await mkdir(path.join(fakeLegacyRoot, 'commands'), { recursive: true });
+    await mkdir(path.join(fakeLegacyRoot, 'agents'), { recursive: true });
 
-    // Create symlinks pointing to pilot-gsd
+    // Create symlinks in paths the installer must own
     const commandLink = path.join(opencodeDir, 'command');
     const agentsLink = path.join(opencodeDir, 'agents');
     const gsdLink = path.join(opencodeDir, 'get-shit-done');
 
-    // Create fake targets in pilot-gsd dir
-    await mkdir(path.join(fakePilotGsd, 'get-shit-done'), { recursive: true });
+    await mkdir(path.join(fakeLegacyRoot, 'get-shit-done'), { recursive: true });
 
-    await symlink(path.join(fakePilotGsd, 'commands'), commandLink);
-    await symlink(path.join(fakePilotGsd, 'agents'), agentsLink);
-    await symlink(path.join(fakePilotGsd, 'get-shit-done'), gsdLink);
+    await symlink(path.join(fakeLegacyRoot, 'commands'), commandLink);
+    await symlink(path.join(fakeLegacyRoot, 'agents'), agentsLink);
+    await symlink(path.join(fakeLegacyRoot, 'get-shit-done'), gsdLink);
 
     // Verify symlinks exist before setup
     const commandStatBefore = await lstat(commandLink);
     expect(commandStatBefore.isSymbolicLink()).toBe(true);
 
-    // Run setup — should remove the old pilot-gsd symlinks
-    await setupProject(tmpDir);
+    // Run setup — installer should be able to replace symlinked paths with real directories
+    const result = await setupProject(tmpDir);
 
-    // After installer ran (mock created real dirs), verify pilot-gsd symlinks are gone
-    // The installer mock creates real directories, replacing the symlinks
-    // We verify setup reported the cleanup
-    const result = await setupProject(tmpDir, { refresh: true });
-    // Installer should have been able to run (no errors about symlinks blocking it)
+    const commandStatAfter = await lstat(commandLink);
+    expect(commandStatAfter.isSymbolicLink()).toBe(false);
+    expect(result.created).toContain('Removed legacy symlink: .opencode/command/');
+    expect(result.created).toContain('Removed legacy symlink: .opencode/agents/');
+    expect(result.created).toContain('Removed legacy symlink: .opencode/get-shit-done/');
     expect(result.errors.filter(e => e.includes('symlink'))).toHaveLength(0);
 
-    await rm(fakePilotGsd, { recursive: true, force: true });
+    await rm(fakeLegacyRoot, { recursive: true, force: true });
   });
 
-  it('reports cleanup of old pilot-gsd symlinks in result.created', async () => {
+  it('reports cleanup of legacy symlinks in result.created', async () => {
     const opencodeDir = path.join(tmpDir, '.opencode');
     await mkdir(opencodeDir, { recursive: true });
 
-    // Create a fake pilot-gsd-like target
-    const fakeTarget = await mkdtemp(path.join(os.tmpdir(), 'fake-pilot-gsd-target-'));
+    // Create a fake legacy target
+    const fakeTarget = await mkdtemp(path.join(os.tmpdir(), 'legacy-command-target-'));
     await mkdir(path.join(fakeTarget, 'commands'), { recursive: true });
     const commandLink = path.join(opencodeDir, 'command');
     await symlink(path.join(fakeTarget, 'commands'), commandLink);
 
     const result = await setupProject(tmpDir);
 
-    // Should report removal of a legacy symlink in installer-owned paths
+    // Should report cleanup message for installer-owned path
     expect(result.created.some(c => c.includes('Removed legacy symlink'))).toBe(true);
 
     await rm(fakeTarget, { recursive: true, force: true });
@@ -602,7 +601,7 @@ describe('verifySetup', () => {
     await mkdir(opencodeDir, { recursive: true });
     // Create a broken symlink for command/
     const commandLink = path.join(opencodeDir, 'command');
-    await symlink('/nonexistent/path/to/pilot-gsd/commands', commandLink);
+    await symlink('/nonexistent/path/to/legacy/commands', commandLink);
 
     await writeFile(path.join(tmpDir, 'opencode.json'), JSON.stringify({ permission: {} }), 'utf8');
 
