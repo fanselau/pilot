@@ -108,10 +108,18 @@ Each task was committed atomically:
 - **Verification:** `rg -n --hidden "DelegationStep|DelegationPlan" src test` returns no matches; delegation/db tests and lint pass.
 - **Committed in:** `97982d9` (task commit)
 
+**2. [Rule 3 - Blocking] `state advance-plan` automation expected legacy STATE field names**
+- **Found during:** Post-task metadata/state update
+- **Issue:** `gsd-tools state advance-plan` failed because this STATE format uses `Plan: X of Y in current phase` instead of `Current Plan`/`Total Plans in Phase` keys.
+- **Fix:** Updated STATE fields manually via deterministic edits and continued with supported `state record-session` and `state update-progress` commands.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE now records `Completed 72-06-PLAN.md`, plan position is `5 of 6`, and session continuity shows latest timestamp.
+- **Committed in:** `aea5dd5` (metadata commit)
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 blocking)
-**Impact on plan:** Blocking audit noise removed without scope creep; changes stay within delegation contract cleanup intent.
+**Total deviations:** 2 auto-fixed (2 blocking)
+**Impact on plan:** Both fixes were execution blockers (audit signal quality + state tooling compatibility) and did not expand product scope.
 
 ## Authentication Gates
 
