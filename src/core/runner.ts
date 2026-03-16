@@ -85,9 +85,12 @@ interface RunnerState {
 }
 
 interface JudgeVerdict {
-  verdict: 'succeeded' | 'failed' | 'doubting';
+  verdict: 'succeeded' | 'failed' | 'doubting' | 'pass' | 'fail' | 'partial';
   confidence: number;
   reason: string;
+  retryRecommendation?: string;  // 'retry-resume' | 'retry-full' | 'none'
+  retryHint?: string;
+  failureFingerprint?: string[];
 }
 
 // ── Spawn rate limiter (module-level) ──────────────────────────────────────
@@ -910,13 +913,18 @@ class Runner {
       updateJudgeVerdict(job.id, JSON.stringify({
         verdict: 'succeeded', confidence: 0, reason: 'judge unavailable',
       }));
-    } else if (judgeVerdict.verdict === 'succeeded') {
+    } else if (judgeVerdict.verdict === 'succeeded' || judgeVerdict.verdict === 'pass') {
+      // Pass verdicts (both legacy and new format)
       updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-    } else if (judgeVerdict.verdict === 'doubting' && judgeVerdict.confidence >= 50) {
+    } else if (
+      (judgeVerdict.verdict === 'doubting' || judgeVerdict.verdict === 'partial')
+      && judgeVerdict.confidence >= 50
+    ) {
+      // Partial with decent confidence = treat as pass (same as 'doubting' >= 50)
       updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
       // Treat as pass — fall through
     } else {
-      // Failed or low-confidence doubt — store verdict and throw
+      // Failed, or low-confidence doubt/partial — store verdict and throw
       updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
       throw new Error(judgeVerdict.reason);
     }
@@ -1523,7 +1531,7 @@ function parseJudgeVerdict(content: string, sessionTitle?: string): JudgeVerdict
     }
 
     const verdict = JSON.parse(jsonStr) as JudgeVerdict;
-    if (!['succeeded', 'failed', 'doubting'].includes(verdict.verdict)) return null;
+    if (!['succeeded', 'failed', 'doubting', 'pass', 'fail', 'partial'].includes(verdict.verdict)) return null;
     return verdict;
   } catch {
     if (sessionTitle) {
