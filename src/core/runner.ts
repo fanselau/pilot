@@ -756,7 +756,7 @@ class Runner {
         // Same-error escalation: two consecutive hangs with same reason → immediate fail
         if (freshJob && isSameHungReason(job.id, err.hungReason) && freshJob.hungCount >= 1) {
           incrementHungCount(job.id, err.hungReason);
-          const escalateMsg = `Escalated: consecutive ${err.hungReason} hangs (tool: ${err.lastToolCall ?? 'unknown'})`;
+          const escalateMsg = `Escalated: consecutive ${err.hungReason} hangs (tool: ${err.lastToolCall ?? 'unknown'}, session: ${err.sessionTitle})`;
           this.log(`Same hung reason repeated for ${job.id}: ${err.hungReason} — escalating to failure`);
           await this.captureRecoveryHead(job.id, projectDir);
           this.collectActualModels(job.id);
@@ -776,7 +776,7 @@ class Runner {
         } else {
           // Budget exhausted
           incrementHungCount(job.id, err.hungReason);
-          const budgetMsg = `Retry budget exhausted after ${err.hungReason} hang (tool: ${err.lastToolCall ?? 'unknown'})`;
+          const budgetMsg = `Retry budget exhausted after ${err.hungReason} hang (tool: ${err.lastToolCall ?? 'unknown'}, session: ${err.sessionTitle})`;
           this.log(`Retry budget exhausted for ${job.id} (budget: ${freshJob?.retryBudget ?? 3} retries)`);
           await this.captureRecoveryHead(job.id, projectDir);
           this.collectActualModels(job.id);

@@ -101,6 +101,15 @@ function buildDeliveryPrompt(job: Job): string {
       lines.push(`hung_reason: ${job.lastHungReason}`);
     }
     lines.push(`hung_count: ${job.hungCount ?? 0}`);
+    if (job.sessionTitles) {
+      try {
+        const titles = JSON.parse(job.sessionTitles) as string[];
+        const lastTitle = titles[titles.length - 1];
+        if (lastTitle) {
+          lines.push(`session_title: ${lastTitle}`);
+        }
+      } catch { /* ignore parse failures */ }
+    }
     lines.push('');
     lines.push('This job failed because the AI session kept getting stuck waiting for interactive input.');
     lines.push('The operator should check if the project has an interactive prompt or confirmation dialog that blocks automation.');
