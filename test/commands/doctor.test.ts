@@ -58,18 +58,17 @@ vi.mock('../../src/core/shell-exposure.js', () => ({
   },
 }));
 
-import * as nodeFs from 'node:fs';
-
-vi.mock('node:fs', () => {
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
   return {
-    default: nodeFs,
+    default: actual,
     accessSync: vi.fn((filePath: string, _mode?: number) => {
       if (mockAccessiblePaths.has(filePath)) return undefined;
       const err = new Error(`EACCES: permission denied, access '${filePath}'`);
       (err as NodeJS.ErrnoException).code = 'EACCES';
       throw err;
     }),
-    constants: nodeFs.constants,
+    constants: actual.constants,
     readFileSync: vi.fn((filePath: string, _encoding?: string) => {
       // Service unit file
       if (typeof filePath === 'string' && filePath.includes('pilot-runner.service')) {
@@ -84,24 +83,24 @@ vi.mock('node:fs', () => {
       if (typeof filePath === 'string' && filePath.includes('config.json')) {
         return '{}';
       }
-      return nodeFs.readFileSync(filePath, _encoding as BufferEncoding);
+      return actual.readFileSync(filePath, _encoding as BufferEncoding);
     }),
     statSync: vi.fn((filePath: string) => {
       if (typeof filePath === 'string' && filePath.includes('config.json')) {
         return { mode: 0o100600 };
       }
-      return nodeFs.statSync(filePath);
+      return actual.statSync(filePath);
     }),
-    existsSync: nodeFs.existsSync,
+    existsSync: actual.existsSync,
   };
 });
 
-import * as nodeOs from 'node:os';
-
-vi.mock('node:os', () => {
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
   return {
+    ...actual,
     default: {
-      ...nodeOs,
+      ...actual,
       homedir: () => mockHomedir,
       freemem: () => 8 * 1024 * 1024 * 1024, // 8GB
       userInfo: () => ({ username: 'testuser' }),
@@ -109,16 +108,6 @@ vi.mock('node:os', () => {
     homedir: () => mockHomedir,
     freemem: () => 8 * 1024 * 1024 * 1024,
     userInfo: () => ({ username: 'testuser' }),
-    // Re-export everything else that might be used
-    cpus: nodeOs.cpus,
-    platform: nodeOs.platform,
-    arch: nodeOs.arch,
-    tmpdir: nodeOs.tmpdir,
-    EOL: nodeOs.EOL,
-    networkInterfaces: nodeOs.networkInterfaces,
-    release: nodeOs.release,
-    type: nodeOs.type,
-    version: nodeOs.version,
   };
 });
 
