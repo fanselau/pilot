@@ -98,6 +98,20 @@ interface JudgeVerdict {
   failureFingerprint?: string[];
 }
 
+type RetryStrategy = 'retry-resume' | 'retry-full';
+
+interface RetryableVerificationFailure {
+  reason: string;
+  retryRecommendation: RetryStrategy;
+  retryHint: string | null;
+  failureFingerprint: string[] | null;
+}
+
+interface VerificationEvidenceEntry {
+  file: string;
+  content: string;
+}
+
 // ── Spawn rate limiter (module-level) ──────────────────────────────────────
 
 let lastSpawnTime = 0;
@@ -137,30 +151,80 @@ function _resetSystemdRunCache(): void {
 /**
  * Read VERIFICATION.md files from the phase directory.
  * Returns aggregated content string, or null if none found.
- * Files must be >100 bytes to count as valid evidence.
+ * Evidence files must be well-formed and >100 bytes.
  */
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
+  const entries = getValidVerificationEvidence(projectDir, phaseNumber);
+  if (entries.length === 0) return null;
+
+  return entries
+    .map((entry) => `## ${entry.file}\n\n${entry.content}`)
+    .join('\n\n---\n\n');
+}
+
+function hasValidVerificationEvidence(projectDir: string, phaseNumber: number): boolean {
+  return getValidVerificationEvidence(projectDir, phaseNumber).length > 0;
+}
+
+function getValidVerificationEvidence(projectDir: string, phaseNumber: number): VerificationEvidenceEntry[] {
+  const contents: VerificationEvidenceEntry[] = [];
+
   try {
     const phasesDir = path.join(projectDir, '.planning', 'phases');
     const dirs = readdirSync(phasesDir).filter(d => d.startsWith(`${phaseNumber}-`));
-    const contents: string[] = [];
+
     for (const dir of dirs) {
       try {
         const files = readdirSync(path.join(phasesDir, dir)).filter(f => f.endsWith('-VERIFICATION.md'));
         for (const file of files) {
           const content = readFileSync(path.join(phasesDir, dir, file), 'utf8');
-          if (content.length > 100) {
-            contents.push(`## ${file}\n\n${content}`);
+          if (isWellFormedVerificationEvidence(content)) {
+            contents.push({ file, content });
           }
         }
       } catch {
         // Skip unreadable phase directories
       }
     }
-    return contents.length > 0 ? contents.join('\n\n---\n\n') : null;
   } catch {
-    return null;
+    return [];
   }
+
+  return contents;
+}
+
+function isWellFormedVerificationEvidence(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.length <= 100) return false;
+
+  const frontmatterMatch = trimmed.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return false;
+
+  const frontmatter = frontmatterMatch[1];
+  const hasStatus = /^status:\s*\S+/m.test(frontmatter);
+  const hasVerdict = /^verdict:\s*\S+/m.test(frontmatter);
+  const body = trimmed.slice(frontmatterMatch[0].length);
+  const hasBodyHeadings = /^##\s+/m.test(body);
+
+  return hasStatus && hasVerdict && hasBodyHeadings;
+}
+
+function normalizeRetryRecommendation(
+  recommendation: string | undefined,
+  hasEvidence: boolean,
+): RetryStrategy {
+  if (recommendation === 'retry-resume' && hasEvidence) {
+    return 'retry-resume';
+  }
+  return 'retry-full';
+}
+
+function normalizeFailureFingerprint(fingerprint: string[] | undefined): string[] | null {
+  if (!Array.isArray(fingerprint)) return null;
+  const cleaned = fingerprint
+    .map(item => item.trim())
+    .filter(item => item.length > 0);
+  return cleaned.length > 0 ? cleaned : null;
 }
 
 /**
@@ -872,7 +936,10 @@ class Runner {
     await this.runGsdStep(job, projectDir, 'execute-phase', `${phaseNumber}`, stepIdx++);
 
     // Judge after execute-phase
-    await this.runJudgeAndHandleResult(job, projectDir, phaseNumber, stepIdx);
+    const verificationFailure = await this.runJudgeAndHandleResult(job, projectDir, phaseNumber, stepIdx);
+    if (verificationFailure) {
+      throw new Error(verificationFailure.reason);
+    }
   }
 
   private async handleExecuteOnly(
@@ -940,7 +1007,7 @@ class Runner {
     projectDir: string,
     phaseNumber: number,
     _stepIdx: number,
-  ): Promise<void> {
+  ): Promise<RetryableVerificationFailure | null> {
     // No-activity check: did the execution session actually produce output?
     const activeEntry = this.activeJobs.get(job.id);
     const execTitle = activeEntry?.title;
@@ -953,44 +1020,57 @@ class Runner {
           process.stderr.write(
             `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
           );
-          return;
+          return null;
         }
       } else {
         resetToPending(job.id, 'No session created — opencode may have crashed before starting');
         process.stderr.write(`[runner] No session found for ${job.id}. Resetting to pending.\n`);
-        return;
+        return null;
       }
     }
 
     if (this.shuttingDown) {
       resetToPending(job.id, 'Interrupted before verification');
       process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
-      return;
+      return null;
     }
 
     // Run judge
-    const judgeVerdict = await this.runJudge(job, projectDir, phaseNumber);
+    const rawVerdict = await this.runJudge(job, projectDir, phaseNumber);
+    const hasEvidence = hasValidVerificationEvidence(projectDir, phaseNumber);
 
-    if (judgeVerdict === null) {
-      // Benefit of doubt
-      updateJudgeVerdict(job.id, JSON.stringify({
-        verdict: 'succeeded', confidence: 0, reason: 'judge unavailable',
-      }));
-    } else if (judgeVerdict.verdict === 'succeeded' || judgeVerdict.verdict === 'pass') {
-      // Pass verdicts (both legacy and new format)
-      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-    } else if (
-      (judgeVerdict.verdict === 'doubting' || judgeVerdict.verdict === 'partial')
-      && judgeVerdict.confidence >= 50
-    ) {
-      // Partial with decent confidence = treat as pass (same as 'doubting' >= 50)
-      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-      // Treat as pass — fall through
-    } else {
-      // Failed, or low-confidence doubt/partial — store verdict and throw
-      updateJudgeVerdict(job.id, JSON.stringify(judgeVerdict));
-      throw new Error(judgeVerdict.reason);
+    const judgeVerdict: JudgeVerdict = rawVerdict ?? {
+      verdict: 'fail',
+      confidence: 0,
+      reason: 'Judge produced no verdict; scheduling retry',
+      retryRecommendation: 'retry-full',
+      retryHint: 'Judge output missing or malformed. Re-run full plan and execution before re-verifying.',
+      failureFingerprint: ['judge:null-verdict'],
+    };
+
+    const normalizedRetryRecommendation = normalizeRetryRecommendation(
+      judgeVerdict.retryRecommendation,
+      hasEvidence,
+    );
+    const normalizedVerdict: JudgeVerdict = {
+      ...judgeVerdict,
+      retryRecommendation: normalizedRetryRecommendation,
+      retryHint: judgeVerdict.retryHint ?? undefined,
+      failureFingerprint: normalizeFailureFingerprint(judgeVerdict.failureFingerprint) ?? undefined,
+    };
+
+    updateJudgeVerdict(job.id, JSON.stringify(normalizedVerdict));
+
+    if (normalizedVerdict.verdict === 'succeeded' || normalizedVerdict.verdict === 'pass') {
+      return null;
     }
+
+    return {
+      reason: normalizedVerdict.reason,
+      retryRecommendation: normalizedRetryRecommendation,
+      retryHint: normalizedVerdict.retryHint ?? null,
+      failureFingerprint: normalizeFailureFingerprint(normalizedVerdict.failureFingerprint),
+    };
   }
 
   /**
