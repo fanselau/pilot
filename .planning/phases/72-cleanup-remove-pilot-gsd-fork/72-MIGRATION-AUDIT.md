@@ -160,3 +160,17 @@ Manual follow-up required:
 - Migration-order gate: executed and currently blocked by project-level migration failures.
 - Config/manifests: audited; root/project clean; user config remediated.
 - External deprecation: attempted via CLI; blocked by GitHub archive permissions with explicit follow-up recorded.
+
+## Verification snapshot
+
+Executed:
+
+- `node dist/index.js projects --json`
+- `gh repo view fanselau/pilot-gsd --json name,isArchived,url`
+- `rg -n --hidden "pilot-gsd|PILOT_GSD_DIR|DelegationStep|DelegationPlan" package.json package-lock.json src test`
+
+Results:
+
+- Projects inventory command succeeds and returns 7 registered projects.
+- GitHub repo remains unarchived (`isArchived=false`) pending owner action.
+- Search across `src` and `test` still returns multiple legacy/compatibility references (for example migration cleanup comments/tests in `src/core/setup.ts` and `test/core/setup.test.ts`, plus active `updateDelegationPlan` symbols). These are recorded for follow-up cleanup plans and were not auto-removed in this audit-only plan.
