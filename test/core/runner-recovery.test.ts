@@ -126,8 +126,10 @@ vi.mock('../../src/core/config.js', () => ({
 
 import { execa } from 'execa';
 import { createRunner, _resetSpawnRateLimit } from '../../src/core/runner.js';
+import { patchAgentFrontmatter } from '../../src/core/models.js';
 
 const mockExeca = vi.mocked(execa);
+const mockPatchAgentFrontmatter = vi.mocked(patchAgentFrontmatter);
 
 function execaResult(exitCode: number, stdout: string = ''): Awaited<ReturnType<typeof execa>> {
   return { exitCode, stdout } as unknown as Awaited<ReturnType<typeof execa>>;
@@ -476,6 +478,27 @@ describe('runner recovery preflight and checkpoint capture', () => {
     // Minimal: at least once from handleInitProject
     expect(mocks.ensureAutonomousGsdConfig).toHaveBeenCalled();
     expect(mocks.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('patches agent frontmatter exactly once for a quick-intent launch path', async () => {
+    const projectDir = process.cwd();
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-quick',
+      headCommit: 'head-quick',
+    });
+    mocks.delegate.mockResolvedValue({
+      intent: { type: 'quick', description: 'quick task' },
+      reasoning: 'quick task',
+    });
+    mocks.findSessionByTitle.mockReturnValue('sess-quick');
+
+    await launchJobWithPollInterval(makeJob({ project: projectDir }), 0);
+
+    expect(mockPatchAgentFrontmatter).toHaveBeenCalledTimes(1);
+    expect(mockPatchAgentFrontmatter).toHaveBeenCalledWith(projectDir, {});
   });
 
   it('marks job failed when config assertion throws before spawn', async () => {
