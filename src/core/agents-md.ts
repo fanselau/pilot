@@ -14,12 +14,36 @@
  */
 
 import { execa } from 'execa';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { resolveOpencodeBinary } from './delegate.js';
 import { resolveTopLevelModel } from './models.js';
 import { findSessionByTitle, isSessionDone, exportSessionFromDb } from './opencode-db.js';
 import { errMsg } from '../util/errors.js';
+
+type AgentsMdOperation = 'setup' | 'health' | 'lessons';
+
+type AgentsMdSessionOptions = {
+  projectDir: string;
+  operation: AgentsMdOperation;
+  timeoutMs?: number;
+  providerMode?: string;
+  allowEdits?: boolean;
+};
+
+type LegacyAgentsMdSessionOptions = {
+  projectDir: string;
+  command: string;
+  timeoutMs?: number;
+  providerMode?: string;
+  allowEdits?: boolean;
+};
+
+const PROMPT_FILE_BY_OPERATION: Record<AgentsMdOperation, string> = {
+  setup: 'agents-setup.md',
+  health: 'agents-health.md',
+  lessons: 'lessons.md',
+};
 
 // ── Public helpers ─────────────────────────────────────────────────────────
 
@@ -45,13 +69,10 @@ async function checkAgentsMdExists(projectDir: string): Promise<boolean> {
  * failure/timeout. This function never throws — all errors are caught
  * and written to stderr.
  */
-async function spawnAgentsMdSession(opts: {
-  projectDir: string;
-  command: string;
-  timeoutMs?: number;
-  providerMode?: string;
-}): Promise<string | null> {
-  const { projectDir, command, timeoutMs = 90_000, providerMode = 'claude-only' } = opts;
+async function spawnAgentsMdSession(opts: AgentsMdSessionOptions | LegacyAgentsMdSessionOptions): Promise<string | null> {
+  const { projectDir, timeoutMs = 90_000, providerMode = 'claude-only' } = opts;
+  const operation = resolveOperation(opts);
+  const allowEdits = resolveAllowEdits(opts, operation);
 
   try {
     // Resolve model — judge scope = haiku-tier (cheapest)
@@ -60,8 +81,11 @@ async function spawnAgentsMdSession(opts: {
     // Resolve opencode binary
     const opencodeBin = resolveOpencodeBinary();
 
+    // Resolve prompt content
+    const prompt = await loadOperationPrompt(projectDir, operation, allowEdits);
+
     // Generate a unique session title
-    const title = `pilot-agents-${Date.now().toString(36).slice(-4)}`;
+    const title = `pilot-agents-${operation}-${Date.now().toString(36).slice(-4)}`;
 
     // Build args
     const args = [
@@ -70,9 +94,7 @@ async function spawnAgentsMdSession(opts: {
       '--model', model,
       ...(variant ? ['--variant', variant] : []),
       '--title', title,
-      // TODO: gsd-setup-agents and gsd-lessons do not exist yet in pilot-gsd.
-      // Stub invocations — replace command strings when GSD commands are available.
-      '--command', command,
+      prompt,
     ];
 
     // Spawn detached process — don't await directly, poll DB instead
@@ -128,6 +150,31 @@ async function spawnAgentsMdSession(opts: {
   }
 }
 
+async function loadOperationPrompt(projectDir: string, operation: AgentsMdOperation, allowEdits: boolean): Promise<string> {
+  const promptFile = PROMPT_FILE_BY_OPERATION[operation];
+  const promptPath = path.resolve(import.meta.dirname, '..', 'prompts', promptFile);
+  const promptBody = await readFile(promptPath, 'utf8');
+
+  return `${promptBody}\n\n---\n\n## Invocation Context\n\nOperation: ${operation}\nAllow file edits: ${allowEdits ? 'true' : 'false'}\nProject root: ${projectDir}\n`;
+}
+
+function resolveOperation(opts: AgentsMdSessionOptions | LegacyAgentsMdSessionOptions): AgentsMdOperation {
+  if ('operation' in opts) return opts.operation;
+
+  const normalized = opts.command.toLowerCase();
+  if (normalized.includes('lesson')) return 'lessons';
+  if (normalized.includes('check') || normalized.includes('health')) return 'health';
+  return 'setup';
+}
+
+function resolveAllowEdits(
+  opts: AgentsMdSessionOptions | LegacyAgentsMdSessionOptions,
+  operation: AgentsMdOperation,
+): boolean {
+  if (typeof opts.allowEdits === 'boolean') return opts.allowEdits;
+  return operation === 'setup';
+}
+
 // ── Private helpers ────────────────────────────────────────────────────────
 
 /**
@@ -151,3 +198,4 @@ function extractLastAssistantContent(sessionId: string): string | null {
 // ── Exports ────────────────────────────────────────────────────────────────
 
 export { checkAgentsMdExists, spawnAgentsMdSession };
+export type { AgentsMdOperation };
