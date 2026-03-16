@@ -1,8 +1,9 @@
 /**
  * `pilot lessons [project]` — Extract lessons from recent builds into AGENTS.md candidates.
  *
- * Spawns an opencode session running `gsd-lessons` against the specified project
- * (or current directory). Prints extracted lesson candidates on completion.
+ * Spawns an opencode session running the lessons operation against the
+ * specified project (or current directory). Prints extracted lesson
+ * candidates on completion.
  *
  * Handles:
  * - No .planning/ directory → helpful message + exit 0
@@ -58,11 +59,10 @@ async function lessonsCommand(projectArg?: string, opts?: { approve?: boolean })
     outputHuman(`  ${dim('Extracting lessons from')} ${bold(projectDir)} ${dim('...')}`);
   }
 
-  // Spawn gsd-lessons session with longer timeout for build history analysis
-  // TODO: Replace 'gsd-lessons' with actual command when available in pilot-gsd
+  // Spawn lessons session with longer timeout for build history analysis.
   const result = await spawnAgentsMdSession({
     projectDir,
-    command: 'gsd-lessons',
+    operation: 'lessons',
     timeoutMs: 120_000,
   });
 

@@ -107,7 +107,7 @@ describe('lessonsCommand', () => {
     expect(joined).toContain('Always validate inputs');
     expect(mockSpawnAgentsMdSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: 'gsd-lessons',
+        operation: 'lessons',
         timeoutMs: 120_000,
       }),
     );
