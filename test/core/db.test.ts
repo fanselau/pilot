@@ -45,6 +45,10 @@ import {
   // Phase 67 retry helpers
   incrementHungCount,
   incrementRetryCount,
+  updateRetryHint,
+  updateLastFailureFingerprint,
+  recordRetryAttempt,
+  getRetryAttempts,
   canRetry,
   isSameHungReason,
   resetRetryState,
@@ -189,6 +193,26 @@ describe('pilot.db', () => {
         true,
       );
       expect(job.skipGracePeriod).toBe(true);
+    });
+
+    it('persists explicit retry budget when provided', () => {
+      const job = addJob(
+        'proj',
+        'quick',
+        'custom retry budget',
+        undefined,
+        'balanced',
+        'claude-only',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        false,
+        undefined,
+        5,
+      );
+      expect(job.retryBudget).toBe(5);
     });
   });
 
@@ -742,6 +766,47 @@ describe('pilot.db', () => {
       expect(getJobSteps(job.id)).toHaveLength(0);
     });
 
+    it('archives retry attempt lineage before clearing live fields', () => {
+      const job = addJob('proj', 'phase', 'task');
+      markRunning(job.id);
+      updateSessionTitles(job.id, ['session-a', 'session-b']);
+      updateRetryHint(job.id, 'focus failing lint and rerun');
+      updateLastFailureFingerprint(job.id, ['lint:src/core/db.ts:line-120']);
+
+      resetToPending(job.id, 'retry-resume');
+
+      const attempts = getRetryAttempts(job.id);
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0].attemptNumber).toBe(1);
+      expect(attempts[0].retryStrategy).toBe('retry-resume');
+      expect(attempts[0].retryHint).toBe('focus failing lint and rerun');
+      expect(attempts[0].failureFingerprint).toEqual(['lint:src/core/db.ts:line-120']);
+      expect(attempts[0].sessionTitles).toEqual(['session-a', 'session-b']);
+
+      const updated = getJob(job.id)!;
+      expect(updated.sessionTitles).toBeNull();
+    });
+
+    it('getRetryAttempts returns deterministic attempt ordering', () => {
+      const job = addJob('proj', 'phase', 'multi-attempt task');
+
+      markRunning(job.id);
+      updateSessionTitles(job.id, ['session-1']);
+      updateRetryHint(job.id, 'attempt-one');
+      resetToPending(job.id, 'retry-full');
+
+      markRunning(job.id);
+      updateSessionTitles(job.id, ['session-2']);
+      updateRetryHint(job.id, 'attempt-two');
+      resetToPending(job.id, 'retry-resume');
+
+      const attempts = getRetryAttempts(job.id);
+      expect(attempts).toHaveLength(2);
+      expect(attempts.map((attempt) => attempt.attemptNumber)).toEqual([1, 2]);
+      expect(attempts[0].retryHint).toBe('attempt-one');
+      expect(attempts[1].retryHint).toBe('attempt-two');
+    });
+
     it('stores resume_hint in dedicated column (not in error)', () => {
       const job = addJob('proj', 'phase', 'task');
       markRunning(job.id);
@@ -1292,8 +1357,46 @@ describe('managed projects', () => {
     });
   });
 
+  describe('retry metadata helpers', () => {
+    it('round-trips retryHint persistence through updateRetryHint', () => {
+      const job = addJob('/proj', 'quick', 'retry hint test');
+      updateRetryHint(job.id, 'investigate flaky test ordering');
+
+      const updated = getJob(job.id)!;
+      expect(updated.retryHint).toBe('investigate flaky test ordering');
+    });
+
+    it('round-trips lastFailureFingerprint through updateLastFailureFingerprint', () => {
+      const job = addJob('/proj', 'quick', 'fingerprint test');
+      updateLastFailureFingerprint(job.id, ['verify:missing-summary', 'lint:src/core/runner.ts']);
+
+      const updated = getJob(job.id)!;
+      expect(updated.lastFailureFingerprint).toEqual([
+        'verify:missing-summary',
+        'lint:src/core/runner.ts',
+      ]);
+    });
+
+    it('records explicit retry attempts via recordRetryAttempt helper', () => {
+      const job = addJob('/proj', 'quick', 'manual archive test');
+      markRunning(job.id);
+      updateSessionTitles(job.id, ['session-manual']);
+      updateRetryHint(job.id, 'manual-hint');
+      updateLastFailureFingerprint(job.id, ['manual:fingerprint']);
+
+      const archived = recordRetryAttempt(job.id, 'retry-full');
+      expect(archived).not.toBeNull();
+
+      const attempts = getRetryAttempts(job.id);
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0].retryStrategy).toBe('retry-full');
+      expect(attempts[0].retryHint).toBe('manual-hint');
+      expect(attempts[0].failureFingerprint).toEqual(['manual:fingerprint']);
+    });
+  });
+
   describe('canRetry', () => {
-    it('returns true when retry_count < retry_budget (0 < 3)', () => {
+    it('returns true when retry_count < retry_budget (0 < 2)', () => {
       const job = addJob('/proj', 'quick', 'can retry');
       expect(canRetry(job.id)).toBe(true);
     });
@@ -1302,9 +1405,8 @@ describe('managed projects', () => {
       const job = addJob('/proj', 'quick', 'budget exhausted');
       incrementRetryCount(job.id);
       incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
 
-      // retryCount=3, retryBudget=3 → cannot retry
+      // retryCount=2, retryBudget=2 → cannot retry
       expect(canRetry(job.id)).toBe(false);
     });
 
@@ -1313,7 +1415,7 @@ describe('managed projects', () => {
       incrementRetryCount(job.id);
       incrementRetryCount(job.id);
       incrementRetryCount(job.id);
-      incrementRetryCount(job.id); // 4 > 3
+      incrementRetryCount(job.id); // 4 > 2
 
       expect(canRetry(job.id)).toBe(false);
     });
