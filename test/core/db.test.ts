@@ -491,6 +491,30 @@ describe('pilot.db', () => {
       expect(parsed.intent.type).toBe('plan-and-execute');
       expect(parsed.reasoning).toBe('Phase 3 needs planning then execution');
     });
+
+    it('rejects legacy array payloads at write boundary', () => {
+      const job = addJob('proj', 'phase', 'legacy payload write');
+      const legacyPayload = [{ command: 'gsd-execute-phase', args: '3' }];
+
+      expect(() => {
+        updateDelegationPlan(job.id, legacyPayload as unknown as DelegationResult);
+      }).toThrow('Legacy delegation payload blocked at runtime boundary');
+
+      expect(getJob(job.id)!.delegationPlan).toBeNull();
+    });
+
+    it('normalizes legacy step-array payloads to null on read', () => {
+      const db = _getTestDb();
+      const job = addJob('proj', 'phase', 'legacy payload read');
+      db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?').run(
+        JSON.stringify([{ command: 'gsd-execute-phase', args: '3' }]),
+        job.id,
+      );
+
+      const fetched = getJob(job.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.delegationPlan).toBeNull();
+    });
   });
 
   // ── advanceStep ───────────────────────────────────────────────────────
@@ -673,6 +697,26 @@ describe('pilot.db', () => {
       expect(claimed).not.toBeNull();
       expect(claimed!.id).toBe(job.id);
       expect(claimed!.status).toBe('running');
+    });
+
+    it('marks pending legacy delegation payloads failed and skips them', () => {
+      const db = _getTestDb();
+      const legacyJob = addJob('proj-legacy', 'quick', 'legacy pending job');
+      const validJob = addJob('proj-valid', 'quick', 'valid pending job');
+
+      db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?').run(
+        JSON.stringify([{ command: 'gsd-execute-phase', args: '3' }]),
+        legacyJob.id,
+      );
+
+      const claimed = claimNextLaunchable();
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(validJob.id);
+
+      const legacyState = getJob(legacyJob.id)!;
+      expect(legacyState.status).toBe('failed');
+      expect(legacyState.error).toContain('Legacy delegation payload blocked at runtime boundary');
+      expect(legacyState.delegationPlan).toBeNull();
     });
   });
 

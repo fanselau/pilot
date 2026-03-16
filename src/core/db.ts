@@ -32,6 +32,19 @@ import { AGENT_MODELS } from './models.js';
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const ID_LENGTH = 4;
 
+const VALID_DELEGATION_INTENT_TYPES = new Set([
+  'quick',
+  'init-project',
+  'new-milestone',
+  'plan-and-execute',
+  'execute-only',
+  'audit-milestone',
+  'noop',
+]);
+
+const LEGACY_DELEGATION_PAYLOAD_BLOCK_REASON =
+  'Legacy delegation payload blocked at runtime boundary; recreate this job with intent-based delegation.';
+
 const CREATE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
@@ -270,7 +283,57 @@ function parseFailureFingerprint(value: string | null | undefined): string[] | n
   return [value];
 }
 
+interface DelegationPlanGuardResult {
+  normalized: string | null;
+  isLegacy: boolean;
+}
+
+function isIntentPayload(value: unknown): value is DelegationResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as { intent?: unknown; reasoning?: unknown; steps?: unknown };
+
+  // Explicitly block old step-array payload shapes.
+  if (Array.isArray(candidate.steps)) {
+    return false;
+  }
+
+  if (!candidate.intent || typeof candidate.intent !== 'object' || Array.isArray(candidate.intent)) {
+    return false;
+  }
+
+  const intentType = (candidate.intent as { type?: unknown }).type;
+  if (typeof intentType !== 'string' || !VALID_DELEGATION_INTENT_TYPES.has(intentType)) {
+    return false;
+  }
+
+  return typeof candidate.reasoning === 'string';
+}
+
+function guardDelegationPlanPayload(payload: string | null): DelegationPlanGuardResult {
+  if (!payload) {
+    return { normalized: null, isLegacy: false };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload) as unknown;
+  } catch {
+    return { normalized: null, isLegacy: true };
+  }
+
+  if (!isIntentPayload(parsed)) {
+    return { normalized: null, isLegacy: true };
+  }
+
+  return { normalized: JSON.stringify(parsed), isLegacy: false };
+}
+
 function rowToJob(row: JobRow): Job {
+  const guardedPlan = guardDelegationPlanPayload(row.delegation_plan);
+
   return {
     id: row.id,
     project: row.project,
@@ -288,7 +351,7 @@ function rowToJob(row: JobRow): Job {
     resumeHint: row.resume_hint ?? null,
     attempts: row.attempts,
     timeout: row.timeout ?? 0,
-    delegationPlan: row.delegation_plan,
+    delegationPlan: guardedPlan.normalized,
     currentStep: row.current_step,
     sessionTitles: row.session_titles,
     modelProfile: (row.model_profile ?? 'balanced') as Job['modelProfile'],
@@ -650,8 +713,7 @@ function claimNextLaunchable(queueGraceSeconds: number = 0): Job | null {
   const db = getDb();
 
   const claim = db.transaction((): Job | null => {
-    // Select next pending job where no running job exists for the same project
-    const row = db.prepare(`
+    const selectNextLaunchable = db.prepare(`
       SELECT * FROM jobs
       WHERE status = 'pending'
         AND project NOT IN (
@@ -668,22 +730,49 @@ function claimNextLaunchable(queueGraceSeconds: number = 0): Job | null {
         )
       ORDER BY priority DESC, created_at ASC
       LIMIT 1
-    `).get(queueGraceSeconds, queueGraceSeconds) as JobRow | undefined;
+    `);
 
-    if (!row) return null;
+    const markLegacyPendingAsFailed = db.prepare(`
+      UPDATE jobs
+      SET status = 'failed',
+          completed_at = datetime('now'),
+          error = ?,
+          delegation_plan = NULL
+      WHERE id = ? AND status = 'pending'
+    `);
 
-    // Atomically mark as running within the same transaction
-    db.prepare(`
+    const normalizeDelegationPlan = db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?');
+
+    const markRunningClaim = db.prepare(`
       UPDATE jobs
       SET status = 'running',
           started_at = datetime('now'),
           attempts = attempts + 1
       WHERE id = ?
-    `).run(row.id);
+    `);
 
-    // Return the updated row (re-fetch to get new values)
-    const updated = db.prepare('SELECT * FROM jobs WHERE id = ?').get(row.id) as JobRow;
-    return rowToJob(updated);
+    while (true) {
+      // Select next pending job where no running job exists for the same project
+      const row = selectNextLaunchable.get(queueGraceSeconds, queueGraceSeconds) as JobRow | undefined;
+      if (!row) return null;
+
+      const guardedPlan = guardDelegationPlanPayload(row.delegation_plan);
+      if (guardedPlan.isLegacy) {
+        markLegacyPendingAsFailed.run(LEGACY_DELEGATION_PAYLOAD_BLOCK_REASON, row.id);
+        continue;
+      }
+
+      if (guardedPlan.normalized !== row.delegation_plan) {
+        normalizeDelegationPlan.run(guardedPlan.normalized, row.id);
+      }
+
+      // Atomically mark as running within the same transaction
+      markRunningClaim.run(row.id);
+
+      // Return the updated row (re-fetch to get new values)
+      const updated = db.prepare('SELECT * FROM jobs WHERE id = ?').get(row.id) as JobRow;
+      return rowToJob(updated);
+    }
   });
 
   return claim();
@@ -763,8 +852,13 @@ function getRecent(limit: number = 20): Job[] {
  */
 function updateDelegationPlan(id: string, plan: DelegationResult): void {
   const db = getDb();
+  const guardedPlan = guardDelegationPlanPayload(JSON.stringify(plan));
+  if (guardedPlan.isLegacy || !guardedPlan.normalized) {
+    throw new Error(LEGACY_DELEGATION_PAYLOAD_BLOCK_REASON);
+  }
+
   db.prepare('UPDATE jobs SET delegation_plan = ? WHERE id = ?').run(
-    JSON.stringify(plan),
+    guardedPlan.normalized,
     id,
   );
 }
