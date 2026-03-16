@@ -1249,7 +1249,7 @@ Read requirements/gsd-05-judge-move.md for full spec.
 
 Plans:
 - [x] 69-01-PLAN.md — Parser-safe frontmatter patch foundation (YAML dependency, file scanning, inherit fallback)
-- [ ] 69-02-PLAN.md — Runner integration hardening (single patch point per job + patch diagnostics)
+- [x] 69-02-PLAN.md — Runner integration hardening (single patch point per job + patch diagnostics)
 - [ ] 69-03-PLAN.md — Regression coverage for patching edge cases and runner invocation count
 
 Wave structure:

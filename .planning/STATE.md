@@ -6,12 +6,12 @@
 ## Current Position
 
 Phase: 69 (Model System — Agent Frontmatter Patching)
-**Next Phase:** Phase 69 (continue with 69-02-PLAN.md)
-Plan: 1 of 3 in current phase
+**Next Phase:** Phase 69 (continue with 69-03-PLAN.md)
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-16 - Completed 69-01-PLAN.md
+Last activity: 2026-03-16 - Completed 69-02-PLAN.md
 
-Progress: ████████████████████████░ 87/90 plans (97%)
+Progress: ████████████████████████░ 88/90 plans (98%)
 
 ## Project Reference
 
@@ -174,7 +174,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 69: Model System — Agent Frontmatter Patching
-- **Status:** in progress (1/3 plans complete)
+- **Status:** in progress (2/3 plans complete)
 
 ### Quick Tasks Completed
 
@@ -807,9 +807,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 68-01 | Confidence ceiling ≤ 40 when VERIFICATION.md absent | Prevents false pass verdicts from transcript-only evidence |
 | 69-01 | patchAgentFrontmatter iterates discovered gsd-*.md files and falls back unmapped agents to inherit | Prevents stale model leakage when provider mode maps are partial or new agents appear upstream |
 | 69-01 | models tests reset to in-memory DB before each test | Prevents local persistent model-profile overrides from causing nondeterministic test expectations |
+| 69-02 | patchModelsForJob logs fallback/skipped summary details from patchAgentFrontmatter | Makes inherit fallback and malformed frontmatter outcomes observable to operators |
+| 69-02 | runGsdStep no longer re-patches agent files; launch() is sole patch point | Eliminates duplicate frontmatter patch churn per step while preserving launch guardrails |
 
 ## Session Continuity
 
-Last session: 2026-03-16 01:56 UTC
-Stopped at: Completed 69-01-PLAN.md (parser-safe, file-driven frontmatter patching foundation)
+Last session: 2026-03-16 02:07 UTC
+Stopped at: Completed 69-02-PLAN.md (runner integration hardening + single patch point)
 Resume file: None
