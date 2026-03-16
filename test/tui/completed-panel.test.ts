@@ -99,11 +99,16 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    notifyRoute: null,
     categories: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '2222222222222222222222222222222222222222',
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -255,6 +260,20 @@ describe('buildCompletedRowBadges', () => {
       makeJob({ status: 'cancelled', judgeVerdict: 'not-json', gitBaseCommit: null, gitHeadCommit: null }),
     ).map((badge) => badge.label);
     expect(labels).toEqual(['[judge:inconclusive]', '[retryable]', '[undo:unavailable]']);
+  });
+
+  it('renders judge:partial badge for partial verdicts (new format)', () => {
+    const labels = buildCompletedRowBadges(
+      makeJob({
+        judgeVerdict: JSON.stringify({
+          verdict: 'partial',
+          confidence: 55,
+          reason: 'Some plans incomplete',
+          retryRecommendation: 'retry-resume',
+        }),
+      }),
+    ).map((badge) => badge.label);
+    expect(labels).toContain('[judge:partial 55%]');
   });
 });
 

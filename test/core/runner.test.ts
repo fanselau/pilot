@@ -217,6 +217,71 @@ describe('judge verdict edge cases', () => {
     expect(result!.confidence).toBe(30);
     expect(result!.reason).toBe('Incomplete implementation');
   });
+
+  it('parseJudgeVerdict with pass verdict returns correct shape', () => {
+    const content = JSON.stringify({
+      verdict: 'pass',
+      confidence: 92,
+      reason: 'All plans executed successfully',
+      retryRecommendation: 'none',
+      retryHint: '',
+      failureFingerprint: [],
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('pass');
+    expect(result!.confidence).toBe(92);
+    expect(result!.retryRecommendation).toBe('none');
+    expect(result!.failureFingerprint).toEqual([]);
+  });
+
+  it('parseJudgeVerdict with partial verdict and retry recommendation', () => {
+    const content = JSON.stringify({
+      verdict: 'partial',
+      confidence: 45,
+      reason: 'Plans 01-02 done, plan 03 incomplete',
+      retryRecommendation: 'retry-resume',
+      retryHint: 'Resume from plan 03',
+      failureFingerprint: ['test: runner.test.ts:45 timeout'],
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('partial');
+    expect(result!.retryRecommendation).toBe('retry-resume');
+    expect(result!.retryHint).toBe('Resume from plan 03');
+    expect(result!.failureFingerprint).toEqual(['test: runner.test.ts:45 timeout']);
+  });
+
+  it('parseJudgeVerdict with fail verdict and retry-full recommendation', () => {
+    const content = JSON.stringify({
+      verdict: 'fail',
+      confidence: 88,
+      reason: 'Build errors in core module',
+      retryRecommendation: 'retry-full',
+      retryHint: 'Fix tsconfig.json paths before retrying',
+      failureFingerprint: ['tsc: TS2304 in src/core/runner.ts'],
+    });
+    const result = parseJudgeVerdict(content);
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('fail');
+    expect(result!.retryRecommendation).toBe('retry-full');
+  });
+
+  it('parseJudgeVerdict accepts legacy succeeded/failed/doubting alongside new pass/fail/partial', () => {
+    const legacy = parseJudgeVerdict(JSON.stringify({ verdict: 'succeeded', confidence: 95, reason: 'ok' }));
+    expect(legacy).not.toBeNull();
+    expect(legacy!.verdict).toBe('succeeded');
+
+    const newFmt = parseJudgeVerdict(JSON.stringify({ verdict: 'pass', confidence: 92, reason: 'ok' }));
+    expect(newFmt).not.toBeNull();
+    expect(newFmt!.verdict).toBe('pass');
+  });
+
+  it('parseJudgeVerdict with missing optional retry fields still parses', () => {
+    const result = parseJudgeVerdict(JSON.stringify({ verdict: 'pass', confidence: 90, reason: 'ok' }));
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('pass');
+  });
 });
 
 // ── runner dispatch wiring ─────────────────────────────────────────────────

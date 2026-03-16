@@ -101,6 +101,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -405,5 +409,26 @@ describe('infoCommand recovery visibility', () => {
 
     const inconclusiveOutput = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(inconclusiveOutput).toContain('judge:inconclusive — benefit of doubt');
+  });
+
+  it('renders judge:partial badge for new-format partial verdict', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        scope: 'phase',
+        status: 'failed',
+        judgeVerdict: JSON.stringify({
+          verdict: 'partial',
+          confidence: 55,
+          reason: 'Plans 01-02 done, plan 03 incomplete',
+          retryRecommendation: 'retry-resume',
+          retryHint: 'Resume from plan 03',
+        }),
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('judge:partial 55%');
   });
 });

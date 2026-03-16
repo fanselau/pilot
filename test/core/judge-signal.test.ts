@@ -29,11 +29,16 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     actualModels: null,
     callbackUrl: null,
     callbackSessionKey: null,
+    notifyRoute: null,
     categories: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -141,5 +146,62 @@ describe('formatJudgeReason', () => {
   it('returns fallback text when reason is missing', () => {
     expect(formatJudgeReason(null)).toBe('n/a');
     expect(formatJudgeReason(null, 'benefit of doubt')).toBe('benefit of doubt');
+  });
+});
+
+describe('buildJudgeSignal — new verdict format (pass/fail/partial)', () => {
+  it('maps pass verdict to judge:pass badge', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 85, reason: 'tests pass' }),
+    }));
+    expect(signal.outcome).toBe('pass');
+    expect(signal.badge).toBe('judge:pass 85%');
+  });
+
+  it('maps partial verdict to judge:partial badge', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({
+        verdict: 'partial',
+        confidence: 45,
+        reason: 'incomplete',
+        retryRecommendation: 'retry-resume',
+        retryHint: 'Resume from plan 03',
+        failureFingerprint: ['test: timeout'],
+      }),
+    }));
+    expect(signal.outcome).toBe('partial');
+    expect(signal.badge).toBe('judge:partial 45%');
+    expect(signal.retryRecommendation).toBe('retry-resume');
+    expect(signal.retryHint).toBe('Resume from plan 03');
+    expect(signal.failureFingerprint).toEqual(['test: timeout']);
+  });
+
+  it('maps fail verdict to judge:fail badge', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'fail', confidence: 90, reason: 'build errors' }),
+    }));
+    expect(signal.outcome).toBe('fail');
+    expect(signal.badge).toBe('judge:fail 90%');
+  });
+
+  it('handles legacy succeeded alongside new pass (backward compat)', () => {
+    const legacy = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 92, reason: 'ok' }),
+    }));
+    expect(legacy.outcome).toBe('pass');
+
+    const modern = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 92, reason: 'ok' }),
+    }));
+    expect(modern.outcome).toBe('pass');
+  });
+
+  it('passes through null retry fields when not present in verdict', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 90, reason: 'ok' }),
+    }));
+    expect(signal.retryRecommendation).toBeNull();
+    expect(signal.retryHint).toBeNull();
+    expect(signal.failureFingerprint).toBeNull();
   });
 });

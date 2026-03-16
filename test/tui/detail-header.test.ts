@@ -47,6 +47,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: '2222222222222222222222222222222222222222',
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -260,5 +264,30 @@ describe('buildHeaderLines observability contract', () => {
 
     expect(zeroConfidence.some((line) => line.startsWith('Verdict: judge:inconclusive'))).toBe(true);
     expect(malformed.some((line) => line.startsWith('Verdict: judge:inconclusive'))).toBe(true);
+  });
+
+  it('renders judge:partial badge for new-format partial verdict', () => {
+    const lines = buildTriageHeaderLines(
+      makeJob({
+        status: 'failed',
+        judgeVerdict: JSON.stringify({
+          verdict: 'partial',
+          confidence: 60,
+          reason: 'Plans 01-02 done, plan 03 incomplete',
+          retryRecommendation: 'retry-resume',
+        }),
+      }),
+    );
+    expect(lines.some((line) => line.startsWith('Verdict: judge:partial 60%'))).toBe(true);
+  });
+
+  it('renders judge:pass badge for new-format pass verdict', () => {
+    const lines = buildTriageHeaderLines(
+      makeJob({
+        status: 'completed',
+        judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 88, reason: 'All criteria met' }),
+      }),
+    );
+    expect(lines.some((line) => line.startsWith('Verdict: judge:pass 88%'))).toBe(true);
   });
 });

@@ -42,6 +42,10 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     notifyRoute: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 3,
+    retryCount: 0,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -466,5 +470,28 @@ describe('statusCommand', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('…');
+  });
+
+  it('renders judge:pass badge for new-format pass verdict in completed phase row', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'np01',
+        scope: 'phase',
+        status: 'completed',
+        project: 'new-format-pass',
+        description: 'new pass verdict format',
+        completedAt: '2026-03-02T09:58:00',
+        judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 88, reason: 'all criteria met' }),
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const lines = mockOutputHuman.mock.calls.map((c: unknown[]) => String(c[0]));
+    const passLine = lines.find((line) => line.includes('np01'));
+    expect(passLine).toBeDefined();
+    expect(passLine).toContain('[judge:pass 88%]');
   });
 });
