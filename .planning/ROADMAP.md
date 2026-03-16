@@ -1281,3 +1281,45 @@ Wave structure:
 
 **Details:**
 Read `requirements/gsd-07-auto-retry.md` and `.planning/phases/70-phase-auto-retry-on-verification-failure/70-RESEARCH.md`.
+
+### Phase 71: Full Milestone Lifecycle — Audit, Gap Closure, Completion
+
+**Goal:** Close milestone jobs end-to-end in runner: run milestone audit, auto-plan and execute gap-closure rounds (max 2), then complete milestone when audit passes, with explicit escalation and notifications when automation cannot safely continue.
+**Depends on:** Phase 70
+**Plans:** 3 plans
+
+Plans:
+- [ ] 71-01-PLAN.md — Milestone lifecycle foundation (gap-round persistence + audit parser helpers)
+- [ ] 71-02-PLAN.md — Runner audit/gap/complete orchestration with stale-audit retry and max-round enforcement
+- [ ] 71-03-PLAN.md — Milestone notifications, interactive blocker manual-gate handling, and delegate prompt contract alignment
+
+Wave structure:
+- Wave 1: 71-01 (schema + parser foundation)
+- Wave 2: 71-02 (runner lifecycle orchestration, depends on 71-01)
+- Wave 3: 71-03 (notifications + manual gates + prompt alignment, depends on 71-01 + 71-02)
+
+**Details:**
+Read `requirements/gsd-08-milestone-lifecycle.md` and `.planning/phases/71-full-milestone-lifecycle-audit-gap-closure-completion/71-RESEARCH.md`.
+
+### Phase 72: Cleanup — Remove pilot-gsd Fork
+
+**Goal:** Complete the clean break from the `pilot-gsd` fork by removing remaining runtime/submodule coupling, migrating AGENTS/lessons flows to Pilot-owned prompts, and updating docs/skills to the upstream `get-shit-done-cc` architecture.
+**Depends on:** Phase 71
+**Status:** in progress (1/6 plans complete)
+**Plans:** 6 plans
+
+Plans:
+- [ ] 72-01-PLAN.md — Core AGENTS/lessons prompt foundation + `agents-md` inline-prompt refactor
+- [ ] 72-02-PLAN.md — Setup/doctor/lessons command rewiring to operation-based AGENTS flows
+- [ ] 72-03-PLAN.md — Submodule removal + fork-agnostic setup migration cleanup + setup test updates
+- [x] 72-05-PLAN.md — Migration-order gate audit (project refresh/doctor checks, config/manifests, external deprecation evidence)
+- [ ] 72-06-PLAN.md — Delegation legacy payload safeguard + canonical intent fixtures + contract audit
+- [ ] 72-04-PLAN.md — README/getting-started/skill docs cleanup + active-surface fork-coupling audit
+
+Wave structure:
+- Wave 1: 72-01 + 72-05 (core prompt decoupling + migration-order gate audit in parallel)
+- Wave 2: 72-02 + 72-03 + 72-06 (command rewiring depends on 72-01; submodule/setup cleanup and delegation contract hardening depend on 72-05)
+- Wave 3: 72-04 (final docs/skill/audit pass depends on 72-02 + 72-03 + 72-05 + 72-06)
+
+**Details:**
+Read `requirements/gsd-09-cleanup.md` and `.planning/phases/72-cleanup-remove-pilot-gsd-fork/72-RESEARCH.md`.

@@ -1,25 +1,25 @@
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 70
+## Current Phase: 72
 
 ## Current Position
 
-Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
-**Next Phase:** Phase 71: Full Milestone Lifecycle — Audit, Gap Closure, Completion
-**Next Plan:** None (phase complete)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-03-16 - Completed quick task 089: Fix Phase 68 judge move verification gap — deprecate pilot-gsd judge commands, add evidence validation tests
+Phase: 72 of 72 (Cleanup — Remove pilot-gsd Fork)
+**Next Phase:** Phase 72: Cleanup — Remove pilot-gsd Fork
+**Next Plan:** 72-06-PLAN.md
+Plan: 5 of 6 in current phase
+Status: In progress
+Last activity: 2026-03-16 - Completed 72-05-PLAN.md
 
-Progress: ████████████████████████░ 93/97 plans (96%)
+Progress: ████████████████████████░ 94/97 plans (97%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 70 complete; retry lineage is now visible in info/log surfaces.
+**Current focus:** Phase 72 migration-order audit completed; cleanup progression is blocked until all registered projects pass refresh/doctor gate.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -322,6 +322,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 69 added: Model System — Agent Frontmatter Patching
 - Phase 70 added: Phase Auto-Retry on Verification Failure
 - Phase 71 added: Full Milestone Lifecycle — Audit, Gap Closure, Completion
+- Phase 72 added: Cleanup — Remove pilot-gsd Fork
 
 ## Decisions
 
@@ -828,9 +829,16 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 70-04 | Attempt lineage displays as retryCount+1 over retryBudget+1 (clamped) | Surfaces deterministic Attempt N/M semantics from persisted retry state |
 | 70-04 | `pilot log --chain` remains opt-in and default log stays current-attempt focused | Preserves existing operator ergonomics while exposing full retry history on demand |
 | 70-04 | Chain JSON metadata is additive under `chain.attempts` | Adds retry-group introspection without breaking existing log JSON consumers |
+| 72-05 | Execute migration audits via `node dist/index.js` when `pilot` launcher requires unavailable bun runtime | Keeps required setup/doctor evidence collection runnable in environments without bun on PATH |
+| 72-05 | Do not proceed with destructive fork cleanup until all registered projects pass setup-refresh + doctor gate | Enforces requirement-critical migration order and avoids stranding unmanaged/broken project setups |
+
+## Blockers/Concerns Carried Forward
+
+- Migration-order gate remains blocked: 5 registered projects still fail refresh/doctor prerequisites and require remediation before fork removal.
+- `fanselau/pilot-gsd` archive action is permission-gated (`archiveRepository` denied for current token) and needs owner/admin follow-up.
 
 ## Session Continuity
 
-Last session: 2026-03-16 03:49 UTC
-Stopped at: Completed 70-04-PLAN.md (retry lineage visibility in info/log + command regressions)
+Last session: 2026-03-16 09:38 UTC
+Stopped at: Completed 72-05-PLAN.md
 Resume file: None
