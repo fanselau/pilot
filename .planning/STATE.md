@@ -6,19 +6,19 @@
 ## Current Position
 
 Phase: 70 of 70 (Phase Auto-Retry on Verification Failure)
-**Next Plan:** 70-04-PLAN.md
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-03-16 - Completed 70-02-PLAN.md
+**Next Plan:** None (phase complete)
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-03-16 - Completed 70-04-PLAN.md
 
-Progress: ████████████████████████░ 92/97 plans (95%)
+Progress: ████████████████████████░ 93/97 plans (96%)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Complete remaining phase-70 operator visibility so retry lineage and context are easy to inspect.
+**Current focus:** Phase 70 complete; retry lineage is now visible in info/log surfaces.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -819,9 +819,12 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 70-02 | Same failure fingerprint escalates before retry_count increments | Avoids burning remaining retry budget on identical consecutive verification failures |
 | 70-03 | retry budget resolution order is --retries > --no-retry (0) > config default > hard fallback 2 | Guarantees deterministic queue-time policy across operator overrides and install defaults |
 | 70-03 | config accepts defaults.retry_budget plus retryBudget alias | Keeps config migration tolerant while prioritizing documented snake_case contract |
+| 70-04 | Attempt lineage displays as retryCount+1 over retryBudget+1 (clamped) | Surfaces deterministic Attempt N/M semantics from persisted retry state |
+| 70-04 | `pilot log --chain` remains opt-in and default log stays current-attempt focused | Preserves existing operator ergonomics while exposing full retry history on demand |
+| 70-04 | Chain JSON metadata is additive under `chain.attempts` | Adds retry-group introspection without breaking existing log JSON consumers |
 
 ## Session Continuity
 
-Last session: 2026-03-16 03:38 UTC
-Stopped at: Completed 70-02-PLAN.md (runner verification auto-retry orchestration + regression coverage)
+Last session: 2026-03-16 03:49 UTC
+Stopped at: Completed 70-04-PLAN.md (retry lineage visibility in info/log + command regressions)
 Resume file: None
