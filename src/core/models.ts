@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseDocument } from 'yaml';
 import { getModelEntry, getAllEntriesForModeAndProfile } from './model-store.js';
 import type { ModelEntry, ModelProfile, ProviderMode, DynamicProviderMode } from './types.js';
 
@@ -14,6 +15,14 @@ import type { ModelEntry, ModelProfile, ProviderMode, DynamicProviderMode } from
 // Provider modes: claude-only, openai-only, hybrid
 
 type AgentOrScope = string;
+
+type FrontmatterParts = {
+  frontmatter: string;
+  body: string;
+  newline: '\n' | '\r\n';
+};
+
+const GSD_AGENT_FILENAME_PATTERN = /^gsd-.*\.md$/;
 
 const AGENT_MODELS: Record<ProviderMode, Record<AgentOrScope, Record<ModelProfile, ModelEntry>>> = {
   'claude-only': {
@@ -179,6 +188,58 @@ function resolveTopLevelModel(
   }
 
   return scopeProfiles[profile];
+}
+
+function discoverAgentFiles(projectDir: string): string[] {
+  const agentsDir = path.join(projectDir, '.opencode', 'agents');
+
+  try {
+    return readdirSync(agentsDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && GSD_AGENT_FILENAME_PATTERN.test(entry.name))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right))
+      .map((filename) => path.join(agentsDir, filename));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+}
+
+function splitFrontmatter(content: string): FrontmatterParts | null {
+  if (!content.startsWith('---\n') && !content.startsWith('---\r\n')) {
+    return null;
+  }
+
+  const match = content.match(/^---(\r?\n)([\s\S]*?)\r?\n---(\r?\n|$)/);
+  if (!match) {
+    return null;
+  }
+
+  const newline = match[1] === '\r\n' ? '\r\n' : '\n';
+  return {
+    frontmatter: match[2],
+    body: content.slice(match[0].length),
+    newline,
+  };
+}
+
+function parseFrontmatterDocument(frontmatter: string) {
+  const doc = parseDocument(frontmatter);
+  if (doc.errors.length > 0) {
+    return null;
+  }
+  return doc;
+}
+
+function patchModelFields(doc: ReturnType<typeof parseDocument>, entry: ModelEntry): void {
+  doc.set('model', entry.model);
+  if (entry.variant) {
+    doc.set('variant', entry.variant);
+    return;
+  }
+  doc.delete('variant');
 }
 
 function patchAgentFrontmatter(projectDir: string, models: Record<string, ModelEntry>): void {
