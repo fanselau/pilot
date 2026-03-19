@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: Completed 72-06-PLAN.md
-last_updated: "2026-03-16T10:00:59.526Z"
-last_activity: 2026-03-16 - Completed 72-06-PLAN.md
+status: verifying
+stopped_at: Completed 72-04-PLAN.md
+last_updated: "2026-03-16T10:12:28.999Z"
+last_activity: 2026-03-16 - Completed 72-04-PLAN.md
 progress:
   total_phases: 71
-  completed_phases: 30
+  completed_phases: 31
   total_plans: 106
-  completed_plans: 98
-  percent: 92
+  completed_plans: 99
+  percent: 93
 ---
 
 # State
@@ -22,20 +22,20 @@ progress:
 ## Current Position
 
 Phase: 72 of 72 (Cleanup — Remove pilot-gsd Fork)
-**Next Phase:** Phase 72: Cleanup — Remove pilot-gsd Fork
-**Next Plan:** 72-04-PLAN.md
-Plan: 5 of 6 in current phase
-Status: In progress
-Last activity: 2026-03-16 - Completed 72-06-PLAN.md
+**Next Phase:** None (current roadmap phase complete)
+**Next Plan:** None (72 complete)
+Plan: 6 of 6 in current phase
+Status: Phase complete
+Last activity: 2026-03-16 - Completed 72-04-PLAN.md
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 93%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 72 delegation payload safeguards and fixture-backed contract audits are complete; remaining work is unresolved migration blockers and pending plan 72-04.
+**Current focus:** Phase 72 cleanup documentation and active-surface coupling audit are complete; follow-up concerns remain migration remediation on external projects and fork repo archive permissions.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 - **Status:** complete (5/5 plans, verified ✓)
@@ -857,6 +857,9 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 72-06 | delegation payload persistence now validates intent shape and blocks legacy step-array payloads at claim/write boundaries | Prevents fork-era payloads from silently entering active execution paths |
 | 72-06 | delegation parser intent coverage now uses canonical JSON fixtures for quick/plan-and-execute/execute-only/audit-milestone | Keeps contract examples realistic and stable while avoiding inline drift |
 | 72-06 | renamed persistence API/helpers from `*DelegationPlan*` to intent-payload naming | Makes `DelegationStep|DelegationPlan` contract-audit regex signal-only with zero false positives |
+| 72-04 | Operator docs now describe only upstream `get-shit-done-cc` installation and `pilot setup --refresh` sentinel recovery | Removes stale submodule/fork instructions and keeps onboarding aligned with actual setup/update behavior |
+| 72-04 | Pilot pipeline skill guidance now uses intent lifecycle + frontmatter patching + retry lineage mental model | Keeps operator actions aligned with current runner contracts and observability surfaces |
+| 72-04 | Active coupling audit enforces zero targeted fork strings across src/test/README/docs/skills | Provides deterministic closeout gate for fork cleanup without rewriting historical archives |
 
 ## Blockers/Concerns Carried Forward
 
@@ -865,6 +868,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-16T10:00:15.452Z
-Stopped at: Completed 72-06-PLAN.md
+Last session: 2026-03-16T10:12:28.993Z
+Stopped at: Completed 72-04-PLAN.md
 Resume file: None

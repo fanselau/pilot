@@ -1305,16 +1305,16 @@ Read `requirements/gsd-08-milestone-lifecycle.md` and `.planning/phases/71-full-
 
 **Goal:** Complete the clean break from the `pilot-gsd` fork by removing remaining runtime/submodule coupling, migrating AGENTS/lessons flows to Pilot-owned prompts, and updating docs/skills to the upstream `get-shit-done-cc` architecture.
 **Depends on:** Phase 71
-**Status:** in progress (4/6 plans complete)
-**Plans:** 5/6 plans executed
+**Status:** complete (6/6 plans complete)
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 72-01-PLAN.md — Core AGENTS/lessons prompt foundation + `agents-md` inline-prompt refactor
 - [x] 72-02-PLAN.md — Setup/doctor/lessons command rewiring to operation-based AGENTS flows
 - [x] 72-03-PLAN.md — Submodule removal + fork-agnostic setup migration cleanup + setup test updates
 - [x] 72-05-PLAN.md — Migration-order gate audit (project refresh/doctor checks, config/manifests, external deprecation evidence)
-- [ ] 72-06-PLAN.md — Delegation legacy payload safeguard + canonical intent fixtures + contract audit
-- [ ] 72-04-PLAN.md — README/getting-started/skill docs cleanup + active-surface fork-coupling audit
+- [x] 72-06-PLAN.md — Delegation legacy payload safeguard + canonical intent fixtures + contract audit
+- [x] 72-04-PLAN.md — README/getting-started/skill docs cleanup + active-surface fork-coupling audit
 
 Wave structure:
 - Wave 1: 72-01 + 72-05 (core prompt decoupling + migration-order gate audit in parallel)
