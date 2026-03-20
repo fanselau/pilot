@@ -1,0 +1,26 @@
+{
+  "mode": "yolo",
+  "granularity": "standard",
+  "parallelization": true,
+  "commit_docs": true,
+  "model_profile": "balanced",
+  "planning": {
+    "commit_docs": true,
+    "search_gitignored": false
+  },
+  "git": {
+    "branching_strategy": "none"
+  },
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "auto_advance": true,
+    "nyquist_validation": true,
+    "ui_phase": true,
+    "ui_safety_gate": false,
+    "node_repair": true,
+    "node_repair_budget": 2,
+    "_auto_chain_active": false
+  }
+}

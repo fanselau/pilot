@@ -4,5 +4,5 @@ dist/
 .opencode/
 
 .archive/
-.planning/
+# .planning/
 requirements/
