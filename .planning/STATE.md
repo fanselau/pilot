@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 77-01-PLAN.md
-last_updated: "2026-03-20T23:24:49.036Z"
+stopped_at: Completed 77-02-PLAN.md
+last_updated: "2026-03-20T23:32:56.216Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 76
   completed_phases: 33
   total_plans: 130
-  completed_plans: 116
+  completed_plans: 117
   percent: 93
 ---
 
@@ -887,6 +887,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 77]: Grace countdown computed client-side from createdAt + queueGraceSeconds — Avoids per-job server computation while keeping the countdown smooth
 - [Phase 77]: {"phase":"77","summary":"Used negative step indices for delegation steps to sort before regular steps"}
 - [Phase 77]: {"phase":"77","summary":"IntersectionObserver scroll-spy with -10% 0px -70% 0px rootMargin for upper viewport triggering"}
+- [Phase 77]: Used existing useIsMobile hook (800px) rather than creating a new 768px breakpoint
 
 ## Blockers/Concerns Carried Forward
 
@@ -895,6 +896,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T23:24:42.547Z
-Stopped at: Completed 77-01-PLAN.md
+Last session: 2026-03-20T23:32:52.093Z
+Stopped at: Completed 77-02-PLAN.md
 Resume file: None
