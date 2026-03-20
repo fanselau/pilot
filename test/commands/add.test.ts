@@ -199,7 +199,7 @@ describe('addCommand', () => {
   });
 
   it('queues a string requirement as quick scope', async () => {
-    await addCommand('my-project', 'fix the navbar', { noNotify: true });
+    await addCommand('my-project', 'fix the navbar', { noNotify: true, noCategories: true });
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
@@ -212,7 +212,7 @@ describe('addCommand', () => {
   });
 
   it('--as overrides auto-detected scope', async () => {
-    await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true });
+    await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -222,7 +222,7 @@ describe('addCommand', () => {
   it('detects file path and uses phase scope with title extraction', async () => {
     // package.json exists and is a file; title won't be found via markdown heading
     // so it falls back to basename
-    await addCommand('my-project', 'package.json', { noNotify: true });
+    await addCommand('my-project', 'package.json', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -244,7 +244,7 @@ describe('addCommand', () => {
 
   it('quick scope with file passes full content as description', async () => {
     // Force quick scope via --as, but provide a file that exists
-    await addCommand('my-project', 'package.json', { as: 'quick' as JobScope, noNotify: true });
+    await addCommand('my-project', 'package.json', { as: 'quick' as JobScope, noNotify: true, noCategories: true });
 
     // When scope=quick and file exists, the full content is passed as description
     const callArgs = vi.mocked(addJob).mock.calls[0];
@@ -257,7 +257,7 @@ describe('addCommand', () => {
   it('outputs JSON when json mode is active', async () => {
     mockJsonMode = true;
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(mockOutputJson).toHaveBeenCalledWith({ job: expect.objectContaining({ id: 'ab12' }) });
     expect(mockOutputHuman).not.toHaveBeenCalled();
@@ -265,14 +265,14 @@ describe('addCommand', () => {
 
   it('truncates long descriptions in human output', async () => {
     const longDesc = 'a'.repeat(100);
-    await addCommand('my-project', longDesc, { noNotify: true });
+    await addCommand('my-project', longDesc, { noNotify: true, noCategories: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('…');
   });
 
   it('passes profile and provider to addJob', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true });
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -280,7 +280,7 @@ describe('addCommand', () => {
   });
 
   it('defaults work without --profile and --provider flags', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -288,14 +288,14 @@ describe('addCommand', () => {
   });
 
   it('shows default grace-window queue message', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('Start mode: waits for queue grace window before launch.');
   });
 
   it('persists --start-immediately and prints speed-vs-safety copy', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, startImmediately: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, startImmediately: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -320,21 +320,21 @@ describe('addCommand', () => {
   });
 
   it('passes explicit --retries value to addJob', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, retries: 3 });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 3 });
 
     const callArgs = vi.mocked(addJob).mock.calls[0];
     expect(callArgs[13]).toBe(3);
   });
 
   it('--no-retry resolves retry budget to 0', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, retry: false });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retry: false });
 
     const callArgs = vi.mocked(addJob).mock.calls[0];
     expect(callArgs[13]).toBe(0);
   });
 
   it('explicit --retries takes precedence over --no-retry when both are set', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, retries: 4, retry: false });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 4, retry: false });
 
     const callArgs = vi.mocked(addJob).mock.calls[0];
     expect(callArgs[13]).toBe(4);
@@ -348,7 +348,7 @@ describe('addCommand', () => {
       retryBudget: 6,
     });
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     const callArgs = vi.mocked(addJob).mock.calls[0];
     expect(callArgs[13]).toBe(6);
@@ -358,7 +358,7 @@ describe('addCommand', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { noNotify: true, retries: -1 })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: -1 })).rejects.toThrow('exit');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('--retries must be a non-negative integer'));
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -369,7 +369,7 @@ describe('addCommand', () => {
   });
 
   it('prints effective retry budget in human output', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, retries: 5 });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 5 });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('Retry budget: 5');
@@ -379,7 +379,7 @@ describe('addCommand', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { profile: 'garbage', noNotify: true })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { profile: 'garbage', noNotify: true, noCategories: true })).rejects.toThrow('exit');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid profile'));
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -392,7 +392,7 @@ describe('addCommand', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus', noNotify: true })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { provider: 'bogus', noNotify: true, noCategories: true })).rejects.toThrow('exit');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown provider'));
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -402,14 +402,14 @@ describe('addCommand', () => {
   });
 
   it('shows non-default profile/provider tag in human output', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true });
+    await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true, noCategories: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('[budget/hybrid]');
   });
 
   it('does not show tag when profile/provider are defaults', async () => {
-    await addCommand('my-project', 'fix stuff', { profile: 'balanced', provider: 'claude-only', noNotify: true });
+    await addCommand('my-project', 'fix stuff', { profile: 'balanced', provider: 'claude-only', noNotify: true, noCategories: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).not.toContain('[');
@@ -463,7 +463,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true })).rejects.toThrow('exit');
+    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
@@ -483,7 +483,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true })).rejects.toThrow('exit');
+    await expect(addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
@@ -501,7 +501,7 @@ describe('project setup validation', () => {
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
     // Should not exit — addJob should be called with the resolved absolute path
-    await addCommand('test-proj', 'fix stuff', { noNotify: true });
+    await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -516,7 +516,7 @@ describe('project setup validation', () => {
     writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
 
     // With --force, should bypass validation and call addJob with resolved path
-    await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true });
+    await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -533,7 +533,7 @@ describe('project setup validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     // Should NOT exit — addJob should be called despite warning
-    await addCommand('test-proj', 'fix stuff', { noNotify: true });
+    await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -546,7 +546,7 @@ describe('project setup validation', () => {
 
   it('resolves "." to cwd when --force is set', async () => {
     // "." resolves to process.cwd() — no project dir creation needed with --force
-    await addCommand('.', 'fix stuff', { force: true, noNotify: true });
+    await addCommand('.', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -556,7 +556,7 @@ describe('project setup validation', () => {
   it('uses absolute path as-is when --force is set', async () => {
     const absPath = '/tmp/some-abs-path';
 
-    await addCommand(absPath, 'fix stuff', { force: true, noNotify: true });
+    await addCommand(absPath, 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
@@ -638,7 +638,7 @@ describe('duplicate detection', () => {
   it('skips addJob when duplicate pending job found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'pending' });
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -649,7 +649,7 @@ describe('duplicate detection', () => {
   it('skips addJob when duplicate running job found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'running' });
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -659,7 +659,7 @@ describe('duplicate detection', () => {
   it('skips addJob when recently completed duplicate exists', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue({ ...fakeJob, status: 'completed' as const });
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).not.toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -669,7 +669,7 @@ describe('duplicate detection', () => {
   it('--force bypasses duplicate check', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
 
-    await addCommand('my-project', 'fix stuff', { force: true, noNotify: true });
+    await addCommand('my-project', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(findDuplicateJob).not.toHaveBeenCalled();
     expect(addJob).toHaveBeenCalled();
@@ -678,7 +678,7 @@ describe('duplicate detection', () => {
   it('proceeds when no duplicate found', async () => {
     vi.mocked(findDuplicateJob).mockReturnValue(null);
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
   });
@@ -687,7 +687,7 @@ describe('duplicate detection', () => {
     mockJsonMode = true;
     vi.mocked(findDuplicateJob).mockReturnValue(fakeJob);
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(mockOutputJson).toHaveBeenCalledWith({
       duplicate: true,
@@ -737,7 +737,7 @@ describe('notify flag validation', () => {
   it('succeeds without --notify or --no-notify (notify is optional)', async () => {
     // No --notify, no --no-notify, no PILOT_DEFAULT_NOTIFY, no project owner
     // Should succeed (not exit) and show informational hint
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -745,7 +745,7 @@ describe('notify flag validation', () => {
   });
 
   it('--notify with derivable legacy key snapshots notifyRoute on the job', async () => {
-    await addCommand('my-project', 'fix stuff', { notify: safeLegacyMain });
+    await addCommand('my-project', 'fix stuff', { notify: safeLegacyMain, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -771,7 +771,7 @@ describe('notify flag validation', () => {
   });
 
   it('--no-notify skips notification silently (callbackSessionKey = undefined)', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -795,7 +795,7 @@ describe('notify flag validation', () => {
   it('PILOT_DEFAULT_NOTIFY env var provides fallback session key', async () => {
     process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -823,7 +823,7 @@ describe('notify flag validation', () => {
   it('--notify takes precedence over PILOT_DEFAULT_NOTIFY env var', async () => {
     process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
-    await addCommand('my-project', 'fix stuff', { notify: safeLegacyOverride });
+    await addCommand('my-project', 'fix stuff', { notify: safeLegacyOverride, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -851,7 +851,7 @@ describe('notify flag validation', () => {
   it('--no-notify overrides PILOT_DEFAULT_NOTIFY env var', async () => {
     process.env.PILOT_DEFAULT_NOTIFY = safeLegacyMain;
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -885,12 +885,13 @@ describe('notify flag validation', () => {
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
+      defaultCategories: null,
     });
 
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { notify: safeLegacyMain })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { notify: safeLegacyMain, noCategories: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(2);
     expect(addJob).not.toHaveBeenCalled();
@@ -905,7 +906,7 @@ describe('notify flag validation', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
 
-    await expect(addCommand('my-project', 'fix stuff', { notify: 'main' })).rejects.toThrow('exit');
+    await expect(addCommand('my-project', 'fix stuff', { notify: 'main', noCategories: true })).rejects.toThrow('exit');
 
     expect(exitSpy).toHaveBeenCalledWith(2);
     expect(addJob).not.toHaveBeenCalled();
@@ -932,9 +933,10 @@ describe('notify flag validation', () => {
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
+      defaultCategories: null,
     });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -969,7 +971,7 @@ describe('notify flag validation', () => {
     // Note: --dry-run doesn't prevent addJob from being called in the current implementation
     // (dry-run only affects the notify requirement, not the actual queuing).
     // The key is that no exit(2) is called for the missing notify.
-    await addCommand('my-project', 'fix stuff', { dryRun: true });
+    await addCommand('my-project', 'fix stuff', { dryRun: true, noCategories: true });
 
     // exitSpy should NOT have been called with code 2 for the notify requirement
     const notifyExitCalls = exitSpy.mock.calls.filter(([code]) => code === 2);
@@ -1026,9 +1028,10 @@ describe('project owner as fallback notify', () => {
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
+      defaultCategories: null,
     });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),
@@ -1058,7 +1061,7 @@ describe('project owner as fallback notify', () => {
     vi.mocked(getProject).mockReturnValue(null);
 
     // Should succeed (not exit) — notify is optional
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -1095,12 +1098,12 @@ describe('dry-run behavior', () => {
   });
 
   it('--dry-run does NOT call addJob', async () => {
-    await addCommand('my-project', 'fix stuff', { dryRun: true });
+    await addCommand('my-project', 'fix stuff', { dryRun: true, noCategories: true });
     expect(addJob).not.toHaveBeenCalled();
   });
 
   it('--dry-run outputs a preview without queuing', async () => {
-    await addCommand('my-project', 'fix stuff', { dryRun: true });
+    await addCommand('my-project', 'fix stuff', { dryRun: true, noCategories: true });
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('[dry-run]');
     expect(output).toContain('Would queue');
@@ -1144,7 +1147,7 @@ describe('unregistered project warning', () => {
     vi.mocked(getProject).mockReturnValue(null);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('Project not registered');
@@ -1163,10 +1166,11 @@ describe('unregistered project warning', () => {
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
+      defaultCategories: null,
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).not.toContain('Project not registered');
@@ -1212,7 +1216,7 @@ describe('optional notify behavior', () => {
 
   it('succeeds with no notify config at all — no error, no exit', async () => {
     // No --notify, no --no-notify, no env var, no project owner
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
     // notifyRoute should NOT be passed (undefined)
@@ -1228,7 +1232,7 @@ describe('optional notify behavior', () => {
   it('does not show notify hint in JSON mode', async () => {
     mockJsonMode = true;
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
     // In JSON mode, the informational hint should NOT appear
@@ -1236,7 +1240,7 @@ describe('optional notify behavior', () => {
   });
 
   it('--no-notify still works as explicit opt-out', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true });
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalled();
     const callArgs = vi.mocked(addJob).mock.calls[0];
@@ -1263,9 +1267,10 @@ describe('optional notify behavior', () => {
       blockedReason: null,
       blockedAt: null,
       createdAt: '2026-03-05T00:00:00Z',
+      defaultCategories: null,
     });
 
-    await addCommand('my-project', 'fix stuff', {});
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
       expect.stringContaining('my-project'),

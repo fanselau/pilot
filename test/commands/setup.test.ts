@@ -171,18 +171,15 @@ afterEach(() => {
 
 // ── Tests: setup skill offer ────────────────────────────────────────────
 
-describe('setup skill offer', () => {
-  it('shows detected stack and skill count after successful setup (non-TTY)', async () => {
-    // Non-TTY so it won't try to prompt
+describe('setup skill offer (removed — skills bootstrap no longer in setup)', () => {
+  it('does NOT call recommendDefaultSkills after setup (bootstrap removed)', async () => {
     (process.stdin as StdinWithTTY).isTTY = false;
 
     await setupCommand('/tmp/my-project', {});
 
-    expect(mockRecommendDefaultSkills).toHaveBeenCalled();
-    const joined = outputLines.join('\n');
-    expect(joined).toContain('Detected stack:');
-    expect(joined).toContain('react');
-    expect(joined).toContain('5 recommended skills available');
+    // Setup no longer calls recommendDefaultSkills — skill management is separate
+    expect(mockRecommendDefaultSkills).not.toHaveBeenCalled();
+    expect(mockBootstrapDefaultSkills).not.toHaveBeenCalled();
   });
 
   it('skips skill offer when setup has errors', async () => {
@@ -196,36 +193,16 @@ describe('setup skill offer', () => {
     expect(mockRecommendDefaultSkills).not.toHaveBeenCalled();
   });
 
-  it('shows hint to run bootstrap manually in non-TTY mode', async () => {
+  it('no skill recommendation or bootstrap output in non-TTY mode', async () => {
     (process.stdin as StdinWithTTY).isTTY = false;
 
     await setupCommand('/tmp/my-project', {});
 
     const joined = outputLines.join('\n');
-    expect(joined).toContain('pilot skills bootstrap --yes');
-    // Should NOT have tried to bootstrap
+    expect(joined).not.toContain('pilot skills bootstrap');
+    expect(joined).not.toContain('Detected stack:');
+    expect(joined).not.toContain('recommended skills available');
     expect(mockBootstrapDefaultSkills).not.toHaveBeenCalled();
-  });
-
-  it('setup succeeds even if skill recommendation throws', async () => {
-    (process.stdin as StdinWithTTY).isTTY = false;
-    mockRecommendDefaultSkills.mockImplementation(() => {
-      throw new Error('Module not found');
-    });
-
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-    // Should NOT throw — setup already succeeded
-    await setupCommand('/tmp/my-project', {});
-
-    // Verify warning was written to stderr
-    const stderrOutput = stderrSpy.mock.calls.map(([line]) => line as string).join('');
-    expect(stderrOutput).toContain('skill recommendation failed');
-
-    // process.exit should NOT have been called (setup succeeded)
-    expect(process.exit).not.toHaveBeenCalled();
-
-    stderrSpy.mockRestore();
   });
 
   it('skips skill offer in verify mode', async () => {
@@ -247,36 +224,6 @@ describe('setup skill offer', () => {
     await setupCommand('/tmp/my-project', {});
 
     expect(mockRecommendDefaultSkills).not.toHaveBeenCalled();
-  });
-
-  it('does not show detected stack line when stack is empty', async () => {
-    (process.stdin as StdinWithTTY).isTTY = false;
-    mockRecommendDefaultSkills.mockReturnValue({
-      skills: [
-        { install: 'author/skill-1', categories: ['general'], tier: 1 },
-      ],
-      detectedStack: { items: [], signals: {} },
-    });
-
-    await setupCommand('/tmp/my-project', {});
-
-    const joined = outputLines.join('\n');
-    expect(joined).toContain('Detected stack:');
-    expect(joined).toContain('none');
-    expect(joined).toContain('1 recommended skills available');
-  });
-
-  it('does not show skill offer when no skills recommended', async () => {
-    (process.stdin as StdinWithTTY).isTTY = false;
-    mockRecommendDefaultSkills.mockReturnValue({
-      skills: [],
-      detectedStack: { items: [], signals: {} },
-    });
-
-    await setupCommand('/tmp/my-project', {});
-
-    const joined = outputLines.join('\n');
-    expect(joined).not.toContain('recommended skills available');
   });
 });
 
