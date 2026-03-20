@@ -53,6 +53,7 @@ vi.mock('../../src/core/db.js', () => ({
     hungCount: 0,
     lastHungReason: null,
   })),
+  bump: vi.fn(),
   findDuplicateJob: vi.fn(() => null),
   getProject: vi.fn(() => null),
   updateJobCategories: vi.fn(),
@@ -136,7 +137,7 @@ vi.mock('../../src/core/config.js', () => {
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
-import { addJob, findDuplicateJob, getProject, updateJobCategories } from '../../src/core/db.js';
+import { addJob, bump, findDuplicateJob, getProject, updateJobCategories } from '../../src/core/db.js';
 import { getConfigFileDefaults } from '../../src/core/config.js';
 import type { JobScope } from '../../src/core/types.js';
 
@@ -1221,5 +1222,57 @@ describe('optional notify behavior', () => {
         to: 'telegram:-5181925291',
       },
     );
+  });
+});
+
+// ── --next flag (bump to front of queue) ───────────────────────────────────
+
+describe('--next flag', () => {
+  let nextTestsDir: string;
+
+  beforeAll(() => {
+    nextTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-next-'));
+    mockedProjectDir = nextTestsDir;
+    syncProjectDirEnv();
+
+    // Set up my-project with proper structure
+    const projectDir = path.join(nextTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(nextTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = nextTestsDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  it('calls bump(job.id) when opts.next is true', async () => {
+    await addCommand('my-project', 'fix stuff', { next: true, noNotify: true, noCategories: true });
+
+    expect(addJob).toHaveBeenCalled();
+    expect(bump).toHaveBeenCalledWith('ab12');
+  });
+
+  it('does NOT call bump when opts.next is not set', async () => {
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    expect(addJob).toHaveBeenCalled();
+    expect(bump).not.toHaveBeenCalled();
+  });
+
+  it('shows "front of queue" indicator in human output when --next is used', async () => {
+    await addCommand('my-project', 'fix stuff', { next: true, noNotify: true, noCategories: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('front of queue');
   });
 });
