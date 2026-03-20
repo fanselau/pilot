@@ -1352,7 +1352,7 @@ Wave structure:
 **Goal:** Make `--categories` required on `pilot add` with helpful AI-caller-friendly error, add project-level default categories, rewrite skills to manifest-only architecture (`{ repo, skill }` format, no git-clone/inject/sync), and switch runner to JIT `npx skills add` installation.
 **Requirements**: TBD
 **Depends on:** Phase 73
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 74-01-PLAN.md — Foundation: types/DB (Project.defaultCategories, SkillEntry rewrite), CATEGORY_INFO, PREDEFINED_CATEGORIES expansion, skills.ts manifest-only rewrite, default-skills.ts SkillRef format
