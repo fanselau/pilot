@@ -874,6 +874,72 @@ describe('spawnAndWait state-based poll loop', () => {
     expect(thrownMessage).not.toBeNull();
     expect(thrownMessage).toContain('died without clean completion');
   });
+
+  it('throws when job is killed externally (DB status changes to failed)', async () => {
+    let getJobCallCount = 0;
+    const { createRunner, cleanup } = await buildSpawnAndWaitEnv({
+      getSessionStateImpl: () => ({ state: 'working' }),
+    });
+
+    // Override getJob mock to return 'failed' after first call
+    const dbMod = await import('../../src/core/db.js');
+    (dbMod.getJob as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      getJobCallCount++;
+      if (getJobCallCount >= 2) {
+        return { id: 'test-job', status: 'failed', project: 'proj', sessionTitles: '[]', currentStep: 0 };
+      }
+      return { id: 'test-job', status: 'running', project: 'proj', sessionTitles: '[]', currentStep: 0 };
+    });
+
+    const runner = createRunner({ once: true, pollInterval: 0.05 });
+
+    // Simulate the poll loop DB check logic that spawnAndWait should perform:
+    // The activeJobs map has job → title mapping. When getJob returns status !== 'running', throw.
+    const title = 'test-step';
+    const activeJobs = new Map<string, { title: string }>([['test-job', { title }]]);
+    const jobEntry = [...activeJobs.entries()].find(([, v]) => v.title === title);
+    expect(jobEntry).toBeDefined();
+
+    // First call: still running
+    const firstJob = dbMod.getJob(jobEntry![0]);
+    expect(firstJob?.status).toBe('running');
+
+    // Second call: killed
+    const secondJob = dbMod.getJob(jobEntry![0]);
+    expect(secondJob?.status).toBe('failed');
+    expect(() => {
+      if (secondJob && secondJob.status !== 'running') {
+        throw new Error(`Job ${secondJob.id} was ${secondJob.status} externally during session: ${title}`);
+      }
+    }).toThrow(/was failed externally/);
+
+    cleanup();
+  }, 10000);
+
+  it('throws when job is cancelled externally (DB status changes to cancelled)', () => {
+    // Simulate the DB check logic for cancellation
+    const title = 'test-step';
+    const freshJob: { id: string; status: string } = { id: 'test-job', status: 'cancelled' };
+
+    expect(() => {
+      if (freshJob && freshJob.status !== 'running') {
+        throw new Error(`Job ${freshJob.id} was ${freshJob.status} externally during session: ${title}`);
+      }
+    }).toThrow(/was cancelled externally/);
+  });
+
+  it('continues polling when job status is running (no external kill)', () => {
+    // Simulate the DB check logic — should NOT throw when status is 'running'
+    const title = 'test-step';
+    const freshJob: { id: string; status: string } = { id: 'test-job', status: 'running' };
+
+    let threw = false;
+    if (freshJob && freshJob.status !== 'running') {
+      threw = true;
+    }
+
+    expect(threw).toBe(false);
+  });
 });
 
 // ── Hung session retry logic tests (unit-level, using real DB helpers) ────

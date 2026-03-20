@@ -1015,6 +1015,44 @@ describe('getSessionState', () => {
     expect(result.state).toBe('done');
   });
 
+  it("returns 'done' when parent is done and child session has no activity for 5+ minutes (stale child)", () => {
+    const now = Date.now();
+    const sixMinutesAgo = now - 6 * 60 * 1000;
+
+    // Parent session with step-finish reason='stop'
+    insertSession(db, 'sess-parent-stale', 'parent-stale-test', 1000, now);
+    insertMessage(db, 'msg-parent-stale', 'sess-parent-stale', 1000, { role: 'assistant' });
+    insertPart(db, 'p-parent-stale-start', 'msg-parent-stale', 'sess-parent-stale', 1000, { type: 'step-start' });
+    insertPart(db, 'p-parent-stale-finish', 'msg-parent-stale', 'sess-parent-stale', 2000, { type: 'step-finish', reason: 'stop' });
+
+    // Child session (no step-finish) with only old activity (6 minutes ago)
+    insertSession(db, 'sess-child-stale', 'child-stale-test', sixMinutesAgo, sixMinutesAgo, 'sess-parent-stale');
+    insertMessage(db, 'msg-child-stale', 'sess-child-stale', sixMinutesAgo, { role: 'assistant' });
+    insertPart(db, 'p-child-stale', 'msg-child-stale', 'sess-child-stale', sixMinutesAgo, { type: 'text', text: 'Working...' });
+
+    const result = getSessionState('sess-parent-stale');
+    expect(result.state).toBe('done');
+  });
+
+  it("returns 'working' when parent is done and child session has recent activity (< 5 min)", () => {
+    const now = Date.now();
+    const oneMinuteAgo = now - 1 * 60 * 1000;
+
+    // Parent session with step-finish reason='stop'
+    insertSession(db, 'sess-parent-active', 'parent-active-test', 1000, now);
+    insertMessage(db, 'msg-parent-active', 'sess-parent-active', 1000, { role: 'assistant' });
+    insertPart(db, 'p-parent-active-start', 'msg-parent-active', 'sess-parent-active', 1000, { type: 'step-start' });
+    insertPart(db, 'p-parent-active-finish', 'msg-parent-active', 'sess-parent-active', 2000, { type: 'step-finish', reason: 'stop' });
+
+    // Child session (no step-finish) with recent activity (1 minute ago)
+    insertSession(db, 'sess-child-active', 'child-active-test', oneMinuteAgo, oneMinuteAgo, 'sess-parent-active');
+    insertMessage(db, 'msg-child-active', 'sess-child-active', oneMinuteAgo, { role: 'assistant' });
+    insertPart(db, 'p-child-active', 'msg-child-active', 'sess-child-active', oneMinuteAgo, { type: 'text', text: 'Still working...' });
+
+    const result = getSessionState('sess-parent-active');
+    expect(result.state).toBe('working');
+  });
+
   it('picks latest pending tool, not older completed tools', () => {
     insertSession(db, 'sess9', 'latest-pending-session', 1000, 3000);
     insertMessage(db, 'msg10', 'sess9', 1000, { role: 'assistant' });
