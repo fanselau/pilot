@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 73-05-PLAN.md
-last_updated: "2026-03-20T13:58:01.486Z"
+stopped_at: Completed 73-04-PLAN.md
+last_updated: "2026-03-20T14:04:45.024Z"
 last_activity: 2026-03-20 - Completed 73-01-PLAN.md
 progress:
   total_phases: 72
   completed_phases: 31
   total_plans: 112
-  completed_plans: 103
+  completed_plans: 104
   percent: 93
 ---
 
@@ -865,6 +865,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 73]: appendSteps uses db.transaction() for bulk insert atomicity
 - [Phase 73]: reDelegateForContinuation() uses phase-level model resolution and pilot-redelegate- session prefix
 - [Phase 73]: Default source to 'delegation' when step.source is nullish for backward compatibility
+- [Phase 73]: Deleted 5 retry-era artifacts and all intent routing methods, replaced with step execution loop + continuation handlers
 
 ## Blockers/Concerns Carried Forward
 
@@ -873,6 +874,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T13:57:51.500Z
-Stopped at: Completed 73-05-PLAN.md
+Last session: 2026-03-20T14:04:45.017Z
+Stopped at: Completed 73-04-PLAN.md
 Resume file: None
