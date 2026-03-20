@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Completed quick task 260320-vju: Bug fix pilot kill --force + stale child sessions"
-last_updated: "2026-03-20T22:53:09.352Z"
+stopped_at: Completed 77-03-PLAN.md
+last_updated: "2026-03-20T23:21:35.579Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
-  total_phases: 75
+  total_phases: 76
   completed_phases: 33
-  total_plans: 126
-  completed_plans: 114
+  total_plans: 130
+  completed_plans: 115
   percent: 93
 ---
 
@@ -346,7 +346,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 74 added: Required Categories on pilot add
 - Phase 75 added: Codex First-Class Citizen — Model-Adaptive Content Patching
 - Phase 76 added: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
-- Phase 77 added: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
+- Phase 77 added: Web UI Fixes — Post-Overhaul Regressions + Missing Features
 
 ## Decisions
 
@@ -884,6 +884,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 76-04]: Used react-resizable-panels v4 Group/Panel/Separator API (not v1/v2 PanelGroup/PanelResizeHandle) — Package was already installed at v4.7.3; v4 exports Group/Panel/Separator
 - [Phase 76-04]: observedModels added to JobDetailSnapshot.job type, derived from getSessionModelsRecursive per root session — Plan stated field existed but it was missing; added to backend and type for correctness
 - [Phase quick-260320-vc3]: Reuse bump() after addJob for --next flag rather than modifying addJob signature — minimal change, proven mechanism
+- [Phase 77]: Grace countdown computed client-side from createdAt + queueGraceSeconds — Avoids per-job server computation while keeping the countdown smooth
 
 ## Blockers/Concerns Carried Forward
 
@@ -892,6 +893,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T22:53:09.345Z
-Stopped at: Completed quick task 260320-vju: Bug fix pilot kill --force + stale child sessions
+Last session: 2026-03-20T23:21:35.572Z
+Stopped at: Completed 77-03-PLAN.md
 Resume file: None
