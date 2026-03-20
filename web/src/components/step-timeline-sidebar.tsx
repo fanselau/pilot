@@ -4,6 +4,10 @@
  * Displays compact job metadata (status, scope, description, duration),
  * model badges showing actual models used (derived from session data),
  * and a keyboard-navigable clickable list of all step groups.
+ *
+ * Sidebar is navigation-only: clicking a step triggers scrollIntoView
+ * in the content pane. The highlighted step is driven by scroll-spy,
+ * not user selection.
  */
 
 import { useRef } from 'react'
@@ -80,20 +84,34 @@ function shortProject(project: string): string {
   return project.split('/').pop() ?? project
 }
 
+/**
+ * Format a delegation step index for display.
+ * Delegation steps use negative indices (-100, -99, ...).
+ * Shows "D1", "D2", etc. based on position.
+ */
+function formatDelegationIndex(stepIndex: number, delegationCount: number): string {
+  if (delegationCount <= 1) return 'D'
+  // -100 → D1, -99 → D2, etc.
+  const pos = stepIndex + 101
+  return `D${pos}`
+}
+
 // ── Component ─────────────────────────────────────────────────────────────
 
 interface StepTimelineSidebarProps {
   snapshot: JobDetailSnapshot
   groups: StepTimelineGroup[]
-  selectedStep: number | null
-  onSelectStep: (idx: number | null) => void
+  /** Scroll-spy driven: which step is currently visible in the content pane. */
+  highlightedStep: number | null
+  /** Triggered when user clicks a step; parent scrolls the content pane. */
+  onClickStep: (idx: number) => void
 }
 
 export function StepTimelineSidebar({
   snapshot,
   groups,
-  selectedStep,
-  onSelectStep,
+  highlightedStep,
+  onClickStep,
 }: StepTimelineSidebarProps) {
   const { job } = snapshot
   const listRef = useRef<HTMLDivElement>(null)
@@ -111,28 +129,32 @@ export function StepTimelineSidebar({
 
   // Only indexed steps (exclude unattributed null-index groups)
   const stepGroups = groups.filter((g) => g.stepIndex !== null)
+  const delegationGroups = stepGroups.filter((g) => g.command === 'delegation')
+  const delegationCount = delegationGroups.length
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
     if (stepGroups.length === 0) return
 
-    if (selectedStep === null) {
+    const currentPos = highlightedStep !== null
+      ? stepGroups.findIndex((g) => g.stepIndex === highlightedStep)
+      : -1
+
+    if (currentPos === -1) {
       const group =
         e.key === 'ArrowDown' ? stepGroups[0] : stepGroups[stepGroups.length - 1]
-      onSelectStep(group.stepIndex)
+      if (group.stepIndex != null) onClickStep(group.stepIndex)
       return
     }
-
-    const currentPos = stepGroups.findIndex((g) => g.stepIndex === selectedStep)
-    if (currentPos === -1) return
 
     const nextPos =
       e.key === 'ArrowDown'
         ? Math.min(currentPos + 1, stepGroups.length - 1)
         : Math.max(currentPos - 1, 0)
 
-    onSelectStep(stepGroups[nextPos].stepIndex)
+    const nextGroup = stepGroups[nextPos]
+    if (nextGroup.stepIndex != null) onClickStep(nextGroup.stepIndex)
   }
 
   return (
@@ -200,24 +222,29 @@ export function StepTimelineSidebar({
         ) : (
           <div className="py-1">
             {stepGroups.map((group) => {
-              const isSelected = selectedStep === group.stepIndex
+              const isDelegation = group.command === 'delegation'
+              const isHighlighted = highlightedStep === group.stepIndex
               return (
                 <button
                   key={`step-${group.stepIndex}`}
                   className={[
                     'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors hover:bg-accent/30',
-                    isSelected
+                    isHighlighted
                       ? 'border-l-2 border-primary bg-accent/50'
                       : 'border-l-2 border-transparent',
                   ].join(' ')}
-                  onClick={() => onSelectStep(group.stepIndex)}
+                  onClick={() => {
+                    if (group.stepIndex != null) onClickStep(group.stepIndex)
+                  }}
                 >
                   <span className="w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
-                    {group.stepIndex}
+                    {isDelegation
+                      ? formatDelegationIndex(group.stepIndex!, delegationCount)
+                      : group.stepIndex}
                   </span>
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="truncate text-xs font-mono leading-tight">
-                      {group.command || '(no command)'}
+                      {isDelegation ? 'Delegation' : (group.command || '(no command)')}
                     </p>
                     <Badge variant={stepStatusVariant(group.status)} size="sm">
                       {group.status}

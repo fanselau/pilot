@@ -2,12 +2,15 @@
  * Split-pane job detail layout.
  *
  * Left pane (34% default): compact job metadata + step timeline sidebar.
- * Right pane (66%): selected step's activity content.
+ * Right pane (66%): continuous-scroll content with scroll-spy highlights.
+ *
+ * Sidebar clicks scroll the content pane to the target step section.
+ * An IntersectionObserver in the content pane drives sidebar highlighting.
  *
  * Uses react-resizable-panels v4 for resizable split layout.
  */
 
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { StepTimelineSidebar } from '~/components/step-timeline-sidebar'
@@ -24,34 +27,13 @@ export function SplitPaneDetail({
   groups,
   isActive,
 }: SplitPaneDetailProps) {
-  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(
-    null,
-  )
+  // Ref-based scroll-to: content pane registers its scrollTo function here
+  const scrollToStepRef = useRef<((idx: number) => void) | null>(null)
+
+  // Scroll-spy driven: which step is currently visible in the content pane
+  const [visibleStepIndex, setVisibleStepIndex] = useState<number | null>(null)
+
   const [autoFollow, setAutoFollow] = useState(isActive)
-
-  // Auto-follow: when isActive && autoFollow, track the last running/active step
-  useEffect(() => {
-    if (!isActive || !autoFollow) return
-    const activeGroup = [...groups]
-      .reverse()
-      .find((g) => g.status === 'running' || g.status === 'active')
-    if (activeGroup?.stepIndex != null) {
-      setSelectedStepIndex(activeGroup.stepIndex)
-    } else if (groups.length > 0) {
-      const lastGroup = groups[groups.length - 1]
-      if (lastGroup.stepIndex != null) {
-        setSelectedStepIndex(lastGroup.stepIndex)
-      }
-    }
-  }, [groups, isActive, autoFollow])
-
-  // For completed jobs, default to last step on first render
-  useEffect(() => {
-    if (!isActive && selectedStepIndex === null && groups.length > 0) {
-      const lastGroup = groups[groups.length - 1]
-      setSelectedStepIndex(lastGroup.stepIndex)
-    }
-  }, [isActive, groups, selectedStepIndex])
 
   return (
     <Group
@@ -62,9 +44,9 @@ export function SplitPaneDetail({
         <StepTimelineSidebar
           snapshot={snapshot}
           groups={groups}
-          selectedStep={selectedStepIndex}
-          onSelectStep={(idx) => {
-            setSelectedStepIndex(idx)
+          highlightedStep={visibleStepIndex}
+          onClickStep={(idx) => {
+            scrollToStepRef.current?.(idx)
             setAutoFollow(false)
           }}
         />
@@ -73,10 +55,11 @@ export function SplitPaneDetail({
       <Panel>
         <StepContentPane
           groups={groups}
-          selectedStep={selectedStepIndex}
           jobId={snapshot.job.id}
           autoFollow={autoFollow}
           onFollowToggle={() => setAutoFollow(true)}
+          scrollToStepRef={scrollToStepRef}
+          onVisibleStepChange={setVisibleStepIndex}
         />
       </Panel>
     </Group>

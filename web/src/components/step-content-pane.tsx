@@ -1,17 +1,20 @@
 /**
  * Content pane for the split-pane job detail view.
  *
- * Shows the selected step's full activity stream. Uses @tanstack/react-virtual
- * for virtualization when item count exceeds VIRTUALIZE_THRESHOLD (200).
+ * Always renders ALL step groups in a continuous scroll. The sidebar drives
+ * navigation via scrollIntoView, and an IntersectionObserver reports which
+ * step section is currently visible (scroll-spy).
+ *
+ * Uses @tanstack/react-virtual for virtualization when total item count
+ * exceeds VIRTUALIZE_THRESHOLD (200).
  * Auto-scrolls to bottom for running jobs when autoFollow=true.
  */
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useCallback, type MutableRefObject } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { StepTimelineGroup, StepTimelineItem } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import { Separator } from '~/components/ui/separator'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 
 /** Minimum item count before virtual scrolling is activated. */
@@ -19,10 +22,13 @@ const VIRTUALIZE_THRESHOLD = 200
 
 export interface StepContentPaneProps {
   groups: StepTimelineGroup[]
-  selectedStep: number | null
   jobId: string
   autoFollow: boolean
   onFollowToggle: () => void
+  /** Ref that the parent sets; content pane registers its scrollTo function here. */
+  scrollToStepRef: MutableRefObject<((idx: number) => void) | null>
+  /** Callback when the visible step changes (scroll-spy). */
+  onVisibleStepChange: (idx: number | null) => void
 }
 
 function stepStatusVariant(status: string) {
@@ -42,45 +48,94 @@ function stepStatusVariant(status: string) {
 }
 
 /**
- * Virtual scrolling content pane. When items ≥ VIRTUALIZE_THRESHOLD it uses
- * @tanstack/react-virtual for performance; below that it renders directly.
+ * Continuous-scroll content pane with scroll-spy.
+ * All groups are always rendered. Sidebar clicks trigger scrollIntoView.
  */
 export function StepContentPane({
   groups,
-  selectedStep,
   jobId,
   autoFollow,
   onFollowToggle,
+  scrollToStepRef,
+  onVisibleStepChange,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // Flatten items: show selected step's items, or all items if no step selected
-  const items: StepTimelineItem[] = selectedStep === null
-    ? groups.flatMap((g) => g.items)
-    : (groups.find((g) => g.stepIndex === selectedStep)?.items ?? [])
-
-  const selectedGroup = selectedStep !== null
-    ? groups.find((g) => g.stepIndex === selectedStep)
-    : null
-
-  const useVirtual = items.length >= VIRTUALIZE_THRESHOLD
+  // All items flattened (for virtualization threshold check)
+  const allItems: StepTimelineItem[] = groups.flatMap((g) => g.items)
+  const useVirtual = allItems.length >= VIRTUALIZE_THRESHOLD
 
   const virtualizer = useVirtualizer({
-    count: items.length,
+    count: allItems.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
     overscan: 20,
   })
 
-  // Auto-scroll to bottom on every data change when following is active
+  // ── ScrollTo registration ───────────────────────────────────────────────
+
+  const scrollToStep = useCallback((stepIndex: number) => {
+    const el = document.getElementById(`step-section-${stepIndex}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
   useEffect(() => {
-    if (!autoFollow || items.length === 0) return
+    scrollToStepRef.current = scrollToStep
+    return () => {
+      scrollToStepRef.current = null
+    }
+  }, [scrollToStep, scrollToStepRef])
+
+  // ── Scroll-spy via IntersectionObserver ──────────────────────────────────
+
+  useEffect(() => {
+    if (useVirtual) return // Skip scroll-spy in virtualized mode
+
+    const container = parentRef.current
+    if (!container) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the topmost intersecting section
+        let topEntry: IntersectionObserverEntry | null = null
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          if (!topEntry || entry.boundingClientRect.top < topEntry.boundingClientRect.top) {
+            topEntry = entry
+          }
+        }
+        if (topEntry) {
+          const stepAttr = (topEntry.target as HTMLElement).dataset.stepIndex
+          if (stepAttr != null) {
+            onVisibleStepChange(Number(stepAttr))
+          }
+        }
+      },
+      {
+        root: container,
+        rootMargin: '-10% 0px -70% 0px',
+        threshold: 0,
+      },
+    )
+
+    const sections = container.querySelectorAll<HTMLElement>('[data-step-index]')
+    sections.forEach((section) => observer.observe(section))
+
+    return () => observer.disconnect()
+  }, [groups, useVirtual, onVisibleStepChange])
+
+  // ── Auto-follow for running jobs ────────────────────────────────────────
+
+  useEffect(() => {
+    if (!autoFollow || allItems.length === 0) return
     if (useVirtual) {
-      virtualizer.scrollToIndex(items.length - 1, { align: 'end' })
+      virtualizer.scrollToIndex(allItems.length - 1, { align: 'end' })
     } else if (parentRef.current) {
       parentRef.current.scrollTop = parentRef.current.scrollHeight
     }
-  }, [autoFollow, items.length, useVirtual, virtualizer])
+  }, [autoFollow, allItems.length, useVirtual, virtualizer])
 
   // ── Empty state ──────────────────────────────────────────────────────────
 
@@ -92,37 +147,13 @@ export function StepContentPane({
     )
   }
 
-  if (selectedStep !== null && items.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No activity recorded for this step.
-      </div>
-    )
-  }
+  // ── Header ──────────────────────────────────────────────────────────────
 
-  // ── Step header when a specific step is selected ─────────────────────────
-
-  const stepHeader = selectedGroup ? (
-    <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
-      <Badge variant="secondary">
-        {selectedGroup.stepIndex === null ? 'Unattributed' : `Step ${selectedGroup.stepIndex}`}
-      </Badge>
-      <Badge variant={stepStatusVariant(selectedGroup.status)} size="sm">
-        {selectedGroup.status}
-      </Badge>
-      <span className="truncate text-sm text-muted-foreground">
-        {selectedGroup.command}
-      </span>
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-        {items.length} item{items.length !== 1 ? 's' : ''}
-        {useVirtual ? ' (virtualized)' : ''}
-      </span>
-    </div>
-  ) : (
+  const header = (
     <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
       <span className="text-sm font-medium">All steps</span>
       <span className="ml-auto text-xs text-muted-foreground">
-        {items.length} item{items.length !== 1 ? 's' : ''}
+        {allItems.length} item{allItems.length !== 1 ? 's' : ''}
         {useVirtual ? ' (virtualized)' : ''}
       </span>
     </div>
@@ -132,7 +163,7 @@ export function StepContentPane({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {stepHeader}
+      {header}
 
       <div className="relative min-h-0 flex-1">
         <div ref={parentRef} className="h-full overflow-auto">
@@ -146,7 +177,7 @@ export function StepContentPane({
               }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
-                const item = items[virtualRow.index]
+                const item = allItems[virtualRow.index]
                 return (
                   <div
                     key={virtualRow.key}
@@ -167,56 +198,44 @@ export function StepContentPane({
               })}
             </div>
           ) : (
-            /* Direct rendering for small item counts */
-            selectedStep === null ? (
-              /* Overview: show all groups with separators */
-              <div className="space-y-0">
-                {groups.map((group, gIdx) => (
-                  <div key={group.stepIndex ?? 'unattributed'}>
-                    {gIdx > 0 && <Separator className="my-2" />}
-                    <div className="px-4">
-                      <div className="flex items-center gap-2 py-1.5">
-                        <Badge variant="secondary" size="sm">
-                          {group.stepIndex === null ? 'Unattributed' : `Step ${group.stepIndex}`}
-                        </Badge>
-                        <Badge variant={stepStatusVariant(group.status)} size="sm">
-                          {group.status}
-                        </Badge>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {group.command}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5 border-l-2 border-border/40 pl-3">
-                        {group.items.map((item, idx) => {
-                          const key = item.kind === 'fork-card'
-                            ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                            : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
-                          return (
-                            <div key={key}>
-                              <TimelineItemRenderer item={item} jobId={jobId} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
+            /* Continuous scroll: all groups rendered as sections */
+            <div className="space-y-0">
+              {groups.map((group) => (
+                <section
+                  key={group.stepIndex ?? 'unattributed'}
+                  id={`step-section-${group.stepIndex}`}
+                  data-step-index={group.stepIndex}
+                >
+                  <div className="flex items-center gap-2 py-2 px-4 sticky top-0 bg-background/95 backdrop-blur z-10 border-b">
+                    <Badge variant="secondary" size="sm">
+                      {group.command === 'delegation'
+                        ? 'Delegation'
+                        : group.stepIndex === null
+                          ? 'Unattributed'
+                          : `Step ${group.stepIndex}`}
+                    </Badge>
+                    <Badge variant={stepStatusVariant(group.status)} size="sm">
+                      {group.status}
+                    </Badge>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {group.command}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              /* Single step: render its items directly */
-              <div className="space-y-0.5 px-4 py-2">
-                {items.map((item, idx) => {
-                  const key = item.kind === 'fork-card'
-                    ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                    : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
-                  return (
-                    <div key={key} className="border-b border-border/20">
-                      <TimelineItemRenderer item={item} jobId={jobId} />
-                    </div>
-                  )
-                })}
-              </div>
-            )
+                  <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
+                    {group.items.map((item, idx) => {
+                      const key = item.kind === 'fork-card'
+                        ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
+                        : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
+                      return (
+                        <div key={key}>
+                          <TimelineItemRenderer item={item} jobId={jobId} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
         </div>
 
