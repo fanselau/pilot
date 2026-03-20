@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 76-02-PLAN.md
-last_updated: "2026-03-20T17:16:51.778Z"
+stopped_at: Completed 76-03-PLAN.md
+last_updated: "2026-03-20T17:29:18.727Z"
 last_activity: "2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot"
 progress:
   total_phases: 75
   completed_phases: 33
   total_plans: 125
-  completed_plans: 112
+  completed_plans: 113
   percent: 93
 ---
 
@@ -878,6 +878,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 74]: Manifest-only skill registry: SkillEntry uses repo+skill instead of source+path; loadManifest() auto-migrates old format — Supports monorepo skill disambiguation and eliminates local file cache
 - [Phase 76-01]: Client/server time-utils duplication: web/src/lib/time-utils.ts intentionally mirrors core to avoid importing sqlite3-dependent module in browser bundle — safeParseTimestamp returns epoch ms (not epoch seconds) for JS Date API consistency
 - [Phase 76-pilot-web-ui-overhaul]: Used pnpm (not npm) for package installation; pnpm is project package manager per package.json config block
+- [Phase 76-pilot-web-ui-overhaul]: getFullJobTimeline uses limit:10000 - sufficient for all practical jobs — Conservative limit prevents memory issues while loading all timeline data
 
 ## Blockers/Concerns Carried Forward
 
@@ -886,6 +887,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T17:16:40.782Z
-Stopped at: Completed 76-02-PLAN.md
+Last session: 2026-03-20T17:29:14.705Z
+Stopped at: Completed 76-03-PLAN.md
 Resume file: None

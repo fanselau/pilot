@@ -95,7 +95,7 @@ function groupKey(group: StepTimelineGroup): string {
   return `step-${group.stepIndex}`
 }
 
-function ActivityRow({ item }: { item: TimelineActivityItem }) {
+export function ActivityRow({ item }: { item: TimelineActivityItem }) {
   const [fullText, setFullText] = useState<string | null>(null)
   const isTruncated = item.text.length > 220
 
@@ -137,7 +137,7 @@ function ActivityRow({ item }: { item: TimelineActivityItem }) {
   )
 }
 
-function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
+export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
   const hasLongInput = (item.toolInput?.length ?? 0) > 100
 
   return (
@@ -180,7 +180,7 @@ function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
   )
 }
 
-function TimelineItemRenderer({
+export function TimelineItemRenderer({
   item,
   jobId,
 }: {

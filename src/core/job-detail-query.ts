@@ -253,6 +253,15 @@ function getJobDetail(jobId: string): JobDetailSnapshot | null {
   // Compute duration
   const durationMs = computeDurationMs(job.startedAt, job.completedAt);
 
+  // Collect observed models across all root sessions (deduplicated, sorted)
+  const observedModelsSet = new Set<string>();
+  for (const rootSession of rootSessions) {
+    for (const model of getSessionModelsRecursive(rootSession.sessionId)) {
+      if (model) observedModelsSet.add(model);
+    }
+  }
+  const observedModels = Array.from(observedModelsSet).sort();
+
   return {
     job: {
       id: job.id,
@@ -270,6 +279,7 @@ function getJobDetail(jobId: string): JobDetailSnapshot | null {
       modelProfile: job.modelProfile,
       providerMode: job.providerMode,
       error: job.error,
+      observedModels,
     },
     steps,
     rootSessions,

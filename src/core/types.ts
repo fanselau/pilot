@@ -390,6 +390,7 @@ export interface JobDetailSnapshot {
     modelProfile: ModelProfile;
     providerMode: string;
     error: string | null;
+    observedModels: string[];
   };
   steps: JobStepSummary[];
   rootSessions: SessionSummary[];
