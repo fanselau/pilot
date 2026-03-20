@@ -23,6 +23,8 @@ import {
   mkdirSync,
   readdirSync,
   statSync,
+  existsSync,
+  rmSync,
   watch as fsWatch,
 } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -76,9 +78,7 @@ import {
   detectGitConflictState,
 } from './git-recovery.js';
 import {
-  resolveSkillsForJob,
-  injectSkills,
-  cleanupInjectedSkills,
+  installSkillsForJob,
 } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import {
@@ -648,21 +648,18 @@ class Runner {
         );
       }
 
-      // Inject matching skills into project's .opencode/skills/ directory
-      const resolvedSkills = resolveSkillsForJob(job.categories ?? null);
-      if (resolvedSkills.length > 0) {
-        try {
-          const injected = injectSkills(resolvedSkills, projectDir);
-          if (injected.length > 0) {
-            process.stderr.write(
-              `[runner] Injected ${injected.length} skill(s) for job ${job.id}: ${injected.join(', ')}\n`,
-            );
-          }
-        } catch (err) {
+      // Install matching skills into project's .opencode/skill/ directory (JIT v2 pattern)
+      try {
+        const installed = await installSkillsForJob(job.categories ?? null, projectDir);
+        if (installed.length > 0) {
           process.stderr.write(
-            `[runner] Warning: skill injection failed for job ${job.id}: ${errMsg(err)}\n`,
+            `[runner] Installed ${installed.length} skill(s) for job ${job.id}: ${installed.join(', ')}\n`,
           );
         }
+      } catch (err) {
+        process.stderr.write(
+          `[runner] Warning: skill installation failed for job ${job.id}: ${errMsg(err)}\n`,
+        );
       }
 
       this.patchModelsForJob(job, projectDir);
@@ -768,7 +765,10 @@ class Runner {
         } catch { /* ignore */ }
       }
       try {
-        cleanupInjectedSkills(projectDir);
+        const skillDir = path.join(projectDir, '.opencode', 'skill');
+        if (existsSync(skillDir)) {
+          rmSync(skillDir, { recursive: true, force: true });
+        }
       } catch {
         // Best-effort cleanup — don't fail the job
       }

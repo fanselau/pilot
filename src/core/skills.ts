@@ -528,6 +528,52 @@ export function injectSkills(skills: SkillEntry[], projectDir: string): string[]
   return injected;
 }
 
+// ── Install Skills for Job (v2 JIT pattern) ──────────────────────────────
+
+/**
+ * Install matched skills for a job directly into project's .opencode/skill/ directory.
+ * Uses resolveSkillsForJob() to find matching manifest entries, then runs
+ * `npx skills add <repo> --skill <name> --agent opencode --yes` for each.
+ *
+ * This is the v2 replacement for the old injectSkills/cleanupInjectedSkills cycle.
+ * Key differences from old pattern:
+ * - No ~/.pilot/skills/ file cache — manifest is a pure registry
+ * - Skills are installed via the `skills` CLI directly into the project
+ * - `--agent opencode` ensures install to .opencode/skill/ only (not all 28 platforms)
+ *
+ * Returns list of skill names actually installed (skips already-present).
+ */
+export async function installSkillsForJob(
+  categories: string[] | null,
+  projectDir: string,
+): Promise<string[]> {
+  const resolved = resolveSkillsForJob(categories);
+  if (resolved.length === 0) return [];
+
+  const installed: string[] = [];
+  for (const skill of resolved) {
+    // Check if project already has this skill installed
+    const destDir = path.join(projectDir, '.opencode', 'skill', skill.name);
+    if (existsSync(destDir)) continue;
+
+    try {
+      await execa('npx', [
+        'skills', 'add', skill.source,
+        '--skill', skill.name,
+        '--agent', 'opencode',
+        '--yes',
+      ], {
+        cwd: projectDir,
+        timeout: 60_000,
+      });
+      installed.push(skill.name);
+    } catch (err) {
+      process.stderr.write(`Warning: failed to install skill '${skill.name}': ${err}\n`);
+    }
+  }
+  return installed;
+}
+
 // ── Cleanup Injected Skills ───────────────────────────────────────────────
 
 /**

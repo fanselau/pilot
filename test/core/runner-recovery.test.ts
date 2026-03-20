@@ -101,9 +101,7 @@ vi.mock('../../src/core/delegate.js', () => ({
 }));
 
 vi.mock('../../src/core/skills.js', () => ({
-  resolveSkillsForJob: vi.fn(() => []),
-  injectSkills: vi.fn(() => []),
-  cleanupInjectedSkills: vi.fn(),
+  installSkillsForJob: vi.fn(async () => []),
 }));
 
 vi.mock('../../src/core/callback.js', () => ({

@@ -417,9 +417,7 @@ describe('runner dispatch wiring', () => {
       resolveCommitOrNull: vi.fn(async () => null),
     }));
     vi.doMock('../../src/core/skills.js', () => ({
-      resolveSkillsForJob: vi.fn(() => []),
-      injectSkills: vi.fn(() => []),
-      cleanupInjectedSkills: vi.fn(),
+      installSkillsForJob: vi.fn(async () => []),
     }));
     vi.doMock('../../src/core/callback.js', () => ({
       notifyJobCompletion: vi.fn(async () => {}),
@@ -628,9 +626,7 @@ async function buildSpawnAndWaitEnv(opts: {
   }));
 
   vi.doMock('../../src/core/skills.js', () => ({
-    resolveSkillsForJob: vi.fn(() => []),
-    injectSkills: vi.fn(() => []),
-    cleanupInjectedSkills: vi.fn(),
+    installSkillsForJob: vi.fn(async () => []),
   }));
 
   vi.doMock('../../src/core/callback.js', () => ({
