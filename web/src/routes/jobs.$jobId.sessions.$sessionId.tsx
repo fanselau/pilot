@@ -80,7 +80,7 @@ function SessionDrillIn() {
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
           Session Activity
         </h3>
-      <SessionActivity key={sessionId} sessionId={sessionId} initialLimit={30} />
+      <SessionActivity key={sessionId} sessionId={sessionId} />
       </div>
 
       {childrenLoading ? (

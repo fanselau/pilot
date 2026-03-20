@@ -4,12 +4,14 @@
  * Renders explicit step containers as the primary timeline structure.
  * Chronology is preserved inside each step group, including inline
  * lifecycle branch blocks for child sessions.
+ *
+ * All timeline data loads in a single query (no pagination / Load More buttons).
+ * Truncated activity rows have a "Show full" button that fetches complete content.
  */
 
-import { Fragment, useEffect } from 'react'
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { Fragment, useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
-  GroupedTimelinePage,
   StepTimelineGroup,
   StepTimelineItem,
   TimelineActivityItem,
@@ -27,10 +29,9 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '~/components/u
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Separator } from '~/components/ui/separator'
 import { Skeleton } from '~/components/ui/skeleton'
-import { Spinner } from '~/components/ui/spinner'
 import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
 import { useJobDetailStream } from '~/lib/sse'
-import { getJobTimelineFn } from '~/lib/server-fns'
+import { getFullJobTimelineFn, getFullMessageFn } from '~/lib/server-fns'
 
 function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleTimeString([], {
@@ -94,44 +95,21 @@ function groupKey(group: StepTimelineGroup): string {
   return `step-${group.stepIndex}`
 }
 
-function mergeStepGroups(pages: Array<GroupedTimelinePage | null | undefined>): StepTimelineGroup[] {
-  const merged = new Map<string, StepTimelineGroup>()
+function ActivityRow({ item }: { item: TimelineActivityItem }) {
+  const [fullText, setFullText] = useState<string | null>(null)
+  const isTruncated = item.text.length > 220
 
-  for (const page of pages) {
-    if (!page) continue
-    for (const group of page.groups) {
-      const key = groupKey(group)
-      const existing = merged.get(key)
-      if (!existing) {
-        merged.set(key, {
-          stepIndex: group.stepIndex,
-          command: group.command,
-          status: group.status,
-          sessionId: group.sessionId,
-          items: [...group.items],
-        })
-        continue
-      }
-
-      existing.items.push(...group.items)
+  async function handleShowFull() {
+    const result = await getFullMessageFn({
+      data: { sessionId: item.sessionId, partId: item.partId },
+    })
+    if (result?.text) {
+      setFullText(result.text)
     }
   }
 
-  const groups = [...merged.values()]
-  groups.sort((a, b) => {
-    if (a.stepIndex === null) return 1
-    if (b.stepIndex === null) return -1
-    return a.stepIndex - b.stepIndex
-  })
+  const displayText = fullText ?? item.text
 
-  for (const group of groups) {
-    group.items.sort((a, b) => a.createdAt - b.createdAt)
-  }
-
-  return groups
-}
-
-function ActivityRow({ item }: { item: TimelineActivityItem }) {
   return (
     <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
@@ -140,9 +118,21 @@ function ActivityRow({ item }: { item: TimelineActivityItem }) {
       <Badge variant={roleVariant(item.role)} size="sm">
         {item.role}
       </Badge>
-      <span className="min-w-0 flex-1 text-xs text-muted-foreground line-clamp-2">
-        {truncate(item.text, 220)}
-      </span>
+      <div className="min-w-0 flex-1">
+        <span className="text-xs text-muted-foreground">
+          {fullText ? displayText : truncate(displayText, 220)}
+        </span>
+        {isTruncated && !fullText && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-1 h-auto py-0 px-1 text-xs text-primary"
+            onClick={() => void handleShowFull()}
+          >
+            Show full
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -255,38 +245,22 @@ interface TimelineStreamProps {
 export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
   const queryClient = useQueryClient()
 
-  const {
-    data,
-    isLoading,
-    error,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery({
-    queryKey: ['job-timeline', jobId],
-    queryFn: ({ pageParam }) => getJobTimelineFn({
-      data: { jobId, cursor: pageParam, limit: 100 },
-    }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => {
-      if (!lastPage || !lastPage.hasMore) return undefined
-      return lastPage.nextCursor ?? undefined
-    },
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['job-timeline-full', jobId],
+    queryFn: () => getFullJobTimelineFn({ data: jobId }),
     refetchInterval: isActive ? 5000 : false,
   })
 
-  const streamCursor = data?.pages[data.pages.length - 1]?.nextCursor ?? '0'
-
   const { events } = useJobDetailStream(
     jobId,
-    streamCursor,
+    '0',
     isActive,
     3000,
   )
 
   useEffect(() => {
     if (events.length > 0) {
-      void queryClient.invalidateQueries({ queryKey: ['job-timeline', jobId] })
+      void queryClient.invalidateQueries({ queryKey: ['job-timeline-full', jobId] })
     }
   }, [events.length, jobId, queryClient])
 
@@ -312,7 +286,7 @@ export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
     )
   }
 
-  const groups = mergeStepGroups(data?.pages ?? [])
+  const groups = data?.groups ?? []
   const totalItems = groups.reduce((sum, group) => sum + group.items.length, 0)
 
   if (totalItems === 0) {
@@ -345,29 +319,6 @@ export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
               ))}
             </div>
           </ScrollArea>
-
-          {hasNextPage && (
-            <>
-              <Separator />
-              <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                >
-                  {isFetchingNextPage ? (
-                    <>
-                      <Spinner className="size-3.5" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Load more activity'
-                  )}
-                </Button>
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
     </div>

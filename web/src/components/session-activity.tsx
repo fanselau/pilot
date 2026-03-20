@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { SessionPart } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
-import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
-import { Separator } from '~/components/ui/separator'
 import { Skeleton } from '~/components/ui/skeleton'
-import { Spinner } from '~/components/ui/spinner'
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -125,67 +122,25 @@ function PartCard({ part }: { part: SessionPart }) {
 
 interface SessionActivityProps {
   sessionId: string
-  initialLimit?: number
 }
 
-export function SessionActivity({
-  sessionId,
-  initialLimit = 20,
-}: SessionActivityProps) {
-  const [pages, setPages] = useState<SessionPart[][]>([])
-  const [cursor, setCursor] = useState<string | undefined>(undefined)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-
-  // Reset pagination state when sessionId changes
-  useEffect(() => {
-    setPages([])
-    setCursor(undefined)
-    setHasMore(true)
-    setLoadingMore(false)
-  }, [sessionId])
-
-  // Initial load
-  const { isLoading: initialLoading } = useQuery({
-    queryKey: ['session-activity', sessionId, 'initial'],
-    queryFn: async () => {
-      const result = await getSessionActivityFn({
+export function SessionActivity({ sessionId }: SessionActivityProps) {
+  // Load all parts in a single query — no pagination / Load More
+  const { data, isLoading } = useQuery({
+    queryKey: ['session-activity-full', sessionId],
+    queryFn: () =>
+      getSessionActivityFn({
         data: {
           sessionId,
-          limit: initialLimit,
+          limit: 1000,
           includeToolDetails: true,
         },
-      })
-      setPages([result.parts])
-      setHasMore(result.hasMore)
-      if (result.nextCursor) setCursor(result.nextCursor)
-      return result
-    },
+      }),
   })
 
-  // Load more handler
+  // Reset query on sessionId change is handled automatically by the queryKey
 
-  async function loadMore() {
-    if (!hasMore || !cursor) return
-    setLoadingMore(true)
-    try {
-      const result = await getSessionActivityFn({
-        data: {
-          sessionId,
-          cursor,
-          limit: initialLimit,
-          includeToolDetails: true,
-        },
-      })
-      setPages((prev) => [...prev, result.parts])
-      setHasMore(result.hasMore)
-      if (result.nextCursor) setCursor(result.nextCursor)
-    } finally {
-      setLoadingMore(false)
-    }
-  }
-
-  if (initialLoading) {
+  if (isLoading) {
     return (
       <Card>
         <CardContent className="py-4 space-y-2">
@@ -197,7 +152,7 @@ export function SessionActivity({
     )
   }
 
-  const allParts = pages.flat()
+  const allParts = data?.parts ?? []
 
   if (allParts.length === 0) {
     return (
@@ -217,28 +172,6 @@ export function SessionActivity({
             <PartCard key={part.id} part={part} />
           ))}
         </div>
-        {hasMore && (
-          <>
-            <Separator className="my-2" />
-            <div className="flex justify-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadMore}
-                disabled={loadingMore}
-              >
-                {loadingMore ? (
-                  <>
-                    <Spinner className="size-3.5" />
-                    Loading...
-                  </>
-                ) : (
-                  'Load more activity'
-                )}
-              </Button>
-            </div>
-          </>
-        )}
       </CardContent>
     </Card>
   )
