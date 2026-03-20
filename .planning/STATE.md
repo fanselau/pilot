@@ -5,7 +5,7 @@ milestone_name: milestone
 status: verifying
 stopped_at: Completed 76-02-PLAN.md
 last_updated: "2026-03-20T17:16:51.778Z"
-last_activity: "2026-03-20 - Completed quick task 260320-mcv: Verify Phase 73 code changes are compatible with updated requirements (skills system, delegation, categories)"
+last_activity: "2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot"
 progress:
   total_phases: 75
   completed_phases: 33
@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-20 - Completed quick task 260320-mcv: Verify Phase 73 code changes are compatible with updated requirements (skills system, delegation, categories)
+Last activity: 2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot
 
 Progress: [█████████░] 93%
 
@@ -272,6 +272,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 089 | Fix Phase 68 judge move verification gap — deprecate pilot-gsd judge commands, add evidence validation tests | 2026-03-16 | a719265 | [089-fix-phase-68-judge-move-verification-gap](./quick/089-fix-phase-68-judge-move-verification-gap/) |
 | 260320-m85 | Verify Phase 73 code compatibility with updated skills and category requirements | 2026-03-20 | 1866bfb | [260320-m85-verify-phase-73-code-compatibility-with-](./quick/260320-m85-verify-phase-73-code-compatibility-with-/) |
 | 260320-mcv | Verify Phase 73 code changes are compatible with updated requirements (skills system, delegation, categories) | 2026-03-20 | 3aa40a7 | Verified | [260320-mcv-verify-phase-73-code-changes-are-compati](./quick/260320-mcv-verify-phase-73-code-changes-are-compati/) |
+| 260320-nc6 | Remove retry completely from pilot | 2026-03-20 | 7302ae9 | [260320-nc6-remove-retry-completely-from-pilot](./quick/260320-nc6-remove-retry-completely-from-pilot/) |
 
 ## Accumulated Context
 
