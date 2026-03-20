@@ -667,19 +667,9 @@ function getSessionState(sessionId: string, pidAlive: boolean = true): SessionSt
         ).get(sessionId) as { id: string; last_activity: number | null } | undefined;
 
         if (runningChildRow) {
-          // Child session exists without terminal step-finish.
-          // Check if it's stale (no activity for 5 minutes = dead process).
-          const CHILD_STALE_TIMEOUT_MS = 5 * 60 * 1000;
-          const lastActivity = runningChildRow.last_activity;
-          if (lastActivity != null) {
-            const elapsed = Date.now() - lastActivity;
-            if (elapsed > CHILD_STALE_TIMEOUT_MS) {
-              // Child is stale — treat parent as done
-              // (process likely died without writing step-finish)
-              return { state: 'done' };
-            }
-          }
-          // Child still active — report as working
+          // Child session exists without terminal step-finish — still working.
+          // Don't timeout: child may be waiting on rate limits for hours. That's fine.
+          // The only way to stop this is `pilot kill --force` which checks DB status mid-poll.
           return { state: 'working' };
         }
         return { state: 'done' };
