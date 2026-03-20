@@ -299,6 +299,41 @@ describe('judge verdict edge cases', () => {
     expect(result!.retryHint).toBeNull();
     expect(result!.failureFingerprint).toBeNull();
   });
+
+  it('parseJudgeVerdict handles passed verdict', () => {
+    const result = parseJudgeVerdict(JSON.stringify({
+      verdict: 'passed',
+      confidence: 88,
+      reason: 'All phase plans executed and verified',
+    }));
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('passed');
+    expect(result!.confidence).toBe(88);
+    expect(result!.reason).toBe('All phase plans executed and verified');
+  });
+
+  it('parseJudgeVerdict handles gaps_found verdict with gaps array', () => {
+    const result = parseJudgeVerdict(JSON.stringify({
+      verdict: 'gaps_found',
+      confidence: 42,
+      reason: '3 plans incomplete',
+      gaps: ['plan-03 missing tests', 'plan-05 build errors'],
+    }));
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('gaps_found');
+    expect(result!.confidence).toBe(42);
+    expect(result!.reason).toBe('3 plans incomplete');
+    expect(result!.gaps).toEqual(['plan-03 missing tests', 'plan-05 build errors']);
+  });
+
+  it('parseJudgeVerdict rejects unknown verdict values', () => {
+    const result = parseJudgeVerdict(JSON.stringify({
+      verdict: 'unknown',
+      confidence: 50,
+      reason: 'test',
+    }));
+    expect(result).toBeNull();
+  });
 });
 
 // ── runner dispatch wiring ─────────────────────────────────────────────────
