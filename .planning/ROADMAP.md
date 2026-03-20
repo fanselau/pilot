@@ -1329,18 +1329,20 @@ Read `requirements/gsd-09-cleanup.md` and `.planning/phases/72-cleanup-remove-pi
 **Goal:** Replace the retry system with an append-forward step model. Jobs get a mutable, append-only step list. The runner executes steps sequentially. When judge finds gaps or sessions hang, new steps are appended via delegation re-query — never retry, never go backwards.
 **Requirements**: TBD
 **Depends on:** Phase 72
-**Plans:** 6/6 plans complete
+**Plans:** 7 plans (6 complete, 1 gap closure)
 
 Plans:
-- [ ] 73-01-PLAN.md — Foundation: StepSource type, extended JobStep, DB schema migration, step CRUD functions
-- [ ] 73-02-PLAN.md — Judge verdict update: passed/gaps_found/failed schema, remove retry fields from prompt and signal
-- [ ] 73-03-PLAN.md — Delegation re-query: reDelegateForContinuation function, delegate prompt re-query section
-- [ ] 73-04-PLAN.md — Runner rewrite: step execution loop, delete retry methods, gap/hung continuation handlers
-- [ ] 73-05-PLAN.md — Detail/notification updates: step source in job detail, step history in notifications
-- [ ] 73-06-PLAN.md — Tests: step CRUD, judge verdict, runner step loop, full regression suite
+- [x] 73-01-PLAN.md — Foundation: StepSource type, extended JobStep, DB schema migration, step CRUD functions
+- [x] 73-02-PLAN.md — Judge verdict update: passed/gaps_found/failed schema, remove retry fields from prompt and signal
+- [x] 73-03-PLAN.md — Delegation re-query: reDelegateForContinuation function, delegate prompt re-query section
+- [x] 73-04-PLAN.md — Runner rewrite: step execution loop, delete retry methods, gap/hung continuation handlers
+- [x] 73-05-PLAN.md — Detail/notification updates: step source in job detail, step history in notifications
+- [x] 73-06-PLAN.md — Tests: step CRUD, judge verdict, runner step loop, full regression suite
+- [ ] 73-07-PLAN.md — Gap closure: fix 11 failing tests (runner-recovery rewrite, verdict badge expectations)
 
 Wave structure:
 - Wave 1: 73-01 + 73-02 (independent: types/DB foundation and judge verdict update)
 - Wave 2: 73-03 (delegation re-query, depends on 73-01)
 - Wave 3: 73-04 + 73-05 (runner rewrite and detail/notification updates, both depend on 73-01 + 73-02, 73-04 also on 73-03)
 - Wave 4: 73-06 (tests, depends on all above)
+- Wave 5: 73-07 (gap closure: test migration for verdict mapping + retry removal)
