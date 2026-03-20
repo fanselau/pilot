@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Job } from '../../src/core/types.js';
-import { buildJudgeSignal, formatJudgeReason } from '../../src/core/judge-signal.js';
+import { buildJudgeSignal, formatJudgeReason, parseJudgeVerdictPayload, formatJudgeBadge } from '../../src/core/judge-signal.js';
 
 function makeJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -203,5 +203,93 @@ describe('buildJudgeSignal — new verdict format (pass/fail/partial)', () => {
     expect(signal.retryRecommendation).toBeNull();
     expect(signal.retryHint).toBeNull();
     expect(signal.failureFingerprint).toBeNull();
+  });
+});
+
+// ── parseJudgeVerdictPayload (Phase 73: new verdict values) ──────────────
+
+describe('parseJudgeVerdictPayload — Phase 73 verdict values', () => {
+  it('handles passed verdict', () => {
+    const result = parseJudgeVerdictPayload(
+      JSON.stringify({ verdict: 'passed', confidence: 85, reason: 'All tests pass', gaps: [] }),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('passed');
+    expect(result!.confidence).toBe(85);
+    expect(result!.gaps).toEqual([]);
+  });
+
+  it('handles gaps_found verdict with gaps', () => {
+    const result = parseJudgeVerdictPayload(
+      JSON.stringify({ verdict: 'gaps_found', confidence: 45, reason: '2 tests failing', gaps: ['test_auth fails', 'test_login missing'] }),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBe('gaps_found');
+    expect(result!.confidence).toBe(45);
+    expect(result!.gaps).toHaveLength(2);
+    expect(result!.gaps).toEqual(['test_auth fails', 'test_login missing']);
+  });
+
+  it('returns null for non-string verdict', () => {
+    const result = parseJudgeVerdictPayload(
+      JSON.stringify({ verdict: 123, confidence: 90, reason: 'bad verdict type' }),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBeNull();
+  });
+
+  it('returns null for null input', () => {
+    expect(parseJudgeVerdictPayload(null)).toBeNull();
+  });
+});
+
+// ── buildJudgeSignal — Phase 73 canonical verdicts ──────────────────────
+
+describe('buildJudgeSignal — Phase 73 canonical verdicts', () => {
+  it('maps passed to pass outcome', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'passed', confidence: 85, reason: 'tests pass' }),
+    }));
+    expect(signal.outcome).toBe('pass');
+    expect(signal.badge).toBe('judge:pass 85%');
+  });
+
+  it('maps gaps_found to gaps outcome', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'gaps_found', confidence: 45, reason: 'gaps remain', gaps: ['auth test'] }),
+    }));
+    expect(signal.outcome).toBe('gaps');
+    expect(signal.badge).toBe('judge:gaps 45%');
+    expect(signal.gaps).toEqual(['auth test']);
+  });
+
+  it('maps legacy doubting to gaps outcome', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'doubting', confidence: 55, reason: 'partial' }),
+    }));
+    expect(signal.outcome).toBe('gaps');
+  });
+
+  it('maps legacy partial to gaps outcome', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'partial', confidence: 40, reason: 'incomplete' }),
+    }));
+    expect(signal.outcome).toBe('gaps');
+  });
+});
+
+// ── formatJudgeBadge — gaps outcome ──────────────────────────────────────
+
+describe('formatJudgeBadge — Phase 73', () => {
+  it('handles gaps outcome', () => {
+    expect(formatJudgeBadge('gaps', 45)).toBe('judge:gaps 45%');
+  });
+
+  it('handles pass outcome', () => {
+    expect(formatJudgeBadge('pass', 92)).toBe('judge:pass 92%');
+  });
+
+  it('handles inconclusive with null confidence', () => {
+    expect(formatJudgeBadge('inconclusive', null)).toBe('judge:inconclusive');
   });
 });

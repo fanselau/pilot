@@ -52,6 +52,15 @@ import {
   canRetry,
   isSameHungReason,
   resetRetryState,
+  // Phase 73: step CRUD for append-forward model
+  createPendingStep,
+  getNextPendingStep,
+  markStepRunning,
+  markStepCompleted,
+  markStepFailed,
+  getTotalStepCount,
+  getPendingStepCount,
+  appendSteps,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -1181,6 +1190,153 @@ describe('pilot.db', () => {
     });
 
   }); // end 'milestone orchestration'
+
+  // ── step CRUD (append-forward model, Phase 73) ────────────────────────
+
+  describe('step CRUD (append-forward model)', () => {
+    it('createPendingStep creates step with status=pending and source', () => {
+      const job = addJob('proj', 'phase', 'step test');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      expect(stepId).toBeGreaterThan(0);
+
+      const steps = getJobSteps(job.id);
+      expect(steps).toHaveLength(1);
+      expect(steps[0].status).toBe('pending');
+      expect(steps[0].source).toBe('delegation');
+      expect(steps[0].command).toBe('plan-phase');
+      expect(steps[0].args).toBe('31');
+      expect(steps[0].startedAt).toBeNull();
+    });
+
+    it('getNextPendingStep returns first pending step by index', () => {
+      const job = addJob('proj', 'phase', 'multi-step');
+      markRunning(job.id);
+      createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      createPendingStep(job.id, 1, 'execute-phase', '31', 'delegation');
+      createPendingStep(job.id, 2, 'judge', '', 'delegation');
+
+      const next = getNextPendingStep(job.id);
+      expect(next).not.toBeNull();
+      expect(next!.stepIndex).toBe(0);
+      expect(next!.command).toBe('plan-phase');
+    });
+
+    it('getNextPendingStep returns null when no pending steps', () => {
+      const job = addJob('proj', 'phase', 'no pending');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      markStepRunning(stepId);
+
+      const next = getNextPendingStep(job.id);
+      expect(next).toBeNull();
+    });
+
+    it('markStepRunning sets status and started_at', () => {
+      const job = addJob('proj', 'phase', 'running step');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      markStepRunning(stepId);
+
+      const steps = getJobSteps(job.id);
+      expect(steps[0].status).toBe('running');
+      expect(steps[0].startedAt).not.toBeNull();
+    });
+
+    it('markStepCompleted sets status, completed_at, duration, sessionId', () => {
+      const job = addJob('proj', 'phase', 'complete step');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'execute-phase', '31', 'delegation');
+      markStepRunning(stepId);
+      markStepCompleted(stepId, 'session-abc', 'My Session Title');
+
+      const steps = getJobSteps(job.id);
+      expect(steps[0].status).toBe('completed');
+      expect(steps[0].completedAt).not.toBeNull();
+      expect(steps[0].sessionId).toBe('session-abc');
+      expect(steps[0].sessionTitle).toBe('My Session Title');
+    });
+
+    it('markStepFailed sets status, error, completed_at', () => {
+      const job = addJob('proj', 'phase', 'fail step');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'judge', '', 'delegation');
+      markStepRunning(stepId);
+      markStepFailed(stepId, 'Process died unexpectedly');
+
+      const steps = getJobSteps(job.id);
+      expect(steps[0].status).toBe('failed');
+      expect(steps[0].error).toBe('Process died unexpectedly');
+      expect(steps[0].completedAt).not.toBeNull();
+    });
+
+    it('getTotalStepCount returns total step count for job', () => {
+      const job = addJob('proj', 'phase', 'count steps');
+      markRunning(job.id);
+      createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      createPendingStep(job.id, 1, 'execute-phase', '31', 'delegation');
+      createPendingStep(job.id, 2, 'judge', '', 'delegation');
+
+      expect(getTotalStepCount(job.id)).toBe(3);
+    });
+
+    it('getPendingStepCount returns only pending steps', () => {
+      const job = addJob('proj', 'phase', 'pending count');
+      markRunning(job.id);
+      createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      const step2 = createPendingStep(job.id, 1, 'execute-phase', '31', 'delegation');
+      createPendingStep(job.id, 2, 'judge', '', 'delegation');
+      markStepRunning(step2);
+
+      expect(getPendingStepCount(job.id)).toBe(2);
+    });
+
+    it('appendSteps bulk-inserts pending steps with correct indexes', () => {
+      const job = addJob('proj', 'phase', 'append test');
+      markRunning(job.id);
+      createPendingStep(job.id, 0, 'plan-phase', '31', 'delegation');
+      createPendingStep(job.id, 1, 'execute-phase', '31', 'delegation');
+
+      appendSteps(
+        job.id,
+        [
+          { command: 'plan-phase', args: '31 --gaps' },
+          { command: 'judge', args: '' },
+        ],
+        'judge:gaps',
+        'Found 3 gaps',
+      );
+
+      const allSteps = getJobSteps(job.id);
+      expect(allSteps).toHaveLength(4);
+      // New steps should have indexes 2 and 3
+      expect(allSteps[2].stepIndex).toBe(2);
+      expect(allSteps[3].stepIndex).toBe(3);
+      expect(allSteps[2].source).toBe('judge:gaps');
+      expect(allSteps[3].source).toBe('judge:gaps');
+      expect(allSteps[2].reason).toBe('Found 3 gaps');
+      expect(allSteps[2].status).toBe('pending');
+      expect(allSteps[2].startedAt).toBeNull();
+    });
+
+    it('appendSteps with source judge:hung', () => {
+      const job = addJob('proj', 'phase', 'hung append');
+      markRunning(job.id);
+      createPendingStep(job.id, 0, 'execute-phase', '31', 'delegation');
+
+      appendSteps(
+        job.id,
+        [{ command: 'execute-phase', args: '31 --resume' }],
+        'judge:hung',
+        'Session hung on interactive-prompt',
+      );
+
+      const allSteps = getJobSteps(job.id);
+      expect(allSteps).toHaveLength(2);
+      expect(allSteps[1].source).toBe('judge:hung');
+      expect(allSteps[1].reason).toBe('Session hung on interactive-prompt');
+    });
+  });
 
 }); // end 'pilot.db'
 
