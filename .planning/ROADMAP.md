@@ -1384,20 +1384,21 @@ Wave structure:
 
 ### Phase 76: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Transform the web UI from a prototype center-column layout into a dense operational dashboard with split-pane job detail, full-width layout, no pagination friction, model visibility badges, projects view, and fixed timezone-safe duration calculations.
+**Requirements**: WUI-01, WUI-02, WUI-03, WUI-04, WUI-05, WUI-06, WUI-07, WUI-08, WUI-09
 **Depends on:** Phase 75
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 76 to break down)
+- [ ] 76-01-PLAN.md — Foundation: safe timestamp parser (TDD), full-width layout, frontend duration fix, comment cleanup
+- [ ] 76-02-PLAN.md — Dashboard projects tab: backend query, server fn, ProjectsList component
+- [ ] 76-03-PLAN.md — Timeline data overhaul: remove pagination, full message loading, "Show full" button
+- [ ] 76-04-PLAN.md — Split-pane job detail: resizable panels, step timeline sidebar, step content pane, model badges, keyboard nav
+- [ ] 76-05-PLAN.md — Virtualization for large jobs + scroll-to-bottom + visual verification checkpoint
 
-### Phase 77: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
+Wave structure:
+- Wave 1: 76-01 + 76-02 (independent: foundation fixes and projects tab)
+- Wave 2: 76-03 (timeline data overhaul, depends on 76-01 for timezone fix)
+- Wave 3: 76-04 + 76-05 (split-pane UI + virtualization, both depend on 76-03 for non-paginated data)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 76
-**Plans:** 0 plans
 
-Plans:
-- [ ] TBD (run /gsd:plan-phase 77 to break down)
