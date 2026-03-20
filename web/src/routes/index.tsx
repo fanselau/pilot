@@ -7,7 +7,8 @@ import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { JobList } from '~/components/job-list'
 import { SessionOverview } from '~/components/session-overview'
-import { getJobsListFn, getJobDetailFn } from '~/lib/server-fns'
+import { ProjectsList } from '~/components/projects-list'
+import { getJobsListFn, getJobDetailFn, getProjectsListFn } from '~/lib/server-fns'
 import { toastManager } from '~/components/ui/toast'
 import type { SessionSummary } from '@pilot/core/types.js'
 
@@ -61,6 +62,14 @@ function Home() {
 
   const sessions = sessionQueries.data ?? []
 
+  // Load projects list
+  const projectsQuery = useQuery({
+    queryKey: ['projects-list'],
+    queryFn: () => getProjectsListFn(),
+    refetchInterval: 30_000,
+  })
+  const projects = projectsQuery.data ?? []
+
   const activeCount = active.length
   const queuedCount = queued.length
   const recentCount = recent.length
@@ -77,7 +86,7 @@ function Home() {
   if (isLoading && !data) {
     return (
       <div className="p-4 sm:p-8">
-        <div className="mx-auto max-w-5xl space-y-6">
+        <div className="mx-auto max-w-[1800px] space-y-6">
           <div>
             <Skeleton className="h-10 w-64" />
             <Skeleton className="mt-2 h-5 w-48" />
@@ -94,7 +103,7 @@ function Home() {
 
   return (
     <div className="p-4 sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-[1800px] space-y-6">
         {/* Header with counts and refresh */}
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -138,6 +147,9 @@ function Home() {
             <TabsTab value="sessions">
               Sessions{sessions.length > 0 ? ` (${sessions.length})` : ''}
             </TabsTab>
+            <TabsTab value="projects">
+              Projects{projects.length > 0 ? ` (${projects.length})` : ''}
+            </TabsTab>
           </TabsList>
 
           <TabsPanel value="active">
@@ -154,6 +166,10 @@ function Home() {
 
           <TabsPanel value="sessions">
             <SessionOverview sessions={sessions} />
+          </TabsPanel>
+
+          <TabsPanel value="projects">
+            <ProjectsList projects={projects} />
           </TabsPanel>
         </Tabs>
       </div>
