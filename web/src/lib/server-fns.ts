@@ -15,11 +15,14 @@ import {
   getJobTimeline,
   getFullJobTimeline,
   getProjectsWithStats,
+  getProjectDetail,
+  getProjectJobs,
   getFullSessionPart,
   retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,
+  blockProjectAction,
 } from '@pilot/core/job-detail-query.js'
 import type { GroupedTimelinePage, ProjectWithStats } from '@pilot/core/types.js'
 import { getQueue, getRecent } from '@pilot/core/db.js'
@@ -178,3 +181,28 @@ export const unblockProjectFn = createServerFn({ method: 'POST' })
       return { ok: false }
     }
   })
+
+// ── Mutation: Block Project ──────────────────────────────────────────────
+
+export const blockProjectFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectPath: string; reason: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      blockProjectAction(data.projectPath, data.reason)
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+// ── Project Detail ───────────────────────────────────────────────────────
+
+export const getProjectDetailFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: projectPath }) => getProjectDetail(projectPath))
+
+// ── Project Jobs ─────────────────────────────────────────────────────────
+
+export const getProjectJobsFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: { projectPath: string; limit?: number }) => d)
+  .handler(async ({ data }) => getProjectJobs(data.projectPath, data.limit))

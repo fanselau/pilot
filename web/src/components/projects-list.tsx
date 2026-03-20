@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import type { ProjectWithStats } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import {
@@ -63,14 +64,13 @@ export function ProjectsList({ projects }: { projects: ProjectWithStats[] }) {
               >
                 <TableCell>
                   <div className="space-y-0.5">
-                    <Tooltip>
-                      <TooltipTrigger className="cursor-default text-left">
-                        <span className="font-medium text-sm">{displayName}</span>
-                      </TooltipTrigger>
-                      <TooltipPopup className="max-w-xs font-mono text-xs">
-                        {project.path}
-                      </TooltipPopup>
-                    </Tooltip>
+                    <Link
+                      to="/projects/$projectPath"
+                      params={{ projectPath: encodeURIComponent(project.path) }}
+                      className="font-medium text-sm hover:underline"
+                    >
+                      {displayName}
+                    </Link>
                     {isBlocked && project.blockedReason && (
                       <p className="text-xs text-muted-foreground truncate max-w-sm">
                         {project.blockedReason}
