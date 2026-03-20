@@ -693,24 +693,11 @@ function getJobTimeline(
  * Get the full timeline for a job without pagination.
  *
  * Unlike getJobTimeline() which supports cursor/limit pagination, this returns
- * all timeline items. Use for dense step visualization in Plans 03-05.
+ * all timeline items in a single call. Uses a limit of 10000 which is large
+ * enough for any practical job. Use for dense step visualization in Plans 03-05.
  */
-function getFullJobTimeline(jobId: string): {
-  groups: StepTimelineGroup[];
-  totalItems: number;
-  sessionCount: number;
-  childCount: number;
-} {
-  const page = getJobTimeline(jobId);
-  if (!page) {
-    return { groups: [], totalItems: 0, sessionCount: 0, childCount: 0 };
-  }
-  return {
-    groups: page.groups,
-    totalItems: page.items.length,
-    sessionCount: page.sessionCount,
-    childCount: page.childCount,
-  };
+function getFullJobTimeline(jobId: string): GroupedTimelinePage | null {
+  return getJobTimeline(jobId, { limit: 10000 });
 }
 
 /**
