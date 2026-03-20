@@ -12,6 +12,7 @@
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { addJob, findDuplicateJob, getProject, updateJobCategories } from '../core/db.js';
+import { formatCategoryHelp } from '../core/skills.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { resolveNotifyRoute } from '../core/notify-route.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
@@ -35,6 +36,7 @@ interface AddOptions {
   noNotify?: boolean; // Explicitly skip completion notification
   dryRun?: boolean;   // Show what would happen without queuing
   categories?: string; // Skill categories for this job (comma-separated string from CLI)
+  noCategories?: boolean; // Explicitly opt out of categories (universal skills only)
   startImmediately?: boolean; // Bypass queue grace wait for this job
   retries?: number; // Retry budget override (integer >= 0)
   retry?: boolean; // Commander --no-retry sets this to false
@@ -161,6 +163,9 @@ async function addCommand(
   // Validate project setup before doing anything else
   validateProjectSetup(resolvedProject, opts.force ?? false);
 
+  // Fetch project record early — needed for category defaults and notify
+  const projectRecord = getProject(resolvedProject);
+
   // Resolve model profile: flag > config file default
   const configDefaults = getConfigFileDefaults();
   const modelProfile: ModelProfile = opts.profile
@@ -185,11 +190,29 @@ async function addCommand(
     }
   }
 
-  // Parse categories from --categories flag (comma-separated string)
-  const categories = parseCategoriesInput(opts.categories);
-  if (opts.categories !== undefined && (!categories || categories.length === 0)) {
-    process.stderr.write('Error: --categories must include at least one category (e.g. frontend,testing)\n');
-    process.exit(2);
+  // Resolve categories: --no-categories → null, --categories → parsed, project default → fallback, else → error
+  let categories: string[] | null;
+  if (opts.noCategories) {
+    categories = null; // Explicit opt-out — universal skills only
+  } else if (opts.categories !== undefined) {
+    categories = parseCategoriesInput(opts.categories);
+    if (!categories || categories.length === 0) {
+      process.stderr.write('Error: --categories must include at least one category (e.g. frontend,testing)\n');
+      process.exit(2);
+    }
+  } else {
+    // Check project-level defaults
+    const projectDefaults = projectRecord?.defaultCategories;
+    if (projectDefaults && projectDefaults.length > 0) {
+      categories = projectDefaults;
+      if (!isJsonMode()) {
+        process.stderr.write(`  Using project default categories: ${projectDefaults.join(', ')}\n`);
+      }
+    } else {
+      // No categories specified, no project default — show helpful error and exit
+      process.stderr.write(formatCategoryHelp() + '\n');
+      process.exit(2);
+    }
   }
 
   // Warn when quick scope is used (explicitly or auto-detected) — encourage phase
@@ -263,8 +286,6 @@ async function addCommand(
       }
     }
   }
-
-  const projectRecord = getProject(resolvedProject);
 
   // Resolve notify target:
   //   1. --no-notify → skip notification (callbackSessionKey = undefined)

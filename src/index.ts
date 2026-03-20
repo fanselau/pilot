@@ -58,6 +58,7 @@ program
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
   .option('--categories <cats>', 'Skill categories for this job (comma-separated): frontend,testing')
+  .option('--no-categories', 'Skip skill injection (universal skills only)')
   .action(async (project: string, requirement: string, opts: Record<string, unknown>) => {
     const { addCommand } = await import('./commands/add.js');
     await addCommand(project, requirement, { ...program.opts(), ...opts } as Parameters<typeof addCommand>[2]);
@@ -192,9 +193,10 @@ program
   .option('--skip-skills', 'With --refresh: skip skill re-offering')
   .option('--owner <agentId>', 'Register project owner (agent ID for notifications)')
   .option('--update', 'Update owner of existing registered project')
+  .option('--categories <categories>', 'Set default skill categories for this project (comma-separated)')
   .action(async (dir: string, opts: Record<string, unknown>) => {
     const { setupCommand } = await import('./commands/setup.js');
-    await setupCommand(dir, opts as { verify?: boolean; refresh?: boolean; force?: boolean; skipSkills?: boolean; owner?: string; update?: boolean });
+    await setupCommand(dir, opts as { verify?: boolean; refresh?: boolean; force?: boolean; skipSkills?: boolean; owner?: string; update?: boolean; categories?: string });
   });
 
 program
