@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 73-01-PLAN.md
-last_updated: "2026-03-20T13:43:45.110Z"
+stopped_at: Completed 73-05-PLAN.md
+last_updated: "2026-03-20T13:58:01.486Z"
 last_activity: 2026-03-20 - Completed 73-01-PLAN.md
 progress:
   total_phases: 72
   completed_phases: 31
   total_plans: 112
-  completed_plans: 101
+  completed_plans: 103
   percent: 93
 ---
 
@@ -863,6 +863,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 73]: StepSource as narrow 5-value union for type safety
 - [Phase 73]: Keep legacy verdictSource/verdictReason on JobStep for backward compat during transition
 - [Phase 73]: appendSteps uses db.transaction() for bulk insert atomicity
+- [Phase 73]: reDelegateForContinuation() uses phase-level model resolution and pilot-redelegate- session prefix
+- [Phase 73]: Default source to 'delegation' when step.source is nullish for backward compatibility
 
 ## Blockers/Concerns Carried Forward
 
@@ -871,6 +873,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T13:43:26.358Z
-Stopped at: Completed 73-01-PLAN.md
+Last session: 2026-03-20T13:57:51.500Z
+Stopped at: Completed 73-05-PLAN.md
 Resume file: None
