@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 73-07-PLAN.md
-last_updated: "2026-03-20T14:43:15.353Z"
-last_activity: 2026-03-20 - Completed quick task 260320-mcv: Replace injectSkills/cleanupInjectedSkills with installSkillsForJob JIT pattern in runner.ts
+stopped_at: Completed 74-01-PLAN.md
+last_updated: "2026-03-20T16:28:52.515Z"
+last_activity: "2026-03-20 - Completed quick task 260320-mcv: Replace injectSkills/cleanupInjectedSkills with installSkillsForJob JIT pattern in runner.ts"
 progress:
-  total_phases: 72
+  total_phases: 74
   completed_phases: 32
-  total_plans: 113
-  completed_plans: 106
+  total_plans: 117
+  completed_plans: 107
   percent: 93
 ---
 
@@ -341,6 +341,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 71 added: Full Milestone Lifecycle — Audit, Gap Closure, Completion
 - Phase 72 added: Cleanup — Remove pilot-gsd Fork
 - Phase 74 added: Required Categories on pilot add
+- Phase 75 added: Codex First-Class Citizen — Model-Adaptive Content Patching
 
 ## Decisions
 
@@ -871,6 +872,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 73]: Deleted 5 retry-era artifacts and all intent routing methods, replaced with step execution loop + continuation handlers
 - [Phase 73]: Pre-existing TUI/info/runner-recovery test failures are out-of-scope; only plan-scoped tests verified
 - [Phase 73]: Added step DB mocks (makeStep helper) and fixed 2 pre-existing tests that passed for wrong reason
+- [Phase 74]: Manifest-only skill registry: SkillEntry uses repo+skill instead of source+path; loadManifest() auto-migrates old format — Supports monorepo skill disambiguation and eliminates local file cache
 
 ## Blockers/Concerns Carried Forward
 
@@ -879,6 +881,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T14:43:10.937Z
-Stopped at: Completed 73-07-PLAN.md
+Last session: 2026-03-20T16:28:41.893Z
+Stopped at: Completed 74-01-PLAN.md
 Resume file: None

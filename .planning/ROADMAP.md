@@ -1352,7 +1352,7 @@ Wave structure:
 **Goal:** Make `--categories` required on `pilot add` with helpful AI-caller-friendly error, add project-level default categories, rewrite skills to manifest-only architecture (`{ repo, skill }` format, no git-clone/inject/sync), and switch runner to JIT `npx skills add` installation.
 **Requirements**: TBD
 **Depends on:** Phase 73
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 - [ ] 74-01-PLAN.md — Foundation: types/DB (Project.defaultCategories, SkillEntry rewrite), CATEGORY_INFO, PREDEFINED_CATEGORIES expansion, skills.ts manifest-only rewrite, default-skills.ts SkillRef format
@@ -1364,3 +1364,13 @@ Wave structure:
 - Wave 1: 74-01 (types + DB + skills core + default-skills foundation)
 - Wave 2: 74-02 + 74-03 in parallel (CLI enforcement + skills CLI rewrite | runner JIT, both depend on 74-01)
 - Wave 3: 74-04 (tests, depends on all above)
+
+### Phase 75: Codex First-Class Citizen — Model-Adaptive Content Patching
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 74
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 75 to break down)
