@@ -1404,3 +1404,23 @@ Wave structure:
 - Wave 4: 76-06 (gap closure: test fix after 76-04 refactor)
 
 
+
+### Phase 77: Web UI Fixes — Post-Overhaul Regressions + Missing Features
+
+**Goal:** Fix post-overhaul regressions and add missing features: mobile responsiveness, delegation step in timeline, continuous-scroll main panel with sidebar navigation, session drill-in layout, grace wait countdown, project management page, and TUI feature parity.
+**Requirements**: WUI77-01, WUI77-02, WUI77-03, WUI77-04, WUI77-05, WUI77-06, WUI77-07
+**Depends on:** Phase 76
+**Plans:** 4 plans
+
+Plans:
+- [ ] 77-01-PLAN.md — Continuous-scroll main panel + sidebar scroll-to + delegation step in timeline (backend + frontend)
+- [ ] 77-02-PLAN.md — Mobile responsiveness + session drill-in layout fix
+- [ ] 77-03-PLAN.md — Grace wait countdown badge + project management detail page
+- [ ] 77-04-PLAN.md — TUI feature parity (delegation step, block/unblock)
+
+Wave structure:
+- Wave 1: 77-01 + 77-03 (independent: core UX overhaul and grace/projects, no file overlap)
+- Wave 2: 77-02 + 77-04 (mobile/subpages depend on 77-01; TUI depends on 77-01 backend changes)
+
+**Details:**
+Read requirements/web-ui-fixes-v2.md for full spec.
