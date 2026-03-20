@@ -11,7 +11,7 @@
 
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { addJob, findDuplicateJob, getProject, updateJobCategories } from '../core/db.js';
+import { addJob, bump, findDuplicateJob, getProject, updateJobCategories } from '../core/db.js';
 import { formatCategoryHelp } from '../core/skills.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { resolveNotifyRoute } from '../core/notify-route.js';
@@ -421,6 +421,11 @@ async function addCommand(
         opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
       ));
 
+  // --next: bump to front of queue (same mechanism as `pilot bump`)
+  if (opts.next) {
+    bump(job.id);
+  }
+
   // Store categories on the job record if provided
   if (categories && categories.length > 0) {
     updateJobCategories(job.id, categories);
@@ -439,6 +444,9 @@ async function addCommand(
   const tagStr = tags.length > 0 ? `  ${dim(`[${tags.join('/')}]`)}` : '';
 
   outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
+  if (opts.next) {
+    outputHuman(`  ${yellow('↑')} Bumped to front of queue`);
+  }
   if (categories && categories.length > 0) {
     outputHuman(`  ${dim('Categories: ' + categories.join(', '))}`);
   }
