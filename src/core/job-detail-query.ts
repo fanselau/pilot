@@ -11,7 +11,6 @@
 import {
   getJob,
   getJobSteps,
-  retry,
   cancel,
   forceQuitJob,
   unblockProject,
@@ -695,10 +694,6 @@ function getJobTimeline(
 
 // ── Mutation Wrappers ─────────────────────────────────────────────────────
 
-/** Retry a failed job — delegates to db.retry(). */
-function retryJobAction(jobId: string): void {
-  retry(jobId);
-}
 
 /** Cancel a job — delegates to db.cancel(). */
 function cancelJobAction(jobId: string): void {
@@ -724,7 +719,6 @@ export {
   getSessionChildSummaries,
   getJobDetailEvents,
   getJobTimeline,
-  retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,

@@ -1381,3 +1381,23 @@ Wave structure:
 - Wave 1: 75-01 (content adaptation engine — pure additive, no existing files modified)
 - Wave 2: 75-02 (spawn-prep + runner/delegate integration, depends on 75-01)
 - Wave 3: 75-03 (CLI + tests, depends on 75-01 + 75-02)
+
+### Phase 76: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 75
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 76 to break down)
+
+### Phase 77: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 76
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 77 to break down)

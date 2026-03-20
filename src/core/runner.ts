@@ -46,7 +46,7 @@ import {
   updateSessionTitles,
   claimNextLaunchable,
   getAllRunningJobs,
-  resetToPending,
+
   updateJudgeVerdict,
   updateActualModels,
   getProject,
@@ -464,10 +464,10 @@ class Runner {
         process.stderr.write(`[runner] watchdog kill error: ${errMsg(err)}\n`);
       }
       try {
-        resetToPending(newestEntry.job.id, 'Killed by memory pressure watchdog');
+        markFailed(newestEntry.job.id, 'Killed by memory pressure watchdog');
         this.activeJobs.delete(newestEntry.job.id);
       } catch (err) {
-        process.stderr.write(`[runner] watchdog resetToPending error: ${errMsg(err)}\n`);
+        process.stderr.write(`[runner] watchdog markFailed error: ${errMsg(err)}\n`);
         this.activeJobs.delete(newestEntry.job.id);
       }
     }, watchdogIntervalMs);
@@ -554,7 +554,7 @@ class Runner {
             ({ job: activeJob }) => activeJob.project === job.project,
           );
           if (projectAlreadyActive) {
-            resetToPending(job.id);
+            markFailed(job.id, 'Stuck in unknown state');
             process.stderr.write(
               `[runner] Skipping ${job.id} (${job.project}): same-project job already active (reset to pending)\n`,
             );
@@ -742,7 +742,7 @@ class Runner {
               callbackSessionKey: project.owner,
               error: `Job ${failedJob.id} failed and blocked project ${failedJob.project}.\n` +
                      `Reason: ${error}\n` +
-                     `Actions: pilot retry ${failedJob.id}  ·  pilot unblock "${failedJob.project}"`,
+                     `Actions: pilot unblock "${failedJob.project}"  ·  queue a new job with pilot add`,
             };
             notifyJobCompletion(ownerNotifyJob).catch(() => {});
           }
@@ -932,27 +932,14 @@ class Runner {
       return;
     }
 
-    // No-activity check: did the execution session actually produce output?
-    const activeEntry = this.activeJobs.get(job.id);
-    const execTitle = activeEntry?.title;
-    if (execTitle) {
-      const execSessionId = findSessionByTitle(execTitle);
-      if (execSessionId) {
-        const assistantMsgCount = getAssistantMessageCount(execSessionId);
-        if (assistantMsgCount === 0) {
-          dbMarkStepFailed(step.id, 'No activity detected in execution session');
-          resetToPending(job.id, 'No activity detected — session may have crashed');
-          process.stderr.write(
-            `[runner] No activity in session for ${job.id} (0 assistant messages). Resetting to pending.\n`,
-          );
-          return;
-        }
-      }
+    // No-activity check removed — session state=done means done.
+    // The judge/VERIFICATION.md system handles quality, not the runner.
+    {
     }
 
     if (this.shuttingDown) {
       dbMarkStepFailed(step.id, 'Interrupted before judge');
-      resetToPending(job.id, 'Interrupted before verification');
+      markFailed(job.id, 'Interrupted before verification');
       process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
       return;
     }
@@ -1131,7 +1118,7 @@ class Runner {
 
     for (let i = 0; i < MAX_REDELEGATION_DEPTH * 3; i++) { // absolute safety cap
       if (this.shuttingDown) {
-        resetToPending(job.id, 'Interrupted during milestone loop');
+        markFailed(job.id, 'Interrupted during milestone loop');
         return;
       }
 
@@ -1368,7 +1355,7 @@ class Runner {
     } catch (memErr) {
       const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
       if (jobEntry) {
-        resetToPending(jobEntry.job.id, `Insufficient memory — returned to queue`);
+        markFailed(jobEntry.job.id, 'Insufficient memory');
         process.stderr.write(
           `[runner] Insufficient memory after 5m wait, returning job ${jobEntry.job.id} to pending\n`,
         );

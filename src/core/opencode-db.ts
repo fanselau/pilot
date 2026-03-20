@@ -650,6 +650,24 @@ function getSessionState(sessionId: string, pidAlive: boolean = true): SessionSt
     if (stepFinishRow) {
       const reason = stepFinishRow.reason;
       if (reason === 'stop' || reason === 'length') {
+        // Check if any child sessions (Task() subagents) are still running.
+        // A parent session can finish before its children complete.
+        const runningChildRow = db.prepare(
+          `SELECT s.id FROM session s
+           WHERE s.parent_id = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM part p
+               WHERE p.session_id = s.id
+                 AND json_extract(p.data, '$.type') = 'step-finish'
+                 AND json_extract(p.data, '$.reason') IN ('stop', 'length')
+             )
+           LIMIT 1`,
+        ).get(sessionId) as { id: string } | undefined;
+
+        if (runningChildRow) {
+          // Parent done but child still running — report as working
+          return { state: 'working' };
+        }
         return { state: 'done' };
       }
       // reason='tool-calls' → fall through to check for pending tools

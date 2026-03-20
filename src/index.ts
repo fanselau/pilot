@@ -52,8 +52,6 @@ program
   .option('--force', 'Bypass project setup check')
   .option('--start-immediately', 'Bypass queue grace wait and launch as soon as eligible (less review/cancel time)')
   .option('--timeout <minutes>', 'Per-job timeout in minutes (default: 0 = infinite)', (v: string) => parseInt(v, 10))
-  .option('--retries <n>', 'Retry budget for verification auto-retry (integer >= 0)', (v: string) => parseInt(v, 10))
-  .option('--no-retry', 'Disable verification auto-retry for this job')
   .option('--notify <agentId>', 'Agent ID to notify on completion (optional, e.g. main)')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
@@ -81,7 +79,6 @@ program
   .option('--follow', 'Live tail new activity')
   .option('--last <n>', 'Show last N parts', parseInt)
   .option('-v, --verbose', 'Show reasoning and full tool output')
-  .option('--chain', 'Show full retry-attempt chain for this job')
   .option('--delegation', 'Show only delegation session')
   .option('--flat', 'Show task parts without expanding child sessions')
   .option('--task <n>', 'Show only the Nth child session (1-indexed)', (v: string) => parseInt(v, 10))
@@ -135,15 +132,6 @@ program
   .action(async (id: string, opts: Record<string, unknown>) => {
     const { killCommand } = await import('./commands/kill.js');
     await killCommand(id, opts as { force?: boolean });
-  });
-
-program
-  .command('retry <id>')
-  .description('Retry a failed job')
-  .option('--why', 'Explain retry context without mutating job state')
-  .action(async (id: string, opts: Record<string, unknown>) => {
-    const { retryCommand } = await import('./commands/retry.js');
-    await retryCommand(id, opts as { why?: boolean });
   });
 
 program

@@ -63,7 +63,7 @@ function nextStepGuidance(job: Job): string {
   if (job.status === 'completed') {
     return 'Acknowledge completion and continue with the next planned item.';
   }
-  return `The project is now blocked. Run: pilot log ${job.id} to read the full build transcript, then pilot retry ${job.id} to retry (also unblocks the project).`;
+  return `The project is now blocked. Run: pilot log ${job.id} to read the full build transcript, then pilot unblock "${job.project}" to unblock, or queue a new job..`;
 }
 
 function buildDeliveryPrompt(job: Job): string {
@@ -137,7 +137,7 @@ function buildDeliveryPrompt(job: Job): string {
 
   if (failed) {
     lines.push(`Flag the failure clearly. The project is now blocked — no further jobs will run until someone retries or unblocks.`);
-    lines.push(`Tell the team to run pilot log ${job.id} to inspect the transcript, then pilot retry ${job.id} to fix and retry.`);
+    lines.push(`Tell the team to run pilot log ${job.id} to inspect the transcript, then pilot unblock the project or queue a new follow-up job.`);
   } else {
     lines.push('Acknowledge success, mention the project and what was done, and note the natural next action.');
   }

@@ -1919,7 +1919,7 @@ export {
   completeStep,
   getJobSteps,
   skipRemainingSteps,
-  resetToPending,
+
   updateJudgeVerdict,
   updateActualModels,
   updateJobCategories,
