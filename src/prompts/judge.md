@@ -93,52 +93,49 @@ Output ONLY a JSON code block with the verdict — no other text before or after
 
 ```json
 {
-  "verdict": "pass",
+  "verdict": "passed",
   "confidence": 92,
   "reason": "All 3 plans executed, summaries written, tests passing.",
-  "retryRecommendation": "none",
-  "retryHint": "",
-  "failureFingerprint": []
+  "gaps": []
 }
 ```
 
 ## Field Definitions
 
-- **`verdict`**: `"pass"` | `"fail"` | `"partial"` — the outcome
-  - `"pass"`: Requirement clearly accomplished. Evidence of commits, tests passing, artifacts created. Use confidence ≥ 70.
-  - `"partial"`: Some work done but incomplete. Mixed signals or session ended mid-work.
-  - `"fail"`: No meaningful progress, fundamental error, or executor asked for human input.
+- **`verdict`**: `"passed"` | `"gaps_found"` | `"failed"` — the outcome
+  - `"passed"`: All requirements are met. Code compiles, tests pass, verification evidence confirms the phase goal. Use when confidence ≥ 70 and no blocking issues.
+  - `"gaps_found"`: Partial progress but specific gaps remain. Code landed (commits exist, summaries written), but verification evidence shows incomplete requirements. The `gaps` array MUST list each gap concretely. Use when evidence shows real progress but measurable shortfalls.
+  - `"failed"`: No meaningful progress or unrecoverable failure. Session produced no useful output, build is fundamentally broken, or the approach is wrong. Cannot be fixed by gap closure — needs full re-run or human intervention.
 
 - **`confidence`**: integer 0–100 — how certain you are about the verdict
 
 - **`reason`**: one sentence, human-readable, suitable for notification messages and TUI display
 
-- **`retryRecommendation`**: `"none"` | `"retry-full"` | `"retry-resume"` — string, never null
-  - `"retry-resume"` → runner uses `--gaps` (targeted fixes from VERIFICATION.md; use when partial progress exists)
-  - `"retry-full"` → runner re-runs full plan+execute (use when approach needs rethinking)
-  - `"none"` → no retry needed (clean pass or unrecoverable failure)
+- **`gaps`**: array of strings — concrete, actionable descriptions of what's missing
+  - REQUIRED when verdict is `"gaps_found"`. Each gap must be specific and actionable (e.g., `"test_auth.py has 2 failing assertions: test_login_invalid_password, test_token_expiry"`, `"SUMMARY.md missing for plan 03"`, `"TypeScript compilation error in src/core/runner.ts: TS2304"`).
+  - Empty array `[]` when verdict is `"passed"` or `"failed"`.
+  - An empty `gaps` array with `"gaps_found"` verdict is INVALID — use `"failed"` instead if you cannot identify specific gaps.
 
-- **`retryHint`**: free-text guidance for next attempt. Examples:
-  - `"Resume from plan 03"`
-  - `"Fix tsconfig.json paths before retrying"`
-  - `""` when none needed
+## Backward Compatibility
 
-- **`failureFingerprint`**: array of short structured strings describing failing items. Examples:
-  - `["tsc: TS2304 in src/core/runner.ts", "test: runner.test.ts:45 timeout"]`
-  - Empty array `[]` on pass.
-  - Enables same-failure detection for future retry logic.
+If evaluating a job that was previously judged with legacy verdict values, apply these transitions:
+- `"doubting"` → treat as `"gaps_found"`
+- `"partial"` → treat as `"gaps_found"`
+- `"pass"` → treat as `"passed"`
+- `"fail"` → treat as `"failed"`
+- `"succeeded"` → treat as `"passed"`
 
 ## Evidence-Absent Rules
 
-- **If VERIFICATION.md is absent or invalid** (<100 bytes or missing expected headers): use transcript-only evidence and default to `"partial"` with confidence ≤ 40.
-- **If transcript is also empty or unavailable**: default to `"partial"` with confidence 10.
-- Never upgrade from `"partial"` to `"pass"` based on transcript alone — require VERIFICATION.md or clear SUMMARY.md completion evidence.
+- **If VERIFICATION.md is absent or invalid** (<100 bytes or missing expected headers): use transcript-only evidence and default to `"gaps_found"` with confidence ≤ 40. Include `"VERIFICATION.md absent or invalid"` in the gaps array.
+- **If transcript is also empty or unavailable**: default to `"failed"` with confidence 10.
+- Never upgrade from `"gaps_found"` to `"passed"` based on transcript alone — require VERIFICATION.md or clear SUMMARY.md completion evidence.
 
 ## Rules
 
 - Output ONLY the JSON code block — no preamble, no explanation
 - Do NOT hallucinate — if evidence is insufficient, set confidence low and verdict to `"partial"`
-- Be conservative: if unsure, say `"partial"` not `"pass"`
+- Be conservative: if unsure, say `"gaps_found"` not `"passed"`
 - The `reason` field should be human-readable (shown in TUI and notifications)
 - Do NOT modify files, run tests, or invoke GSD commands — read-only
 - Complete evaluation quickly — this is evaluation, not creative work
