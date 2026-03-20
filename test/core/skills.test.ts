@@ -1,12 +1,15 @@
 /**
- * Unit tests for core/skills.ts — resolveSkillsForJob, injectSkills, cleanupInjectedSkills.
+ * Unit tests for core/skills.ts — manifest-only skill registry.
+ *
+ * Tests: CATEGORY_INFO, PREDEFINED_CATEGORIES, registerSkill, unregisterSkill,
+ * formatCategoryHelp, resolveSkillsForJob.
  *
  * Uses temp directories for filesystem isolation. Mocks getConfig to point
  * pilotDir at a temp directory so manifest/skills are sandboxed.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -23,10 +26,13 @@ vi.mock('../../src/core/config.js', () => ({
 // Must import AFTER vi.mock
 import {
   resolveSkillsForJob,
-  injectSkills,
-  cleanupInjectedSkills,
   saveManifest,
   loadManifest,
+  registerSkill,
+  unregisterSkill,
+  formatCategoryHelp,
+  PREDEFINED_CATEGORIES,
+  CATEGORY_INFO,
 } from '../../src/core/skills.js';
 import type { SkillEntry, SkillManifest } from '../../src/core/types.js';
 
@@ -38,33 +44,18 @@ function makeTmpDir(): string {
 
 function makeSkillEntry(overrides: Partial<SkillEntry> & { name: string }): SkillEntry {
   const name = overrides.name;
-  const skillPath = overrides.path ?? path.join(tmpPilotDir, 'skills', name);
   return {
     name,
     description: overrides.description ?? `${name} skill`,
     categories: overrides.categories ?? [],
-    source: overrides.source ?? 'local',
-    path: skillPath,
+    repo: overrides.repo ?? 'https://github.com/test/repo',
+    skill: overrides.skill ?? name,
   };
 }
 
 function setupManifest(skills: SkillEntry[]): void {
   const manifest: SkillManifest = { version: 1, skills };
   saveManifest(manifest);
-}
-
-/**
- * Create a fake skill directory with SKILL.md in the temp pilot skills dir.
- */
-function createFakeSkillDir(name: string, description = `${name} skill`): string {
-  const skillDir = path.join(tmpPilotDir, 'skills', name);
-  mkdirSync(skillDir, { recursive: true });
-  writeFileSync(
-    path.join(skillDir, 'SKILL.md'),
-    `---\nname: ${name}\ndescription: "${description}"\n---\n\n# ${name}\n\nContent here.\n`,
-    'utf-8',
-  );
-  return skillDir;
 }
 
 // ── Setup / Teardown ────────────────────────────────────────────────────
@@ -77,6 +68,107 @@ afterEach(() => {
   try {
     rmSync(tmpPilotDir, { recursive: true, force: true });
   } catch { /* ignore */ }
+});
+
+// ── CATEGORY_INFO ────────────────────────────────────────────────────────
+
+describe('CATEGORY_INFO', () => {
+  it('has exactly 15 entries', () => {
+    expect(Object.keys(CATEGORY_INFO).length).toBe(15);
+  });
+
+  it('has entries for all PREDEFINED_CATEGORIES', () => {
+    for (const cat of PREDEFINED_CATEGORIES) {
+      expect(CATEGORY_INFO[cat]).toBeDefined();
+      expect(typeof CATEGORY_INFO[cat]).toBe('string');
+      expect(CATEGORY_INFO[cat].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('includes new categories: deployment, accessibility, architecture', () => {
+    expect(CATEGORY_INFO['deployment']).toContain('Cloudflare');
+    expect(CATEGORY_INFO['accessibility']).toContain('WCAG');
+    expect(CATEGORY_INFO['architecture']).toContain('Component');
+  });
+});
+
+// ── PREDEFINED_CATEGORIES ────────────────────────────────────────────────
+
+describe('PREDEFINED_CATEGORIES', () => {
+  it('has 15 entries', () => {
+    expect(PREDEFINED_CATEGORIES.length).toBe(15);
+  });
+
+  it('includes deployment, accessibility, architecture', () => {
+    expect(PREDEFINED_CATEGORIES).toContain('deployment');
+    expect(PREDEFINED_CATEGORIES).toContain('accessibility');
+    expect(PREDEFINED_CATEGORIES).toContain('architecture');
+  });
+});
+
+// ── registerSkill ────────────────────────────────────────────────────────
+
+describe('registerSkill', () => {
+  it('adds new skill to manifest', () => {
+    const entry = registerSkill('https://github.com/test/repo', 'my-skill', ['frontend']);
+    expect(entry.name).toBe('my-skill');
+    expect(entry.repo).toBe('https://github.com/test/repo');
+    expect(entry.skill).toBe('my-skill');
+    expect(entry.categories).toEqual(['frontend']);
+    const manifest = loadManifest();
+    expect(manifest.skills.find(s => s.name === 'my-skill')).toBeDefined();
+  });
+
+  it('updates existing skill by name', () => {
+    registerSkill('https://github.com/test/repo', 'my-skill', ['frontend']);
+    const updated = registerSkill('https://github.com/test/repo2', 'my-skill', ['backend']);
+    expect(updated.repo).toBe('https://github.com/test/repo2');
+    expect(updated.categories).toEqual(['backend']);
+  });
+});
+
+// ── unregisterSkill ──────────────────────────────────────────────────────
+
+describe('unregisterSkill', () => {
+  it('removes skill from manifest', () => {
+    registerSkill('https://github.com/test/repo', 'to-remove', ['general']);
+    const result = unregisterSkill('to-remove');
+    expect(result.removed).toBe(true);
+    expect(loadManifest().skills.find(s => s.name === 'to-remove')).toBeUndefined();
+  });
+
+  it('returns false for non-existent skill', () => {
+    const result = unregisterSkill('nonexistent');
+    expect(result.removed).toBe(false);
+  });
+});
+
+// ── formatCategoryHelp ───────────────────────────────────────────────────
+
+describe('formatCategoryHelp', () => {
+  it('includes Available categories header', () => {
+    const help = formatCategoryHelp();
+    expect(help).toContain('Available categories:');
+  });
+
+  it('includes all category descriptions', () => {
+    const help = formatCategoryHelp();
+    expect(help).toContain('React, UI components');
+    expect(help).toContain('Cloudflare Workers');
+    expect(help).toContain('WCAG');
+  });
+
+  it('includes usage examples', () => {
+    const help = formatCategoryHelp();
+    expect(help).toContain('Usage: pilot add');
+    expect(help).toContain('--no-categories');
+  });
+
+  it('shows installed skills count when manifest has entries', () => {
+    registerSkill('https://github.com/test/repo', 'test-skill', ['general']);
+    const help = formatCategoryHelp();
+    expect(help).toContain('Installed skills (1 total)');
+  });
 });
 
 // ── resolveSkillsForJob ─────────────────────────────────────────────────
@@ -151,139 +243,5 @@ describe('resolveSkillsForJob', () => {
 
     const result = resolveSkillsForJob([]);
     expect(result).toHaveLength(0);
-  });
-});
-
-// ── injectSkills ────────────────────────────────────────────────────────
-
-describe('injectSkills', () => {
-  let projectDir: string;
-
-  beforeEach(() => {
-    projectDir = makeTmpDir();
-  });
-
-  afterEach(() => {
-    try {
-      rmSync(projectDir, { recursive: true, force: true });
-    } catch { /* ignore */ }
-  });
-
-  it('copies skill to .opencode/skills/<name>/', () => {
-    const skillDir = createFakeSkillDir('my-skill');
-    const skill = makeSkillEntry({ name: 'my-skill', path: skillDir });
-
-    const result = injectSkills([skill], projectDir);
-
-    expect(result).toEqual(['my-skill']);
-    expect(existsSync(path.join(projectDir, '.opencode', 'skills', 'my-skill', 'SKILL.md'))).toBe(true);
-  });
-
-  it('writes .pilot-injected.json with list of injected names', () => {
-    const skillDir = createFakeSkillDir('my-skill');
-    const skill = makeSkillEntry({ name: 'my-skill', path: skillDir });
-
-    injectSkills([skill], projectDir);
-
-    const manifestPath = path.join(projectDir, '.opencode', 'skills', '.pilot-injected.json');
-    expect(existsSync(manifestPath)).toBe(true);
-
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-    expect(manifest.injected).toEqual(['my-skill']);
-  });
-
-  it('skips skills where project already has that skill directory', () => {
-    const skillDir = createFakeSkillDir('existing-skill');
-    const skill = makeSkillEntry({ name: 'existing-skill', path: skillDir });
-
-    // Pre-create the skill in the project
-    const projectSkillDir = path.join(projectDir, '.opencode', 'skills', 'existing-skill');
-    mkdirSync(projectSkillDir, { recursive: true });
-    writeFileSync(path.join(projectSkillDir, 'SKILL.md'), '# My project skill\n', 'utf-8');
-
-    const result = injectSkills([skill], projectDir);
-
-    expect(result).toEqual([]); // nothing injected
-  });
-
-  it('returns list of actually copied skill names only', () => {
-    const dir1 = createFakeSkillDir('skill-a');
-    const dir2 = createFakeSkillDir('skill-b');
-    const skill1 = makeSkillEntry({ name: 'skill-a', path: dir1 });
-    const skill2 = makeSkillEntry({ name: 'skill-b', path: dir2 });
-
-    // Pre-create skill-a in project
-    const existing = path.join(projectDir, '.opencode', 'skills', 'skill-a');
-    mkdirSync(existing, { recursive: true });
-    writeFileSync(path.join(existing, 'SKILL.md'), '# existing\n', 'utf-8');
-
-    const result = injectSkills([skill1, skill2], projectDir);
-    expect(result).toEqual(['skill-b']); // only skill-b was copied
-  });
-});
-
-// ── cleanupInjectedSkills ───────────────────────────────────────────────
-
-describe('cleanupInjectedSkills', () => {
-  let projectDir: string;
-
-  beforeEach(() => {
-    projectDir = makeTmpDir();
-  });
-
-  afterEach(() => {
-    try {
-      rmSync(projectDir, { recursive: true, force: true });
-    } catch { /* ignore */ }
-  });
-
-  it('removes injected skill directories and the manifest file', () => {
-    // Set up: inject a skill
-    const skillDir = createFakeSkillDir('injected-skill');
-    const skill = makeSkillEntry({ name: 'injected-skill', path: skillDir });
-    injectSkills([skill], projectDir);
-
-    // Verify it was injected
-    const injectedDir = path.join(projectDir, '.opencode', 'skills', 'injected-skill');
-    expect(existsSync(injectedDir)).toBe(true);
-
-    // Now cleanup
-    cleanupInjectedSkills(projectDir);
-
-    expect(existsSync(injectedDir)).toBe(false);
-    expect(existsSync(path.join(projectDir, '.opencode', 'skills', '.pilot-injected.json'))).toBe(false);
-  });
-
-  it('leaves pre-existing project skills untouched', () => {
-    // Pre-create a project skill
-    const projectSkillDir = path.join(projectDir, '.opencode', 'skills', 'project-skill');
-    mkdirSync(projectSkillDir, { recursive: true });
-    writeFileSync(path.join(projectSkillDir, 'SKILL.md'), '# Project skill\n', 'utf-8');
-
-    // Inject a different skill
-    const skillDir = createFakeSkillDir('injected-skill');
-    const skill = makeSkillEntry({ name: 'injected-skill', path: skillDir });
-    injectSkills([skill], projectDir);
-
-    // Cleanup
-    cleanupInjectedSkills(projectDir);
-
-    // Injected removed, project skill preserved
-    expect(existsSync(path.join(projectDir, '.opencode', 'skills', 'injected-skill'))).toBe(false);
-    expect(existsSync(path.join(projectDir, '.opencode', 'skills', 'project-skill', 'SKILL.md'))).toBe(true);
-  });
-
-  it('does not throw if .pilot-injected.json does not exist (idempotent)', () => {
-    expect(() => cleanupInjectedSkills(projectDir)).not.toThrow();
-  });
-
-  it('is idempotent — calling twice does not throw', () => {
-    const skillDir = createFakeSkillDir('temp-skill');
-    const skill = makeSkillEntry({ name: 'temp-skill', path: skillDir });
-    injectSkills([skill], projectDir);
-
-    cleanupInjectedSkills(projectDir);
-    // Second call — manifest and dirs already gone
-    expect(() => cleanupInjectedSkills(projectDir)).not.toThrow();
   });
 });

@@ -6,12 +6,14 @@
  * - STACK_SKILLS: Stack-specific skills keyed by detected technology
  * - detectProjectStack(): Filesystem-based project stack detection
  * - recommendDefaultSkills(): Deduplicated union of Tier 1 + detected Tier 2
+ * - bootstrapDefaultSkills(): Register all recommended skills for a project
  *
  * Pure core module — no UI dependencies.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { registerSkill } from './skills.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -227,4 +229,54 @@ export function recommendDefaultSkills(
   }
 
   return { skills, detectedStack };
+}
+
+// ── Bootstrap Result ──────────────────────────────────────────────────────
+
+export interface BootstrapResult {
+  installed: number;
+  attempted: number;
+  failed: number;
+  errors: Array<{ skill: string; error: string }>;
+}
+
+// ── Bootstrap Default Skills ──────────────────────────────────────────────
+
+/**
+ * Register all recommended skills for a project in the manifest.
+ * Uses recommendDefaultSkills() to determine which skills to register,
+ * then calls registerSkill() (manifest-only) for each.
+ *
+ * Returns counts and any errors encountered.
+ */
+export async function bootstrapDefaultSkills(options: {
+  projectDir: string;
+  yes?: boolean;
+  tier?: 1 | 2 | 'all';
+}): Promise<BootstrapResult> {
+  const recommendation = recommendDefaultSkills(options.projectDir, { tier: options.tier });
+
+  let installed = 0;
+  let failed = 0;
+  const errors: Array<{ skill: string; error: string }> = [];
+
+  for (const s of recommendation.skills) {
+    try {
+      registerSkill(s.repo, s.skill, s.categories);
+      installed++;
+    } catch (err) {
+      failed++;
+      errors.push({
+        skill: s.skill,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    installed,
+    attempted: recommendation.skills.length,
+    failed,
+    errors,
+  };
 }

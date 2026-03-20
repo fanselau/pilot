@@ -1367,10 +1367,17 @@ Wave structure:
 
 ### Phase 75: Codex First-Class Citizen — Model-Adaptive Content Patching
 
-**Goal:** [To be planned]
+**Goal:** Make Codex (gpt-5.4) produce results on par with Claude by patching GSD prompt content before spawn. Create unified pre-spawn preparation (`prepareProjectForSpawn` / `restoreProjectAfterSpawn`) consolidating frontmatter patching, JIT skill installation, and content adaptation (identity/tool/path neutralization) into a single try/finally lifecycle. Add `pilot adapt --dry-run/--scan` verification tools.
 **Requirements**: TBD
 **Depends on:** Phase 74
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 75 to break down)
+- [ ] 75-01-PLAN.md — Content adaptation engine: prompt-adapter.ts with model family detection, text transformation pipeline, mode-aware file selection
+- [ ] 75-02-PLAN.md — Unified spawn prep: spawn-prep.ts + runner/delegate integration + inline prompt adaptation for Codex
+- [ ] 75-03-PLAN.md — CLI adapt commands (dry-run, scan) + comprehensive tests for all new modules + runner test updates
+
+Wave structure:
+- Wave 1: 75-01 (content adaptation engine — pure additive, no existing files modified)
+- Wave 2: 75-02 (spawn-prep + runner/delegate integration, depends on 75-01)
+- Wave 3: 75-03 (CLI + tests, depends on 75-01 + 75-02)
