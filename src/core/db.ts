@@ -24,6 +24,7 @@ import type {
   ModelProfileRow,
   ProviderModeRow,
   OpenClawDeliverRoute,
+  StepSource,
 } from './types.js';
 import { AGENT_MODELS } from './models.js';
 
@@ -87,13 +88,16 @@ CREATE TABLE IF NOT EXISTS job_steps (
   step_index INTEGER NOT NULL,
   command TEXT NOT NULL,
   args TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'delegation',
   session_title TEXT,
   session_id TEXT,
-  status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'skipped')),
+  status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped')),
+  reason TEXT,
   verdict_source TEXT,
   verdict_reason TEXT,
-  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  started_at TEXT DEFAULT (datetime('now')),
   completed_at TEXT,
+  error TEXT,
   duration_ms INTEGER
 );
 `;
@@ -415,6 +419,10 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN last_failure_fingerprint TEXT DEFAULT NULL',
     'ALTER TABLE jobs ADD COLUMN hung_count INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN last_hung_reason TEXT DEFAULT NULL',
+    // Phase 73: job_steps append-forward model columns
+    "ALTER TABLE job_steps ADD COLUMN source TEXT NOT NULL DEFAULT 'delegation'",
+    'ALTER TABLE job_steps ADD COLUMN reason TEXT',
+    'ALTER TABLE job_steps ADD COLUMN error TEXT',
   ];
   for (const sql of migrations) {
     try {
@@ -1185,6 +1193,157 @@ function skipRemainingSteps(
   }
 }
 
+// ── Step CRUD (Append-Forward Model, Phase 73) ────────────────────────────
+
+/**
+ * Create a new step with status='pending'. No started_at.
+ * Returns the auto-increment row ID.
+ */
+function createPendingStep(
+  jobId: string,
+  stepIndex: number,
+  command: string,
+  args: string,
+  source: StepSource,
+  reason?: string,
+): number {
+  const db = getDb();
+  const result = db.prepare(`
+    INSERT INTO job_steps (job_id, step_index, command, args, source, status, reason, started_at)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL)
+  `).run(jobId, stepIndex, command, args, source, reason ?? null);
+  return Number(result.lastInsertRowid);
+}
+
+/**
+ * Get the next pending step for a job (lowest step_index with status='pending').
+ * Returns null if no pending steps remain.
+ */
+function getNextPendingStep(jobId: string): JobStep | null {
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT * FROM job_steps WHERE job_id = ? AND status = 'pending' ORDER BY step_index ASC LIMIT 1",
+  ).get(jobId) as JobStepRow | undefined;
+  return row ? rowToJobStep(row) : null;
+}
+
+/**
+ * Mark a pending step as running. Sets started_at to now.
+ */
+function markStepRunning(stepId: number): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE job_steps
+    SET status = 'running', started_at = datetime('now')
+    WHERE id = ?
+  `).run(stepId);
+}
+
+/**
+ * Mark a running step as completed. Sets completed_at, computes duration_ms.
+ * Optionally records session ID and session title.
+ */
+function markStepCompleted(
+  stepId: number,
+  sessionId?: string | null,
+  sessionTitle?: string | null,
+): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE job_steps
+    SET status = 'completed',
+        completed_at = datetime('now'),
+        duration_ms = CASE
+          WHEN started_at IS NOT NULL THEN CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER)
+          ELSE NULL
+        END,
+        session_id = COALESCE(?, session_id),
+        session_title = COALESCE(?, session_title)
+    WHERE id = ?
+  `).run(sessionId ?? null, sessionTitle ?? null, stepId);
+}
+
+/**
+ * Mark a running step as failed. Records error, sets completed_at, computes duration_ms.
+ * Optionally records session ID and session title.
+ */
+function markStepFailed(
+  stepId: number,
+  error: string,
+  sessionId?: string | null,
+  sessionTitle?: string | null,
+): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE job_steps
+    SET status = 'failed',
+        error = ?,
+        completed_at = datetime('now'),
+        duration_ms = CASE
+          WHEN started_at IS NOT NULL THEN CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER)
+          ELSE NULL
+        END,
+        session_id = COALESCE(?, session_id),
+        session_title = COALESCE(?, session_title)
+    WHERE id = ?
+  `).run(error, sessionId ?? null, sessionTitle ?? null, stepId);
+}
+
+/**
+ * Get the total number of steps for a job (all statuses).
+ */
+function getTotalStepCount(jobId: string): number {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT COUNT(*) as cnt FROM job_steps WHERE job_id = ?',
+  ).get(jobId) as { cnt: number };
+  return row.cnt;
+}
+
+/**
+ * Get the number of pending steps for a job.
+ */
+function getPendingStepCount(jobId: string): number {
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT COUNT(*) as cnt FROM job_steps WHERE job_id = ? AND status = 'pending'",
+  ).get(jobId) as { cnt: number };
+  return row.cnt;
+}
+
+/**
+ * Bulk-insert pending steps for a job. Auto-computes step_index from MAX(step_index)+1.
+ * All steps share the same source and optional reason.
+ */
+function appendSteps(
+  jobId: string,
+  steps: Array<{ command: string; args: string }>,
+  source: StepSource,
+  reason?: string,
+): void {
+  if (steps.length === 0) return;
+
+  const db = getDb();
+  const maxRow = db.prepare(
+    'SELECT MAX(step_index) as max_idx FROM job_steps WHERE job_id = ?',
+  ).get(jobId) as { max_idx: number | null };
+  let nextIndex = (maxRow.max_idx ?? -1) + 1;
+
+  const insert = db.prepare(`
+    INSERT INTO job_steps (job_id, step_index, command, args, source, status, reason, started_at)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL)
+  `);
+
+  const bulkInsert = db.transaction(() => {
+    for (const step of steps) {
+      insert.run(jobId, nextIndex, step.command, step.args, source, reason ?? null);
+      nextIndex++;
+    }
+  });
+
+  bulkInsert();
+}
+
 // ── Retry Metadata + Attempt Archive Helpers ───────────────────────────────
 
 function updateRetryHint(jobId: string, retryHint: string | null): void {
@@ -1767,4 +1926,13 @@ export {
   canRetry,
   isSameHungReason,
   resetRetryState,
+  // Phase 73: step CRUD for append-forward model
+  createPendingStep,
+  getNextPendingStep,
+  markStepRunning,
+  markStepCompleted,
+  markStepFailed,
+  getTotalStepCount,
+  getPendingStepCount,
+  appendSteps,
 };
