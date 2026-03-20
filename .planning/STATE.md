@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Completed quick task 260320-vc3: Fix --next flag on pilot add"
-last_updated: "2026-03-20T22:40:37.976Z"
-last_activity: "2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot"
+stopped_at: "Completed quick task 260320-vju: Bug fix pilot kill --force + stale child sessions"
+last_updated: "2026-03-20T22:53:09.352Z"
+last_activity: "2026-03-20 - Completed quick task 260320-vc3: Bug fix: --next flag on pilot add doesn't insert at front of queue"
 progress:
   total_phases: 75
   completed_phases: 33
@@ -891,6 +891,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T22:40:28.263Z
-Stopped at: Completed quick task 260320-vc3: Fix --next flag on pilot add
+Last session: 2026-03-20T22:53:09.345Z
+Stopped at: Completed quick task 260320-vju: Bug fix pilot kill --force + stale child sessions
 Resume file: None
