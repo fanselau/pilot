@@ -3,30 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 73-02-PLAN.md
-last_updated: "2026-03-20T13:36:01.374Z"
-last_activity: 2026-03-16 - Completed 72-04-PLAN.md
+stopped_at: Completed 73-01-PLAN.md
+last_updated: "2026-03-20T13:43:45.110Z"
+last_activity: 2026-03-20 - Completed 73-01-PLAN.md
 progress:
   total_phases: 72
   completed_phases: 31
   total_plans: 112
-  completed_plans: 100
+  completed_plans: 101
   percent: 93
 ---
 
 # State
 
 ## Current Milestone: launch-v1
-## Current Phase: 72
+## Current Phase: 73
 
 ## Current Position
 
-Phase: 72 of 72 (Cleanup — Remove pilot-gsd Fork)
-**Next Phase:** None (current roadmap phase complete)
-**Next Plan:** None (72 complete)
-Plan: 6 of 6 in current phase
-Status: Phase complete
-Last activity: 2026-03-16 - Completed 72-04-PLAN.md
+Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Append-Forward Model)
+**Next Plan:** 73-02-PLAN.md
+Plan: 2 of 6 in current phase
+Status: In progress
+Last activity: 2026-03-20 - Completed 73-01-PLAN.md
 
 Progress: [█████████░] 93%
 
@@ -861,6 +860,9 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 72-04 | Pilot pipeline skill guidance now uses intent lifecycle + frontmatter patching + retry lineage mental model | Keeps operator actions aligned with current runner contracts and observability surfaces |
 | 72-04 | Active coupling audit enforces zero targeted fork strings across src/test/README/docs/skills | Provides deterministic closeout gate for fork cleanup without rewriting historical archives |
 - [Phase 73]: Legacy verdict transition: doubting/partial map to gaps outcome for append-forward alignment
+- [Phase 73]: StepSource as narrow 5-value union for type safety
+- [Phase 73]: Keep legacy verdictSource/verdictReason on JobStep for backward compat during transition
+- [Phase 73]: appendSteps uses db.transaction() for bulk insert atomicity
 
 ## Blockers/Concerns Carried Forward
 
@@ -869,6 +871,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T13:36:01.368Z
-Stopped at: Completed 73-02-PLAN.md
+Last session: 2026-03-20T13:43:26.358Z
+Stopped at: Completed 73-01-PLAN.md
 Resume file: None

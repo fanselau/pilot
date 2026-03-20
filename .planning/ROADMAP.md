@@ -1329,7 +1329,7 @@ Read `requirements/gsd-09-cleanup.md` and `.planning/phases/72-cleanup-remove-pi
 **Goal:** Replace the retry system with an append-forward step model. Jobs get a mutable, append-only step list. The runner executes steps sequentially. When judge finds gaps or sessions hang, new steps are appended via delegation re-query — never retry, never go backwards.
 **Requirements**: TBD
 **Depends on:** Phase 72
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 - [ ] 73-01-PLAN.md — Foundation: StepSource type, extended JobStep, DB schema migration, step CRUD functions
