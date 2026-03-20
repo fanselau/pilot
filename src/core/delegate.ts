@@ -20,8 +20,9 @@ import path from 'node:path';
 import { findSessionByTitle, exportSessionFromDb, isSessionDone } from './opencode-db.js';
 import { resolveTopLevelModel } from './models.js';
 import { resolveSkillsForJob } from './skills.js';
+import { getJobSteps } from './db.js';
 import { errMsg } from '../util/errors.js';
-import type { Job, DelegationIntent, DelegationResult } from './types.js';
+import type { Job, DelegationIntent, DelegationResult, JobStep, StepSource } from './types.js';
 
 // Load delegation prompt from src/prompts/delegate.md at module load time
 const DELEGATE_PROMPT_PATH = fileURLToPath(new URL('../prompts/delegate.md', import.meta.url));
@@ -89,6 +90,279 @@ async function delegate(job: Job, projectDir: string): Promise<DelegationResult>
     throw new Error(`${firstErrMsg}. Check project setup with: pilot doctor --project ${projectDir}`);
   }
 }
+
+// ── Re-Delegation (Step Continuation) ─────────────────────────────────────
+
+/**
+ * Result from re-querying the delegation AI after a failure or gaps_found verdict.
+ * Contains new steps to append to the job's step list.
+ */
+interface ContinuationResult {
+  steps: Array<{ command: string; args: string }>;
+  reasoning: string;
+  _sessionTitle?: string;  // for session attribution
+}
+
+/**
+ * Re-query the delegation AI after a failure or gaps_found verdict.
+ * Sends the step history and context, receives continuation steps to append.
+ *
+ * The delegation AI outputs { continuation_steps: [...], reasoning: ... }
+ * which the runner will append as new pending steps.
+ */
+async function reDelegateForContinuation(
+  job: Job,
+  projectDir: string,
+  context: {
+    source: StepSource;
+    reason: string;
+    gaps?: string[];        // From judge verdict when gaps_found
+    hungInfo?: {            // From hung session detection
+      command: string;
+      reason: string;
+      toolName?: string;
+    };
+  },
+): Promise<ContinuationResult> {
+  try {
+    return await attemptContinuationDelegation(job, projectDir, context, 1);
+  } catch (firstErr) {
+    // If parse failure, retry once with error context injected into prompt
+    const firstErrMsg = errMsg(firstErr);
+    if (firstErrMsg.includes('Failed to parse') || firstErrMsg.includes('No continuation_steps')) {
+      try {
+        return await attemptContinuationDelegation(job, projectDir, context, 2, `Your previous re-query attempt produced invalid JSON: ${firstErrMsg}`);
+      } catch (retryErr) {
+        throw new Error(`Re-delegation failed: ${errMsg(retryErr)}`);
+      }
+    }
+    throw new Error(`Re-delegation failed: ${firstErrMsg}`);
+  }
+}
+
+/**
+ * Single re-delegation attempt: spawn opencode with inline prompt containing
+ * step history and continuation context, wait for result, parse continuation_steps.
+ */
+async function attemptContinuationDelegation(
+  job: Job,
+  projectDir: string,
+  context: {
+    source: StepSource;
+    reason: string;
+    gaps?: string[];
+    hungInfo?: {
+      command: string;
+      reason: string;
+      toolName?: string;
+    };
+  },
+  attempt: number,
+  parseErrorHint?: string,
+): Promise<ContinuationResult> {
+  const ts = Date.now().toString(36).slice(-4);
+  const title = `pilot-redelegate-${job.id}-${attempt}-${ts}`;
+
+  // Get step history from DB
+  const steps = getJobSteps(job.id);
+  const stepHistory = steps.map(s => ({
+    index: s.stepIndex,
+    command: s.command,
+    args: s.args,
+    status: s.status,
+    source: s.source,
+    error: s.error ?? undefined,
+    reason: s.reason ?? undefined,
+  }));
+
+  // Build continuation context section
+  const continuationLines: string[] = [
+    `source: ${context.source}`,
+    `reason: ${context.reason}`,
+  ];
+  if (context.gaps && context.gaps.length > 0) {
+    continuationLines.push(`gaps:`);
+    for (const gap of context.gaps) {
+      continuationLines.push(`  - ${gap}`);
+    }
+  }
+  if (context.hungInfo) {
+    continuationLines.push(`hung_command: ${context.hungInfo.command}`);
+    continuationLines.push(`hung_reason: ${context.hungInfo.reason}`);
+    if (context.hungInfo.toolName) {
+      continuationLines.push(`hung_tool: ${context.hungInfo.toolName}`);
+    }
+  }
+
+  // Build the full prompt with step history and continuation context
+  const promptParts = [
+    DELEGATE_PROMPT,
+    '',
+    '---',
+    '',
+    '## Current Job',
+    '',
+    `scope: ${job.scope}`,
+    `project: ${job.project}`,
+    `description: ${job.description}`,
+    `requirement_path: ${job.requirementPath ?? 'none'}`,
+    '',
+    '<step_history>',
+    JSON.stringify(stepHistory, null, 2),
+    '</step_history>',
+    '',
+    '<continuation_context>',
+    ...continuationLines,
+    '</continuation_context>',
+    '',
+    'You are in RE-QUERY MODE. Output continuation_steps, not intent.',
+    'Your response MUST be a JSON object with "continuation_steps" array and "reasoning" string.',
+  ];
+
+  if (parseErrorHint) {
+    promptParts.push('');
+    promptParts.push(`Parse Error from Previous Attempt:`);
+    promptParts.push(parseErrorHint);
+    promptParts.push(`Please produce valid JSON this time.`);
+  }
+
+  const fullPrompt = promptParts.join('\n');
+
+  const opencodeBin = resolveOpencodeBinary();
+  // Re-delegation is a phase-level operation
+  const { model: topLevelModel, variant } = resolveTopLevelModel('phase', job.modelProfile, job.providerMode);
+  process.stderr.write(`[redelegate] Model: ${topLevelModel}${variant ? ` (variant: ${variant})` : ''}\n`);
+
+  const proc = execa(opencodeBin, [
+    'run',
+    '--format', 'default',
+    '--model', topLevelModel,
+    ...(variant ? ['--variant', variant] : []),
+    '--title', title,
+    fullPrompt,
+  ], {
+    cwd: projectDir,
+    stdin: 'ignore',
+    stdout: 'ignore',
+    stderr: 'ignore',
+    detached: true,
+    cleanup: false,
+  });
+  // Don't await — we poll the DB instead
+  proc.catch(() => {});
+  proc.unref();
+
+  const spawnedPid = proc.pid;
+  const result = await waitForContinuationResult(title, spawnedPid);
+  return { ...result, _sessionTitle: title };
+}
+
+/**
+ * Wait for a continuation delegation session to complete and parse its output.
+ * Same polling pattern as waitForDelegationResult but parses continuation_steps.
+ */
+async function waitForContinuationResult(title: string, pid?: number): Promise<ContinuationResult> {
+  const pollMs = 2_000;
+
+  while (true) {
+    await new Promise(r => setTimeout(r, pollMs));
+
+    // Check if the spawned process is still alive
+    if (pid !== undefined) {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        // Process is dead — check if session completed before dying
+        const sessionId = findSessionByTitle(title);
+        if (sessionId && isSessionDone(sessionId)) {
+          try {
+            const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
+            if (exported.messages.length > 0) {
+              const lastAssistant = [...exported.messages].reverse().find(m => m.role === 'assistant');
+              if (lastAssistant) {
+                return parseContinuationOutput(String(lastAssistant.content ?? ''));
+              }
+            }
+          } catch (err) {
+            process.stderr.write(`[redelegate] session export failed for ${title}: ${errMsg(err)}\n`);
+          }
+        }
+        throw new Error(`Re-delegation process died before completing session: ${title}`);
+      }
+    }
+
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId) continue;
+
+    // Wait for session to actually complete before extracting result
+    if (!isSessionDone(sessionId)) continue;
+
+    try {
+      const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
+      if (exported.messages.length > 0) {
+        const lastAssistant = [...exported.messages]
+          .reverse()
+          .find(m => m.role === 'assistant');
+
+        if (lastAssistant) {
+          const content = String(lastAssistant.content ?? '');
+          return parseContinuationOutput(content);
+        }
+      }
+    } catch (err) {
+      process.stderr.write(`[redelegate] session export failed for ${title}: ${errMsg(err)}\n`);
+    }
+  }
+}
+
+/**
+ * Parse continuation delegation AI output into a ContinuationResult.
+ * Extracts JSON from a ```json block or uses raw content.
+ * Validates that continuation_steps is an array of {command, args} objects.
+ */
+function parseContinuationOutput(content: string): ContinuationResult {
+  // Extract JSON from ```json ... ``` block, or use raw content
+  const jsonBlockMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+  const jsonStr = jsonBlockMatch ? jsonBlockMatch[1] : content.trim();
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse re-delegation output: ${errMsg(err)}\nRaw content: ${content.slice(0, 500)}`,
+    );
+  }
+
+  const rawSteps = parsed.continuation_steps;
+  if (!Array.isArray(rawSteps)) {
+    throw new Error(
+      `No continuation_steps array in re-delegation output. Got keys: ${Object.keys(parsed).join(', ')}`,
+    );
+  }
+
+  const steps: Array<{ command: string; args: string }> = [];
+  for (const step of rawSteps) {
+    if (typeof step !== 'object' || step === null) {
+      throw new Error('Each continuation step must be an object with command and args');
+    }
+    const s = step as Record<string, unknown>;
+    if (typeof s.command !== 'string') {
+      throw new Error('Each continuation step must have a string "command" field');
+    }
+    steps.push({
+      command: s.command,
+      args: typeof s.args === 'string' ? s.args : '',
+    });
+  }
+
+  return {
+    steps,
+    reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
+  };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 /**
  * Scan .planning/phases/ directory for existing phase dirs and return next phase number.
@@ -388,7 +662,9 @@ function parseIntentOutput(content: string): DelegationResult {
 
 export {
   delegate,
+  reDelegateForContinuation,
   parseIntentOutput,
+  parseContinuationOutput,
   resolveOpencodeBinary,
   buildNewProjectArgs,
   buildQuickArgs,
