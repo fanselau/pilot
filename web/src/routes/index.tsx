@@ -8,7 +8,7 @@ import { Badge } from '~/components/ui/badge'
 import { JobList } from '~/components/job-list'
 import { SessionOverview } from '~/components/session-overview'
 import { ProjectsList } from '~/components/projects-list'
-import { getJobsListFn, getJobDetailFn, getProjectsListFn } from '~/lib/server-fns'
+import { getJobsListFn, getJobDetailFn, getProjectsListFn, getGraceConfigFn } from '~/lib/server-fns'
 import { toastManager } from '~/components/ui/toast'
 import type { SessionSummary } from '@pilot/core/types.js'
 
@@ -69,6 +69,14 @@ function Home() {
     refetchInterval: 30_000,
   })
   const projects = projectsQuery.data ?? []
+
+  // Load grace config for countdown badge
+  const { data: graceConfig } = useQuery({
+    queryKey: ['grace-config'],
+    queryFn: () => getGraceConfigFn(),
+    staleTime: 60_000, // config rarely changes
+  })
+  const queueGraceSeconds = graceConfig?.queueGraceSeconds ?? 0
 
   const activeCount = active.length
   const queuedCount = queued.length
@@ -153,15 +161,15 @@ function Home() {
           </TabsList>
 
           <TabsPanel value="active">
-            <JobList data={{ active, queued: [], recent: [] }} />
+            <JobList data={{ active, queued: [], recent: [] }} queueGraceSeconds={queueGraceSeconds} />
           </TabsPanel>
 
           <TabsPanel value="queued">
-            <JobList data={{ active: [], queued, recent: [] }} />
+            <JobList data={{ active: [], queued, recent: [] }} queueGraceSeconds={queueGraceSeconds} />
           </TabsPanel>
 
           <TabsPanel value="recent">
-            <JobList data={{ active: [], queued: [], recent }} />
+            <JobList data={{ active: [], queued: [], recent }} queueGraceSeconds={queueGraceSeconds} />
           </TabsPanel>
 
           <TabsPanel value="sessions">

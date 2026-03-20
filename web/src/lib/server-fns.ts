@@ -23,6 +23,16 @@ import {
 } from '@pilot/core/job-detail-query.js'
 import type { GroupedTimelinePage, ProjectWithStats } from '@pilot/core/types.js'
 import { getQueue, getRecent } from '@pilot/core/db.js'
+import { getConfig } from '@pilot/core/config.js'
+
+// ── Grace Config ─────────────────────────────────────────────────────────
+
+export const getGraceConfigFn = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const config = getConfig()
+    return { queueGraceSeconds: config.queueGraceSeconds }
+  },
+)
 
 // ── Jobs List ────────────────────────────────────────────────────────────
 

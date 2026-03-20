@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { Job } from '@pilot/core/types.js'
 import { formatDurationSafe, getDurationMsSafe } from '~/lib/time-utils'
@@ -68,6 +68,19 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   return formatDurationSafe(startedAt, completedAt)
 }
 
+function getGraceSecondsRemaining(job: Job, queueGraceSeconds: number): number | null {
+  if (job.status !== 'pending') return null
+  if (job.skipGracePeriod) return null
+  if (queueGraceSeconds <= 0) return null
+
+  const createdMs = Date.parse(job.createdAt)
+  if (isNaN(createdMs)) return null
+
+  const graceExpiryMs = createdMs + queueGraceSeconds * 1000
+  const remaining = Math.ceil((graceExpiryMs - Date.now()) / 1000)
+  return remaining > 0 ? remaining : null
+}
+
 // ── Sorting ──────────────────────────────────────────────────────────────
 
 type SortField = 'status' | 'duration' | null
@@ -134,7 +147,8 @@ function SortableHead({
 
 // ── Job Card (mobile fallback) ───────────────────────────────────────────
 
-function JobCard({ job }: { job: Job }) {
+function JobCard({ job, queueGraceSeconds = 0 }: { job: Job; queueGraceSeconds?: number }) {
+  const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
   return (
     <Link to="/jobs/$jobId" params={{ jobId: job.id }} className="block group">
       <Card className="transition-colors group-hover:bg-accent/50">
@@ -145,6 +159,11 @@ function JobCard({ job }: { job: Job }) {
               <Badge variant={statusVariant(job.status)} size="sm">
                 {job.status}
               </Badge>
+              {graceSeconds != null && (
+                <Badge variant="outline" size="sm" className="text-[10px]">
+                  Starting in {graceSeconds}s
+                </Badge>
+              )}
               <Badge variant={scopeVariant(job.scope)} size="sm">
                 {job.scope}
               </Badge>
@@ -174,7 +193,7 @@ function JobCard({ job }: { job: Job }) {
 
 // ── Job Table (desktop) ──────────────────────────────────────────────────
 
-function JobTable({ jobs }: { jobs: Job[] }) {
+function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeconds?: number }) {
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -224,6 +243,7 @@ function JobTable({ jobs }: { jobs: Job[] }) {
           {sorted.map((job) => {
             const desc = truncate(job.description, 60)
             const isRunning = job.status === 'running'
+            const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
             return (
               <TableRow
                 key={job.id}
@@ -239,13 +259,20 @@ function JobTable({ jobs }: { jobs: Job[] }) {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Badge
-                    variant={statusVariant(job.status)}
-                    size="sm"
-                    className={isRunning ? 'animate-pulse' : ''}
-                  >
-                    {job.status}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge
+                      variant={statusVariant(job.status)}
+                      size="sm"
+                      className={isRunning ? 'animate-pulse' : ''}
+                    >
+                      {job.status}
+                    </Badge>
+                    {graceSeconds != null && (
+                      <Badge variant="outline" size="sm" className="text-[10px]">
+                        Starting in {graceSeconds}s
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant={scopeVariant(job.scope)} size="sm">
@@ -294,10 +321,12 @@ function JobSection({
   jobs,
   emptyMessage,
   isMobile,
+  queueGraceSeconds = 0,
 }: {
   jobs: Job[]
   emptyMessage: string
   isMobile: boolean
+  queueGraceSeconds?: number
 }) {
   if (jobs.length === 0) {
     return (
@@ -314,13 +343,13 @@ function JobSection({
     return (
       <div className="space-y-2">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+          <JobCard key={job.id} job={job} queueGraceSeconds={queueGraceSeconds} />
         ))}
       </div>
     )
   }
 
-  return <JobTable jobs={jobs} />
+  return <JobTable jobs={jobs} queueGraceSeconds={queueGraceSeconds} />
 }
 
 // ── Main Export ───────────────────────────────────────────────────────────
@@ -336,22 +365,37 @@ export interface JobListData {
  * Pass only the relevant section in the data prop — the component
  * will render whichever array is non-empty.
  */
-export function JobList({ data }: { data: JobListData }) {
+export function JobList({ data, queueGraceSeconds = 0 }: { data: JobListData; queueGraceSeconds?: number }) {
   const isMobile = useIsMobile()
+
+  // Auto-refresh every second when any pending job has a grace countdown
+  const [, setTick] = useState(0)
+  const hasGraceCountdown = useMemo(() => {
+    if (queueGraceSeconds <= 0) return false
+    return [...data.active, ...data.queued].some(
+      (job) => getGraceSecondsRemaining(job, queueGraceSeconds) != null,
+    )
+  }, [data.active, data.queued, queueGraceSeconds])
+
+  useEffect(() => {
+    if (!hasGraceCountdown) return
+    const id = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [hasGraceCountdown])
 
   return (
     <div className="space-y-2">
       {data.active.length > 0 && (
-        <JobSection jobs={data.active} emptyMessage="No active jobs" isMobile={isMobile} />
+        <JobSection jobs={data.active} emptyMessage="No active jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
       )}
       {data.queued.length > 0 && (
-        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} />
+        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
       )}
       {data.recent.length > 0 && (
-        <JobSection jobs={data.recent} emptyMessage="No recent jobs" isMobile={isMobile} />
+        <JobSection jobs={data.recent} emptyMessage="No recent jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
       )}
       {data.active.length === 0 && data.queued.length === 0 && data.recent.length === 0 && (
-        <JobSection jobs={[]} emptyMessage="No jobs" isMobile={isMobile} />
+        <JobSection jobs={[]} emptyMessage="No jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
       )}
     </div>
   )
