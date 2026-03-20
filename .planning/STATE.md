@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 73-06-PLAN.md
-last_updated: "2026-03-20T14:11:42.371Z"
+stopped_at: Completed 73-07-PLAN.md
+last_updated: "2026-03-20T14:43:15.353Z"
 last_activity: 2026-03-20 - Completed 73-01-PLAN.md
 progress:
   total_phases: 72
   completed_phases: 32
-  total_plans: 112
-  completed_plans: 105
+  total_plans: 113
+  completed_plans: 106
   percent: 93
 ---
 
@@ -867,6 +867,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 73]: Default source to 'delegation' when step.source is nullish for backward compatibility
 - [Phase 73]: Deleted 5 retry-era artifacts and all intent routing methods, replaced with step execution loop + continuation handlers
 - [Phase 73]: Pre-existing TUI/info/runner-recovery test failures are out-of-scope; only plan-scoped tests verified
+- [Phase 73]: Added step DB mocks (makeStep helper) and fixed 2 pre-existing tests that passed for wrong reason
 
 ## Blockers/Concerns Carried Forward
 
@@ -875,6 +876,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T14:11:33.816Z
-Stopped at: Completed 73-06-PLAN.md
+Last session: 2026-03-20T14:43:10.937Z
+Stopped at: Completed 73-07-PLAN.md
 Resume file: None

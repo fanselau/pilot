@@ -204,7 +204,7 @@ export type DelegationIntent =
   | { type: 'quick'; description: string; flags?: ('full' | 'research')[] }
   | { type: 'init-project'; prdPath: string }
   | { type: 'new-milestone'; prdPath: string }
-  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string; categories?: string[] }
+  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string }
   | { type: 'execute-only'; phaseNumber: number }
   | { type: 'audit-milestone'; version: string }
   | { type: 'noop'; reason: string }
