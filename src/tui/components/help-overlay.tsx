@@ -26,8 +26,9 @@ export const HELP_TEXT = `
   r            Retry failed job
   x            Cancel pending job
   K            Force-quit running job
-  u            Unblock project (projects panel)
-  d            Remove project (projects panel)
+   b            Block project (projects panel)
+   u            Unblock project (projects panel)
+   d            Remove project (projects panel)
   g            Jump to top
   G            Jump to bottom
 

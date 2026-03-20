@@ -12,7 +12,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid'
 import { Show, Switch, Match, onMount, onCleanup, batch } from 'solid-js';
 import { createPilotState } from './state.js';
 import { createPoller } from './data/poller.js';
-import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject, cancel, retry, deregisterProject } from './data/pilot-db.js';
+import { fetchQueueData, fetchRecentData, fetchProjectData, unblockProject, blockProject, cancel, retry, deregisterProject } from './data/pilot-db.js';
 import { fetchSessionEnrichment } from './data/opencode-db.js';
 import { buildJobObservability } from '../core/job-observability.js';
 import { StatusBar } from './components/status-bar.js';
@@ -222,6 +222,24 @@ export function handleKeyPress(
       }
     } else if (project) {
       flashFor(state, 'unblock: project is not blocked');
+    }
+    return;
+  }
+
+  // b — block selected active project (projects panel only)
+  if (key.sequence === 'b' && state.panelFocus() === 'projects') {
+    const idx = state.selectedIndex();
+    const project = state.projects()[idx];
+    if (project && project.status !== 'blocked') {
+      try {
+        blockProject(project.path, 'Manually blocked via TUI');
+        // Refresh projects immediately
+        state.setProjects(fetchProjectData());
+      } catch (err) {
+        process.stderr.write(`[tui] block error: ${String(err)}\n`);
+      }
+    } else if (project) {
+      flashFor(state, 'block: project is already blocked');
     }
     return;
   }

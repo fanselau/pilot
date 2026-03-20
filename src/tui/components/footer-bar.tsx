@@ -29,7 +29,7 @@ const DASHBOARD_PANEL_HINTS: Record<PanelFocus, string> = {
   queue:     ' j/k navigate │ enter detail │ tab panel │ x cancel │ / filter │ ? help │ q quit',
   running:   ' j/k navigate │ enter detail │ tab panel │ K kill │ / filter │ ? help │ q quit',
   completed: ' j/k navigate │ enter detail │ tab panel │ r retry │ / filter │ ? help │ q quit',
-  projects:  ' j/k navigate │ tab panel │ u unblock │ d remove │ / filter │ ? help │ q quit',
+  projects:  ' j/k navigate │ tab panel │ b block │ u unblock │ d remove │ / filter │ ? help │ q quit',
 };
 
 // ── Detail view status-specific action hints ──────────────────────────────

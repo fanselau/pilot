@@ -60,6 +60,9 @@ export function ProjectsPanel(props: ProjectsPanelProps) {
                   </text>
                   <text fg={theme.muted}>Press u to unblock</text>
                 </Show>
+                <Show when={isSelected() && !isBlocked()}>
+                  <text fg={theme.muted}>Press b to block</text>
+                </Show>
                 <Show when={isSelected()}>
                   <text fg={theme.muted}>Press d to remove</text>
                 </Show>
