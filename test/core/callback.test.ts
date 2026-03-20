@@ -3,6 +3,7 @@ import type { Job, OpenClawDeliverRoute, Project } from '../../src/core/types.js
 
 vi.mock('../../src/core/db.js', () => ({
   getProject: vi.fn(() => null),
+  getJobSteps: vi.fn(() => []),
 }));
 
 vi.mock('../../src/core/openclaw-deliver.js', () => ({

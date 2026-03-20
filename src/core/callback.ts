@@ -6,7 +6,7 @@
  * and delivers via OpenClaw CLI with explicit reply routing.
  */
 
-import { getProject } from './db.js';
+import { getProject, getJobSteps } from './db.js';
 import { errMsg } from '../util/errors.js';
 import { resolveNotifyRoute } from './notify-route.js';
 import { executeOpenClawDeliver } from './openclaw-deliver.js';
@@ -113,6 +113,23 @@ function buildDeliveryPrompt(job: Job): string {
     lines.push('');
     lines.push('This job failed because the AI session kept getting stuck waiting for interactive input.');
     lines.push('The operator should check if the project has an interactive prompt or confirmation dialog that blocks automation.');
+  }
+
+  // Build step history summary for notification
+  const steps = getJobSteps(job.id);
+  if (steps.length > 0) {
+    lines.push('');
+    lines.push('Step history:');
+    for (const step of steps) {
+      const statusIcon = step.status === 'completed' ? '✓'
+        : step.status === 'failed' ? '✗'
+        : step.status === 'pending' ? '○'
+        : step.status === 'skipped' ? '⊘'
+        : '◆';
+      const sourceTag = step.source !== 'delegation' ? ` [${step.source}]` : '';
+      const errorSuffix = step.error ? ` — ${truncate(step.error, 80)}` : '';
+      lines.push(`  ${statusIcon} Step ${step.stepIndex + 1}: ${step.command} ${truncate(step.args, 40)}${sourceTag}${errorSuffix}`);
+    }
   }
 
   lines.push(`next_step: ${nextStepGuidance(job)}`);
