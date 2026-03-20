@@ -13,12 +13,15 @@ import {
   getSessionChildSummaries,
   getJobDetailEvents,
   getJobTimeline,
+  getFullJobTimeline,
+  getProjectsWithStats,
+  getFullSessionPart,
   retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,
 } from '@pilot/core/job-detail-query.js'
-import type { GroupedTimelinePage } from '@pilot/core/types.js'
+import type { GroupedTimelinePage, ProjectWithStats } from '@pilot/core/types.js'
 import { getQueue, getRecent } from '@pilot/core/db.js'
 
 // ── Jobs List ────────────────────────────────────────────────────────────
@@ -93,6 +96,26 @@ export const getJobTimelineFn = createServerFn({ method: 'GET' })
       limit: data.limit,
     })
   })
+
+// ── Full Job Timeline (unpaginated) ──────────────────────────────────────
+
+export const getFullJobTimelineFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: jobId }) => getFullJobTimeline(jobId))
+
+// ── Projects List ────────────────────────────────────────────────────────
+
+export const getProjectsListFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<ProjectWithStats[]> => {
+    return getProjectsWithStats()
+  },
+)
+
+// ── Full Message Part (untruncated content) ───────────────────────────────
+
+export const getFullMessageFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: { sessionId: string; partId: string }) => d)
+  .handler(async ({ data }) => getFullSessionPart(data.sessionId, data.partId))
 
 // ── Mutation: Retry Job ──────────────────────────────────────────────────
 

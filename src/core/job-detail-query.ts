@@ -14,7 +14,11 @@ import {
   cancel,
   forceQuitJob,
   unblockProject,
+  requeueFailedJob,
+  getAllProjects,
+  getProjectJobCounts,
 } from './db.js';
+import { computeSafeDurationMs, safeParseTimestamp } from './time-utils.js';
 import {
   findSessionByTitle,
   getChildSessions,
@@ -31,6 +35,7 @@ import type {
   JobDetailSnapshot,
   JobStepSummary,
   SessionSummary,
+  SessionPart,
   ActivityPreviewItem,
   SessionActivityPage,
   SessionActivityOptions,
@@ -40,6 +45,7 @@ import type {
   StepTimelineItem,
   StepTimelineGroup,
   GroupedTimelinePage,
+  ProjectWithStats,
 } from './types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -81,19 +87,10 @@ function parseJudgeVerdict(raw: string | null): { verdict: string | null; confid
 /**
  * Compute duration in ms between two ISO 8601 timestamps.
  * Returns null if either timestamp is null or unparseable.
+ * Delegates to computeSafeDurationMs for timezone-correct parsing.
  */
 function computeDurationMs(startedAt: string | null, completedAt: string | null): number | null {
-  if (!startedAt) return null;
-  const start = Date.parse(startedAt);
-  if (Number.isNaN(start)) return null;
-
-  if (completedAt) {
-    const end = Date.parse(completedAt);
-    if (!Number.isNaN(end)) return Math.max(0, end - start);
-  }
-
-  // Job still running — duration from start to now
-  return Math.max(0, Date.now() - start);
+  return computeSafeDurationMs(startedAt, completedAt);
 }
 
 /**
@@ -452,9 +449,7 @@ interface TimelineCandidate {
 }
 
 function parseStepTime(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
+  return safeParseTimestamp(value);
 }
 
 function resolveStepIndex(candidate: TimelineCandidate, steps: TimelineStepRef[]): number | null {
@@ -692,8 +687,73 @@ function getJobTimeline(
   };
 }
 
+// ── New Queries for Web UI Plans 03-05 ───────────────────────────────────
+
+/**
+ * Get the full timeline for a job without pagination.
+ *
+ * Unlike getJobTimeline() which supports cursor/limit pagination, this returns
+ * all timeline items. Use for dense step visualization in Plans 03-05.
+ */
+function getFullJobTimeline(jobId: string): {
+  groups: StepTimelineGroup[];
+  totalItems: number;
+  sessionCount: number;
+  childCount: number;
+} {
+  const page = getJobTimeline(jobId);
+  if (!page) {
+    return { groups: [], totalItems: 0, sessionCount: 0, childCount: 0 };
+  }
+  return {
+    groups: page.groups,
+    totalItems: page.items.length,
+    sessionCount: page.sessionCount,
+    childCount: page.childCount,
+  };
+}
+
+/**
+ * Get all projects with aggregate job counts.
+ *
+ * Combines getAllProjects() with getProjectJobCounts() per project.
+ */
+function getProjectsWithStats(): ProjectWithStats[] {
+  const projects = getAllProjects();
+  return projects.map((p) => {
+    const counts = getProjectJobCounts(p.path);
+    return {
+      path: p.path,
+      owner: p.owner,
+      status: p.status,
+      blockedReason: p.blockedReason,
+      blockedAt: p.blockedAt,
+      defaultCategories: p.defaultCategories,
+      activeJobCount: counts.running + counts.pending,
+      completedJobCount: counts.completed,
+      failedJobCount: counts.failed,
+    };
+  });
+}
+
+/**
+ * Get a single session part by ID — returns the full, untruncated content.
+ *
+ * Fetches all parts for the session and finds the matching part by ID.
+ * Returns null if the session or part does not exist.
+ */
+function getFullSessionPart(sessionId: string, partId: string): SessionPart | null {
+  const parts = getSessionParts(sessionId);
+  return parts.find((p) => p.id === partId) ?? null;
+}
+
 // ── Mutation Wrappers ─────────────────────────────────────────────────────
 
+
+/** Retry a job — resets status to pending via db.requeueFailedJob(). */
+function retryJobAction(jobId: string): void {
+  requeueFailedJob(jobId);
+}
 
 /** Cancel a job — delegates to db.cancel(). */
 function cancelJobAction(jobId: string): void {
@@ -719,6 +779,10 @@ export {
   getSessionChildSummaries,
   getJobDetailEvents,
   getJobTimeline,
+  getFullJobTimeline,
+  getProjectsWithStats,
+  getFullSessionPart,
+  retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,

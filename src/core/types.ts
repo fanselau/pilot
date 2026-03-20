@@ -308,6 +308,18 @@ export interface Project {
   defaultCategories: string[] | null;  // project-level default skill categories
 }
 
+export interface ProjectWithStats {
+  path: string;
+  owner: string | null;
+  status: ProjectStatus;
+  blockedReason: string | null;
+  blockedAt: string | null;
+  defaultCategories: string[] | null;
+  activeJobCount: number;    // running + pending
+  completedJobCount: number;
+  failedJobCount: number;
+}
+
 // ── Skills System ──────────────────────────────────────────────────────────
 
 /** A single installed skill entry in the manifest. */

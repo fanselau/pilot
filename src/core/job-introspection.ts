@@ -1,4 +1,5 @@
 import type { Job, JobStatus } from './types.js';
+import { safeParseTimestamp } from './time-utils.js';
 
 export type JobWhyCode =
   | 'grace-wait'
@@ -43,13 +44,8 @@ function hasNoCommitDelta(job: Job): boolean {
 }
 
 function parseTimestampToEpochSeconds(raw: string): number | null {
-  if (!raw) return null;
-  const hasZone = /[zZ]$|[+-]\d\d:\d\d$/.test(raw);
-  const withTime = raw.includes('T') ? raw : raw.replace(' ', 'T');
-  const normalized = hasZone ? withTime : `${withTime}Z`;
-  const millis = Date.parse(normalized);
-  if (Number.isNaN(millis)) return null;
-  return Math.floor(millis / 1000);
+  const ms = safeParseTimestamp(raw);
+  return ms !== null ? Math.floor(ms / 1000) : null;
 }
 
 function inferKnownGuardState(job: Job): 'newer-work' | 'diverged-history' | null {
