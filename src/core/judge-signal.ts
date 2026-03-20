@@ -1,14 +1,16 @@
 import type { Job } from './types.js';
 
-export type JudgeSignalOutcome = 'none' | 'pass' | 'fail' | 'partial' | 'doubt' | 'inconclusive';
+export type JudgeSignalOutcome = 'none' | 'pass' | 'fail' | 'gaps' | 'partial' | 'doubt' | 'inconclusive';
 
-type JudgeVerdictValue = 'succeeded' | 'failed' | 'doubting' | 'pass' | 'fail' | 'partial';
+type JudgeVerdictValue = 'succeeded' | 'failed' | 'doubting' | 'pass' | 'fail' | 'partial' | 'passed' | 'gaps_found';
 
 interface ParsedJudgeVerdictPayload {
   verdict: string | null;
   confidence: number | null;
   reason: string | null;
-  retryRecommendation: string | null;  // 'retry-resume' | 'retry-full' | 'none'
+  gaps: string[] | null;
+  // Keep retry fields for backward compat parsing (old verdicts in DB)
+  retryRecommendation: string | null;
   retryHint: string | null;
   failureFingerprint: string[] | null;
 }
@@ -19,18 +21,24 @@ export interface JudgeSignal {
   confidence: number | null;
   reason: string | null;
   verdict: string | null;
+  gaps: string[] | null;
+  // Keep retry fields for backward compat (old verdicts in DB)
   retryRecommendation: string | null;
   retryHint: string | null;
   failureFingerprint: string[] | null;
 }
 
 const VERDICT_TO_OUTCOME: Record<JudgeVerdictValue, Exclude<JudgeSignalOutcome, 'none' | 'inconclusive'>> = {
+  // New canonical values
+  passed: 'pass',
+  gaps_found: 'gaps',
+  // Legacy values (backward compat)
   succeeded: 'pass',
   failed: 'fail',
-  doubting: 'doubt',
+  doubting: 'gaps',    // transition: was 'doubt'
   pass: 'pass',
   fail: 'fail',
-  partial: 'partial',
+  partial: 'gaps',     // transition: was 'partial'
 };
 
 function asText(value: unknown): string | null {
@@ -62,6 +70,10 @@ export function parseJudgeVerdictPayload(judgeVerdict: string | null): ParsedJud
       verdict: asText(parsed.verdict),
       confidence: normalizeConfidence(parsed.confidence),
       reason: asText(parsed.reason) ?? asText(parsed.summary),
+      gaps: Array.isArray(parsed.gaps)
+        ? (parsed.gaps as unknown[]).filter((s): s is string => typeof s === 'string')
+        : null,
+      // Legacy fields (backward compat for old verdicts in DB)
       retryRecommendation: asText(parsed.retryRecommendation),
       retryHint: asText(parsed.retryHint),
       failureFingerprint: Array.isArray(parsed.failureFingerprint)
@@ -76,6 +88,7 @@ export function parseJudgeVerdictPayload(judgeVerdict: string | null): ParsedJud
 export function formatJudgeBadge(outcome: JudgeSignalOutcome, confidence: number | null): string {
   if (outcome === 'none') return '';
   if (outcome === 'inconclusive' || confidence === null) return 'judge:inconclusive';
+  // 'gaps' outcome shows as "judge:gaps N%" for gap-found verdicts
   return `judge:${outcome} ${confidence}%`;
 }
 
@@ -91,6 +104,7 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       confidence: null,
       reason: null,
       verdict: null,
+      gaps: null,
       retryRecommendation: null,
       retryHint: null,
       failureFingerprint: null,
@@ -107,6 +121,7 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       confidence: null,
       reason: parsed?.reason ?? null,
       verdict: parsed?.verdict ?? null,
+      gaps: parsed?.gaps ?? null,
       retryRecommendation: parsed?.retryRecommendation ?? null,
       retryHint: parsed?.retryHint ?? null,
       failureFingerprint: parsed?.failureFingerprint ?? null,
@@ -119,6 +134,7 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
     confidence: parsed.confidence,
     reason: parsed.reason,
     verdict: parsed.verdict,
+    gaps: parsed.gaps,
     retryRecommendation: parsed.retryRecommendation,
     retryHint: parsed.retryHint,
     failureFingerprint: parsed.failureFingerprint,

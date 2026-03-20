@@ -63,13 +63,13 @@ describe('buildJudgeSignal', () => {
     expect(signal.badge).toBe('judge:fail 95%');
   });
 
-  it('maps doubting verdict to judge:doubt badge', () => {
+  it('maps doubting verdict to judge:gaps badge (transition)', () => {
     const signal = buildJudgeSignal(makeJob({
       judgeVerdict: JSON.stringify({ verdict: 'doubting', confidence: 61, reason: 'partially met' }),
     }));
 
-    expect(signal.outcome).toBe('doubt');
-    expect(signal.badge).toBe('judge:doubt 61%');
+    expect(signal.outcome).toBe('gaps');
+    expect(signal.badge).toBe('judge:gaps 61%');
   });
 
   it('returns inconclusive for confidence 0 payloads', () => {
@@ -158,7 +158,7 @@ describe('buildJudgeSignal — new verdict format (pass/fail/partial)', () => {
     expect(signal.badge).toBe('judge:pass 85%');
   });
 
-  it('maps partial verdict to judge:partial badge', () => {
+  it('maps partial verdict to judge:gaps badge (transition)', () => {
     const signal = buildJudgeSignal(makeJob({
       judgeVerdict: JSON.stringify({
         verdict: 'partial',
@@ -169,8 +169,8 @@ describe('buildJudgeSignal — new verdict format (pass/fail/partial)', () => {
         failureFingerprint: ['test: timeout'],
       }),
     }));
-    expect(signal.outcome).toBe('partial');
-    expect(signal.badge).toBe('judge:partial 45%');
+    expect(signal.outcome).toBe('gaps');
+    expect(signal.badge).toBe('judge:gaps 45%');
     expect(signal.retryRecommendation).toBe('retry-resume');
     expect(signal.retryHint).toBe('Resume from plan 03');
     expect(signal.failureFingerprint).toEqual(['test: timeout']);
