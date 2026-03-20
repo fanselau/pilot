@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot
+Last activity: 2026-03-20 - Completed quick task 260320-vc3: Bug fix: --next flag on pilot add doesn't insert at front of queue
 
 Progress: [█████████░] 93%
 
@@ -273,6 +273,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260320-m85 | Verify Phase 73 code compatibility with updated skills and category requirements | 2026-03-20 | 1866bfb | [260320-m85-verify-phase-73-code-compatibility-with-](./quick/260320-m85-verify-phase-73-code-compatibility-with-/) |
 | 260320-mcv | Verify Phase 73 code changes are compatible with updated requirements (skills system, delegation, categories) | 2026-03-20 | 3aa40a7 | Verified | [260320-mcv-verify-phase-73-code-changes-are-compati](./quick/260320-mcv-verify-phase-73-code-changes-are-compati/) |
 | 260320-nc6 | Remove retry completely from pilot | 2026-03-20 | 7302ae9 | [260320-nc6-remove-retry-completely-from-pilot](./quick/260320-nc6-remove-retry-completely-from-pilot/) |
+| 260320-vc3 | Bug fix: --next flag on pilot add doesn't insert at front of queue | 2026-03-20 | 23739bb | [260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i](./quick/260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i/) |
 
 ## Accumulated Context
 
