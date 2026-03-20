@@ -230,6 +230,7 @@ interface ProjectRow {
   blocked_reason: string | null;
   blocked_at: string | null;
   created_at: string;
+  default_categories: string | null;
 }
 
 function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDeliverRoute | null {
@@ -269,6 +270,7 @@ function rowToProject(row: ProjectRow): Project {
     blockedReason: row.blocked_reason,
     blockedAt: row.blocked_at,
     createdAt: row.created_at,
+    defaultCategories: row.default_categories ? JSON.parse(row.default_categories) as string[] : null,
   };
 }
 
@@ -413,6 +415,7 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN started_dirty INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN skip_grace_period INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE projects ADD COLUMN notify_openclaw_route TEXT DEFAULT NULL',
+    'ALTER TABLE projects ADD COLUMN default_categories TEXT DEFAULT NULL',
     'ALTER TABLE jobs ADD COLUMN retry_budget INTEGER NOT NULL DEFAULT 2',
     'ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN retry_hint TEXT DEFAULT NULL',
@@ -1671,6 +1674,18 @@ function updateProjectNotifyOpenClawRoute(path: string, route: OpenClawDeliverRo
 }
 
 /**
+ * Update the default skill categories for a project.
+ * Pass null to clear project defaults.
+ */
+function updateProjectDefaultCategories(path: string, categories: string[] | null): void {
+  const db = getDb();
+  db.prepare('UPDATE projects SET default_categories = ? WHERE path = ?').run(
+    categories ? JSON.stringify(categories) : null,
+    path,
+  );
+}
+
+/**
  * Block a project: set status='blocked', record reason and timestamp.
  */
 function blockProject(path: string, reason: string): void {
@@ -1873,6 +1888,7 @@ export {
   getAllProjects,
   updateProjectOwner,
   updateProjectNotifyOpenClawRoute,
+  updateProjectDefaultCategories,
   blockProject,
   unblockProject,
   deregisterProject,

@@ -308,17 +308,18 @@ export interface Project {
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601
   createdAt: string;
+  defaultCategories: string[] | null;  // project-level default skill categories
 }
 
 // ── Skills System ──────────────────────────────────────────────────────────
 
 /** A single installed skill entry in the manifest. */
 export interface SkillEntry {
-  name: string;        // from SKILL.md frontmatter
-  description: string; // from SKILL.md frontmatter
+  name: string;        // skill identifier (matches --skill flag value)
+  description: string; // from manual entry or empty string
   categories: string[]; // user-assigned tags (empty = universal skill)
-  source: string;      // e.g. "github:owner/repo"
-  path: string;        // absolute path to skill directory (~/.pilot/skills/<name>/)
+  repo: string;        // e.g. 'https://github.com/anthropics/skills'
+  skill: string;       // e.g. 'frontend-design' (the --skill flag)
 }
 
 /** The manifest.json file at ~/.pilot/skills/manifest.json */
