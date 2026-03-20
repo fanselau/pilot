@@ -1019,13 +1019,16 @@ interface JobStepRow {
   step_index: number;
   command: string;
   args: string;
+  source: string;
   session_title: string | null;
   session_id: string | null;
   status: string;
+  reason: string | null;
   verdict_source: string | null;
   verdict_reason: string | null;
-  started_at: string;
+  started_at: string | null;
   completed_at: string | null;
+  error: string | null;
   duration_ms: number | null;
 }
 
@@ -1071,14 +1074,17 @@ function rowToJobStep(row: JobStepRow): JobStep {
     stepIndex: row.step_index,
     command: row.command,
     args: row.args,
-    sessionTitle: row.session_title,
-    sessionId: row.session_id,
+    source: (row.source ?? 'delegation') as JobStep['source'],
     status: row.status as JobStep['status'],
-    verdictSource: row.verdict_source,
-    verdictReason: row.verdict_reason,
+    sessionId: row.session_id,
+    sessionTitle: row.session_title,
+    reason: row.reason ?? null,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    error: row.error ?? null,
     durationMs: row.duration_ms,
+    verdictSource: row.verdict_source,
+    verdictReason: row.verdict_reason,
   };
 }
 

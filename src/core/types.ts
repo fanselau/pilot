@@ -204,7 +204,7 @@ export type DelegationIntent =
   | { type: 'quick'; description: string; flags?: ('full' | 'research')[] }
   | { type: 'init-project'; prdPath: string }
   | { type: 'new-milestone'; prdPath: string }
-  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string }
+  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string; categories?: string[] }
   | { type: 'execute-only'; phaseNumber: number }
   | { type: 'audit-milestone'; version: string }
   | { type: 'noop'; reason: string }
@@ -270,20 +270,30 @@ export interface SessionPart {
 
 // ── Job Steps (per-step audit trail) ──────────────────────────────────────
 
+/** Why a step exists — tracks provenance for the append-forward model. */
+export type StepSource = 'delegation' | 'judge:gaps' | 'judge:hung' | 'judge:failed' | 'operator';
+
+/** Maximum total steps per job — prevents infinite append loops. */
+export const MAX_STEPS_PER_JOB = 10;
+
 export interface JobStep {
   id: number;                     // auto-increment
   jobId: string;                  // FK to jobs.id
   stepIndex: number;              // 0-based step position
   command: string;                // e.g. "execute-phase", "plan-phase", "quick"
   args: string;                   // e.g. "3 --auto"
-  sessionTitle: string | null;    // opencode session title
+  source: StepSource;             // why this step exists (delegation, judge:gaps, etc.)
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   sessionId: string | null;       // opencode session ID (if found)
-  status: 'running' | 'completed' | 'failed' | 'skipped';
+  sessionTitle: string | null;    // opencode session title
+  reason: string | null;          // human-readable reason (e.g. "judge found 3 gaps")
+  startedAt: string | null;       // ISO 8601 — nullable (pending steps haven't started)
+  completedAt: string | null;
+  error: string | null;           // failure reason if status=failed
+  durationMs: number | null;
+  // Legacy fields kept for backward compat during transition
   verdictSource: string | null;   // e.g. "semantic-check", null for non-phase commands
   verdictReason: string | null;   // reason for the verdict
-  startedAt: string;              // ISO 8601
-  completedAt: string | null;
-  durationMs: number | null;
 }
 
 // ── Project (matches projects table in pilot.db) ─────────────────────────
