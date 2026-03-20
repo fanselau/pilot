@@ -439,7 +439,7 @@ describe('infoCommand recovery visibility', () => {
     expect(inconclusiveOutput).toContain('judge:inconclusive — benefit of doubt');
   });
 
-  it('renders judge:partial badge for new-format partial verdict', async () => {
+  it('renders judge:gaps badge for partial verdict (mapped to gaps)', async () => {
     mockGetJob.mockReturnValue(
       makeJob({
         scope: 'phase',
@@ -457,6 +457,6 @@ describe('infoCommand recovery visibility', () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('judge:partial 55%');
+    expect(output).toContain('judge:gaps 55%');
   });
 });

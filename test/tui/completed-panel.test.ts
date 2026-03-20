@@ -228,11 +228,11 @@ describe('buildCompletedRowBadges', () => {
     expect(labels).toEqual(['[judge:pass 92%]', '[undo:safe]']);
   });
 
-  it('renders judge:doubt badge for doubting verdicts', () => {
+  it('renders judge:gaps badge for doubting verdicts (mapped to gaps)', () => {
     const labels = buildCompletedRowBadges(
       makeJob({ judgeVerdict: JSON.stringify({ verdict: 'doubting', confidence: 61, reason: 'Mixed evidence.' }) }),
     ).map((badge) => badge.label);
-    expect(labels).toEqual(['[judge:doubt 61%]', '[undo:safe]']);
+    expect(labels).toEqual(['[judge:gaps 61%]', '[undo:safe]']);
   });
 
   it('renders judge:inconclusive when confidence is zero', () => {
@@ -262,7 +262,7 @@ describe('buildCompletedRowBadges', () => {
     expect(labels).toEqual(['[judge:inconclusive]', '[retryable]', '[undo:unavailable]']);
   });
 
-  it('renders judge:partial badge for partial verdicts (new format)', () => {
+  it('renders judge:gaps badge for partial verdicts (mapped to gaps)', () => {
     const labels = buildCompletedRowBadges(
       makeJob({
         judgeVerdict: JSON.stringify({
@@ -273,7 +273,7 @@ describe('buildCompletedRowBadges', () => {
         }),
       }),
     ).map((badge) => badge.label);
-    expect(labels).toContain('[judge:partial 55%]');
+    expect(labels).toContain('[judge:gaps 55%]');
   });
 });
 

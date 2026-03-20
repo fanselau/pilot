@@ -266,7 +266,7 @@ describe('buildHeaderLines observability contract', () => {
     expect(malformed.some((line) => line.startsWith('Verdict: judge:inconclusive'))).toBe(true);
   });
 
-  it('renders judge:partial badge for new-format partial verdict', () => {
+  it('renders judge:gaps badge for partial verdict (mapped to gaps)', () => {
     const lines = buildTriageHeaderLines(
       makeJob({
         status: 'failed',
@@ -278,7 +278,7 @@ describe('buildHeaderLines observability contract', () => {
         }),
       }),
     );
-    expect(lines.some((line) => line.startsWith('Verdict: judge:partial 60%'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('Verdict: judge:gaps 60%'))).toBe(true);
   });
 
   it('renders judge:pass badge for new-format pass verdict', () => {
