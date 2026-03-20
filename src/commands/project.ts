@@ -214,7 +214,7 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
 
   if (existing.status === 'blocked') {
     outputHuman('');
-    outputHuman(`  ${dim('actions:')} pilot project "${shortPath}" --unblock  ·  pilot retry <id>`);
+    outputHuman(`  ${dim('actions:')} pilot project "${shortPath}" --unblock  ·  queue a new job with pilot add`);
   }
   outputHuman('');
 }

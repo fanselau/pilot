@@ -44,7 +44,7 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
     outputHuman(`    ${dim('status:')} ${statusLabel}`);
     if (p.status === 'blocked' && p.blockedReason) {
       outputHuman(`    ${dim('reason:')} ${yellow(p.blockedReason.slice(0, 120))}`);
-      outputHuman(`    ${dim('actions:')} pilot retry <id>  ·  pilot unblock "${shortPath}"`);
+      outputHuman(`    ${dim('actions:')} pilot unblock "${shortPath}"  ·  queue a new job with pilot add`);
     }
     outputHuman(`    ${dim('jobs:')}    ${counts.pending} pending · ${counts.running} running · ${counts.failed} failed`);
     outputHuman('');
