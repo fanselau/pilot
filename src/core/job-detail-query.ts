@@ -14,9 +14,12 @@ import {
   cancel,
   forceQuitJob,
   unblockProject,
+  blockProject,
   requeueFailedJob,
   getAllProjects,
   getProjectJobCounts,
+  getQueue,
+  getRecent,
 } from './db.js';
 import { computeSafeDurationMs, safeParseTimestamp } from './time-utils.js';
 import {
@@ -28,6 +31,7 @@ import {
   isSessionDone,
   getSessionTokensRecursive,
   getSessionModelsRecursive,
+  getSessionMeta,
 } from './opencode-db.js';
 import { truncate } from '../util/format.js';
 import type {
@@ -517,14 +521,69 @@ function getJobTimeline(
     completedAtMs: parseStepTime(step.completedAt),
   }));
 
+  // ── Delegation session discovery ────────────────────────────────────────
+  const allTitles = parseSessionTitles(job.sessionTitles);
+  const delegationPrefix = `pilot-delegate-${jobId}-`;
+  const delegationTitles = allTitles.filter(t => t.startsWith(delegationPrefix));
+
+  const delegationInfos: Array<{
+    sessionId: string;
+    title: string;
+    timeCreated: number;
+    timeUpdated: number;
+    done: boolean;
+  }> = [];
+
+  for (const title of delegationTitles) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId) continue;
+    const meta = getSessionMeta(sessionId);
+    if (!meta) continue;
+    const done = isSessionDone(sessionId);
+    delegationInfos.push({
+      sessionId,
+      title,
+      timeCreated: meta.timeCreated,
+      timeUpdated: meta.timeUpdated,
+      done,
+    });
+  }
+
+  // Sort delegation sessions chronologically
+  delegationInfos.sort((a, b) => a.timeCreated - b.timeCreated);
+
+  // Create synthetic delegation step refs with negative indices
+  const delegationStepRefs: TimelineStepRef[] = delegationInfos.map((info, i) => ({
+    stepIndex: -100 + i,
+    command: 'delegation',
+    status: info.done ? 'completed' : 'running',
+    source: 'delegation',
+    sessionId: info.sessionId,
+    sessionTitle: info.title,
+    startedAtMs: info.timeCreated,
+    completedAtMs: info.done ? info.timeUpdated : null,
+  }));
+
+  // Prepend delegation step refs before real step refs
+  const allStepRefs: TimelineStepRef[] = [...delegationStepRefs, ...stepRefs];
+
+  // ── BFS queue from session titles ─────────────────────────────────────
   const queue: Array<{ sessionId: string; title: string; parentSessionId: string | null }> = [];
   const queuedSessionIds = new Set<string>();
 
-  for (const title of parseSessionTitles(job.sessionTitles)) {
+  for (const title of allTitles) {
     const sessionId = findSessionByTitle(title);
     if (!sessionId || queuedSessionIds.has(sessionId)) continue;
     queue.push({ sessionId, title, parentSessionId: null });
     queuedSessionIds.add(sessionId);
+  }
+
+  // Ensure delegation sessions are in the BFS queue
+  for (const info of delegationInfos) {
+    if (!queuedSessionIds.has(info.sessionId)) {
+      queue.push({ sessionId: info.sessionId, title: info.title, parentSessionId: null });
+      queuedSessionIds.add(info.sessionId);
+    }
   }
 
   const seenSessions = new Set<string>();
@@ -639,7 +698,7 @@ function getJobTimeline(
   const nextCursor = page.length > 0 ? String(page[page.length - 1].createdAt) : null;
 
   const groupsByStepIndex = new Map<number, StepTimelineGroup>();
-  for (const step of stepRefs) {
+  for (const step of allStepRefs) {
     groupsByStepIndex.set(step.stepIndex, {
       stepIndex: step.stepIndex,
       command: step.command,
@@ -660,7 +719,7 @@ function getJobTimeline(
   };
 
   for (const candidate of page) {
-    const attributedStepIndex = resolveStepIndex(candidate, stepRefs);
+    const attributedStepIndex = resolveStepIndex(candidate, allStepRefs);
     if (attributedStepIndex === null) {
       unattributed.items.push(candidate.item);
       continue;
@@ -675,7 +734,7 @@ function getJobTimeline(
   }
 
   const groups: StepTimelineGroup[] = [];
-  for (const step of stepRefs) {
+  for (const step of allStepRefs) {
     const group = groupsByStepIndex.get(step.stepIndex);
     if (!group || group.items.length === 0) continue;
     group.items.sort((a, b) => a.createdAt - b.createdAt);
@@ -744,6 +803,50 @@ function getFullSessionPart(sessionId: string, partId: string): SessionPart | nu
   return parts.find((p) => p.id === partId) ?? null;
 }
 
+// ── Project Detail Queries ────────────────────────────────────────────────
+
+/**
+ * Get a single project with aggregate job stats.
+ * Returns null if the project is not registered.
+ */
+function getProjectDetail(projectPath: string): ProjectWithStats | null {
+  const projects = getAllProjects();
+  const project = projects.find((p) => p.path === projectPath);
+  if (!project) return null;
+  const counts = getProjectJobCounts(projectPath);
+  return {
+    path: project.path,
+    owner: project.owner,
+    status: project.status,
+    blockedReason: project.blockedReason,
+    blockedAt: project.blockedAt,
+    defaultCategories: project.defaultCategories,
+    activeJobCount: counts.running + counts.pending,
+    completedJobCount: counts.completed,
+    failedJobCount: counts.failed,
+  };
+}
+
+/**
+ * Get all jobs for a specific project, ordered by createdAt DESC.
+ * Combines queue (pending/running) and recent (completed/failed/cancelled) jobs,
+ * filtered to the specified project.
+ */
+function getProjectJobs(projectPath: string, limit: number = 50): import('./types.js').Job[] {
+  const queue = getQueue();
+  const recent = getRecent(200);
+  const allJobs = [...queue, ...recent];
+  return allJobs
+    .filter((j) => j.project === projectPath)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, limit);
+}
+
+/** Block a project — delegates to db.blockProject(). */
+function blockProjectAction(projectPath: string, reason: string): void {
+  blockProject(projectPath, reason);
+}
+
 // ── Mutation Wrappers ─────────────────────────────────────────────────────
 
 
@@ -778,9 +881,12 @@ export {
   getJobTimeline,
   getFullJobTimeline,
   getProjectsWithStats,
+  getProjectDetail,
+  getProjectJobs,
   getFullSessionPart,
   retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,
+  blockProjectAction,
 };

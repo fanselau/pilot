@@ -1047,6 +1047,31 @@ function getSessionModels(sessionTitle: string): string[] {
   return getSessionModelsRecursive(sessionId);
 }
 
+/**
+ * Get basic session metadata by session ID.
+ * Returns { id, title, timeCreated, timeUpdated } or null if not found.
+ */
+function getSessionMeta(sessionId: string): { id: string; title: string; timeCreated: number; timeUpdated: number } | null {
+  const db = openDb();
+  if (db === null) return null;
+
+  try {
+    const row = db.prepare(
+      'SELECT id, title, time_created, time_updated FROM session WHERE id = ? LIMIT 1',
+    ).get(sessionId) as { id: string; title: string; time_created: number; time_updated: number } | undefined;
+
+    if (!row) return null;
+    return {
+      id: row.id,
+      title: row.title,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Test helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -1090,6 +1115,7 @@ export {
   getSessionModelsById,
   getSessionModelsRecursive,
   getSessionModels,
+  getSessionMeta,
   _resetDbCache,
   _setTestDb,
 };
