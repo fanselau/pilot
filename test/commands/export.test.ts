@@ -182,8 +182,8 @@ const statusWhy: JobWhy = {
 };
 
 const retryWhy: JobWhy = {
-  code: 'retry-unavailable',
-  badge: 'retry-unavailable',
+  code: 'not-applicable',
+  badge: 'n/a',
   what: 'Job is completed.',
   why: 'Retry only applies to failed or cancelled jobs.',
   next: 'Queue a new job for follow-up work.',
@@ -244,18 +244,18 @@ describe('buildJobExportMarkdown', () => {
         jobStatus: 'failed',
       }),
       statusWhy: {
-        code: 'retryable-failure',
-        badge: 'retryable',
-        what: 'Last run failed but appears retryable.',
+        code: 'failed',
+        badge: 'failed',
+        what: 'Last run failed.',
         why: 'Latest failure: verification failed',
-        next: 'Run pilot retry ab12.',
+        next: 'Run pilot unblock "test-proj" and queue a new job.',
       },
       retryWhy: {
-        code: 'retryable-failure',
-        badge: 'retryable',
-        what: 'Last run failed but appears retryable.',
+        code: 'failed',
+        badge: 'failed',
+        what: 'Last run failed.',
         why: 'Latest failure: verification failed',
-        next: 'Run pilot retry ab12.',
+        next: 'Run pilot unblock "test-proj" and queue a new job.',
       },
       undoWhy: {
         code: 'undo-safe',
@@ -266,10 +266,10 @@ describe('buildJobExportMarkdown', () => {
       },
     });
 
-    expect(markdown).toContain('Outcome summary: Last run failed but appears retryable.');
+    expect(markdown).toContain('Outcome summary: Last run failed.');
     expect(markdown).toContain('Failure context: execute-phase 45 --auto');
     expect(markdown).toContain('Failure reason: build failed due to type errors in export command implementation');
-    expect(markdown).toContain('Retry context: Last run failed but appears retryable.');
+    expect(markdown).toContain('Retry context: Last run failed.');
     expect(markdown).toContain('Commit delta: no-op');
   });
 
@@ -321,8 +321,8 @@ describe('buildJobExportMarkdown', () => {
         next: 'Use pilot log <id> for live progress.',
       },
       retryWhy: {
-        code: 'retry-unavailable',
-        badge: 'retry-unavailable',
+        code: 'not-applicable',
+        badge: 'n/a',
         what: 'Job is running.',
         why: 'Retry only applies to failed or cancelled jobs.',
         next: 'Wait for terminal state.',

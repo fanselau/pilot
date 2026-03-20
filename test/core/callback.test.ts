@@ -187,7 +187,7 @@ describe('notifyJobCompletion', () => {
     // Blocked-awareness and recovery guidance in failure prompt
     expect(prompt).toContain('blocked');
     expect(prompt).toContain('pilot log ab12');
-    expect(prompt).toContain('pilot retry ab12');
+    expect(prompt).toContain('pilot unblock');
 
     // Anti-silence instruction
     expect(prompt).toContain('Do NOT choose NO_REPLY');
@@ -246,7 +246,7 @@ describe('notifyJobCompletion', () => {
 
     // Log and retry guidance
     expect(prompt).toContain('pilot log ab12');
-    expect(prompt).toContain('pilot retry ab12');
+    expect(prompt).toContain('pilot unblock');
 
     expect(prompt).toContain('Do NOT choose NO_REPLY');
   });
@@ -331,12 +331,12 @@ describe('notifyJobCompletion', () => {
       status: 'failed',
       error: 'Compilation error',
     }));
-    expect(prompt).toContain('pilot retry ab12');
+    expect(prompt).toContain('pilot unblock');
     // Verify retry guidance is in next_step line
     expect(prompt).toContain('next_step:');
     const nextStepLine = prompt.split('\n').find(l => l.startsWith('next_step:'));
     expect(nextStepLine).toContain('pilot log ab12');
-    expect(nextStepLine).toContain('pilot retry ab12');
+    expect(nextStepLine).toContain('pilot unblock');
   });
 
   it('hung failure prompt includes session title from sessionTitles', () => {

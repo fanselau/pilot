@@ -17,7 +17,6 @@ import {
   markCompleted,
   markFailed,
   cancel,
-  retry,
   getQueue,
   getRecent,
   updateDelegationPayload,
@@ -31,7 +30,6 @@ import {
   forceQuitJob,
   getJobSteps,
   recordStep,
-  resetToPending,
   getChildJobs,
   pauseJob,
   getMilestoneStatus,
@@ -42,16 +40,9 @@ import {
   updateProjectNotifyOpenClawRoute,
   blockProject,
   unblockProject,
-  // Phase 67 retry helpers
+  // Phase 67 hung helpers
   incrementHungCount,
-  incrementRetryCount,
-  updateRetryHint,
-  updateLastFailureFingerprint,
-  recordRetryAttempt,
   getRetryAttempts,
-  canRetry,
-  isSameHungReason,
-  resetRetryState,
   // Phase 73: step CRUD for append-forward model
   createPendingStep,
   getNextPendingStep,
@@ -204,24 +195,9 @@ describe('pilot.db', () => {
       expect(job.skipGracePeriod).toBe(true);
     });
 
-    it('persists explicit retry budget when provided', () => {
-      const job = addJob(
-        'proj',
-        'quick',
-        'custom retry budget',
-        undefined,
-        'balanced',
-        'claude-only',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        0,
-        false,
-        undefined,
-        5,
-      );
-      expect(job.retryBudget).toBe(5);
+    it('always sets retry_budget to 0 (retries removed)', () => {
+      const job = addJob('proj', 'quick', 'no retry budget');
+      expect(job.retryBudget).toBe(0);
     });
   });
 
@@ -348,12 +324,10 @@ describe('pilot.db', () => {
     it('increments attempts on each call', () => {
       const job = addJob('proj', 'quick', 'task');
       markRunning(job.id);
-      // retry() resets attempts to 0, so after markRunning it's 1 again
-      retry(job.id);
       markRunning(job.id);
 
       const updated = getJob(job.id);
-      expect(updated!.attempts).toBe(1);
+      expect(updated!.attempts).toBe(2);
     });
   });
 
@@ -397,23 +371,6 @@ describe('pilot.db', () => {
 
       const updated = getJob(job.id);
       expect(updated!.status).toBe('cancelled');
-    });
-  });
-
-  // ── retry ─────────────────────────────────────────────────────────────
-
-  describe('retry', () => {
-    it('resets job to pending state', () => {
-      const job = addJob('proj', 'quick', 'task');
-      markRunning(job.id);
-      markFailed(job.id, 'timeout');
-      retry(job.id);
-
-      const updated = getJob(job.id);
-      expect(updated!.status).toBe('pending');
-      expect(updated!.startedAt).toBeNull();
-      expect(updated!.completedAt).toBeNull();
-      expect(updated!.error).toBeNull();
     });
   });
 
@@ -785,163 +742,14 @@ describe('pilot.db', () => {
     });
   });
 
-  // ── resetToPending ────────────────────────────────────────────────────
+  // ── resetToPending (removed — retries removed) ────────────────────────
 
-  describe('resetToPending', () => {
-    it('sets status to pending and clears started_at', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      resetToPending(job.id);
+  // resetToPending tests removed — retry concept eliminated.
 
-      const updated = getJob(job.id)!;
-      expect(updated.status).toBe('pending');
-      expect(updated.startedAt).toBeNull();
-    });
-
-    it('clears session_titles to prevent stale reconciler matches', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      updateSessionTitles(job.id, ['proj-phase-abc-1234']);
-      expect(getJob(job.id)!.sessionTitles).not.toBeNull();
-
-      resetToPending(job.id);
-      expect(getJob(job.id)!.sessionTitles).toBeNull();
-    });
-
-    it('deletes all job_steps for the job', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      recordStep(job.id, 0, 'execute-phase', '3 --auto');
-      recordStep(job.id, 1, 'verify-phase', '3');
-      expect(getJobSteps(job.id)).toHaveLength(2);
-
-      resetToPending(job.id);
-      expect(getJobSteps(job.id)).toHaveLength(0);
-    });
-
-    it('archives retry attempt lineage before clearing live fields', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      updateSessionTitles(job.id, ['session-a', 'session-b']);
-      updateRetryHint(job.id, 'focus failing lint and rerun');
-      updateLastFailureFingerprint(job.id, ['lint:src/core/db.ts:line-120']);
-
-      resetToPending(job.id, 'retry-resume');
-
-      const attempts = getRetryAttempts(job.id);
-      expect(attempts).toHaveLength(1);
-      expect(attempts[0].attemptNumber).toBe(1);
-      expect(attempts[0].retryStrategy).toBe('retry-resume');
-      expect(attempts[0].retryHint).toBe('focus failing lint and rerun');
-      expect(attempts[0].failureFingerprint).toEqual(['lint:src/core/db.ts:line-120']);
-      expect(attempts[0].sessionTitles).toEqual(['session-a', 'session-b']);
-
-      const updated = getJob(job.id)!;
-      expect(updated.sessionTitles).toBeNull();
-    });
-
-    it('getRetryAttempts returns deterministic attempt ordering', () => {
-      const job = addJob('proj', 'phase', 'multi-attempt task');
-
-      markRunning(job.id);
-      updateSessionTitles(job.id, ['session-1']);
-      updateRetryHint(job.id, 'attempt-one');
-      resetToPending(job.id, 'retry-full');
-
-      markRunning(job.id);
-      updateSessionTitles(job.id, ['session-2']);
-      updateRetryHint(job.id, 'attempt-two');
-      resetToPending(job.id, 'retry-resume');
-
-      const attempts = getRetryAttempts(job.id);
-      expect(attempts).toHaveLength(2);
-      expect(attempts.map((attempt) => attempt.attemptNumber)).toEqual([1, 2]);
-      expect(attempts[0].retryHint).toBe('attempt-one');
-      expect(attempts[1].retryHint).toBe('attempt-two');
-    });
-
-    it('stores resume_hint in dedicated column (not in error)', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      resetToPending(job.id, 'Resume from plan 04');
-
-      const updated = getJob(job.id)!;
-      expect(updated.resumeHint).toBe('Resume from plan 04');
-      expect(updated.error).toBeNull(); // error must NOT be overloaded
-    });
-
-    it('sets resume_hint to null when no hint provided', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      resetToPending(job.id);
-
-      const updated = getJob(job.id)!;
-      expect(updated.resumeHint).toBeNull();
-      expect(updated.error).toBeNull();
-    });
-
-    it('resume_hint persists through getJob and is accessible as job.resumeHint', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      resetToPending(job.id, 'Fix tsconfig first');
-
-      const fetched = getJob(job.id);
-      expect(fetched).not.toBeNull();
-      expect(fetched!.resumeHint).toBe('Fix tsconfig first');
-    });
-
-    it('clears previous resume_hint when called without hint after a hinted reset', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      // First reset with hint
-      resetToPending(job.id, 'Some hint');
-      markRunning(job.id);
-      // Second reset without hint — should clear the previous hint
-      resetToPending(job.id);
-
-      expect(getJob(job.id)!.resumeHint).toBeNull();
-    });
-
-    it('returns true when resetting a running job', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-
-      const didReset = resetToPending(job.id);
-      expect(didReset).toBe(true);
-      expect(getJob(job.id)!.status).toBe('pending');
-    });
-
-    it('is no-op on failed (force-quit) jobs', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      forceQuitJob(job.id, 'cli');
-      expect(getJob(job.id)!.status).toBe('failed');
-
-      const didReset = resetToPending(job.id, 'retry hint');
-      expect(didReset).toBe(false);
-      expect(getJob(job.id)!.status).toBe('failed'); // Still failed, not resurrected
-    });
-
-    it('is no-op on completed jobs', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      markCompleted(job.id);
-
-      const didReset = resetToPending(job.id);
-      expect(didReset).toBe(false);
-      expect(getJob(job.id)!.status).toBe('completed');
-    });
-
-    it('is no-op on cancelled jobs', () => {
-      const job = addJob('proj', 'phase', 'task');
-      markRunning(job.id);
-      cancel(job.id);
-
-      const didReset = resetToPending(job.id);
-      expect(didReset).toBe(false);
-      expect(getJob(job.id)!.status).toBe('cancelled');
-    });
-  });
+  // ── dummy anchor to mark removal end ─────────────────────────────
+  // The following tests were removed:
+  // - resetToPending: sets status to pending, clears session_titles, archives attempts, stores resume_hint, etc.
+  // resetToPending tests removed — retry concept eliminated (quick task 260320-nc6).
 
   // ── milestone orchestration ───────────────────────────────────────────
 
@@ -1502,10 +1310,10 @@ describe('managed projects', () => {
 
   // ── Phase 67: hung session retry helpers ──────────────────────────────
 
-  describe('retry budget fields on new jobs', () => {
-    it('new job has retryBudget=2, retryCount=0, hungCount=0, lastHungReason=null', () => {
+  describe('retry budget always zero on new jobs', () => {
+    it('new job has retryBudget=0, retryCount=0, hungCount=0', () => {
       const job = addJob('/proj', 'quick', 'test job');
-      expect(job.retryBudget).toBe(2);
+      expect(job.retryBudget).toBe(0);
       expect(job.retryCount).toBe(0);
       expect(job.hungCount).toBe(0);
       expect(job.lastHungReason).toBeNull();
@@ -1536,160 +1344,7 @@ describe('managed projects', () => {
     });
   });
 
-  describe('incrementRetryCount', () => {
-    it('increments retry_count by 1', () => {
-      const job = addJob('/proj', 'quick', 'retry test');
-      expect(job.retryCount).toBe(0);
-
-      incrementRetryCount(job.id);
-
-      const updated = getJob(job.id)!;
-      expect(updated.retryCount).toBe(1);
-    });
-
-    it('accumulates on multiple calls', () => {
-      const job = addJob('/proj', 'quick', 'multi-retry');
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
-
-      const updated = getJob(job.id)!;
-      expect(updated.retryCount).toBe(2);
-    });
-  });
-
-  describe('retry metadata helpers', () => {
-    it('round-trips retryHint persistence through updateRetryHint', () => {
-      const job = addJob('/proj', 'quick', 'retry hint test');
-      updateRetryHint(job.id, 'investigate flaky test ordering');
-
-      const updated = getJob(job.id)!;
-      expect(updated.retryHint).toBe('investigate flaky test ordering');
-    });
-
-    it('round-trips lastFailureFingerprint through updateLastFailureFingerprint', () => {
-      const job = addJob('/proj', 'quick', 'fingerprint test');
-      updateLastFailureFingerprint(job.id, ['verify:missing-summary', 'lint:src/core/runner.ts']);
-
-      const updated = getJob(job.id)!;
-      expect(updated.lastFailureFingerprint).toEqual([
-        'verify:missing-summary',
-        'lint:src/core/runner.ts',
-      ]);
-    });
-
-    it('records explicit retry attempts via recordRetryAttempt helper', () => {
-      const job = addJob('/proj', 'quick', 'manual archive test');
-      markRunning(job.id);
-      updateSessionTitles(job.id, ['session-manual']);
-      updateRetryHint(job.id, 'manual-hint');
-      updateLastFailureFingerprint(job.id, ['manual:fingerprint']);
-
-      const archived = recordRetryAttempt(job.id, 'retry-full');
-      expect(archived).not.toBeNull();
-
-      const attempts = getRetryAttempts(job.id);
-      expect(attempts).toHaveLength(1);
-      expect(attempts[0].retryStrategy).toBe('retry-full');
-      expect(attempts[0].retryHint).toBe('manual-hint');
-      expect(attempts[0].failureFingerprint).toEqual(['manual:fingerprint']);
-    });
-  });
-
-  describe('canRetry', () => {
-    it('returns true when retry_count < retry_budget (0 < 2)', () => {
-      const job = addJob('/proj', 'quick', 'can retry');
-      expect(canRetry(job.id)).toBe(true);
-    });
-
-    it('returns false when retry_count equals retry_budget', () => {
-      const job = addJob('/proj', 'quick', 'budget exhausted');
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
-
-      // retryCount=2, retryBudget=2 → cannot retry
-      expect(canRetry(job.id)).toBe(false);
-    });
-
-    it('returns false when retry_count exceeds retry_budget (defensive)', () => {
-      const job = addJob('/proj', 'quick', 'over budget');
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id); // 4 > 2
-
-      expect(canRetry(job.id)).toBe(false);
-    });
-
-    it('returns false for non-existent job id', () => {
-      expect(canRetry('xxxx')).toBe(false);
-    });
-  });
-
-  describe('isSameHungReason', () => {
-    it('returns true when last_hung_reason matches current reason', () => {
-      const job = addJob('/proj', 'quick', 'same reason');
-      incrementHungCount(job.id, 'interactive-prompt');
-
-      expect(isSameHungReason(job.id, 'interactive-prompt')).toBe(true);
-    });
-
-    it('returns false when last_hung_reason differs from current reason', () => {
-      const job = addJob('/proj', 'quick', 'different reason');
-      incrementHungCount(job.id, 'interactive-prompt');
-
-      expect(isSameHungReason(job.id, 'stuck-tool')).toBe(false);
-    });
-
-    it('returns false when last_hung_reason is null (no previous hang)', () => {
-      const job = addJob('/proj', 'quick', 'fresh job');
-      expect(isSameHungReason(job.id, 'interactive-prompt')).toBe(false);
-    });
-  });
-
-  describe('resetRetryState', () => {
-    it('clears retry_count, hung_count, and last_hung_reason', () => {
-      const job = addJob('/proj', 'quick', 'reset test');
-      incrementHungCount(job.id, 'interactive-prompt');
-      incrementRetryCount(job.id);
-      incrementRetryCount(job.id);
-
-      // Verify state before reset
-      const before = getJob(job.id)!;
-      expect(before.hungCount).toBe(1);
-      expect(before.retryCount).toBe(2);
-      expect(before.lastHungReason).toBe('interactive-prompt');
-
-      resetRetryState(job.id);
-
-      const after = getJob(job.id)!;
-      expect(after.retryCount).toBe(0);
-      expect(after.hungCount).toBe(0);
-      expect(after.lastHungReason).toBeNull();
-    });
-  });
-
-  describe('retry() resets retry state', () => {
-    it('pilot retry clears retry_count, hung_count, last_hung_reason', () => {
-      const job = addJob('/proj', 'quick', 'pilot retry test');
-      markRunning(job.id);
-      incrementHungCount(job.id, 'interactive-prompt');
-      incrementRetryCount(job.id);
-      markFailed(job.id, 'Retry budget exhausted after interactive-prompt hang');
-
-      // Before pilot retry
-      const before = getJob(job.id)!;
-      expect(before.retryCount).toBe(1);
-      expect(before.hungCount).toBe(1);
-      expect(before.lastHungReason).toBe('interactive-prompt');
-
-      retry(job.id);
-
-      const after = getJob(job.id)!;
-      expect(after.status).toBe('pending');
-      expect(after.retryCount).toBe(0);
-      expect(after.hungCount).toBe(0);
-      expect(after.lastHungReason).toBeNull();
-    });
-  });
+  // incrementRetryCount, canRetry, isSameHungReason, resetRetryState, retry() tests
+  // removed — retry concept eliminated (quick task 260320-nc6).
 
 });

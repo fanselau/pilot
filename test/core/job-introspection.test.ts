@@ -121,8 +121,8 @@ describe('buildRetryWhy', () => {
       }),
     );
 
-    expect(why.code).toBe('retryable-failure');
-    expect(why.badge).toBe('retryable');
+    expect(why.code).toBe('failed');
+    expect(why.badge).toBe('failed');
   });
 });
 

@@ -52,7 +52,6 @@ import {
   getSessionChildSummaries,
   getJobDetailEvents,
   getJobTimeline,
-  retryJobAction,
   cancelJobAction,
   forceQuitJobAction,
   unblockProjectAction,
@@ -1077,12 +1076,7 @@ describe('getJobTimeline', () => {
 
 // ── Mutation Wrapper Tests ────────────────────────────────────────────────
 
-describe('retryJobAction', () => {
-  it('calls db.retry with the given job ID', () => {
-    retryJobAction('job-123');
-    expect(mockRetry).toHaveBeenCalledWith('job-123');
-  });
-});
+// retryJobAction test removed — retry concept eliminated.
 
 describe('cancelJobAction', () => {
   it('calls db.cancel with the given job ID', () => {

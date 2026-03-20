@@ -204,8 +204,8 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('What happened: Undo checkpoints look compatible.');
     expect(output).toContain('What next: Run pilot undo ab12 --dry-run to preview rollback.');
     expect(output).toContain('Run profile: balanced/hybrid · attempts 1');
-    expect(output).toContain('Attempt: Attempt 1/4');
-    expect(output).toContain('Retryability: retry-unavailable (retry-unavailable)');
+    expect(output).toContain('Attempt: Attempt 1');
+    expect(output).toContain('Failure: n/a — Wait for terminal failure/cancel state or queue a new job.');
     expect(output).toContain('Undo safety: undo:safe (undo-safe)');
     expect(output).toContain('Recovery');
     expect(output).toContain('undo:safe');
@@ -249,7 +249,7 @@ describe('infoCommand recovery visibility', () => {
         delta: 'changed',
       },
       retry: {
-        code: 'retry-unavailable',
+        code: 'not-applicable',
       },
       undo: {
         code: 'undo-safe',
@@ -263,10 +263,7 @@ describe('infoCommand recovery visibility', () => {
     });
     expect(payload.retryLineage).toMatchObject({
       attempt: 1,
-      totalAttempts: 4,
-      display: 'Attempt 1/4',
-      retryBudget: 3,
-      retryCount: 0,
+      display: 'Attempt 1',
       retryHint: null,
     });
     expect(payload.recovery.guidance).toContain('Undo blocked by newer work');
@@ -285,7 +282,7 @@ describe('infoCommand recovery visibility', () => {
       failed: false,
       commitDelta: 'changed',
       retry: {
-        code: 'retry-unavailable',
+        code: 'not-applicable',
       },
     });
     expect(payload.tokenUsage).toMatchObject({
@@ -349,20 +346,19 @@ describe('infoCommand recovery visibility', () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('What happened: Last run failed but appears retryable. Last failure: network timeout');
-    expect(output).toContain('What next: Run pilot retry ab12.');
-    expect(output).toContain('Retryability: retryable (retryable-failure)');
+    expect(output).toContain('What happened: Last run failed. Last failure: network timeout');
+    expect(output).toContain('What next: Run pilot unblock');
+    expect(output).toContain('Failure: failed');
     expect(output).toContain('Failure step: 2/2 execute-phase');
     expect(output).toContain('Failure reason: semantic-check: tests failed');
     expect(output).toContain('Completed before failure: 1/2');
-    expect(output).toContain('Retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
+    expect(output).toContain('Retry guidance: failed (failed)');
   });
 
-  it('shows retry hint and derived attempt lineage for retried jobs', async () => {
+  it('shows retry hint and attempt count for jobs', async () => {
     mockGetJob.mockReturnValue(
       makeJob({
-        retryBudget: 2,
-        retryCount: 1,
+        attempts: 2,
         retryHint: 'retry-resume: Resume from plan 03',
       }),
     );
@@ -370,7 +366,7 @@ describe('infoCommand recovery visibility', () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('Attempt: Attempt 2/3');
+    expect(output).toContain('Attempt: Attempt 2');
     expect(output).toContain('Retry hint: retry-resume: Resume from plan 03');
   });
 

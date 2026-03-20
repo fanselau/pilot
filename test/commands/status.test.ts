@@ -275,9 +275,9 @@ describe('statusCommand', () => {
     await statusCommand({ why: true });
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('[retryable]');
+    expect(output).toContain('[failed]');
     expect(output).toContain('[needs-revision]');
-    expect(output).toContain('Retry alone is unlikely to fix this failure.');
+    expect(output).toContain('This failure suggests a requirement or outcome mismatch.');
   });
 
   it('shows undo:safe tag for checkpointed terminal jobs', async () => {

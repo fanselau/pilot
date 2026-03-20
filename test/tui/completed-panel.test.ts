@@ -259,7 +259,7 @@ describe('buildCompletedRowBadges', () => {
     const labels = buildCompletedRowBadges(
       makeJob({ status: 'cancelled', judgeVerdict: 'not-json', gitBaseCommit: null, gitHeadCommit: null }),
     ).map((badge) => badge.label);
-    expect(labels).toEqual(['[judge:inconclusive]', '[retryable]', '[undo:unavailable]']);
+    expect(labels).toEqual(['[judge:inconclusive]', '[cancelled]', '[undo:unavailable]']);
   });
 
   it('renders judge:gaps badge for partial verdicts (mapped to gaps)', () => {

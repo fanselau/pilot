@@ -283,7 +283,7 @@ describe('logCommand --summary', () => {
         total: 1,
       },
       retry: {
-        code: 'retryable-failure',
+        code: 'failed',
       },
     });
     expect(mockGetSessionParts).not.toHaveBeenCalled();
@@ -302,9 +302,9 @@ describe('logCommand --summary', () => {
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('what: Last run failed but appears retryable.');
-    expect(output).toContain('next: Run pilot retry ab12.');
-    expect(output).toContain('retry guidance: retryable (retryable-failure) — Run pilot retry ab12.');
+    expect(output).toContain('what: Last run failed.');
+    expect(output).toContain('next: Run pilot unblock');
+    expect(output).toContain('retry guidance: failed (failed)');
   });
 
   it('surfaces safe undo/no-step fallback state without transcript reads', async () => {
@@ -336,8 +336,7 @@ describe('logCommand retry chain rendering', () => {
     mockGetQueue.mockReturnValue([]);
     mockGetJob.mockReturnValue(
       makeJob({
-        retryBudget: 2,
-        retryCount: 1,
+        attempts: 2,
         retryHint: 'retry-full: Full rerun after stale verification evidence',
         sessionTitles: JSON.stringify(['attempt-2-execute']),
       }),

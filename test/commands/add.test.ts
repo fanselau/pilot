@@ -14,7 +14,7 @@ import path from 'node:path';
 
 // Mock the db module
 vi.mock('../../src/core/db.js', () => ({
-  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _skipGracePeriod?: boolean, _notifyRoute?: unknown, _retryBudget?: number) => ({
+  addJob: vi.fn((_proj: string, _scope: string, _desc: string, _reqPath?: string, _profile?: string, _provider?: string, _dependsOn?: string, _parentJobId?: string, _callbackSessionKey?: string, _callbackUrl?: string, _timeout?: number, _skipGracePeriod?: boolean, _notifyRoute?: unknown) => ({
     id: 'ab12',
     project: _proj,
     scope: _scope,
@@ -46,7 +46,7 @@ vi.mock('../../src/core/db.js', () => ({
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: _skipGracePeriod ?? false,
-    retryBudget: _retryBudget ?? 2,
+    retryBudget: 0,
     retryCount: 0,
     retryHint: null,
     lastFailureFingerprint: null,
@@ -130,7 +130,6 @@ vi.mock('../../src/core/config.js', () => {
     modelProfile: 'balanced' as const,
     providerMode: 'claude-only' as const,
     scope: null,
-    retryBudget: 2,
   }));
 
   return { getConfig, resolveProjectDir, getConfigFileDefaults };
@@ -203,7 +202,7 @@ describe('addCommand', () => {
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -215,7 +214,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -236,9 +235,6 @@ describe('addCommand', () => {
       undefined,
       undefined,
       0,
-      undefined,
-      undefined,
-      2,
     );
   });
 
@@ -275,7 +271,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -283,7 +279,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -310,8 +306,6 @@ describe('addCommand', () => {
       undefined,
       0,
       true,
-      undefined,
-      2,
     );
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -319,61 +313,7 @@ describe('addCommand', () => {
     expect(output).toContain('faster start, less review/cancel time');
   });
 
-  it('passes explicit --retries value to addJob', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 3 });
-
-    const callArgs = vi.mocked(addJob).mock.calls[0];
-    expect(callArgs[13]).toBe(3);
-  });
-
-  it('--no-retry resolves retry budget to 0', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retry: false });
-
-    const callArgs = vi.mocked(addJob).mock.calls[0];
-    expect(callArgs[13]).toBe(0);
-  });
-
-  it('explicit --retries takes precedence over --no-retry when both are set', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 4, retry: false });
-
-    const callArgs = vi.mocked(addJob).mock.calls[0];
-    expect(callArgs[13]).toBe(4);
-  });
-
-  it('uses config default retry budget when no retry flags are provided', async () => {
-    vi.mocked(getConfigFileDefaults).mockReturnValueOnce({
-      modelProfile: 'balanced',
-      providerMode: 'claude-only',
-      scope: null,
-      retryBudget: 6,
-    });
-
-    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
-
-    const callArgs = vi.mocked(addJob).mock.calls[0];
-    expect(callArgs[13]).toBe(6);
-  });
-
-  it('exits 2 for invalid --retries values', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
-
-    await expect(addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: -1 })).rejects.toThrow('exit');
-
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('--retries must be a non-negative integer'));
-    expect(exitSpy).toHaveBeenCalledWith(2);
-    expect(addJob).not.toHaveBeenCalled();
-
-    stderrSpy.mockRestore();
-    exitSpy.mockRestore();
-  });
-
-  it('prints effective retry budget in human output', async () => {
-    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true, retries: 5 });
-
-    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('Retry budget: 5');
-  });
+  // Retry-specific tests removed (--retries, --no-retry, retry budget)
 
   it('exits 2 for invalid profile', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -504,7 +444,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -519,7 +459,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -536,7 +476,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('opencode.json');
@@ -549,7 +489,7 @@ describe('project setup validation', () => {
     await addCommand('.', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 
@@ -559,7 +499,7 @@ describe('project setup validation', () => {
     await addCommand(absPath, 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, undefined, undefined, 2,
+      absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
     );
   });
 });
@@ -600,7 +540,7 @@ describe('duplicate detection', () => {
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
-    retryBudget: 2,
+    retryBudget: 0,
     retryCount: 0,
     retryHint: null,
     lastFailureFingerprint: null,
@@ -766,7 +706,6 @@ describe('notify flag validation', () => {
         channel: 'telegram',
         to: 'telegram:-5181925291',
       },
-      2,
     );
   });
 
@@ -785,9 +724,6 @@ describe('notify flag validation', () => {
       undefined,    // callbackSessionKey = undefined (no notification)
       undefined,
       0,            // timeout
-      undefined,
-      undefined,
-      2,
     );
     // No error should have occurred
   });
@@ -816,7 +752,6 @@ describe('notify flag validation', () => {
         channel: 'telegram',
         to: 'telegram:-5181925291',
       },
-      2,
     );
   });
 
@@ -844,7 +779,6 @@ describe('notify flag validation', () => {
         channel: 'telegram',
         to: 'telegram:-111',
       },
-      2,
     );
   });
 
@@ -865,9 +799,6 @@ describe('notify flag validation', () => {
       undefined,    // --no-notify wins over env var
       undefined,
       0,            // timeout
-      undefined,
-      undefined,
-      2,
     );
   });
 
@@ -958,7 +889,6 @@ describe('notify flag validation', () => {
         to: 'telegram:-5181925291',
         accountId: 'benefitu',
       },
-      2,
     );
   });
 
@@ -1052,7 +982,6 @@ describe('project owner as fallback notify', () => {
         channel: 'telegram',
         to: 'telegram:-5181925291',
       },
-      2,
     );
   });
 
@@ -1291,7 +1220,6 @@ describe('optional notify behavior', () => {
         channel: 'telegram',
         to: 'telegram:-5181925291',
       },
-      2,
     );
   });
 });
