@@ -112,11 +112,57 @@ Count `*-PLAN.md` files and `*-SUMMARY.md` files.
 **All PLAN.md files have matching SUMMARY.md files (phase complete):**
 - Output `{ type: 'noop', reason: 'Phase N is already complete' }`
 
+## Re-Query Mode (Step Continuation)
+
+When the runner re-queries you after a failure or gaps_found verdict, you receive additional context in `<step_history>` and `<continuation_context>` blocks.
+
+### What You Receive
+
+- `<step_history>`: JSON array of all steps executed so far, with their status, command, args, and any error messages
+- `<continuation_context>`: Why you're being re-queried (judge gaps, hung session, etc.) with specific details
+
+### How to Respond
+
+In re-query mode, you output a JSON object with `continuation_steps` instead of `intent`:
+
+```json
+{
+  "continuation_steps": [
+    { "command": "plan-phase", "args": "31 --gaps" },
+    { "command": "execute-phase", "args": "phase: 31\nactive_flags: --gaps-only" },
+    { "command": "judge", "args": "" }
+  ],
+  "reasoning": "Judge found 3 gaps in phase 31. Using GSD gap-closure flow: plan --gaps to create gap closure plans, execute --gaps-only to run only those plans, then re-judge."
+}
+```
+
+### Decision Logic for Re-Query
+
+1. **Judge returned `gaps_found`:**
+   - Output gap-closure flow: `plan-phase N --gaps` → `execute-phase N --gaps-only` → `judge`
+   - This is GSD's native gap-closure mechanism
+
+2. **Session hung on interactive prompt:**
+   - If the step was a GSD command: re-run the same command (it may work on retry)
+   - If multiple hangs on same command: output `noop` with reason explaining the block
+   - Always append a `judge` step after re-run
+
+3. **Judge returned `failed`:**
+   - If this is the first failure: re-run full plan + execute + judge
+   - If repeated failures: output empty `continuation_steps` (the runner will mark the job failed)
+
+4. **General rules:**
+   - Always end with a `judge` step so progress is verified
+   - Keep continuation_steps minimal (2-4 steps typical)
+   - Never output more than 5 steps in a continuation
+
 ## JSON Output Format
 
-Output EXACTLY one JSON block with a `DelegationResult` object. No other text before or after (though brief reasoning text before the block is acceptable for debugging).
+There are two output modes depending on whether this is a standard query or a re-query.
 
-### Schema
+### Standard Mode (Initial Delegation)
+
+Output EXACTLY one JSON block with a `DelegationResult` object. No other text before or after (though brief reasoning text before the block is acceptable for debugging).
 
 ```json
 {
@@ -124,6 +170,21 @@ Output EXACTLY one JSON block with a `DelegationResult` object. No other text be
   "reasoning": "<brief human-readable explanation of why this intent was chosen>"
 }
 ```
+
+### Re-Query Mode (Step Continuation)
+
+When `<step_history>` and `<continuation_context>` blocks are present, output continuation steps instead:
+
+```json
+{
+  "continuation_steps": [
+    { "command": "<gsd-command>", "args": "<args>" }
+  ],
+  "reasoning": "<why these steps are needed>"
+}
+```
+
+### Standard Mode Schema
 
 ### Intent Examples
 
