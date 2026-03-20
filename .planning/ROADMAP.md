@@ -1387,7 +1387,7 @@ Wave structure:
 **Goal:** Transform the web UI from a prototype center-column layout into a dense operational dashboard with split-pane job detail, full-width layout, no pagination friction, model visibility badges, projects view, and fixed timezone-safe duration calculations.
 **Requirements**: WUI-01, WUI-02, WUI-03, WUI-04, WUI-05, WUI-06, WUI-07, WUI-08, WUI-09
 **Depends on:** Phase 75
-**Plans:** 5 plans
+**Plans:** 2/5 plans executed
 
 Plans:
 - [ ] 76-01-PLAN.md — Foundation: safe timestamp parser (TDD), full-width layout, frontend duration fix, comment cleanup

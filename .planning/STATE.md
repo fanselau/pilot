@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 74-04-PLAN.md
-last_updated: "2026-03-20T16:46:09.461Z"
+stopped_at: Completed 76-02-PLAN.md
+last_updated: "2026-03-20T17:16:51.778Z"
 last_activity: "2026-03-20 - Completed quick task 260320-mcv: Verify Phase 73 code changes are compatible with updated requirements (skills system, delegation, categories)"
 progress:
-  total_phases: 74
+  total_phases: 75
   completed_phases: 33
-  total_plans: 120
-  completed_plans: 110
+  total_plans: 125
+  completed_plans: 112
   percent: 93
 ---
 
@@ -875,6 +875,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 73]: Pre-existing TUI/info/runner-recovery test failures are out-of-scope; only plan-scoped tests verified
 - [Phase 73]: Added step DB mocks (makeStep helper) and fixed 2 pre-existing tests that passed for wrong reason
 - [Phase 74]: Manifest-only skill registry: SkillEntry uses repo+skill instead of source+path; loadManifest() auto-migrates old format — Supports monorepo skill disambiguation and eliminates local file cache
+- [Phase 76-01]: Client/server time-utils duplication: web/src/lib/time-utils.ts intentionally mirrors core to avoid importing sqlite3-dependent module in browser bundle — safeParseTimestamp returns epoch ms (not epoch seconds) for JS Date API consistency
+- [Phase 76-pilot-web-ui-overhaul]: Used pnpm (not npm) for package installation; pnpm is project package manager per package.json config block
 
 ## Blockers/Concerns Carried Forward
 
@@ -883,6 +885,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T16:46:09.454Z
-Stopped at: Completed 74-04-PLAN.md
+Last session: 2026-03-20T17:16:40.782Z
+Stopped at: Completed 76-02-PLAN.md
 Resume file: None
