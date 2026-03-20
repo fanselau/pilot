@@ -111,10 +111,6 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
       assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'milestone']);
     }
 
-    const retryBudgetRaw = defaults.retry_budget ?? defaults.retryBudget;
-    if (retryBudgetRaw !== undefined && retryBudgetRaw !== null) {
-      assertNonNegativeInteger('defaults.retry_budget', retryBudgetRaw);
-    }
   }
 
   // ── runner numeric fields ──
@@ -294,7 +290,6 @@ function getConfigFileDefaults(): ConfigFileDefaults {
     modelProfile: fileConfig?.defaults?.modelProfile ?? 'balanced',
     providerMode: fileConfig?.defaults?.providerMode ?? 'claude-only',
     scope: fileConfig?.defaults?.scope ?? null,
-    retryBudget: fileConfig?.defaults?.retry_budget ?? fileConfig?.defaults?.retryBudget ?? 2,
   };
 }
 

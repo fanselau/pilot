@@ -130,8 +130,7 @@ function filterCurrentAttemptSessions(
 }
 
 function resolveCurrentAttemptNumber(job: Job): number {
-  const totalAttempts = Math.max(1, job.retryBudget + 1);
-  return Math.min(totalAttempts, Math.max(1, job.retryCount + 1));
+  return job.attempts;
 }
 
 function buildAttemptSessionGroups(job: Job, steps: JobStep[], chainMode: boolean): AttemptSessionGroup[] {

@@ -150,10 +150,7 @@ interface InfoFailureContext {
 
 interface RetryLineage {
   attempt: number;
-  totalAttempts: number;
   display: string;
-  retryBudget: number;
-  retryCount: number;
   retryHint: string | null;
 }
 
@@ -173,14 +170,9 @@ function normalizeSingleLine(text: string): string {
 }
 
 function buildRetryLineage(job: Job): RetryLineage {
-  const totalAttempts = Math.max(1, job.retryBudget + 1);
-  const attempt = Math.min(totalAttempts, Math.max(1, job.retryCount + 1));
   return {
-    attempt,
-    totalAttempts,
-    display: `Attempt ${attempt}/${totalAttempts}`,
-    retryBudget: job.retryBudget,
-    retryCount: job.retryCount,
+    attempt: job.attempts,
+    display: `Attempt ${job.attempts}`,
     retryHint: job.retryHint,
   };
 }
@@ -571,7 +563,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   outputHuman(
     `  ${dim('Checkpoints:')} ${formatCommitDisplay(triage.checkpoints.baseCommit)} -> ${formatCommitDisplay(triage.checkpoints.headCommit)} (${triage.checkpoints.delta})`,
   );
-  outputHuman(`  ${dim('Retryability:')} ${triage.retry.badge} (${triage.retry.code})`);
+  outputHuman(`  ${dim('Failure:')} ${triage.retry.badge} — ${triage.retry.next}`);
   outputHuman(`  ${dim('Undo safety:')} ${triage.undo.badge} (${triage.undo.code})`);
   outputHuman(`  ${dim('Recovery tag:')} ${triage.recoveryTag}`);
   outputHuman('');

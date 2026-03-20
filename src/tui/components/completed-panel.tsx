@@ -105,7 +105,7 @@ function judgeBadgeColor(outcome: JudgeSignalOutcome): string {
 
 function retryBadgeColor(code: ReturnType<typeof buildRetryWhy>['code']): string {
   if (code === 'needs-revision') return statusColors.failed;
-  if (code === 'retryable-failure') return statusColors.warning;
+  if (code === 'failed') return statusColors.warning;
   return theme.muted;
 }
 

@@ -6,9 +6,9 @@ export type JobWhyCode =
   | 'depends-on'
   | 'project-serial'
   | 'launchable'
-  | 'retryable-failure'
+  | 'failed'
   | 'needs-revision'
-  | 'retry-unavailable'
+  | 'not-applicable'
   | 'undo-safe'
   | 'undo-guarded-newer-work'
   | 'undo-guarded-diverged'
@@ -176,11 +176,11 @@ function buildPendingWhy(job: Job, context: JobWhyContext): JobWhy {
 function buildRetryWhy(job: Job): JobWhy {
   if (job.status === 'cancelled') {
     return {
-      code: 'retryable-failure',
-      badge: 'retryable',
-      what: 'Job was cancelled and can be retried.',
+      code: 'failed',
+      badge: 'cancelled',
+      what: 'Job was cancelled.',
       why: 'Cancellation does not imply a requirement issue.',
-      next: `Run pilot retry ${job.id} when you want it queued again.`,
+      next: `Queue a new job with pilot add ${job.project}.`,
     };
   }
 
@@ -189,26 +189,26 @@ function buildRetryWhy(job: Job): JobWhy {
       return {
         code: 'needs-revision',
         badge: 'needs-revision',
-        what: 'Retry alone is unlikely to fix this failure.',
+        what: 'This failure suggests a requirement or outcome mismatch.',
         why: 'Signals point to requirement or outcome mismatch rather than a transient error.',
         next: 'Revise the requirement and queue a follow-up job.',
       };
     }
 
     return {
-      code: 'retryable-failure',
-      badge: 'retryable',
-      what: 'Last run failed but appears retryable.',
+      code: 'failed',
+      badge: 'failed',
+      what: 'Last run failed.',
       why: job.error ? `Latest failure: ${job.error}` : 'No non-retryable guard was detected.',
-      next: `Run pilot retry ${job.id}.`,
+      next: `Run pilot unblock "${job.project}" and queue a new job.`,
     };
   }
 
   return {
-    code: 'retry-unavailable',
-    badge: 'retry-unavailable',
+    code: 'not-applicable',
+    badge: 'n/a',
     what: `Job is ${job.status}.`,
-    why: 'Retry only applies to failed or cancelled jobs.',
+    why: 'Failure analysis only applies to failed or cancelled jobs.',
     next: 'Wait for terminal failure/cancel state or queue a new job.',
   };
 }

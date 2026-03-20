@@ -550,16 +550,12 @@ function addJob(
   timeout?: number,
   skipGracePeriod?: boolean,
   notifyRoute?: OpenClawDeliverRoute | null,
-  retryBudget?: number,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
   const defaults = getConfigFileDefaults();
   const profile = modelProfile ?? defaults.modelProfile;
   const provider = providerMode ?? defaults.providerMode;
-  const resolvedRetryBudget = Number.isFinite(retryBudget)
-    ? Math.max(0, Math.trunc(retryBudget as number))
-    : 2;
 
   db.prepare(`
     INSERT INTO jobs (id, project, scope, description, requirement_path, model_profile, provider_mode, depends_on, parent_job_id, callback_session_key, callback_url, timeout, skip_grace_period, notify_route, retry_budget)
@@ -579,7 +575,7 @@ function addJob(
     timeout ?? 0,
     skipGracePeriod ? 1 : 0,
     notifyRoute ? JSON.stringify(notifyRoute) : null,
-    resolvedRetryBudget,
+    0,
   );
 
   return getJob(id)!;
@@ -658,12 +654,14 @@ function cancel(id: string): void {
   db.prepare("UPDATE jobs SET status = 'cancelled' WHERE id = ?").run(id);
 }
 
+
+
 /**
- * Retry a failed job. Resets to pending, clears started_at/completed_at/error.
- * Also resets retry tracking state (retry_count, hung_count, last_hung_reason)
- * to give the job a fresh retry slate via `pilot retry`.
+ * Reset a failed/cancelled job to pending for re-execution.
+ * Used by milestone resume to re-queue a failed child phase job.
+ * No retry tracking — jobs are disposable; this is a fresh re-queue.
  */
-function retry(id: string): void {
+function requeueFailedJob(id: string): void {
   const db = getDb();
   db.prepare(`
     UPDATE jobs
@@ -673,8 +671,6 @@ function retry(id: string): void {
   `).run(id);
   // Clean up step records from previous attempt
   db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
-  // Reset retry tracking so operator retry gets a fresh budget
-  resetRetryState(id);
 }
 
 /**
@@ -1347,59 +1343,7 @@ function appendSteps(
   bulkInsert();
 }
 
-// ── Retry Metadata + Attempt Archive Helpers ───────────────────────────────
-
-function updateRetryHint(jobId: string, retryHint: string | null): void {
-  getDb().prepare('UPDATE jobs SET retry_hint = ? WHERE id = ?').run(retryHint, jobId);
-}
-
-function updateLastFailureFingerprint(jobId: string, fingerprint: string[] | null): void {
-  const serializedFingerprint = fingerprint ? JSON.stringify(fingerprint) : null;
-  getDb().prepare('UPDATE jobs SET last_failure_fingerprint = ? WHERE id = ?').run(serializedFingerprint, jobId);
-}
-
-function recordRetryAttempt(jobId: string, retryStrategy: string | null = null): JobRetryAttempt | null {
-  const db = getDb();
-  const row = db.prepare(`
-    SELECT id, attempts, session_titles, retry_hint, last_failure_fingerprint
-    FROM jobs
-    WHERE id = ?
-  `).get(jobId) as {
-    id: string;
-    attempts: number;
-    session_titles: string | null;
-    retry_hint: string | null;
-    last_failure_fingerprint: string | null;
-  } | undefined;
-
-  if (!row) return null;
-
-  const attemptNumber = Math.max(1, row.attempts ?? 0);
-  const insert = db.prepare(`
-    INSERT INTO job_retry_attempts (
-      job_id,
-      attempt_number,
-      session_titles,
-      retry_strategy,
-      retry_hint,
-      failure_fingerprint
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    row.id,
-    attemptNumber,
-    row.session_titles,
-    retryStrategy,
-    row.retry_hint,
-    row.last_failure_fingerprint,
-  );
-
-  const archived = db.prepare('SELECT * FROM job_retry_attempts WHERE id = ?').get(
-    Number(insert.lastInsertRowid),
-  ) as JobRetryAttemptRow;
-
-  return rowToJobRetryAttempt(archived);
-}
+// ── Retry Attempt Archive (read-only — used by log --chain) ───────────────
 
 function getRetryAttempts(jobId: string): JobRetryAttempt[] {
   const rows = getDb().prepare(`
@@ -1412,76 +1356,7 @@ function getRetryAttempts(jobId: string): JobRetryAttempt[] {
   return rows.map(rowToJobRetryAttempt);
 }
 
-// ── Reset to Pending ──────────────────────────────────────────────────
 
-/**
- * Reset a job back to pending status for retry.
- * Used by the judge-based evaluation when a retryable failure is detected.
- * Clears started_at for fresh timing on next attempt.
- * Clears session_titles to prevent stale titles matching in reconciler pgrep.
- * Stores resumeHint in the dedicated resume_hint column (NOT in error field).
- * Deletes all job_steps for the job to prevent stale steps appearing in TUI.
- *
- * Only affects jobs with status='running'. No-op for jobs already in a terminal
- * state (failed, completed, cancelled) — prevents force-quit jobs from being resurrected.
- *
- * @returns true when the reset actually happened, false when the job was not running (no-op).
- */
-function resetToPending(id: string, resumeHint?: string): boolean {
-  const db = getDb();
-
-  const reset = db.transaction((): boolean => {
-    const runningRow = db.prepare(`
-      SELECT id, attempts, session_titles, retry_hint, last_failure_fingerprint
-      FROM jobs
-      WHERE id = ? AND status = 'running'
-    `).get(id) as {
-      id: string;
-      attempts: number;
-      session_titles: string | null;
-      retry_hint: string | null;
-      last_failure_fingerprint: string | null;
-    } | undefined;
-
-    if (!runningRow) return false;
-
-    const attemptNumber = Math.max(1, runningRow.attempts ?? 0);
-    db.prepare(`
-      INSERT INTO job_retry_attempts (
-        job_id,
-        attempt_number,
-        session_titles,
-        retry_strategy,
-        retry_hint,
-        failure_fingerprint
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      runningRow.id,
-      attemptNumber,
-      runningRow.session_titles,
-      resumeHint ?? null,
-      runningRow.retry_hint,
-      runningRow.last_failure_fingerprint,
-    );
-
-    db.prepare(`
-      UPDATE jobs
-      SET status = 'pending',
-          started_at = NULL,
-          error = NULL,
-          current_step = 0,
-          session_titles = NULL,
-          resume_hint = ?
-      WHERE id = ? AND status = 'running'
-    `).run(resumeHint ?? null, id);
-
-    db.prepare('DELETE FROM job_steps WHERE job_id = ?').run(id);
-    return true;
-  });
-
-  return reset();
-}
 
 // ── Hung Session Retry Helpers (Phase 67) ─────────────────────────────────
 
@@ -1496,50 +1371,7 @@ function incrementHungCount(jobId: string, hungReason: string): void {
   `).run(hungReason, jobId);
 }
 
-/**
- * Increment the retry_count for a job by 1.
- * Called when the runner decides to retry a hung session.
- */
-function incrementRetryCount(jobId: string): void {
-  getDb().prepare(`
-    UPDATE jobs SET retry_count = retry_count + 1
-    WHERE id = ?
-  `).run(jobId);
-}
 
-/**
- * Check whether a job still has retry budget remaining.
- * Returns true if retry_count < retry_budget, false otherwise.
- */
-function canRetry(jobId: string): boolean {
-  const row = getDb().prepare(`
-    SELECT retry_count, retry_budget FROM jobs WHERE id = ?
-  `).get(jobId) as { retry_count: number; retry_budget: number } | undefined;
-  if (!row) return false;
-  return row.retry_count < row.retry_budget;
-}
-
-/**
- * Check whether the last recorded hung reason matches the current reason.
- * Used to detect two consecutive hangs of the same type (escalation condition).
- */
-function isSameHungReason(jobId: string, currentReason: string): boolean {
-  const row = getDb().prepare(`
-    SELECT last_hung_reason FROM jobs WHERE id = ?
-  `).get(jobId) as { last_hung_reason: string | null } | undefined;
-  return row?.last_hung_reason === currentReason;
-}
-
-/**
- * Reset retry tracking state for a job (retry_count, hung_count, last_hung_reason).
- * Called by `pilot retry` CLI to give the job a fresh retry slate.
- */
-function resetRetryState(jobId: string): void {
-  getDb().prepare(`
-    UPDATE jobs SET retry_count = 0, hung_count = 0, last_hung_reason = NULL
-    WHERE id = ?
-  `).run(jobId);
-}
 
 /**
  * Store judge verdict JSON string on a job.
@@ -1900,7 +1732,7 @@ export {
   markCompleted,
   markFailed,
   cancel,
-  retry,
+  requeueFailedJob,
   getQueue,
   getRunningJobsForProject,
   getAllRunningJobs,
@@ -1932,16 +1764,9 @@ export {
   deleteOldJobs,
   countOldJobs,
   vacuumDb,
-  // Phase 67: hung session retry helpers
+  // Phase 67: hung session helpers
   incrementHungCount,
-  incrementRetryCount,
-  updateRetryHint,
-  updateLastFailureFingerprint,
-  recordRetryAttempt,
   getRetryAttempts,
-  canRetry,
-  isSameHungReason,
-  resetRetryState,
   // Phase 73: step CRUD for append-forward model
   createPendingStep,
   getNextPendingStep,

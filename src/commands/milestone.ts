@@ -7,7 +7,7 @@
  *   skip <id>    — Cancel the failed child, unblock next, unpause milestone
  */
 
-import { getJob, getChildJobs, getMilestoneStatus, retry, cancel, unpauseMilestone, clearDependsOn } from '../core/db.js';
+import { getJob, getChildJobs, getMilestoneStatus, requeueFailedJob, cancel, unpauseMilestone, clearDependsOn } from '../core/db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, yellow, dim } from '../util/colors.js';
 import type { Job } from '../core/types.js';
@@ -124,8 +124,8 @@ async function milestoneResume(id: string): Promise<void> {
     process.exit(1);
   }
 
-  // Retry the failed child job
-  retry(failedChild.id);
+  // Re-queue the failed child job as pending
+  requeueFailedJob(failedChild.id);
 
   // Unpause the milestone (set back to completed so it stays as coordinator)
   unpauseMilestone(id);
