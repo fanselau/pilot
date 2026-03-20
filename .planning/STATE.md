@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 76-04-PLAN.md
-last_updated: "2026-03-20T21:19:21.437Z"
+stopped_at: "Completed quick task 260320-vc3: Fix --next flag on pilot add"
+last_updated: "2026-03-20T22:40:37.976Z"
 last_activity: "2026-03-20 - Completed quick task 260320-nc6: Remove retry completely from pilot"
 progress:
   total_phases: 75
   completed_phases: 33
-  total_plans: 125
+  total_plans: 126
   completed_plans: 114
   percent: 93
 ---
@@ -881,6 +881,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 76-pilot-web-ui-overhaul]: getFullJobTimeline uses limit:10000 - sufficient for all practical jobs — Conservative limit prevents memory issues while loading all timeline data
 - [Phase 76-04]: Used react-resizable-panels v4 Group/Panel/Separator API (not v1/v2 PanelGroup/PanelResizeHandle) — Package was already installed at v4.7.3; v4 exports Group/Panel/Separator
 - [Phase 76-04]: observedModels added to JobDetailSnapshot.job type, derived from getSessionModelsRecursive per root session — Plan stated field existed but it was missing; added to backend and type for correctness
+- [Phase quick-260320-vc3]: Reuse bump() after addJob for --next flag rather than modifying addJob signature — minimal change, proven mechanism
 
 ## Blockers/Concerns Carried Forward
 
@@ -889,6 +890,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T21:19:01.326Z
-Stopped at: Completed 76-04-PLAN.md
+Last session: 2026-03-20T22:40:28.263Z
+Stopped at: Completed quick task 260320-vc3: Fix --next flag on pilot add
 Resume file: None
