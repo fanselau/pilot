@@ -1346,3 +1346,21 @@ Wave structure:
 - Wave 3: 73-04 + 73-05 (runner rewrite and detail/notification updates, both depend on 73-01 + 73-02, 73-04 also on 73-03)
 - Wave 4: 73-06 (tests, depends on all above)
 - Wave 5: 73-07 (gap closure: test migration for verdict mapping + retry removal)
+
+### Phase 74: Required Categories on pilot add
+
+**Goal:** Make `--categories` required on `pilot add` with helpful AI-caller-friendly error, add project-level default categories, rewrite skills to manifest-only architecture (`{ repo, skill }` format, no git-clone/inject/sync), and switch runner to JIT `npx skills add` installation.
+**Requirements**: TBD
+**Depends on:** Phase 73
+**Plans:** 4 plans
+
+Plans:
+- [ ] 74-01-PLAN.md — Foundation: types/DB (Project.defaultCategories, SkillEntry rewrite), CATEGORY_INFO, PREDEFINED_CATEGORIES expansion, skills.ts manifest-only rewrite, default-skills.ts SkillRef format
+- [ ] 74-02-PLAN.md — CLI enforcement: required --categories on add, formatCategoryHelp error, project default fallback, --no-categories opt-out, setup --categories, skills CLI rewrite (register/categories/remove)
+- [ ] 74-03-PLAN.md — Runner JIT: replace injectSkills/cleanupInjectedSkills with npx skills add --agent opencode, delegate.ts SkillEntry compat
+- [ ] 74-04-PLAN.md — Tests: skills core, default-skills, add enforcement, skills CLI, runner JIT, full regression
+
+Wave structure:
+- Wave 1: 74-01 (types + DB + skills core + default-skills foundation)
+- Wave 2: 74-02 + 74-03 in parallel (CLI enforcement + skills CLI rewrite | runner JIT, both depend on 74-01)
+- Wave 3: 74-04 (tests, depends on all above)

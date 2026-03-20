@@ -5,7 +5,7 @@ milestone_name: milestone
 status: verifying
 stopped_at: Completed 73-07-PLAN.md
 last_updated: "2026-03-20T14:43:15.353Z"
-last_activity: 2026-03-20 - Completed 73-01-PLAN.md
+last_activity: 2026-03-20 - Completed quick task 260320-mcv: Replace injectSkills/cleanupInjectedSkills with installSkillsForJob JIT pattern in runner.ts
 progress:
   total_phases: 72
   completed_phases: 32
@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-20 - Completed quick task 260320-m85: Verify Phase 73 code compatibility with updated skills and category requirements
+Last activity: 2026-03-20 - Completed quick task 260320-mcv: Replace injectSkills/cleanupInjectedSkills with installSkillsForJob JIT pattern in runner.ts
 
 Progress: [█████████░] 93%
 
@@ -271,6 +271,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 088 | Fix Phase 67 session blocker handling — sessionTitle in hung notifications | 2026-03-16 | df5880b | [088-fix-phase-67-session-blocker-handling-ve](./quick/088-fix-phase-67-session-blocker-handling-ve/) |
 | 089 | Fix Phase 68 judge move verification gap — deprecate pilot-gsd judge commands, add evidence validation tests | 2026-03-16 | a719265 | [089-fix-phase-68-judge-move-verification-gap](./quick/089-fix-phase-68-judge-move-verification-gap/) |
 | 260320-m85 | Verify Phase 73 code compatibility with updated skills and category requirements | 2026-03-20 | 1866bfb | [260320-m85-verify-phase-73-code-compatibility-with-](./quick/260320-m85-verify-phase-73-code-compatibility-with-/) |
+| 260320-mcv | Replace injectSkills/cleanupInjectedSkills with installSkillsForJob JIT pattern (skills-system-v2) | 2026-03-20 | 3aa40a7 | [260320-mcv-verify-phase-73-code-changes-are-compati](./quick/260320-mcv-verify-phase-73-code-changes-are-compati/) |
 
 ## Accumulated Context
 
@@ -339,6 +340,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 70 added: Phase Auto-Retry on Verification Failure
 - Phase 71 added: Full Milestone Lifecycle — Audit, Gap Closure, Completion
 - Phase 72 added: Cleanup — Remove pilot-gsd Fork
+- Phase 74 added: Required Categories on pilot add
 
 ## Decisions
 
