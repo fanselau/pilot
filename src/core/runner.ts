@@ -1461,6 +1461,15 @@ class Runner {
         throw new Error('Runner shutting down');
       }
 
+      // Check if job was killed/cancelled externally (e.g., `pilot kill`)
+      const jobEntry = [...this.activeJobs.entries()].find(([, v]) => v.title === title);
+      if (jobEntry) {
+        const freshJob = getJob(jobEntry[0]);
+        if (freshJob && freshJob.status !== 'running') {
+          throw new Error(`Job ${freshJob.id} was ${freshJob.status} externally during session: ${title}`);
+        }
+      }
+
       const sessionId = findSessionByTitle(title);
 
       if (!sessionId) {

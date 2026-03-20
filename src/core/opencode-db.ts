@@ -653,7 +653,9 @@ function getSessionState(sessionId: string, pidAlive: boolean = true): SessionSt
         // Check if any child sessions (Task() subagents) are still running.
         // A parent session can finish before its children complete.
         const runningChildRow = db.prepare(
-          `SELECT s.id FROM session s
+          `SELECT s.id,
+                  (SELECT MAX(p2.time_created) FROM part p2 WHERE p2.session_id = s.id) as last_activity
+           FROM session s
            WHERE s.parent_id = ?
              AND NOT EXISTS (
                SELECT 1 FROM part p
@@ -662,10 +664,22 @@ function getSessionState(sessionId: string, pidAlive: boolean = true): SessionSt
                  AND json_extract(p.data, '$.reason') IN ('stop', 'length')
              )
            LIMIT 1`,
-        ).get(sessionId) as { id: string } | undefined;
+        ).get(sessionId) as { id: string; last_activity: number | null } | undefined;
 
         if (runningChildRow) {
-          // Parent done but child still running — report as working
+          // Child session exists without terminal step-finish.
+          // Check if it's stale (no activity for 5 minutes = dead process).
+          const CHILD_STALE_TIMEOUT_MS = 5 * 60 * 1000;
+          const lastActivity = runningChildRow.last_activity;
+          if (lastActivity != null) {
+            const elapsed = Date.now() - lastActivity;
+            if (elapsed > CHILD_STALE_TIMEOUT_MS) {
+              // Child is stale — treat parent as done
+              // (process likely died without writing step-finish)
+              return { state: 'done' };
+            }
+          }
+          // Child still active — report as working
           return { state: 'working' };
         }
         return { state: 'done' };
