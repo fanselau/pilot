@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 72-04-PLAN.md
-last_updated: "2026-03-16T10:12:28.999Z"
+stopped_at: Completed 73-02-PLAN.md
+last_updated: "2026-03-20T13:36:01.374Z"
 last_activity: 2026-03-16 - Completed 72-04-PLAN.md
 progress:
-  total_phases: 71
+  total_phases: 72
   completed_phases: 31
-  total_plans: 106
-  completed_plans: 99
+  total_plans: 112
+  completed_plans: 100
   percent: 93
 ---
 
@@ -860,6 +860,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 72-04 | Operator docs now describe only upstream `get-shit-done-cc` installation and `pilot setup --refresh` sentinel recovery | Removes stale submodule/fork instructions and keeps onboarding aligned with actual setup/update behavior |
 | 72-04 | Pilot pipeline skill guidance now uses intent lifecycle + frontmatter patching + retry lineage mental model | Keeps operator actions aligned with current runner contracts and observability surfaces |
 | 72-04 | Active coupling audit enforces zero targeted fork strings across src/test/README/docs/skills | Provides deterministic closeout gate for fork cleanup without rewriting historical archives |
+- [Phase 73]: Legacy verdict transition: doubting/partial map to gaps outcome for append-forward alignment
 
 ## Blockers/Concerns Carried Forward
 
@@ -868,6 +869,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-16T10:12:28.993Z
-Stopped at: Completed 72-04-PLAN.md
+Last session: 2026-03-20T13:36:01.368Z
+Stopped at: Completed 73-02-PLAN.md
 Resume file: None
