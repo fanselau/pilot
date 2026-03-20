@@ -193,6 +193,9 @@ function getJobDetail(jobId: string): JobDetailSnapshot | null {
     command: s.command,
     args: s.args,
     status: s.status,
+    source: s.source ?? 'delegation',
+    reason: s.reason ?? null,
+    error: s.error ?? null,
     sessionId: s.sessionId,
     durationMs: s.durationMs,
     verdictReason: s.verdictReason,
@@ -435,6 +438,7 @@ interface TimelineStepRef {
   stepIndex: number;
   command: string;
   status: string;
+  source: string;
   sessionId: string | null;
   sessionTitle: string | null;
   startedAtMs: number | null;
@@ -502,6 +506,7 @@ function getJobTimeline(
     stepIndex: step.stepIndex,
     command: step.command,
     status: step.status,
+    source: step.source ?? 'delegation',
     sessionId: step.sessionId,
     sessionTitle: step.sessionTitle,
     startedAtMs: parseStepTime(step.startedAt),
@@ -635,6 +640,7 @@ function getJobTimeline(
       stepIndex: step.stepIndex,
       command: step.command,
       status: step.status,
+      source: step.source,
       sessionId: step.sessionId,
       items: [],
     });
@@ -644,6 +650,7 @@ function getJobTimeline(
     stepIndex: null,
     command: 'unattributed',
     status: 'unattributed',
+    source: 'delegation',
     sessionId: null,
     items: [],
   };

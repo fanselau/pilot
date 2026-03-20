@@ -394,6 +394,9 @@ export interface JobStepSummary {
   command: string;
   args: string;
   status: string;
+  source: string;              // 'delegation' | 'judge:gaps' | etc.
+  reason: string | null;       // why this step exists
+  error: string | null;        // failure reason
   sessionId: string | null;
   durationMs: number | null;
   verdictReason: string | null;
@@ -514,6 +517,7 @@ export interface StepTimelineGroup {
   stepIndex: number | null;
   command: string;
   status: string;
+  source: string;               // 'delegation' | 'judge:gaps' | etc.
   sessionId: string | null;
   items: StepTimelineItem[];
 }
