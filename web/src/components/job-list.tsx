@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { Job } from '@pilot/core/types.js'
+import { formatDurationSafe, getDurationMsSafe } from '~/lib/time-utils'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
@@ -64,16 +65,7 @@ function truncate(text: string, max: number): string {
 }
 
 function formatDuration(startedAt: string | null, completedAt: string | null): string {
-  if (!startedAt) return '\u2014'
-  const start = new Date(startedAt).getTime()
-  const end = completedAt ? new Date(completedAt).getTime() : Date.now()
-  const diffMs = end - start
-  const mins = Math.floor(diffMs / 60_000)
-  const secs = Math.floor((diffMs % 60_000) / 1_000)
-  if (mins < 1) return `${secs}s`
-  if (mins < 60) return `${mins}m ${secs}s`
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ${mins % 60}m`
+  return formatDurationSafe(startedAt, completedAt)
 }
 
 // ── Sorting ──────────────────────────────────────────────────────────────
@@ -91,10 +83,7 @@ const STATUS_ORDER: Record<string, number> = {
 }
 
 function getDurationMs(job: Job): number {
-  if (!job.startedAt) return 0
-  const start = new Date(job.startedAt).getTime()
-  const end = job.completedAt ? new Date(job.completedAt).getTime() : Date.now()
-  return end - start
+  return getDurationMsSafe(job.startedAt, job.completedAt)
 }
 
 function sortJobs(jobs: Job[], field: SortField, dir: SortDir): Job[] {

@@ -7,6 +7,7 @@
 
 import { useNavigate } from '@tanstack/react-router'
 import type { JobDetailSnapshot } from '@pilot/core/types.js'
+import { parseSqliteTimestamp } from '~/lib/time-utils'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -72,7 +73,9 @@ function formatDurationMs(ms: number | null): string {
 
 function formatTime(iso: string | null): string {
   if (!iso) return '\u2014'
-  return new Date(iso).toLocaleString([], {
+  const ms = parseSqliteTimestamp(iso)
+  if (ms === null) return '\u2014'
+  return new Date(ms).toLocaleString([], {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -108,7 +111,7 @@ function JobHeader({
   const duration = job.durationMs
     ? formatDurationMs(job.durationMs)
     : job.startedAt
-      ? formatDurationMs(now - new Date(job.startedAt).getTime())
+      ? formatDurationMs(now - (parseSqliteTimestamp(job.startedAt) ?? now))
       : '\u2014'
 
   // Filter to only job-level actions (retry, cancel, force-quit)

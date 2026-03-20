@@ -27,7 +27,7 @@ function JobLayout() {
 
   return (
     <div className="min-h-screen p-4 sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-[1800px] space-y-6">
         <Outlet />
       </div>
 
