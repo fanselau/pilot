@@ -403,7 +403,22 @@ export function formatStepSectionHeader(section: TimelineSection): string {
   if (section.stepIndex === null) {
     return '  ── Unattributed Activity ──';
   }
+  if (section.command === 'delegation') {
+    return `  ── Delegation [${section.status}] ──`;
+  }
   return `  ── Step ${section.stepIndex + 1}: ${section.command} [${section.status}] ──`;
+}
+
+export function formatSectionModelLine(section: TimelineSection): string | null {
+  const sectionModels = new Set<string>();
+  for (const item of section.items) {
+    if (item.kind === 'fork-card' && item.models) {
+      for (const m of item.models) sectionModels.add(m);
+    }
+  }
+  if (sectionModels.size === 0) return null;
+  const modelStr = [...sectionModels].map(shortModelName).join(', ');
+  return `     models: ${modelStr}`;
 }
 
 function formatTimelineItemLines(item: StepTimelineItem): FormattedLine[] {
@@ -1003,15 +1018,21 @@ export function DetailView(props: { state: PilotStateStore }) {
         <box flexGrow={1}>
           <Scrollable follow={true}>
             <For each={scopedSections()}>
-              {(section) => (
-                <box flexDirection="column">
-                  <text
-                    content={formatStepSectionHeader(section)}
-                    fg={timelineStatusColor(section.status)}
-                  />
-                  {renderTimelineItems(section.items)}
-                </box>
-              )}
+              {(section) => {
+                const modelLine = formatSectionModelLine(section);
+                return (
+                  <box flexDirection="column">
+                    <text
+                      content={formatStepSectionHeader(section)}
+                      fg={timelineStatusColor(section.status)}
+                    />
+                    <Show when={modelLine}>
+                      <text content={modelLine!} fg={theme.muted} />
+                    </Show>
+                    {renderTimelineItems(section.items)}
+                  </box>
+                );
+              }}
             </For>
             <Show when={scopedSections().length === 0}>
               <text
