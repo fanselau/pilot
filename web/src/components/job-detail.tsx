@@ -22,7 +22,7 @@ import { useActions, type ActionContextInput } from '~/lib/use-actions'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
-function statusVariant(status: string) {
+export function statusVariant(status: string) {
   switch (status) {
     case 'running':
     case 'active':
@@ -44,7 +44,7 @@ function statusVariant(status: string) {
   }
 }
 
-function verdictVariant(verdict: string | null) {
+export function verdictVariant(verdict: string | null) {
   if (!verdict) return 'outline' as const
   switch (verdict.toLowerCase()) {
     case 'succeeded':
@@ -61,7 +61,7 @@ function verdictVariant(verdict: string | null) {
   }
 }
 
-function formatDurationMs(ms: number | null): string {
+export function formatDurationMs(ms: number | null): string {
   if (ms == null) return '\u2014'
   const secs = Math.floor(ms / 1_000)
   const mins = Math.floor(secs / 60)
@@ -71,7 +71,7 @@ function formatDurationMs(ms: number | null): string {
   return `${hours}h ${mins % 60}m`
 }
 
-function formatTime(iso: string | null): string {
+export function formatTime(iso: string | null): string {
   if (!iso) return '\u2014'
   const ms = parseSqliteTimestamp(iso)
   if (ms === null) return '\u2014'
@@ -83,7 +83,7 @@ function formatTime(iso: string | null): string {
   })
 }
 
-function shortProject(project: string): string {
+export function shortProject(project: string): string {
   return project.split('/').pop() ?? project
 }
 
@@ -98,7 +98,7 @@ function actionButtonVariant(actionId: string) {
 
 // ── Job Header with Action Buttons ───────────────────────────────────────
 
-function JobHeader({
+export function JobHeader({
   job,
   actionCtx,
 }: {
