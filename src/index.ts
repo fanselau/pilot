@@ -312,14 +312,13 @@ skillsCmd
   });
 
 skillsCmd
-  .command('add <repo>')
-  .description('Install skill from GitHub (e.g. owner/repo)')
-  .option('--skill <name>', 'Install specific skill by name')
-  .option('--all', 'Install all skills from repo')
-  .option('--categories <cats>', 'Assign categories (comma-separated)')
+  .command('register <repo>')
+  .description('Register a skill in the manifest (e.g. https://github.com/owner/repo)')
+  .requiredOption('--skill <name>', 'Skill name within the repo')
+  .requiredOption('--categories <cats>', 'Assign categories (comma-separated)')
   .action(async (repo: string, opts: Record<string, unknown>) => {
-    const { skillsAddCommand } = await import('./commands/skills.js');
-    await skillsAddCommand(repo, opts as { categories?: string; all?: boolean; skill?: string });
+    const { skillsRegisterCommand } = await import('./commands/skills.js');
+    await skillsRegisterCommand(repo, opts as { skill: string; categories: string });
   });
 
 skillsCmd
@@ -347,32 +346,7 @@ skillsCmd
     await skillsTagCommand(name, opts as { categories: string });
   });
 
-skillsCmd
-  .command('sync')
-  .description('Re-scan skills directory and rebuild manifest')
-  .action(async () => {
-    const { skillsSyncCommand } = await import('./commands/skills.js');
-    await skillsSyncCommand();
-  });
 
-skillsCmd
-  .command('bootstrap [project-dir]')
-  .description('Install recommended skills for a project (detects stack)')
-  .option('--yes', 'Non-interactive: install without prompting')
-  .option('--tier <tier>', 'Filter: 1 (universal only), 2 (stack-specific only), all (default)')
-  .action(async (projectDir: string | undefined, opts: Record<string, unknown>) => {
-    const { skillsBootstrapCommand } = await import('./commands/skills.js');
-    await skillsBootstrapCommand(projectDir ?? process.cwd(), opts as { yes?: boolean; tier?: string });
-  });
-
-skillsCmd
-  .command('recommend [project-dir]')
-  .description('Show recommended skills without installing')
-  .option('--tier <tier>', 'Filter: 1 (universal only), 2 (stack-specific only), all (default)')
-  .action(async (projectDir: string | undefined, opts: Record<string, unknown>) => {
-    const { skillsRecommendCommand } = await import('./commands/skills.js');
-    await skillsRecommendCommand(projectDir ?? process.cwd(), opts as { tier?: string });
-  });
 
 const modelsCmd = program
   .command('models')

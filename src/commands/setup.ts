@@ -21,6 +21,7 @@ interface SetupOptions {
   skipSkills?: boolean;  // with --refresh: skip skill re-offering
   owner?: string;        // agent ID to register as project owner
   update?: boolean;      // if true, update owner of existing project
+  categories?: string;   // comma-separated default categories for this project
 }
 
 async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
@@ -121,57 +122,14 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
     }
   }
 
-  // ── Optional: offer recommended skills ──────────────────────────────────
-  // --skip-skills skips this section entirely (only meaningful with --refresh)
-  if (result.errors.length === 0 && !isJsonMode() && !opts.skipSkills) {
-    try {
-      const { recommendDefaultSkills, bootstrapDefaultSkills } = await import('../core/default-skills.js');
-      const absSkillDir = path.resolve(dir);
-      const recommendation = recommendDefaultSkills(absSkillDir);
-
-      if (recommendation.skills.length > 0) {
-        outputHuman('');
-
-        // Show detected stack
-        if (recommendation.detectedStack.items.length > 0) {
-          outputHuman(`  ${dim('Detected stack:')} ${recommendation.detectedStack.items.join(', ')}`);
-        } else {
-          outputHuman(`  ${dim('Detected stack:')} ${dim('none')}`);
-        }
-
-        outputHuman(`  ${dim(`${recommendation.skills.length} recommended skills available`)}`);
-
-        // Only prompt if TTY
-        if (process.stdin.isTTY) {
-          const readline = await import('node:readline');
-          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-          const answer = await new Promise<string>(resolve => {
-            rl.question('  Install recommended skills? (Y/n) ', resolve);
-          });
-          rl.close();
-
-          if (answer.toLowerCase() !== 'n') {
-            const bootstrapResult = await bootstrapDefaultSkills({ projectDir: absSkillDir, yes: true });
-
-            outputHuman('');
-            for (const err of bootstrapResult.errors) {
-              outputHuman(`  ${yellow('⚠')} ${err.skill}: ${dim(err.error)}`);
-            }
-            if (bootstrapResult.installed > 0) {
-              outputHuman(`  ${green('✓')} Installed ${bootstrapResult.installed} skills`);
-            }
-            if (bootstrapResult.failed > 0) {
-              outputHuman(`  ${dim(`${bootstrapResult.failed} failed (see warnings above)`)}`);
-            }
-          }
-        } else {
-          outputHuman(`  ${dim('Run `pilot skills bootstrap --yes` to install')}`);
-        }
-      }
-    } catch (err) {
-      // Non-fatal: skill bootstrap failure must NEVER make setup fail
-      process.stderr.write(`Warning: skill recommendation failed: ${err}\n`);
+  // Set default categories if --categories provided
+  if (opts.categories) {
+    const cats = opts.categories.split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (cats.length > 0) {
+      const { updateProjectDefaultCategories } = await import('../core/db.js');
+      const absDir = path.resolve(dir);
+      updateProjectDefaultCategories(absDir, cats);
+      outputHuman(`  ${green('✓')} Default categories: ${cats.join(', ')}`);
     }
   }
 

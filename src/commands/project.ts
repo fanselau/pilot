@@ -208,6 +208,9 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
     outputHuman(`    ${dim('reason:')}  ${yellow(existing.blockedReason.slice(0, 120))}`);
   }
   outputHuman(`    ${dim('jobs:')}    ${counts.pending} pending · ${counts.running} running · ${counts.failed} failed · ${counts.completed} done`);
+  if (existing.defaultCategories && existing.defaultCategories.length > 0) {
+    outputHuman(`    ${dim('categories:')} ${existing.defaultCategories.join(', ')}`);
+  }
 
   if (existing.status === 'blocked') {
     outputHuman('');
