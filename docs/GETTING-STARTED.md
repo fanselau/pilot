@@ -683,6 +683,8 @@ bun run build && pilot reload
 
 `pilot reload` sends SIGHUP to the running daemon. Under systemd, the daemon exits and systemd restarts it with the new binary.
 
+> **Tip:** Run `pilot doctor` after reload to confirm the service binary matches your build. See [docs/RUNTIME.md](RUNTIME.md) for the full runtime path guide.
+
 ---
 
 ## 11. Verification Checklist
