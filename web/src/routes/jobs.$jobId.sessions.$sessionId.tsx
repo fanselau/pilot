@@ -46,7 +46,7 @@ function SessionDrillIn() {
         <div className="rounded-xl border bg-card p-3 sm:p-4 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Child Session
+              Sub-Agent Session
             </p>
             <Badge variant="outline" size="sm" className="font-mono truncate max-w-[200px]">
               {sessionId.slice(0, 8)}
@@ -77,11 +77,11 @@ function SessionDrillIn() {
             <Skeleton className="h-16 w-full rounded-2xl" />
           </div>
         ) : children && children.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-2 max-w-full overflow-hidden">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Child Sessions ({children.length})
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2 max-w-full overflow-hidden">
               {children.map((child) => (
                 <SubagentCard
                   key={child.sessionId}
