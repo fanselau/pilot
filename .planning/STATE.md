@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 78-06-PLAN.md
-last_updated: "2026-03-21T03:58:29.478Z"
+last_updated: "2026-03-21T03:58:39.056Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 77
@@ -895,6 +895,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 78]: ObservabilityCard fetches via getJobObservabilityFn with 5s refetch for active jobs
 - [Phase 78]: Parse judgeVerdict JSON client-side for inline verdict display — Same pattern as job-detail-query.ts; avoids unnecessary server round-trip
 - [Phase 78]: Module-level shared shiki highlighter promise; content >5000 chars bypasses highlighting; polling 3s active / 30s completed
+- [Phase 78]: Main CSS file is styles.css not app.css; Tabs API uses TabsTrigger/TabsContent re-exports; Sheet uses render prop pattern
 
 ## Blockers/Concerns Carried Forward
 
