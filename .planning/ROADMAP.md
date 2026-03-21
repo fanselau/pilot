@@ -1530,7 +1530,7 @@ Wave structure:
 **Goal:** Make Pilot's runner + web status surfaces reflect live job truth correctly, and stop productive runs from degrading into misleading failed/stale labels and unnecessary continuation churn.
 **Requirements**: Per requirements/pilot-control-flow-and-live-status-bugs.md
 **Depends on:** Phase 83
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 84-01-PLAN.md — Fix web UI live-status desync: derive isActive from reactive snapshot

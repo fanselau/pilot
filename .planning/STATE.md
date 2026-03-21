@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 84-01-PLAN.md
-last_updated: "2026-03-21T13:55:23.765Z"
+stopped_at: Completed 84-02-PLAN.md
+last_updated: "2026-03-21T13:59:09.766Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
   total_phases: 83
   completed_phases: 40
   total_plans: 154
-  completed_plans: 140
+  completed_plans: 141
   percent: 93
 ---
 
@@ -920,6 +920,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Added Phase 82 requirements as v1 section before v2 Requirements, following Phase 80 traceability table — Matches existing REQUIREMENTS.md structure; 6 of 9 TSEM requirements marked Complete based on requirement file indicators
 - [Phase 82-04]: isJudgeStep uses command.includes judge/verify OR source.startsWith judge: to cover both step types
 - [Phase 83-pilot-human-review-semantics-phase-81-follow-up-completion]: resumed_from_hold INTEGER column as DB marker for runner to detect review_hold jobs resumed by pilot review --approve
+- [Phase 84-02]: Extracted buildStepCapMessage and buildContinuationLimitMessage as pure helpers for DRY+testability — TDD approach benefits from testable pure functions; avoids duplicating message strings across two handlers
 
 ## Blockers/Concerns Carried Forward
 
@@ -928,6 +929,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T13:55:23.758Z
-Stopped at: Completed 84-01-PLAN.md
+Last session: 2026-03-21T13:59:09.758Z
+Stopped at: Completed 84-02-PLAN.md
 Resume file: None
