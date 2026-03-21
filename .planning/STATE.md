@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study
+Last activity: 2026-03-21 - Completed quick task 260321-ujl: Fix debug/fast scope support end-to-end: DB schema, migration, runtime compatibility
 
 Progress: [█████████░] 93%
 
@@ -279,6 +279,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260321-kd9 | Budget-aware continuation/re-delegation and human-needed control-flow cleanup | 2026-03-21 | 16de453 | Verified | [260321-kd9-implement-budget-aware-continuation-re-d](./quick/260321-kd9-implement-budget-aware-continuation-re-d/) |
 | 260321-s79 | Mobile header density cleanup - compress job-detail header on mobile | 2026-03-21 | 9394bea | | [260321-s79-mobile-header-density-cleanup-compress-j](./quick/260321-s79-mobile-header-density-cleanup-compress-j/) |
 | 260321-tdm | Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study | 2026-03-21 | 2e4fa8a | Verified | [260321-tdm-fix-debug-fast-scope-support-end-to-end-](./quick/260321-tdm-fix-debug-fast-scope-support-end-to-end-/) |
+| 260321-ujl | Fix debug/fast scope support end-to-end: DB schema, migration, runtime compatibility | 2026-03-21 | d003c04 | | [260321-ujl-fix-debug-fast-scope-support-end-to-end-](./quick/260321-ujl-fix-debug-fast-scope-support-end-to-end-/) |
 
 ## Accumulated Context
 
