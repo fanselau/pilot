@@ -124,7 +124,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **REVIEW-12**: No auto-job creation happens for review handling
 - [x] **REVIEW-13**: CLI `pilot status` shows review states with amber non-failure styling
 - [x] **REVIEW-14**: CLI `pilot log` shows review checklist from `resumeHint`
-- [ ] **REVIEW-15**: TUI dashboard shows review states with distinct non-failure colors in completed panel
+- [x] **REVIEW-15**: TUI dashboard shows review states with distinct non-failure colors in completed panel
 - [x] **REVIEW-16**: Web UI `StatusBadge` renders review states with warning/info variant, not destructive
 
 | Requirement | Phase | Status |
@@ -143,7 +143,7 @@ Requirements for initial release. Each maps to roadmap phases.
 | REVIEW-12 | Phase 81 | Complete |
 | REVIEW-13 | Phase 81 | Complete |
 | REVIEW-14 | Phase 81 | Complete |
-| REVIEW-15 | Phase 83 | Pending |
+| REVIEW-15 | Phase 83 | Complete |
 | REVIEW-16 | Phase 81 | Complete |
 
 ## v2 Requirements
