@@ -5,7 +5,7 @@ milestone_name: milestone
 status: completed
 stopped_at: "Completed quick task 260321-kd9: Budget-aware continuation gating and improved human-only detection"
 last_updated: "2026-03-21T14:57:25.444Z"
-last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
+last_activity: "2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup"
 progress:
   total_phases: 83
   completed_phases: 41
@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog
+Last activity: 2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup
 
 Progress: [█████████░] 93%
 
@@ -276,6 +276,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260320-vc3 | Bug fix: --next flag on pilot add doesn't insert at front of queue | 2026-03-20 | 23739bb | [260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i](./quick/260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i/) |
 | 260320-vju | Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions | 2026-03-20 | 98df0ea | [260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru](./quick/260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru/) |
 | 260321-61z | Fix skills JIT loading — seed manifest from built-in catalog | 2026-03-21 | b61a92d | [260321-61z-fix-skills-jit-loading-seed-manifest-fro](./quick/260321-61z-fix-skills-jit-loading-seed-manifest-fro/) |
+| 260321-kd9 | Budget-aware continuation/re-delegation and human-needed control-flow cleanup | 2026-03-21 | 16de453 | Verified | [260321-kd9-implement-budget-aware-continuation-re-d](./quick/260321-kd9-implement-budget-aware-continuation-re-d/) |
 
 ## Accumulated Context
 
