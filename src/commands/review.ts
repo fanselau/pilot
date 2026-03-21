@@ -78,7 +78,7 @@ async function reviewCommand(jobId: string, opts: ReviewOptions): Promise<void> 
         return;
       }
       outputHuman(`  ${green('✓')} Resumed: Job ${job.id} → running`);
-      outputHuman(`  ${dim('The runner will pick up execution from where it paused.')}`);
+      outputHuman(`  ${dim('The runner will continue execution from the next pending step on its next poll cycle.')}`);
     }
     return;
   }
