@@ -118,7 +118,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **REVIEW-06**: `approveReview()` transitions `completed_pending_review` to `completed`; `resumeFromReviewHold()` transitions `review_hold` to `running`
 - [x] **REVIEW-07**: Runner detects when judge verdict leaves only human-review items and transitions to `completed_pending_review`
 - [ ] **REVIEW-08**: Runner detects mid-phase checkpoint pauses and transitions to `review_hold`
-- [ ] **REVIEW-09**: `pilot review <id> --approve` on `review_hold` job resumes step execution
+- [x] **REVIEW-09**: `pilot review <id> --approve` on `review_hold` job resumes step execution
 - [x] **REVIEW-10**: Notification callback says "review pending" for `completed_pending_review` jobs, not "failed"
 - [x] **REVIEW-11**: `pilot review` CLI command with `--approve` and `--reject` flows
 - [x] **REVIEW-12**: No auto-job creation happens for review handling
@@ -137,7 +137,7 @@ Requirements for initial release. Each maps to roadmap phases.
 | REVIEW-06 | Phase 81 | Complete |
 | REVIEW-07 | Phase 81 | Complete |
 | REVIEW-08 | Phase 83 | Pending |
-| REVIEW-09 | Phase 83 | Pending |
+| REVIEW-09 | Phase 83 | Complete |
 | REVIEW-10 | Phase 81 | Complete |
 | REVIEW-11 | Phase 81 | Complete |
 | REVIEW-12 | Phase 81 | Complete |

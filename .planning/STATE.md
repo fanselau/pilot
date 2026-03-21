@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 83-02-PLAN.md
-last_updated: "2026-03-21T13:22:21.098Z"
+stopped_at: Completed 83-01-PLAN.md
+last_updated: "2026-03-21T13:28:30.958Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
   total_phases: 82
-  completed_phases: 39
+  completed_phases: 40
   total_plans: 151
-  completed_plans: 138
+  completed_plans: 139
   percent: 93
 ---
 
@@ -918,6 +918,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Renamed 'Timeline' tab to 'Summary' in split-pane-detail to avoid naming conflict when renaming 'Steps' tab to 'Timeline' — Preserves user-visible tab distinction while satisfying requirement to rename 'Steps' to 'Timeline'
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Added Phase 82 requirements as v1 section before v2 Requirements, following Phase 80 traceability table — Matches existing REQUIREMENTS.md structure; 6 of 9 TSEM requirements marked Complete based on requirement file indicators
 - [Phase 82-04]: isJudgeStep uses command.includes judge/verify OR source.startsWith judge: to cover both step types
+- [Phase 83-pilot-human-review-semantics-phase-81-follow-up-completion]: resumed_from_hold INTEGER column as DB marker for runner to detect review_hold jobs resumed by pilot review --approve
 
 ## Blockers/Concerns Carried Forward
 
@@ -926,6 +927,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T13:22:21.091Z
-Stopped at: Completed 83-02-PLAN.md
+Last session: 2026-03-21T13:28:30.951Z
+Stopped at: Completed 83-01-PLAN.md
 Resume file: None

@@ -1516,7 +1516,7 @@ Wave structure:
 **Goal:** Finish the remaining Phase 81 human-review semantics work: mid-phase hold checkpoint detection, resume-from-hold execution wiring, TUI completed-panel review rendering, and REQUIREMENTS.md traceability entries.
 **Requirements**: REVIEW-08, REVIEW-09, REVIEW-12, REVIEW-13, REVIEW-15
 **Depends on:** Phase 82
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 83-01-PLAN.md — Mid-phase hold checkpoint detection + resume-from-hold execution wiring
