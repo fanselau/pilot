@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 85-01-PLAN.md
-last_updated: "2026-03-21T18:19:34.671Z"
+stopped_at: Completed 85-02-PLAN.md
+last_updated: "2026-03-21T18:24:25.366Z"
 last_activity: "2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup"
 progress:
   total_phases: 84
-  completed_phases: 41
+  completed_phases: 42
   total_plans: 156
-  completed_plans: 143
+  completed_plans: 144
   percent: 93
 ---
 
@@ -924,6 +924,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 83-pilot-human-review-semantics-phase-81-follow-up-completion]: resumed_from_hold INTEGER column as DB marker for runner to detect review_hold jobs resumed by pilot review --approve
 - [Phase 84-02]: Extracted buildStepCapMessage and buildContinuationLimitMessage as pure helpers for DRY+testability — TDD approach benefits from testable pure functions; avoids duplicating message strings across two handlers
 - [Phase 85-01]: Kept milestone in JobScope union for backward compat with DB; blocked at CLI add layer only
+- [Phase 85]: debug intent appends symptoms to description; fast uses buildQuickArgs bare (no flags)
 
 ## Blockers/Concerns Carried Forward
 
@@ -932,6 +933,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T18:19:34.664Z
-Stopped at: Completed 85-01-PLAN.md
+Last session: 2026-03-21T18:24:21.781Z
+Stopped at: Completed 85-02-PLAN.md
 Resume file: None
