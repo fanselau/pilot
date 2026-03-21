@@ -456,6 +456,7 @@ interface TimelineStepRef {
   sessionTitle: string | null;
   startedAtMs: number | null;
   completedAtMs: number | null;
+  verdictReason?: string | null;
 }
 
 interface TimelineCandidate {
@@ -608,6 +609,7 @@ function getJobTimeline(
     sessionTitle: step.sessionTitle,
     startedAtMs: parseStepTime(step.startedAt),
     completedAtMs: parseStepTime(step.completedAt),
+    verdictReason: step.verdictReason ?? null,
   }));
 
   // ── Delegation session discovery ────────────────────────────────────────
@@ -831,6 +833,7 @@ function getJobTimeline(
       sessionId: step.sessionId,
       items: [],
       semanticLabel: computeSemanticLabel(step.command, step.source),
+      verdictReason: step.verdictReason ?? null,
     });
   }
 

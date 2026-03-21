@@ -535,6 +535,7 @@ export interface StepTimelineGroup {
   sessionId: string | null;
   items: StepTimelineItem[];
   semanticLabel?: string;       // Pre-computed human-readable label (e.g., "Execution", "Judge", "Gap Closure")
+  verdictReason?: string | null; // Populated for judge steps — the judge's verdict reason text
 }
 
 /** Grouped timeline payload for step-first rendering. */

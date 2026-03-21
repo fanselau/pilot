@@ -18,7 +18,7 @@ import { Button } from '~/components/ui/button'
 import { SourceBadge } from '~/components/ui/status-badge'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
-import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep } from '~/lib/step-semantics'
+import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 
 /** Minimum item count before virtual scrolling is activated. */
@@ -305,6 +305,25 @@ export function StepContentPane({
                         {/* Row 4: Tool summary chips */}
                         <ToolSummaryChips items={group.items} />
                       </div>
+                      {/* Judge verdict inline block */}
+                      {isJudgeStep(group) && group.verdictReason && (
+                        <div className="mx-4 my-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+                              Verdict
+                            </span>
+                            <Badge variant={
+                              group.status === 'completed' || group.status === 'done' ? 'success' :
+                              group.status === 'failed' ? 'destructive' : 'warning'
+                            } size="sm">
+                              {group.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-snug">
+                            {group.verdictReason}
+                          </p>
+                        </div>
+                      )}
                       <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
                         {group.items.map((item, idx) => {
                           const globalIdx = groupStartIndex + idx

@@ -33,7 +33,7 @@ import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
 import { SyntaxHighlight, detectLanguage } from '~/components/syntax-highlight'
 import { useJobDetailStream } from '~/lib/sse'
 import { getFullJobTimelineFn, getFullMessageFn } from '~/lib/server-fns'
-import { formatStepLabel } from '~/lib/step-semantics'
+import { formatStepLabel, isJudgeStep } from '~/lib/step-semantics'
 
 function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleTimeString([], {
@@ -236,6 +236,13 @@ function StepGroupSection({
         </Badge>
         <span className="text-sm text-muted-foreground">{group.command}</span>
       </div>
+
+      {isJudgeStep(group) && group.verdictReason && (
+        <div className="px-4 py-1 border-b border-amber-500/20 bg-amber-500/5 text-xs text-muted-foreground">
+          <span className="text-amber-400 font-medium">Verdict:</span>{' '}
+          <span className="line-clamp-1">{group.verdictReason}</span>
+        </div>
+      )}
 
       <div className="relative min-w-0 max-w-full overflow-hidden space-y-0.5 border-l-2 border-border/40 pl-2 sm:pl-4">
         {group.items.map((item, idx) => {

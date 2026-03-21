@@ -95,6 +95,18 @@ export function isContinuationStep(group: StepTimelineGroup): boolean {
 }
 
 /**
+ * Whether a step group represents a judge evaluation step.
+ * True for steps where the judge runs to evaluate the work.
+ *
+ * Matches steps with 'judge' or 'verify' in their command,
+ * or steps sourced from a judge: prefix (gap closure, retry, recovery).
+ */
+export function isJudgeStep(group: StepTimelineGroup): boolean {
+  return group.command.includes('judge') || group.command.includes('verify')
+    || group.source.startsWith('judge:')
+}
+
+/**
  * Format a delegation step index for display.
  * Delegation steps use negative indices (-100, -99, ...).
  *
