@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone')),
   description TEXT NOT NULL,
   requirement_path TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused', 'completed_pending_review', 'review_hold')),
   priority INTEGER DEFAULT 0,
   depends_on TEXT REFERENCES jobs(id),
   parent_job_id TEXT REFERENCES jobs(id),
@@ -394,6 +394,96 @@ function rowToJob(row: JobRow): Job {
  * Auto-creates ~/.pilot/ directory and the jobs table on first access.
  */
 /**
+ * Migrate the jobs table CHECK constraint to support review state values.
+ *
+ * SQLite does not support ALTER TABLE to modify CHECK constraints, so we detect
+ * whether the current schema is outdated (doesn't mention 'completed_pending_review')
+ * and recreate the table with the updated constraint if necessary.
+ *
+ * New databases already use the updated CREATE_TABLE_SQL — this is a no-op for them.
+ */
+function migrateReviewStates(db: DatabaseType): void {
+  const tableRow = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'",
+  ).get() as { sql: string } | undefined;
+
+  // Already migrated or new database — nothing to do
+  if (!tableRow || tableRow.sql.includes('completed_pending_review')) {
+    return;
+  }
+
+  // Old CHECK constraint detected — recreate table with updated constraint
+  db.pragma('foreign_keys = off');
+  try {
+    db.exec(`
+      CREATE TABLE jobs_review_migration (
+        id TEXT PRIMARY KEY,
+        project TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone')),
+        description TEXT NOT NULL,
+        requirement_path TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused', 'completed_pending_review', 'review_hold')),
+        priority INTEGER DEFAULT 0,
+        depends_on TEXT,
+        parent_job_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        started_at TEXT,
+        completed_at TEXT,
+        error TEXT,
+        resume_hint TEXT,
+        attempts INTEGER DEFAULT 0,
+        timeout INTEGER DEFAULT 0,
+        delegation_plan TEXT,
+        current_step INTEGER DEFAULT 0,
+        session_titles TEXT,
+        model_profile TEXT NOT NULL DEFAULT 'balanced',
+        provider_mode TEXT NOT NULL DEFAULT 'claude-only',
+        judge_verdict TEXT,
+        actual_models TEXT,
+        callback_url TEXT,
+        callback_session_key TEXT,
+        notify_route TEXT,
+        categories TEXT,
+        git_base_commit TEXT,
+        git_head_commit TEXT,
+        started_dirty INTEGER NOT NULL DEFAULT 0,
+        skip_grace_period INTEGER NOT NULL DEFAULT 0,
+        retry_budget INTEGER NOT NULL DEFAULT 2,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        retry_hint TEXT,
+        last_failure_fingerprint TEXT,
+        hung_count INTEGER NOT NULL DEFAULT 0,
+        last_hung_reason TEXT
+      );
+
+      INSERT INTO jobs_review_migration (
+        id, project, scope, description, requirement_path, status, priority,
+        depends_on, parent_job_id, created_at, started_at, completed_at, error,
+        resume_hint, attempts, timeout, delegation_plan, current_step, session_titles,
+        model_profile, provider_mode, judge_verdict, actual_models, callback_url,
+        callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
+        started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
+        last_failure_fingerprint, hung_count, last_hung_reason
+      )
+      SELECT
+        id, project, scope, description, requirement_path, status, priority,
+        depends_on, parent_job_id, created_at, started_at, completed_at, error,
+        resume_hint, attempts, timeout, delegation_plan, current_step, session_titles,
+        model_profile, provider_mode, judge_verdict, actual_models, callback_url,
+        callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
+        started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
+        last_failure_fingerprint, hung_count, last_hung_reason
+      FROM jobs;
+
+      DROP TABLE jobs;
+      ALTER TABLE jobs_review_migration RENAME TO jobs;
+    `);
+  } finally {
+    db.pragma('foreign_keys = on');
+  }
+}
+
+/**
  * Run ALTER TABLE migrations for new columns.
  * Wraps each in try/catch so already-existing columns don't error.
  */
@@ -486,6 +576,7 @@ function openPilotDb(): DatabaseType {
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
+  migrateReviewStates(cachedDb!);
   seedModelTables(cachedDb!);
 
   // Restrict DB file permissions to owner-only (chmod 600)
@@ -517,6 +608,7 @@ function _getTestDb(): DatabaseType {
   cachedDb!.exec(CREATE_MODEL_PROFILES_TABLE_SQL);
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
+  migrateReviewStates(cachedDb!);
   seedModelTables(cachedDb!);
   return cachedDb!;
 }
@@ -628,6 +720,67 @@ function markCompleted(id: string): void {
 }
 
 /**
+ * Mark a job as completed pending human review.
+ * Sets status to 'completed_pending_review' and records completed_at.
+ * Stores an optional review checklist in resume_hint for downstream display.
+ * Deliberately does NOT call blockProject() — review states must not block the project.
+ */
+function markCompletedPendingReview(id: string, reviewChecklist?: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'completed_pending_review',
+        completed_at = datetime('now'),
+        resume_hint = COALESCE(?, resume_hint)
+    WHERE id = ?
+  `).run(reviewChecklist ?? null, id);
+  // NOTE: deliberately does NOT call blockProject()
+}
+
+/**
+ * Mark a job as held for mid-phase human review.
+ * Sets status to 'review_hold' and stores the review reason in resume_hint.
+ * Deliberately does NOT call blockProject() — review states must not block the project.
+ */
+function markReviewHold(id: string, reviewReason: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'review_hold', resume_hint = ?
+    WHERE id = ?
+  `).run(reviewReason, id);
+  // NOTE: deliberately does NOT call blockProject()
+}
+
+/**
+ * Approve a completed_pending_review job, transitioning to 'completed'.
+ * Clears resume_hint. No-op if job is not in completed_pending_review state.
+ */
+function approveReview(id: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'completed', resume_hint = NULL
+    WHERE id = ? AND status = 'completed_pending_review'
+  `).run(id);
+}
+
+/**
+ * Resume from review_hold — transition back to 'running' for continued execution.
+ * Clears resume_hint. Returns the updated Job, or null if not in review_hold.
+ */
+function resumeFromReviewHold(id: string): Job | null {
+  const db = getDb();
+  const result = db.prepare(`
+    UPDATE jobs
+    SET status = 'running', resume_hint = NULL
+    WHERE id = ? AND status = 'review_hold'
+  `).run(id);
+  if (result.changes === 0) return null;
+  return getJob(id);
+}
+
+/**
  * Mark a job as failed. Sets completed_at and error message.
  * Also blocks the project so no further jobs run until operator unblocks.
  */
@@ -674,12 +827,13 @@ function requeueFailedJob(id: string): void {
 }
 
 /**
- * Get all pending + running jobs, ordered by priority DESC, created_at ASC.
+ * Get all pending + running + review_hold jobs, ordered by priority DESC, created_at ASC.
+ * Includes review_hold because those jobs are mid-execution and still "in progress".
  */
 function getQueue(): Job[] {
   const db = getDb();
   const rows = db.prepare(
-    "SELECT * FROM jobs WHERE status IN ('pending', 'running') ORDER BY priority DESC, created_at ASC",
+    "SELECT * FROM jobs WHERE status IN ('pending', 'running', 'review_hold') ORDER BY priority DESC, created_at ASC",
   ).all() as JobRow[];
   return rows.map(rowToJob);
 }
@@ -843,13 +997,14 @@ function markStale(id: string): void {
 }
 
 /**
- * Get last N completed/failed/cancelled jobs, ordered by completed_at DESC.
+ * Get last N completed/failed/cancelled/completed_pending_review jobs, ordered by completed_at DESC.
  * For cancelled jobs without completed_at, falls back to created_at.
+ * Includes completed_pending_review since those jobs are done with autonomous execution.
  */
 function getRecent(limit: number = 20): Job[] {
   const db = getDb();
   const rows = db.prepare(
-    "SELECT * FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') ORDER BY COALESCE(completed_at, created_at) DESC LIMIT ?",
+    "SELECT * FROM jobs WHERE status IN ('completed', 'failed', 'cancelled', 'completed_pending_review') ORDER BY COALESCE(completed_at, created_at) DESC LIMIT ?",
   ).all(limit) as JobRow[];
   return rows.map(rowToJob);
 }
@@ -1776,4 +1931,9 @@ export {
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
+  // Phase 81: review state transitions
+  markCompletedPendingReview,
+  markReviewHold,
+  approveReview,
+  resumeFromReviewHold,
 };
