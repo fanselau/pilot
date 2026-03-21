@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-kd9: Budget-aware continuation gating and improved human-only detection"
-last_updated: "2026-03-21T14:57:25.444Z"
+stopped_at: Completed 85-01-PLAN.md
+last_updated: "2026-03-21T18:19:34.671Z"
 last_activity: "2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup"
 progress:
-  total_phases: 83
+  total_phases: 84
   completed_phases: 41
-  total_plans: 154
-  completed_plans: 142
+  total_plans: 156
+  completed_plans: 143
   percent: 93
 ---
 
@@ -356,6 +356,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 82 added: Pilot Timeline Semantics + Renderer Unification
 - Phase 83 added: Pilot Human Review Semantics — Phase 81 Follow-up Completion
 - Phase 84 added: Pilot Control-Flow + Live Status Bugs — Fix False Failure Presentation and Continuation Churn
+- Phase 85 added: Pilot CLI: Disable Milestones for Now + Realign Top-Level GSD Commands (debug + fast)
 
 ## Decisions
 
@@ -922,6 +923,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 82-04]: isJudgeStep uses command.includes judge/verify OR source.startsWith judge: to cover both step types
 - [Phase 83-pilot-human-review-semantics-phase-81-follow-up-completion]: resumed_from_hold INTEGER column as DB marker for runner to detect review_hold jobs resumed by pilot review --approve
 - [Phase 84-02]: Extracted buildStepCapMessage and buildContinuationLimitMessage as pure helpers for DRY+testability — TDD approach benefits from testable pure functions; avoids duplicating message strings across two handlers
+- [Phase 85-01]: Kept milestone in JobScope union for backward compat with DB; blocked at CLI add layer only
 
 ## Blockers/Concerns Carried Forward
 
@@ -930,6 +932,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T14:57:25.437Z
-Stopped at: Completed quick task 260321-kd9: Budget-aware continuation gating and improved human-only detection
+Last session: 2026-03-21T18:19:34.664Z
+Stopped at: Completed 85-01-PLAN.md
 Resume file: None

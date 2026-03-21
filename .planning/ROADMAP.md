@@ -1546,7 +1546,7 @@ Wave structure:
 **Goal:** Make Pilot safer and more expressive at the CLI level by disabling milestone queuing, adding first-class debug and fast job scopes, and updating the delegation prompt with explicit autonomy guidance for workflow selection.
 **Requirements**: TBD
 **Depends on:** Phase 84
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 85-01-PLAN.md — Foundation: types, models, add command, config, delegation prompt (debug/fast scopes + milestone blocking)
