@@ -167,10 +167,10 @@ describe('detectScope', () => {
     expect(scope).toBe('phase');
   });
 
-  it('returns milestone for an existing directory path', () => {
-    // Use a directory that definitely exists
+  it('returns phase for an existing directory path (milestone disabled — directories route to phase)', () => {
+    // Use a directory that definitely exists — milestone is disabled, directories now route to phase
     const scope = detectScope('src');
-    expect(scope).toBe('milestone');
+    expect(scope).toBe('phase');
   });
 });
 

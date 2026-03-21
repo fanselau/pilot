@@ -138,7 +138,7 @@ function detectScope(requirement: string): JobScope {
 
 function detectScopeWithReason(requirement: string): { scope: JobScope; reason: string } {
   if (isFilePath(requirement)) return { scope: 'phase', reason: 'requirement is a file' };
-  if (isDirPath(requirement)) return { scope: 'milestone', reason: 'requirements directory' };
+  if (isDirPath(requirement)) return { scope: 'phase', reason: 'requirements directory (milestone disabled)' };
 
   // Long descriptions are likely requirements, not quick fixes
   if (requirement.length > 100) return { scope: 'phase', reason: 'long description (>100 chars)' };
@@ -186,6 +186,17 @@ async function addCommand(
     }
   }
 
+  // Block milestone scope — not currently supported
+  if (scope === 'milestone') {
+    process.stderr.write(
+      `\n  ${yellow('⚠')}  Milestone scope is currently disabled.\n` +
+      `     Milestone support is not working well enough yet.\n` +
+      `     Use --as phase for requirement files, or --as quick for ad-hoc tasks.\n\n` +
+      `     Available scopes: quick, phase, debug, fast\n\n`,
+    );
+    process.exit(1);
+  }
+
   // Resolve categories: --no-categories → null, --categories → parsed, project default → fallback, else → error
   let categories: string[] | null;
   if (opts.noCategories) {
@@ -211,11 +222,13 @@ async function addCommand(
     }
   }
 
-  // Warn when quick scope is used (explicitly or auto-detected) — encourage phase
+  // Warn when quick scope is used (explicitly or auto-detected) — encourage phase or debug/fast
   if (scope === 'quick' && !isJsonMode()) {
     process.stderr.write(
-      `  ${yellow('⚠')} Quick mode skips planning. Consider phase mode for better results:\n` +
-      `    pilot add ${project} ${requirement.includes(' ') ? `"${requirement.slice(0, 50)}"` : requirement} --as phase\n\n`,
+      `  ${yellow('⚠')} Quick mode skips planning. Consider a more targeted scope:\n` +
+      `    pilot add ${project} ${requirement.includes(' ') ? `"${requirement.slice(0, 50)}"` : requirement} --as phase   # full planning for complex work\n` +
+      `    pilot add ${project} ${requirement.includes(' ') ? `"${requirement.slice(0, 50)}"` : requirement} --as debug   # diagnosis-first for broken behavior\n` +
+      `    pilot add ${project} ${requirement.includes(' ') ? `"${requirement.slice(0, 50)}"` : requirement} --as fast    # truly trivial inline work\n\n`,
     );
   }
 
@@ -274,7 +287,8 @@ async function addCommand(
             `\n  ${yellow('⚠')}  No matching phase found for "${description.slice(0, 50)}"\n` +
             `     The delegate AI will create a new phase. To override:\n` +
             `       pilot add ${project} "${requirement}" --as quick    # run as quick task\n` +
-            `       pilot add ${project} "${requirement}" --as milestone  # full milestone\n\n`,
+            `       pilot add ${project} "${requirement}" --as debug    # diagnosis-first debugging\n` +
+            `       pilot add ${project} "${requirement}" --as fast     # trivial inline work\n\n`,
           );
         }
       } catch {

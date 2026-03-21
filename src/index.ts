@@ -44,7 +44,7 @@ program.action(async () => {
 program
   .command('add <project> <requirement>')
   .description('Queue work: auto-detects scope or use --as')
-  .option('--as <scope>', 'Force scope: quick, phase, or milestone')
+  .option('--as <scope>', 'Force scope: quick, phase, debug, or fast')
   .option('--next', 'Insert at front of queue')
   .option('--dry-run', 'Show what would happen without queuing')
   .option('--profile <profile>', 'Model profile: quality, balanced, or budget')
