@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 85-02-PLAN.md
-last_updated: "2026-03-21T18:30:36.076Z"
+stopped_at: "Completed quick task 260321-s79: Mobile header density cleanup"
+last_updated: "2026-03-21T20:25:38.510Z"
 last_activity: "2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup"
 progress:
   total_phases: 84
@@ -925,6 +925,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 84-02]: Extracted buildStepCapMessage and buildContinuationLimitMessage as pure helpers for DRY+testability — TDD approach benefits from testable pure functions; avoids duplicating message strings across two handlers
 - [Phase 85-01]: Kept milestone in JobScope union for backward compat with DB; blocked at CLI add layer only
 - [Phase 85]: debug intent appends symptoms to description; fast uses buildQuickArgs bare (no flags)
+- [Phase quick-260321-s79]: Hide AppHeader via useMatches() route detection rather than prop drilling
 
 ## Blockers/Concerns Carried Forward
 
@@ -933,6 +934,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T18:24:21.781Z
-Stopped at: Completed 85-02-PLAN.md
+Last session: 2026-03-21T20:25:35.381Z
+Stopped at: Completed quick task 260321-s79: Mobile header density cleanup
 Resume file: None
