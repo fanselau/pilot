@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 83-01-PLAN.md
-last_updated: "2026-03-21T13:36:52.429Z"
+stopped_at: Completed 84-01-PLAN.md
+last_updated: "2026-03-21T13:55:23.765Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
-  total_phases: 82
+  total_phases: 83
   completed_phases: 40
-  total_plans: 151
-  completed_plans: 139
+  total_plans: 154
+  completed_plans: 140
   percent: 93
 ---
 
@@ -354,6 +354,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 81 added: Pilot Human Review Semantics — Autonomy-First, No False Failure
 - Phase 82 added: Pilot Timeline Semantics + Renderer Unification
 - Phase 83 added: Pilot Human Review Semantics — Phase 81 Follow-up Completion
+- Phase 84 added: Pilot Control-Flow + Live Status Bugs — Fix False Failure Presentation and Continuation Churn
 
 ## Decisions
 
@@ -927,6 +928,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T13:28:30.951Z
-Stopped at: Completed 83-01-PLAN.md
+Last session: 2026-03-21T13:55:23.758Z
+Stopped at: Completed 84-01-PLAN.md
 Resume file: None
