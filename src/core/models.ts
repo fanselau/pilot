@@ -165,15 +165,21 @@ function resolveAllAgentModels(
  *
  * Maps scope strings to _top: prefixed keys in the AGENT_MODELS table:
  * - 'phase' / 'milestone' → '_top:phase'
- * - 'quick' → '_top:quick'
+ * - 'quick' / 'debug' / 'fast' → '_top:quick'
  * - 'judge' → '_top:judge'
  */
 function resolveTopLevelModel(
-  scope: 'phase' | 'quick' | 'milestone' | 'judge',
+  scope: 'phase' | 'quick' | 'milestone' | 'debug' | 'fast' | 'judge',
   profile: ModelProfile,
   providerMode: DynamicProviderMode,
 ): ModelEntry {
-  const key = scope === 'milestone' ? '_top:phase' : `_top:${scope}`;
+  let key: string;
+  switch (scope) {
+    case 'milestone': key = '_top:phase'; break;
+    case 'debug':
+    case 'fast':      key = '_top:quick'; break;
+    default:          key = `_top:${scope}`;
+  }
 
   // Try DB first
   try {

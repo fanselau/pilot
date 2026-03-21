@@ -140,7 +140,7 @@ const CONFIG_FIELD_SPECS: Record<string, FieldSpec> = {
   'defaults.modelProfile': { type: 'enum', path: ['defaults', 'modelProfile'], enum: ['quality', 'balanced', 'budget'] },
   'defaults.providerMode': { type: 'string', path: ['defaults', 'providerMode'] },
   'defaults.notifyTarget': { type: 'nullable-string', path: ['defaults', 'notifyTarget'] },
-  'defaults.scope': { type: 'enum', path: ['defaults', 'scope'], enum: ['quick', 'phase', 'milestone'] },
+  'defaults.scope': { type: 'enum', path: ['defaults', 'scope'], enum: ['quick', 'phase', 'debug', 'fast'] },
   'notifications.openclawHooksUrl': { type: 'nullable-string', path: ['notifications', 'openclawHooksUrl'] },
   'notifications.openclawHooksToken': { type: 'nullable-string', path: ['notifications', 'openclawHooksToken'] },
   'notifications.telegramBotToken': { type: 'nullable-string', path: ['notifications', 'telegramBotToken'] },

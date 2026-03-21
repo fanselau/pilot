@@ -28,7 +28,7 @@ export interface ConfigFileSchema {
     modelProfile?: 'quality' | 'balanced' | 'budget';
     providerMode?: string;  // accepts built-in modes + custom user-defined modes from provider_modes table
     notifyTarget?: string | null;
-    scope?: 'quick' | 'phase' | 'milestone' | null;
+    scope?: 'quick' | 'phase' | 'debug' | 'fast' | null;
   };
   notifications?: {
     openclawHooksUrl?: string | null;
@@ -49,7 +49,7 @@ export type ConfigSource = 'env' | 'config' | 'default' | 'auto-detect';
 export interface ConfigFileDefaults {
   modelProfile: 'quality' | 'balanced' | 'budget';
   providerMode: string;  // accepts built-in modes + custom user-defined modes
-  scope: 'quick' | 'phase' | 'milestone' | null;
+  scope: 'quick' | 'phase' | 'debug' | 'fast' | null;
 }
 
 export interface PilotConfig {
@@ -72,7 +72,7 @@ export interface PilotConfig {
 
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
 
-export type JobScope = 'quick' | 'phase' | 'milestone';
+export type JobScope = 'quick' | 'phase' | 'milestone' | 'debug' | 'fast';
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'completed_pending_review' | 'review_hold';
 export type ModelProfile = 'quality' | 'balanced' | 'budget';
 export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
@@ -199,6 +199,8 @@ export interface JobObservabilitySnapshot {
 
 export type DelegationIntent =
   | { type: 'quick'; description: string; flags?: ('full' | 'research')[] }
+  | { type: 'debug'; description: string; symptoms?: string }
+  | { type: 'fast'; description: string }
   | { type: 'init-project'; prdPath: string }
   | { type: 'new-milestone'; prdPath: string }
   | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string }
