@@ -945,6 +945,19 @@ class Runner {
         // No-op for now
         return [];
 
+      case 'debug': {
+        // Debug jobs map to gsd-debug (diagnose-issues workflow)
+        // spawnAndWait auto-prepends gsd- so command 'debug' → '--command gsd-debug'
+        const debugArgs = intent.symptoms
+          ? `${job.description}\n\nSymptoms: ${intent.symptoms}`
+          : job.description;
+        return [{ command: 'debug', args: debugArgs }];
+      }
+      case 'fast': {
+        // Fast jobs map to gsd-quick with no flags (lightest path)
+        // Unlike 'quick' which may add --full or --research flags, fast is always bare
+        return [{ command: 'quick', args: buildQuickArgs(job) }];
+      }
       case 'noop':
         return [];
 

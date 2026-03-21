@@ -608,7 +608,7 @@ function parseIntentOutput(content: string): DelegationResult {
     );
   }
 
-  const validTypes = ['quick', 'init-project', 'new-milestone', 'plan-and-execute', 'execute-only', 'audit-milestone', 'noop'];
+  const validTypes = ['quick', 'debug', 'fast', 'init-project', 'new-milestone', 'plan-and-execute', 'execute-only', 'audit-milestone', 'noop'];
   const intent = parsed.intent as Record<string, unknown> | undefined;
 
   if (!intent || typeof intent.type !== 'string' || !validTypes.includes(intent.type)) {
@@ -620,6 +620,16 @@ function parseIntentOutput(content: string): DelegationResult {
     case 'quick':
       if (typeof intent.description !== 'string') {
         throw new Error('Intent "quick" must have a string "description" field');
+      }
+      break;
+    case 'debug':
+      if (typeof intent.description !== 'string') {
+        throw new Error('Intent "debug" must have a string "description" field');
+      }
+      break;
+    case 'fast':
+      if (typeof intent.description !== 'string') {
+        throw new Error('Intent "fast" must have a string "description" field');
       }
       break;
     case 'init-project':
