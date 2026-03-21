@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-w8r: Use modern iOS Safari viewport height (dvh)"
+stopped_at: "Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks"
 last_updated: "2026-03-21T23:17:18.796Z"
-last_activity: "2026-03-21 - Completed quick task 260321-vga: Pilot Runtime / Install Path Unification + Operator Documentation"
+last_activity: "2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior"
 progress:
   total_phases: 84
   completed_phases: 42
@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-vga: Pilot Runtime / Install Path Unification + Operator Documentation
+Last activity: 2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior
 
 Progress: [█████████░] 93%
 
@@ -281,6 +281,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260321-tdm | Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study | 2026-03-21 | 2e4fa8a | Verified | [260321-tdm-fix-debug-fast-scope-support-end-to-end-](./quick/260321-tdm-fix-debug-fast-scope-support-end-to-end-/) |
 | 260321-ujl | Fix debug/fast scope support end-to-end: DB schema, migration, runtime compatibility | 2026-03-21 | d003c04 | | [260321-ujl-fix-debug-fast-scope-support-end-to-end-](./quick/260321-ujl-fix-debug-fast-scope-support-end-to-end-/) |
 | 260321-vga | Pilot Runtime / Install Path Unification + Operator Documentation | 2026-03-21 | 0245edc | Needs Review | [260321-vga-pilot-runtime-install-path-unification-o](./quick/260321-vga-pilot-runtime-install-path-unification-o/) |
+| 260321-w8r | use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior | 2026-03-21 | 6fe716b | | [260321-w8r-use-modern-ios-safari-viewport-height-ha](./quick/260321-w8r-use-modern-ios-safari-viewport-height-ha/) |
 
 ## Accumulated Context
 
