@@ -50,6 +50,30 @@ export const getJobsListFn = createServerFn({ method: 'GET' }).handler(
   },
 )
 
+// ── Jobs Activity Preview (batch) ────────────────────────────────────────
+
+export const getJobsActivityPreviewFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string[]) => d)
+  .handler(async ({ data: jobIds }) => {
+    const result: Record<string, { latestActivity: string | null; activityCount: number; stepCount: number }> = {}
+    for (const jobId of jobIds) {
+      const detail = getJobDetail(jobId)
+      if (!detail) {
+        result[jobId] = { latestActivity: null, activityCount: 0, stepCount: 0 }
+        continue
+      }
+      const lastPreview = detail.activityPreview.length > 0
+        ? detail.activityPreview[detail.activityPreview.length - 1]
+        : null
+      result[jobId] = {
+        latestActivity: lastPreview?.preview ?? null,
+        activityCount: detail.activityPreview.length,
+        stepCount: detail.steps.length,
+      }
+    }
+    return result
+  })
+
 // ── Job Detail ───────────────────────────────────────────────────────────
 
 export const getJobDetailFn = createServerFn({ method: 'GET' })

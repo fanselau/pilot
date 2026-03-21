@@ -9,7 +9,7 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/u
 import { JobList } from '~/components/job-list'
 import { SessionOverview } from '~/components/session-overview'
 import { ProjectsList } from '~/components/projects-list'
-import { getJobsListFn, getJobDetailFn, getProjectsListFn, getGraceConfigFn } from '~/lib/server-fns'
+import { getJobsListFn, getJobDetailFn, getProjectsListFn, getGraceConfigFn, getJobsActivityPreviewFn } from '~/lib/server-fns'
 import { toastManager } from '~/components/ui/toast'
 import type { SessionSummary } from '@pilot/core/types.js'
 
@@ -74,6 +74,19 @@ function Home() {
     refetchInterval: 30_000,
   })
   const projects = projectsQuery.data ?? []
+
+  // Load activity previews for all visible jobs
+  const allJobIds = useMemo(() => {
+    return [...active, ...queued, ...recent.slice(0, 10)].map(j => j.id)
+  }, [active, queued, recent])
+
+  const { data: activityPreviews } = useQuery({
+    queryKey: ['jobs-activity-preview', allJobIds],
+    queryFn: () => getJobsActivityPreviewFn({ data: allJobIds }),
+    enabled: allJobIds.length > 0,
+    refetchInterval: active.length > 0 ? 10_000 : 60_000,
+    staleTime: 5_000,
+  })
 
   // Load grace config for countdown badge
   const { data: graceConfig } = useQuery({
@@ -177,7 +190,7 @@ function Home() {
                 </EmptyHeader>
               </Empty>
             ) : (
-              <JobList data={{ active, queued: [], recent: [] }} queueGraceSeconds={queueGraceSeconds} />
+              <JobList data={{ active, queued: [], recent: [] }} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
             )}
           </TabsPanel>
 
@@ -185,14 +198,14 @@ function Home() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Queued ({queuedCount})
             </h2>
-            <JobList data={{ active: [], queued, recent: [] }} queueGraceSeconds={queueGraceSeconds} />
+            <JobList data={{ active: [], queued, recent: [] }} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
           </TabsPanel>
 
           <TabsPanel value="recent">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Recent ({recentCount})
             </h2>
-            <JobList data={{ active: [], queued: [], recent }} queueGraceSeconds={queueGraceSeconds} />
+            <JobList data={{ active: [], queued: [], recent }} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
           </TabsPanel>
 
           <TabsPanel value="sessions">

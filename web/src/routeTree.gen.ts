@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProjectsProjectPathRouteImport } from './routes/projects.$projectPath'
 import { Route as JobsJobIdRouteImport } from './routes/jobs.$jobId'
 import { Route as JobsJobIdIndexRouteImport } from './routes/jobs.$jobId.index'
 import { Route as JobsJobIdSessionsSessionIdRouteImport } from './routes/jobs.$jobId.sessions.$sessionId'
@@ -17,6 +18,11 @@ import { Route as JobsJobIdSessionsSessionIdRouteImport } from './routes/jobs.$j
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsProjectPathRoute = ProjectsProjectPathRouteImport.update({
+  id: '/projects/$projectPath',
+  path: '/projects/$projectPath',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JobsJobIdRoute = JobsJobIdRouteImport.update({
@@ -39,11 +45,13 @@ const JobsJobIdSessionsSessionIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/jobs/$jobId': typeof JobsJobIdRouteWithChildren
+  '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId/': typeof JobsJobIdIndexRoute
   '/jobs/$jobId/sessions/$sessionId': typeof JobsJobIdSessionsSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId': typeof JobsJobIdIndexRoute
   '/jobs/$jobId/sessions/$sessionId': typeof JobsJobIdSessionsSessionIdRoute
 }
@@ -51,6 +59,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/jobs/$jobId': typeof JobsJobIdRouteWithChildren
+  '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId/': typeof JobsJobIdIndexRoute
   '/jobs/$jobId/sessions/$sessionId': typeof JobsJobIdSessionsSessionIdRoute
 }
@@ -59,14 +68,20 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/jobs/$jobId'
+    | '/projects/$projectPath'
     | '/jobs/$jobId/'
     | '/jobs/$jobId/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/jobs/$jobId' | '/jobs/$jobId/sessions/$sessionId'
+  to:
+    | '/'
+    | '/projects/$projectPath'
+    | '/jobs/$jobId'
+    | '/jobs/$jobId/sessions/$sessionId'
   id:
     | '__root__'
     | '/'
     | '/jobs/$jobId'
+    | '/projects/$projectPath'
     | '/jobs/$jobId/'
     | '/jobs/$jobId/sessions/$sessionId'
   fileRoutesById: FileRoutesById
@@ -74,6 +89,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   JobsJobIdRoute: typeof JobsJobIdRouteWithChildren
+  ProjectsProjectPathRoute: typeof ProjectsProjectPathRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -83,6 +99,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectPath': {
+      id: '/projects/$projectPath'
+      path: '/projects/$projectPath'
+      fullPath: '/projects/$projectPath'
+      preLoaderRoute: typeof ProjectsProjectPathRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/jobs/$jobId': {
@@ -126,6 +149,7 @@ const JobsJobIdRouteWithChildren = JobsJobIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   JobsJobIdRoute: JobsJobIdRouteWithChildren,
+  ProjectsProjectPathRoute: ProjectsProjectPathRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

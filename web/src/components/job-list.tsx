@@ -162,7 +162,9 @@ function SortableHead({
 
 // ── Job Card (mobile fallback) ───────────────────────────────────────────
 
-function JobCard({ job, queueGraceSeconds = 0, queuePosition }: { job: Job; queueGraceSeconds?: number; queuePosition?: number }) {
+type ActivityPreviewEntry = { latestActivity: string | null; activityCount: number; stepCount: number }
+
+function JobCard({ job, queueGraceSeconds = 0, queuePosition, activityPreview }: { job: Job; queueGraceSeconds?: number; queuePosition?: number; activityPreview?: ActivityPreviewEntry }) {
   const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
   const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict)
   const isRunning = job.status === 'running'
@@ -220,6 +222,25 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition }: { job: Job; queu
                 </Badge>
               )}
             </div>
+            {activityPreview?.latestActivity && (
+              <p className="text-xs text-muted-foreground/70 font-mono line-clamp-1 mt-0.5">
+                {activityPreview.latestActivity.length > 80
+                  ? activityPreview.latestActivity.slice(0, 80) + '\u2026'
+                  : activityPreview.latestActivity}
+              </p>
+            )}
+            {activityPreview && activityPreview.stepCount > 0 && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Badge variant="outline" size="sm" className="text-[10px]">
+                  {activityPreview.stepCount} steps
+                </Badge>
+                {activityPreview.activityCount > 0 && (
+                  <Badge variant="outline" size="sm" className="text-[10px]">
+                    {activityPreview.activityCount} items
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
           <div className="ml-4 flex shrink-0 flex-col items-end gap-1">
             <span className="text-xs text-muted-foreground">
@@ -239,7 +260,7 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition }: { job: Job; queu
 
 // ── Job Table (desktop) ──────────────────────────────────────────────────
 
-function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job[]; queueGraceSeconds?: number; queuePositionMap?: Map<string, number> }) {
+function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPreviews }: { jobs: Job[]; queueGraceSeconds?: number; queuePositionMap?: Map<string, number>; activityPreviews?: ActivityPreviewMap }) {
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -293,6 +314,7 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job
             const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
             const queuePos = queuePositionMap?.get(job.id)
             const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict)
+            const activityPreview = activityPreviews?.[job.id]
             return (
               <TableRow
                 key={job.id}
@@ -332,6 +354,11 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job
                     {isRunning && job.currentStep > 0 && (
                       <Badge variant="outline" size="sm" className="text-[10px] font-mono">
                         Step {job.currentStep}
+                      </Badge>
+                    )}
+                    {activityPreview && activityPreview.stepCount > 0 && (
+                      <Badge variant="outline" size="sm" className="text-[10px] font-mono text-muted-foreground">
+                        {activityPreview.stepCount}s
                       </Badge>
                     )}
                   </div>
@@ -377,6 +404,13 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job
                       <VerdictBadge verdict={verdict} confidence={confidence} />
                     )}
                   </div>
+                  {activityPreview?.latestActivity && (
+                    <p className="text-[10px] text-muted-foreground/60 font-mono line-clamp-1 mt-0.5">
+                      {activityPreview.latestActivity.length > 100
+                        ? activityPreview.latestActivity.slice(0, 100) + '\u2026'
+                        : activityPreview.latestActivity}
+                    </p>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs text-muted-foreground">
                   {isRunning
@@ -405,12 +439,14 @@ function JobSection({
   isMobile,
   queueGraceSeconds = 0,
   queuePositionMap,
+  activityPreviews,
 }: {
   jobs: Job[]
   emptyMessage: string
   isMobile: boolean
   queueGraceSeconds?: number
   queuePositionMap?: Map<string, number>
+  activityPreviews?: ActivityPreviewMap
 }) {
   if (jobs.length === 0) {
     return (
@@ -427,13 +463,13 @@ function JobSection({
     return (
       <div className="space-y-2">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job} queueGraceSeconds={queueGraceSeconds} queuePosition={queuePositionMap?.get(job.id)} />
+          <JobCard key={job.id} job={job} queueGraceSeconds={queueGraceSeconds} queuePosition={queuePositionMap?.get(job.id)} activityPreview={activityPreviews?.[job.id]} />
         ))}
       </div>
     )
   }
 
-  return <JobTable jobs={jobs} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} />
+  return <JobTable jobs={jobs} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} activityPreviews={activityPreviews} />
 }
 
 // ── Main Export ───────────────────────────────────────────────────────────
@@ -444,12 +480,14 @@ export interface JobListData {
   recent: Job[]
 }
 
+export type ActivityPreviewMap = Record<string, { latestActivity: string | null; activityCount: number; stepCount: number }>
+
 /**
  * Renders a single job list section (active OR queued OR recent).
  * Pass only the relevant section in the data prop — the component
  * will render whichever array is non-empty.
  */
-export function JobList({ data, queueGraceSeconds = 0 }: { data: JobListData; queueGraceSeconds?: number }) {
+export function JobList({ data, queueGraceSeconds = 0, activityPreviews }: { data: JobListData; queueGraceSeconds?: number; activityPreviews?: ActivityPreviewMap }) {
   const isMobile = useIsMobile()
 
   // Build queue position map: queued array order = queue order
@@ -477,13 +515,13 @@ export function JobList({ data, queueGraceSeconds = 0 }: { data: JobListData; qu
   return (
     <div className="space-y-2">
       {data.active.length > 0 && (
-        <JobSection jobs={data.active} emptyMessage="No active jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
+        <JobSection jobs={data.active} emptyMessage="No active jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
       )}
       {data.queued.length > 0 && (
-        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} />
+        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} activityPreviews={activityPreviews} />
       )}
       {data.recent.length > 0 && (
-        <JobSection jobs={data.recent} emptyMessage="No recent jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
+        <JobSection jobs={data.recent} emptyMessage="No recent jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
       )}
       {data.active.length === 0 && data.queued.length === 0 && data.recent.length === 0 && (
         <JobSection jobs={[]} emptyMessage="No jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
