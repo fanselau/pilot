@@ -1,6 +1,10 @@
 /**
  * `pilot milestone <action> <id>` — Milestone management commands.
  *
+ * NOTE: Milestone job QUEUING is currently disabled (Phase 85).
+ * These management commands still work for existing milestone jobs.
+ * New milestone jobs cannot be created via `pilot add --as milestone`.
+ *
  * Actions:
  *   status <id>  — Show milestone + child phase progress
  *   resume <id>  — Retry the failed child phase (reset to pending), unpause milestone
