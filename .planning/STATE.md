@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 80-03-PLAN.md
-last_updated: "2026-03-21T09:35:22.975Z"
+stopped_at: Completed 81-01-PLAN.md
+last_updated: "2026-03-21T10:56:55.544Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
-  total_phases: 79
+  total_phases: 80
   completed_phases: 37
-  total_plans: 141
-  completed_plans: 129
+  total_plans: 144
+  completed_plans: 130
   percent: 93
 ---
 
@@ -351,6 +351,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 78 added: Web UI Premium — Data-Rich, Dense, Modern Dashboard
 - Phase 79 added: Web UI Job Activity Regression — Restore visible activity under jobs
 - Phase 80 added: Web UI Attribution + Mobile Overflow Hardening
+- Phase 81 added: Pilot Human Review Semantics — Autonomy-First, No False Failure
 
 ## Decisions
 
@@ -906,6 +907,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 80]: Used responsive margin classes (pl-2 ml-2 sm:pl-3 sm:ml-4) to reclaim mobile space without affecting desktop
 - [Phase 80]: 5-tier attribution: sessionId → sessionTitle → timeWindow → childTransitivity → lastStepFallback
 - [Phase 80]: All 11 Phase 80 requirements marked Complete; Phase 80 section added to REQUIREMENTS.md before v2 section
+- [Phase 81-pilot-human-review-semantics-autonomy-first-no-false-failure]: Review states (completed_pending_review, review_hold) never call blockProject — critical non-blocking invariant — Human review situations should not be treated as failures; projects must remain active for subsequent jobs
 
 ## Blockers/Concerns Carried Forward
 
@@ -914,6 +916,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:35:01.658Z
-Stopped at: Completed 80-03-PLAN.md
+Last session: 2026-03-21T10:56:50.543Z
+Stopped at: Completed 81-01-PLAN.md
 Resume file: None
