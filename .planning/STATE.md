@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 81-02-PLAN.md
-last_updated: "2026-03-21T11:06:19.869Z"
+stopped_at: Completed 81-03-PLAN.md
+last_updated: "2026-03-21T11:09:19.412Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
   total_phases: 80
-  completed_phases: 37
+  completed_phases: 38
   total_plans: 144
-  completed_plans: 131
+  completed_plans: 132
   percent: 93
 ---
 
@@ -909,6 +909,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 80]: All 11 Phase 80 requirements marked Complete; Phase 80 section added to REQUIREMENTS.md before v2 section
 - [Phase 81-pilot-human-review-semantics-autonomy-first-no-false-failure]: Review states (completed_pending_review, review_hold) never call blockProject — critical non-blocking invariant — Human review situations should not be treated as failures; projects must remain active for subsequent jobs
 - [Phase 81]: isHumanOnlyRemaining exported as module-level function — enables direct unit testing following runner.ts pattern
+- [Phase 81]: Review states use amber (completed_pending_review) and blue (review_hold) across CLI/TUI/web — never red/destructive — Non-failure states must not use failure colors to avoid false alarm UX
 
 ## Blockers/Concerns Carried Forward
 
@@ -917,6 +918,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:06:16.316Z
-Stopped at: Completed 81-02-PLAN.md
+Last session: 2026-03-21T11:09:19.405Z
+Stopped at: Completed 81-03-PLAN.md
 Resume file: None
