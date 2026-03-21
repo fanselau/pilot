@@ -391,6 +391,9 @@ export interface JobDetailSnapshot {
     providerMode: string;
     error: string | null;
     observedModels: string[];
+    gitBaseCommit: string | null;
+    gitHeadCommit: string | null;
+    startedDirty: boolean;
   };
   steps: JobStepSummary[];
   rootSessions: SessionSummary[];

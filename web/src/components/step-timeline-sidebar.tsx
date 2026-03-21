@@ -10,10 +10,17 @@
  * not user selection.
  */
 
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { parseSqliteTimestamp } from '~/lib/time-utils'
+import { formatCompactDuration } from '~/lib/format'
+import { DurationBar } from '~/components/ui/sparkline'
+import { SourceBadge } from '~/components/ui/status-badge'
+import { Tooltip, TooltipTrigger, TooltipPopup, TooltipProvider } from '~/components/ui/tooltip'
+import { ObservabilityCard } from '~/components/observability-card'
+import { VerdictCard } from '~/components/verdict-card'
+import { GitCheckpointCard } from '~/components/git-checkpoint-card'
 
 // ── Status helpers ────────────────────────────────────────────────────────
 
@@ -105,6 +112,8 @@ interface StepTimelineSidebarProps {
   highlightedStep: number | null
   /** Triggered when user clicks a step; parent scrolls the content pane. */
   onClickStep: (idx: number) => void
+  /** Whether the job is currently active (running/pending). */
+  isActive?: boolean
 }
 
 export function StepTimelineSidebar({
@@ -112,6 +121,7 @@ export function StepTimelineSidebar({
   groups,
   highlightedStep,
   onClickStep,
+  isActive = false,
 }: StepTimelineSidebarProps) {
   const { job } = snapshot
   const listRef = useRef<HTMLDivElement>(null)
@@ -131,6 +141,24 @@ export function StepTimelineSidebar({
   const stepGroups = groups.filter((g) => g.stepIndex !== null)
   const delegationGroups = stepGroups.filter((g) => g.command === 'delegation')
   const delegationCount = delegationGroups.length
+
+  // Build stepMap for metadata lookup from snapshot.steps
+  const stepMap = useMemo(() => {
+    const map = new Map<number, (typeof snapshot.steps)[number]>()
+    for (const s of snapshot.steps) {
+      map.set(s.stepIndex, s)
+    }
+    return map
+  }, [snapshot.steps])
+
+  // Compute maxMs for DurationBar normalization
+  const maxMs = useMemo(() => {
+    let max = 0
+    for (const s of snapshot.steps) {
+      if (s.durationMs && s.durationMs > max) max = s.durationMs
+    }
+    return max
+  }, [snapshot.steps])
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
@@ -209,6 +237,15 @@ export function StepTimelineSidebar({
         </div>
       </div>
 
+      {/* Observability, Verdict, Git cards */}
+      <ObservabilityCard jobId={job.id} isActive={isActive} />
+      <VerdictCard jobId={job.id} />
+      <GitCheckpointCard
+        gitBaseCommit={job.gitBaseCommit ?? null}
+        gitHeadCommit={job.gitHeadCommit ?? null}
+        startedDirty={job.startedDirty}
+      />
+
       {/* Step timeline — keyboard navigable */}
       <div
         ref={listRef}
@@ -220,40 +257,81 @@ export function StepTimelineSidebar({
         {stepGroups.length === 0 ? (
           <p className="p-3 text-xs text-muted-foreground">No steps yet.</p>
         ) : (
-          <div className="py-1">
-            {stepGroups.map((group) => {
-              const isDelegation = group.command === 'delegation'
-              const isHighlighted = highlightedStep === group.stepIndex
-              return (
-                <button
-                  key={`step-${group.stepIndex}`}
-                  className={[
-                    'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors hover:bg-accent/30',
-                    isHighlighted
-                      ? 'border-l-2 border-primary bg-accent/50'
-                      : 'border-l-2 border-transparent',
-                  ].join(' ')}
-                  onClick={() => {
-                    if (group.stepIndex != null) onClickStep(group.stepIndex)
-                  }}
-                >
-                  <span className="w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
-                    {isDelegation
-                      ? formatDelegationIndex(group.stepIndex!, delegationCount)
-                      : group.stepIndex}
-                  </span>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="truncate text-xs font-mono leading-tight">
-                      {isDelegation ? 'Delegation' : (group.command || '(no command)')}
-                    </p>
-                    <Badge variant={stepStatusVariant(group.status)} size="sm">
-                      {group.status}
-                    </Badge>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+          <TooltipProvider>
+            <div className="py-1">
+              {stepGroups.map((group) => {
+                const isDelegation = group.command === 'delegation'
+                const isHighlighted = highlightedStep === group.stepIndex
+                const stepMeta = group.stepIndex != null ? stepMap.get(group.stepIndex) : null
+                const stepDurationMs = stepMeta?.durationMs ?? null
+                const stepSource = stepMeta?.source ?? group.source
+                const stepReason = stepMeta?.reason ?? null
+                const stepError = stepMeta?.error ?? null
+
+                const commandLabel = isDelegation ? 'Delegation' : (group.command || '(no command)')
+
+                return (
+                  <button
+                    key={`step-${group.stepIndex}`}
+                    className={[
+                      'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors hover:bg-accent/30',
+                      isHighlighted
+                        ? 'border-l-2 border-primary bg-accent/50'
+                        : 'border-l-2 border-transparent',
+                    ].join(' ')}
+                    onClick={() => {
+                      if (group.stepIndex != null) onClickStep(group.stepIndex)
+                    }}
+                  >
+                    <span className="w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
+                      {isDelegation
+                        ? formatDelegationIndex(group.stepIndex!, delegationCount)
+                        : group.stepIndex}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      {/* Row 1: command + duration text */}
+                      <div className="flex items-center gap-1.5">
+                        {stepReason ? (
+                          <Tooltip>
+                            <TooltipTrigger className="truncate text-xs font-mono leading-tight text-left">
+                              {commandLabel}
+                            </TooltipTrigger>
+                            <TooltipPopup side="right" className="max-w-[280px]">
+                              <p className="text-[11px] leading-snug">{stepReason}</p>
+                            </TooltipPopup>
+                          </Tooltip>
+                        ) : (
+                          <p className="truncate text-xs font-mono leading-tight">
+                            {commandLabel}
+                          </p>
+                        )}
+                        {stepDurationMs != null && (
+                          <span className="shrink-0 text-[10px] font-mono text-muted-foreground">
+                            {formatCompactDuration(stepDurationMs)}
+                          </span>
+                        )}
+                        {stepError && (
+                          <span className="shrink-0 w-2 h-2 rounded-full bg-rose-500" title={stepError} />
+                        )}
+                      </div>
+                      {/* Row 2: status badge + source badge + duration bar */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Badge variant={stepStatusVariant(group.status)} size="sm">
+                          {group.status}
+                        </Badge>
+                        {stepSource && stepSource !== 'delegation' && !isDelegation && (
+                          <SourceBadge source={stepSource} />
+                        )}
+                        {stepDurationMs != null && maxMs > 0 && (
+                          <DurationBar ms={stepDurationMs} maxMs={maxMs} className="ml-auto shrink-0" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </TooltipProvider>
         )}
       </div>
     </div>
