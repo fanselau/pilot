@@ -52,6 +52,11 @@ import {
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
+  // Phase 81: review state transitions
+  markCompletedPendingReview,
+  markReviewHold,
+  approveReview,
+  resumeFromReviewHold,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -1346,5 +1351,153 @@ describe('managed projects', () => {
 
   // incrementRetryCount, canRetry, isSameHungReason, resetRetryState, retry() tests
   // removed — retry concept eliminated (quick task 260320-nc6).
+
+  // ── review state transitions (Phase 81) ──────────────────────────────
+
+  describe('review state transitions', () => {
+    it('markCompletedPendingReview sets status to completed_pending_review', () => {
+      registerProject('/review/proj', 'owner');
+      const job = addJob('/review/proj', 'quick', 'review task');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('completed_pending_review');
+    });
+
+    it('markCompletedPendingReview does NOT block the project', () => {
+      registerProject('/review/proj2', 'owner');
+      const job = addJob('/review/proj2', 'quick', 'review job');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id);
+
+      const project = getProject('/review/proj2')!;
+      expect(project.status).toBe('active');
+      expect(project.blockedReason).toBeNull();
+    });
+
+    it('markCompletedPendingReview stores reviewChecklist in resume_hint', () => {
+      const job = addJob('/proj', 'quick', 'review job with checklist');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id, 'Check API response shapes, verify auth flow');
+
+      const updated = getJob(job.id)!;
+      expect(updated.resumeHint).toBe('Check API response shapes, verify auth flow');
+    });
+
+    it('markCompletedPendingReview sets completed_at', () => {
+      const job = addJob('/proj', 'quick', 'review job timestamps');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.completedAt).not.toBeNull();
+    });
+
+    it('markReviewHold sets status to review_hold without blocking project', () => {
+      registerProject('/review/proj3', 'owner');
+      const job = addJob('/review/proj3', 'quick', 'mid-phase job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'Verify migration results before continuing');
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('review_hold');
+
+      const project = getProject('/review/proj3')!;
+      expect(project.status).toBe('active');
+    });
+
+    it('markReviewHold stores reviewReason in resume_hint', () => {
+      const job = addJob('/proj', 'quick', 'hold job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'Check migration output before continuing');
+
+      const updated = getJob(job.id)!;
+      expect(updated.resumeHint).toBe('Check migration output before continuing');
+    });
+
+    it('approveReview transitions completed_pending_review to completed', () => {
+      const job = addJob('/proj', 'quick', 'approve me');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id);
+      approveReview(job.id);
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('completed');
+      expect(updated.resumeHint).toBeNull();
+    });
+
+    it('approveReview is a no-op when job is not in completed_pending_review', () => {
+      const job = addJob('/proj', 'quick', 'pending job');
+      approveReview(job.id); // no-op
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('pending');
+    });
+
+    it('resumeFromReviewHold transitions review_hold to running and returns job', () => {
+      const job = addJob('/proj', 'quick', 'resume me');
+      markRunning(job.id);
+      markReviewHold(job.id, 'review reason');
+
+      const resumed = resumeFromReviewHold(job.id);
+      expect(resumed).not.toBeNull();
+      expect(resumed!.status).toBe('running');
+
+      const updated = getJob(job.id)!;
+      expect(updated.status).toBe('running');
+      expect(updated.resumeHint).toBeNull();
+    });
+
+    it('resumeFromReviewHold returns null when job is not in review_hold', () => {
+      const job = addJob('/proj', 'quick', 'pending job');
+      const result = resumeFromReviewHold(job.id);
+      expect(result).toBeNull();
+    });
+
+    it('markFailed still blocks project (existing behavior preserved)', () => {
+      registerProject('/test/proj-fail2', 'owner');
+      const job = addJob('/test/proj-fail2', 'quick', 'fail task');
+      markRunning(job.id);
+      markFailed(job.id, 'Something went wrong');
+
+      const project = getProject('/test/proj-fail2')!;
+      expect(project.status).toBe('blocked');
+    });
+
+    it('claimNextLaunchable does NOT skip projects that only have completed_pending_review jobs', () => {
+      registerProject('/review/proj4', 'owner');
+      const job1 = addJob('/review/proj4', 'quick', 'first job');
+      markRunning(job1.id);
+      markCompletedPendingReview(job1.id);
+
+      // Second job for same project — should be claimable since first is not 'running'
+      const job2 = addJob('/review/proj4', 'quick', 'second job');
+
+      const claimed = claimNextLaunchable();
+      expect(claimed).not.toBeNull();
+      expect(claimed!.id).toBe(job2.id);
+    });
+
+    it('review_hold jobs appear in getQueue', () => {
+      const job = addJob('/proj', 'quick', 'held job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'mid-phase check needed');
+
+      const queue = getQueue();
+      const ids = queue.map((j) => j.id);
+      expect(ids).toContain(job.id);
+    });
+
+    it('completed_pending_review jobs appear in getRecent', () => {
+      const job = addJob('/proj', 'quick', 'review recent');
+      markRunning(job.id);
+      markCompletedPendingReview(job.id);
+
+      const recent = getRecent();
+      const ids = recent.map((j) => j.id);
+      expect(ids).toContain(job.id);
+    });
+  });
 
 });

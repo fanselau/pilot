@@ -73,7 +73,7 @@ export interface PilotConfig {
 // ── Job (matches pilot.db schema) ─────────────────────────────────────────
 
 export type JobScope = 'quick' | 'phase' | 'milestone';
-export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused';
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'completed_pending_review' | 'review_hold';
 export type ModelProfile = 'quality' | 'balanced' | 'budget';
 export type ProviderMode = 'hybrid' | 'claude-only' | 'openai-only';
 
