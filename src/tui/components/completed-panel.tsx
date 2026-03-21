@@ -77,11 +77,12 @@ export function statusIcon(job: { status: JobStatus; scope?: string; judgeVerdic
     }
     case 'failed': return { icon: '✗', color: statusColors.failed };
     case 'cancelled': return { icon: '–', color: statusColors.cancelled };
+    case 'completed_pending_review': return { icon: '◑', color: statusColors.completed_pending_review };
     default: return { icon: ' ', color: theme.muted };
   }
 }
 
-const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled']);
+const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled', 'completed_pending_review']);
 
 export interface CompletedRowBadge {
   kind: 'judge' | 'retry' | 'undo';
@@ -125,6 +126,14 @@ export function buildCompletedRowBadges(job: Job): CompletedRowBadge[] {
       kind: 'judge',
       label: `[${judge.badge}]`,
       color: judgeBadgeColor(judge.outcome),
+    });
+  }
+
+  if (job.status === 'completed_pending_review') {
+    badges.push({
+      kind: 'judge' as const,
+      label: '[review pending]',
+      color: statusColors.completed_pending_review,
     });
   }
 

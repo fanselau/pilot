@@ -77,7 +77,7 @@ function statusColor(status: string): string {
   }
 }
 
-const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled']);
+const TERMINAL_STATUSES = new Set<JobStatus>(['completed', 'failed', 'cancelled', 'completed_pending_review']);
 
 interface RecoveryHeader {
   line: string;
