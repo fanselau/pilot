@@ -236,6 +236,15 @@ export const getJobVerdictHistoryFn = createServerFn({ method: 'GET' })
       }))
   })
 
+// ── Session State ────────────────────────────────────────────────────────
+
+export const getSessionStateFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: sessionId }) => {
+    const { getSessionState } = await import('@pilot/core/opencode-db.js')
+    return getSessionState(sessionId)
+  })
+
 // ── Job Verdict (parsed) ─────────────────────────────────────────────────
 
 export const getJobVerdictFn = createServerFn({ method: 'GET' })
