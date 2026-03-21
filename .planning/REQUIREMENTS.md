@@ -56,6 +56,34 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **CLEN-03**: Remove `--command gsd-judge` call path from `spawnAndWait()` in runner.ts
 - [ ] **CLEN-04**: Update runner tests that reference `gsd-judge` command
 
+### Web UI Attribution + Mobile Overflow Hardening
+
+- [x] **ATTR-01**: Late judge/final-step session activity is attributed to the correct step instead of appearing in Unattributed bucket
+- [x] **ATTR-02**: Unattributed bucket only contains genuinely unassignable content (e.g., activity before any step starts)
+- [x] **ATTR-03**: resolveStepIndex() uses 5-tier attribution: sessionId → sessionTitle → timeWindow → childSessionTransitivity → lastStepFallback
+- [x] **ATTR-04**: Child session transitivity: candidates from sessions spawned by a step's root session are attributed to that step via childToStepIndex map
+- [x] **ATTR-05**: Existing 3-tier attribution (sessionId/sessionTitle/timeWindow) remains backward-compatible with no regressions
+- [x] **MOB-01**: No page-level horizontal overflow on mobile (375px viewport) across main data viewers (timeline-stream, step-content-pane, job-list)
+- [x] **MOB-02**: No page-level horizontal overflow on mobile in child/sub-session drill-in views
+- [x] **MOB-03**: Long code/tool-input content is contained via wrapping, truncation, or inner scroll — never clips important content without readable fallback
+- [x] **MOB-04**: Responsive margins on step content border-l items reclaim horizontal space on mobile without affecting desktop
+- [x] **MOB-05**: Global overflow-x-hidden safeguard on body element as safety net
+- [x] **SUB-01**: Child/sub-session drill-in view has visual polish parity with main job detail (StatusBadge, responsive padding, overflow containment)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| ATTR-01 | Phase 80 | Complete |
+| ATTR-02 | Phase 80 | Complete |
+| ATTR-03 | Phase 80 | Complete |
+| ATTR-04 | Phase 80 | Complete |
+| ATTR-05 | Phase 80 | Complete |
+| MOB-01 | Phase 80 | Complete |
+| MOB-02 | Phase 80 | Complete |
+| MOB-03 | Phase 80 | Complete |
+| MOB-04 | Phase 80 | Complete |
+| MOB-05 | Phase 80 | Complete |
+| SUB-01 | Phase 80 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -120,8 +148,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLEN-04 | Phase 68 | Pending |
 
 **Coverage:**
-- v1 requirements: 31 total
-- Mapped to phases: 31
+- v1 requirements: 42 total (31 Phase 68 + 11 Phase 80)
+- Mapped to phases: 42
 - Unmapped: 0 ✓
 
 ---
