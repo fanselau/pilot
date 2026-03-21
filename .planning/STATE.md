@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 78-07-PLAN.md
-last_updated: "2026-03-21T04:14:09.731Z"
+stopped_at: "Completed quick task 260321-61z: Fix skills JIT loading — seed manifest from catalog"
+last_updated: "2026-03-21T04:26:33.400Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 77
@@ -275,6 +275,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260320-nc6 | Remove retry completely from pilot | 2026-03-20 | 7302ae9 | [260320-nc6-remove-retry-completely-from-pilot](./quick/260320-nc6-remove-retry-completely-from-pilot/) |
 | 260320-vc3 | Bug fix: --next flag on pilot add doesn't insert at front of queue | 2026-03-20 | 23739bb | [260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i](./quick/260320-vc3-bug-fix-next-flag-on-pilot-add-doesn-t-i/) |
 | 260320-vju | Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions | 2026-03-20 | 98df0ea | [260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru](./quick/260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru/) |
+| 260321-61z | Fix skills JIT loading — seed manifest from built-in catalog | 2026-03-21 | b61a92d | [260321-61z-fix-skills-jit-loading-seed-manifest-fro](./quick/260321-61z-fix-skills-jit-loading-seed-manifest-fro/) |
 
 ## Accumulated Context
 
@@ -897,6 +898,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 78]: Module-level shared shiki highlighter promise; content >5000 chars bypasses highlighting; polling 3s active / 30s completed
 - [Phase 78]: Main CSS file is styles.css not app.css; Tabs API uses TabsTrigger/TabsContent re-exports; Sheet uses render prop pattern
 - [Phase 78]: Message count parity confirmed — no code change needed; both card and drill-in use getAssistantMessageCount()
+- [Phase quick-260321-61z]: Seed registers all tiers (tier 'all') by default; old stale entries left intact since different names
 
 ## Blockers/Concerns Carried Forward
 
@@ -905,6 +907,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:14:03.416Z
-Stopped at: Completed 78-07-PLAN.md
+Last session: 2026-03-21T04:26:29.221Z
+Stopped at: Completed quick task 260321-61z: Fix skills JIT loading — seed manifest from catalog
 Resume file: None
