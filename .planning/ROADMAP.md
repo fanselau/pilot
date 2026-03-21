@@ -1481,7 +1481,7 @@ Wave structure:
 **Goal:** Make Pilot treat human verification as a first-class autonomy-compatible review state rather than a failure mode, supporting both final review pending (job done, human validates) and mid-phase review hold (checkpoint hit mid-execution) without project blocking or failure semantics.
 **Requirements**: REVIEW-01, REVIEW-02, REVIEW-03, REVIEW-04, REVIEW-05, REVIEW-06, REVIEW-07, REVIEW-08, REVIEW-09, REVIEW-10, REVIEW-11, REVIEW-12, REVIEW-13, REVIEW-14, REVIEW-15, REVIEW-16
 **Depends on:** Phase 80
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 81-01-PLAN.md — Foundation: extend JobStatus type, DB schema, and state transition functions for review states
