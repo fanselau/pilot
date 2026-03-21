@@ -440,7 +440,9 @@ async function addCommand(
   if (opts.timeout && opts.timeout > 0) {
     outputHuman(`  ${dim(`Timeout: ${opts.timeout}m`)}`);
   }
-  if (opts.startImmediately) {
+  if (scope === 'fast') {
+    outputHuman(`  ${yellow('⚡')} Start mode: immediate (fast scope) — skips queue grace, runner picks up immediately.`);
+  } else if (opts.startImmediately) {
     outputHuman(`  ${yellow('⚠')} Start mode: immediate (--start-immediately) — faster start, less review/cancel time.`);
   } else {
     outputHuman('  Start mode: waits for queue grace window before launch.');
