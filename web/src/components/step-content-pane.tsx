@@ -35,6 +35,8 @@ export interface StepContentPaneProps {
   onVisibleStepChange: (idx: number | null) => void
   /** Optional step summaries for enriched headers (source, reason, error, duration). */
   steps?: JobStepSummary[]
+  /** When true, hide the "All steps" header bar (used on mobile to save vertical space). */
+  hideHeader?: boolean
 }
 
 function stepStatusVariant(status: string) {
@@ -65,6 +67,7 @@ export function StepContentPane({
   scrollToStepRef,
   onVisibleStepChange,
   steps,
+  hideHeader = false,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -184,7 +187,7 @@ export function StepContentPane({
 
   // ── Header ──────────────────────────────────────────────────────────────
 
-  const header = (
+  const header = hideHeader ? null : (
     <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
       <span className="text-sm font-medium">All steps</span>
       {firstErrorGroup && (
@@ -346,9 +349,19 @@ export function StepContentPane({
           )}
         </div>
 
-        {/* Follow button — shown when not auto-following */}
-        {!autoFollow && (
-          <div className="pointer-events-none absolute bottom-4 right-4">
+        {/* Floating buttons — follow + jump to error (when header hidden) */}
+        <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col gap-2 items-end">
+          {hideHeader && firstErrorGroup && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="pointer-events-auto shadow-md text-xs"
+              onClick={handleJumpToError}
+            >
+              ↑ Error
+            </Button>
+          )}
+          {!autoFollow && (
             <Button
               variant="secondary"
               size="sm"
@@ -357,8 +370,8 @@ export function StepContentPane({
             >
               ↓ Follow
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

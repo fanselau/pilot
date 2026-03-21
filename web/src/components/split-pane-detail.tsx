@@ -136,55 +136,50 @@ export function SplitPaneDetail({
   if (isMobile) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        {/* Sticky compact summary */}
-        <div className="flex-shrink-0 border-b px-3 py-2 bg-background/95 backdrop-blur">
-          <div className="flex items-center gap-2">
+        {/* Ultra-compact summary — single ~32px row with status, step info, elapsed, actions */}
+        <div className="flex-shrink-0 border-b px-3 py-1 bg-background/95 backdrop-blur">
+          <div className="flex items-center gap-1.5">
             <StatusBadge status={snapshot.job.status} pulse={isActive} size="sm" />
-            <span className="font-mono text-sm font-bold">{snapshot.job.id}</span>
-            <span className="text-xs text-muted-foreground ml-auto">
+            <span className="text-xs text-muted-foreground truncate">
               {snapshot.job.currentStep != null && (
                 currentGroup
                   ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep}`
                   : `#${snapshot.job.currentStep}`
               )}
-              {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
             </span>
+            {isActive && (
+              <>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                {elapsed && <span className="text-[10px] text-muted-foreground tabular-nums">{elapsed}</span>}
+              </>
+            )}
 
             {/* Action bottom sheet */}
-            <Sheet>
-              <SheetTrigger render={<Button variant="outline" size="sm" className="h-7 px-2 text-xs" />}>
-                Actions
-              </SheetTrigger>
-              <SheetContent side="bottom" className="rounded-t-lg">
-                <SheetHeader>
-                  <SheetTitle>Job Actions</SheetTitle>
-                </SheetHeader>
-                <div className="p-4 space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Job {snapshot.job.id} — {snapshot.job.status}
-                  </p>
-                </div>
-              </SheetContent>
-            </Sheet>
+            <span className="ml-auto">
+              <Sheet>
+                <SheetTrigger render={<Button variant="outline" size="sm" className="h-6 px-2 text-[10px]" />}>
+                  Actions
+                </SheetTrigger>
+                <SheetContent side="bottom" className="rounded-t-lg">
+                  <SheetHeader>
+                    <SheetTitle>Job Actions</SheetTitle>
+                  </SheetHeader>
+                  <div className="p-4 space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Job {snapshot.job.id} — {snapshot.job.status}
+                    </p>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </span>
           </div>
         </div>
 
-        {/* Running banner */}
-        {isActive && (
-          <div className="flex-shrink-0 bg-sky-500/10 border-b border-sky-500/20 px-3 py-1.5 flex items-center gap-2 text-xs">
-            <span className="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-            <span className="text-sky-300">
-              {currentGroup
-                ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep ?? '…'}…`
-                : `Running #${snapshot.job.currentStep ?? '…'}…`}
-            </span>
-            <span className="text-muted-foreground ml-auto">{elapsed}</span>
-          </div>
-        )}
+        {/* No separate running banner — running state is inline in summary row above */}
 
-        {/* Tabs */}
+        {/* Flat full-width tabs (underline variant, compact height) */}
         <Tabs defaultValue="steps" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="flex-shrink-0 border-b overflow-x-auto">
+          <TabsList variant="underline" className="flex-shrink-0 w-full border-b overflow-x-auto [&>*]:flex-1 [&>*]:h-7 [&>*]:text-xs">
             <TabsTrigger value="steps">Timeline</TabsTrigger>
             <TabsTrigger value="timeline">Summary</TabsTrigger>
             <TabsTrigger value="meta">Meta</TabsTrigger>
@@ -199,6 +194,7 @@ export function SplitPaneDetail({
               scrollToStepRef={scrollToStepRef}
               onVisibleStepChange={setVisibleStepIndex}
               steps={snapshot.steps}
+              hideHeader
             />
           </TabsContent>
 

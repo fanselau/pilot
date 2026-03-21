@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { CommandPalette } from '~/components/command-palette'
 import { getJobDetailFn } from '~/lib/server-fns'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 export const Route = createFileRoute('/jobs/$jobId')({
   loader: ({ params }) => getJobDetailFn({ data: params.jobId }),
@@ -12,6 +13,7 @@ function JobLayout() {
   const loaderData = Route.useLoaderData()
   const { jobId } = Route.useParams()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   // Auto-refresh the detail view every 3 seconds for active jobs.
   // Use the callback form so the interval re-evaluates against the
@@ -28,7 +30,7 @@ function JobLayout() {
   })
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden">
+    <div className={`flex flex-col overflow-hidden ${isMobile ? 'h-screen' : 'h-[calc(100vh-3rem)]'}`}>
       <Outlet />
 
       {/* Command palette with job context */}

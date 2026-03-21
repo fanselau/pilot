@@ -7,6 +7,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '~/components/u
 import { getJobDetailFn, getFullJobTimelineFn } from '~/lib/server-fns'
 import { Route as JobLayoutRoute } from './jobs.$jobId'
 import { useJobDetailStream } from '~/lib/sse'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 export const Route = createFileRoute('/jobs/$jobId/')({
   loader: ({ params }) => getFullJobTimelineFn({ data: params.jobId }),
@@ -18,6 +19,7 @@ function JobDetailIndexPage() {
   const layoutLoaderData = JobLayoutRoute.useLoaderData()
   const timelineLoaderData = Route.useLoaderData()
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
 
   // Use the callback form so the job-detail query self-regulates against
   // the latest cached data, not the stale initial loader snapshot.
@@ -71,14 +73,14 @@ function JobDetailIndexPage() {
 
   return (
     <div className="flex flex-col overflow-hidden">
-      {/* Compact breadcrumb header */}
-      <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+      {/* Compact breadcrumb header — ultra-compact on mobile */}
+      <div className={`flex shrink-0 items-center border-b px-4 ${isMobile ? 'gap-2 py-1' : 'gap-3 py-2'}`}>
         <Link to="/">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+          <Button variant="ghost" size="sm" className={`px-2 text-xs ${isMobile ? 'h-6' : 'h-7'}`}>
             &larr; Dashboard
           </Button>
         </Link>
-        <span className="font-mono text-sm font-semibold">
+        <span className={`font-mono font-semibold ${isMobile ? 'text-xs' : 'text-sm'}`}>
           Job {snapshot.job.id}
         </span>
       </div>

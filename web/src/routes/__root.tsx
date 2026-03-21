@@ -6,6 +6,7 @@ import {
   HeadContent,
   Scripts,
   useNavigate,
+  useMatches,
 } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
@@ -13,6 +14,7 @@ import appCss from '~/styles.css?url'
 import { ToastProvider } from '~/components/ui/toast'
 import { CommandPalette } from '~/components/command-palette'
 import { Kbd } from '~/components/ui/kbd'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,10 +55,17 @@ function AppHeader() {
 
 function AppShell() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
+  const matches = useMatches()
+
+  // Hide the app header on mobile when viewing a job-detail page.
+  // The breadcrumb inside the job detail already provides "← Dashboard".
+  const isJobDetailRoute = matches.some((m) => m.routeId.startsWith('/jobs/$jobId'))
+  const hideHeader = isMobile && isJobDetailRoute
 
   return (
     <ToastProvider position="bottom-right">
-      <AppHeader />
+      {!hideHeader && <AppHeader />}
       <CommandPalette
         ctx={{
           navigate: (to) => navigate({ to }),
