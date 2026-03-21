@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-ujl: Fix debug/fast scope config validation"
-last_updated: "2026-03-21T22:05:01.142Z"
-last_activity: "2026-03-21 - Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study"
+stopped_at: "Completed quick task 260321-vga: Pilot runtime/install path unification — doctor drift detection + operator docs"
+last_updated: "2026-03-21T22:51:38.454Z"
+last_activity: "2026-03-21 - Completed quick task 260321-ujl: Fix debug/fast scope support end-to-end: DB schema, migration, runtime compatibility"
 progress:
   total_phases: 84
   completed_phases: 42
@@ -939,6 +939,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:04:58.256Z
-Stopped at: Completed quick task 260321-ujl: Fix debug/fast scope config validation
+Last session: 2026-03-21T22:51:38.447Z
+Stopped at: Completed quick task 260321-vga: Pilot runtime/install path unification — doctor drift detection + operator docs
 Resume file: None
