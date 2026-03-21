@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end"
-last_updated: "2026-03-21T21:38:53.785Z"
+stopped_at: "Completed quick task 260321-ujl: Fix debug/fast scope config validation"
+last_updated: "2026-03-21T22:05:01.142Z"
 last_activity: "2026-03-21 - Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study"
 progress:
   total_phases: 84
@@ -929,6 +929,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 85]: debug intent appends symptoms to description; fast uses buildQuickArgs bare (no flags)
 - [Phase quick-260321-s79]: Hide AppHeader via useMatches() route detection rather than prop drilling
 - [Phase 260321-tdm]: Handle fast→skipGracePeriod at both addJob() and add.ts level for defense-in-depth
+- [Phase 260321-ujl]: Remove milestone from config defaults allowed list (Phase 85 disabled milestone scope, config LOAD now aligns with types.ts and config SET)
 
 ## Blockers/Concerns Carried Forward
 
@@ -937,6 +938,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T21:38:49.427Z
-Stopped at: Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end
+Last session: 2026-03-21T22:04:58.256Z
+Stopped at: Completed quick task 260321-ujl: Fix debug/fast scope config validation
 Resume file: None
