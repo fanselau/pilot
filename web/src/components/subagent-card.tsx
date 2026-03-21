@@ -2,19 +2,9 @@ import { Link } from '@tanstack/react-router'
 import type { SessionSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
+import { SessionStateBadge } from '~/components/session-state-badge'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function sessionStatusVariant(status: string) {
-  switch (status) {
-    case 'active':
-      return 'info' as const
-    case 'done':
-      return 'success' as const
-    default:
-      return 'secondary' as const
-  }
-}
 
 function formatDurationMs(ms: number | null): string {
   if (ms == null) return '\u2014'
@@ -59,9 +49,10 @@ export function SubagentCard({ session, jobId }: SubagentCardProps) {
                 <span className="text-sm font-medium truncate">
                   {session.title || 'Untitled session'}
                 </span>
-                <Badge variant={sessionStatusVariant(session.status)} size="sm">
-                  {session.status}
-                </Badge>
+                <SessionStateBadge
+                  sessionId={session.sessionId}
+                  isActive={session.status === 'active'}
+                />
               </div>
               {session.latestMessagePreview && (
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-2">

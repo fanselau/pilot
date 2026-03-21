@@ -26,19 +26,9 @@ import {
   TooltipProvider,
 } from '~/components/ui/tooltip'
 import { useIsMobile } from '~/hooks/use-media-query'
+import { SessionStateBadge } from '~/components/session-state-badge'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function sessionStatusVariant(status: string) {
-  switch (status) {
-    case 'active':
-      return 'info' as const
-    case 'done':
-      return 'success' as const
-    default:
-      return 'secondary' as const
-  }
-}
 
 function formatDurationMs(ms: number | null): string {
   if (ms == null || ms <= 0) return '\u2014'
@@ -160,13 +150,10 @@ function SessionCard({ session }: { session: SessionSummary }) {
           <span className="text-sm font-medium truncate max-w-[200px]">
             {truncateTitle(session.title, 40)}
           </span>
-          <Badge
-            variant={sessionStatusVariant(session.status)}
-            size="sm"
-            className={session.status === 'active' ? 'animate-pulse' : ''}
-          >
-            {session.status}
-          </Badge>
+          <SessionStateBadge
+            sessionId={session.sessionId}
+            isActive={session.status === 'active'}
+          />
           <Badge
             variant={session.role === 'root' ? 'outline' : 'secondary'}
             size="sm"
@@ -311,13 +298,10 @@ export function SessionOverview({ sessions }: SessionOverviewProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Badge
-                    variant={sessionStatusVariant(session.status)}
-                    size="sm"
-                    className={session.status === 'active' ? 'animate-pulse' : ''}
-                  >
-                    {session.status}
-                  </Badge>
+                  <SessionStateBadge
+                    sessionId={session.sessionId}
+                    isActive={session.status === 'active'}
+                  />
                 </TableCell>
                 <TableCell>
                   <Badge
