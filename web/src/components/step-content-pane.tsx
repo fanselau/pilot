@@ -18,6 +18,7 @@ import { Button } from '~/components/ui/button'
 import { SourceBadge } from '~/components/ui/status-badge'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
+import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 
 /** Minimum item count before virtual scrolling is activated. */
@@ -261,12 +262,18 @@ export function StepContentPane({
                         {/* Row 1: Step label + status + source + command + duration */}
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary" size="sm" data-status={group.status}>
-                            {group.command === 'delegation'
-                              ? 'Delegation'
-                              : group.stepIndex === null
-                                ? 'Unattributed'
-                                : `Step ${group.stepIndex}`}
+                            {formatStepLabel(group)}
                           </Badge>
+                          {isContinuationStep(group) && (
+                            <Badge variant="warning" size="sm" className="text-[10px]">
+                              continuation
+                            </Badge>
+                          )}
+                          {group.stepIndex !== null && group.stepIndex >= 0 && (
+                            <span className="text-[10px] font-mono text-muted-foreground/60">
+                              #{group.stepIndex}
+                            </span>
+                          )}
                           <Badge variant={stepStatusVariant(group.status)} size="sm" data-status={group.status}>
                             {group.status}
                           </Badge>
@@ -274,7 +281,8 @@ export function StepContentPane({
                             <SourceBadge source={group.source} />
                           )}
                           <span className="truncate text-xs text-muted-foreground">
-                            {group.command}
+                            {group.command !== group.semanticLabel?.toLowerCase() ? group.command : ''}
+                            {stepMeta?.args ? ` ${stepMeta.args}` : ''}
                           </span>
                           {stepMeta?.durationMs != null && (
                             <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">

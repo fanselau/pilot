@@ -33,6 +33,7 @@ import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
 import { SyntaxHighlight, detectLanguage } from '~/components/syntax-highlight'
 import { useJobDetailStream } from '~/lib/sse'
 import { getFullJobTimelineFn, getFullMessageFn } from '~/lib/server-fns'
+import { formatStepLabel } from '~/lib/step-semantics'
 
 function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleTimeString([], {
@@ -214,7 +215,7 @@ function StepGroupSection({
   group: StepTimelineGroup
   jobId: string
 }) {
-  const stepLabel = group.stepIndex === null ? 'Unattributed' : `Step ${group.stepIndex}`
+  const stepLabel = formatStepLabel(group)
 
   return (
     <section className="space-y-2">
@@ -313,7 +314,7 @@ export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        Timeline by step
+        Timeline
       </h3>
       <Card className="min-w-0 max-w-full overflow-hidden">
         <CardContent className="min-w-0 max-w-full overflow-hidden py-3 space-y-3">

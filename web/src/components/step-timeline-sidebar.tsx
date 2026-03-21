@@ -13,6 +13,7 @@
 import { useRef, useMemo } from 'react'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
+import { formatStepLabel, formatDelegationIndex, isContinuationStep } from '~/lib/step-semantics'
 import { parseSqliteTimestamp } from '~/lib/time-utils'
 import { formatCompactDuration } from '~/lib/format'
 import { DurationBar } from '~/components/ui/sparkline'
@@ -89,18 +90,6 @@ function formatDurationMs(ms: number | null): string {
 
 function shortProject(project: string): string {
   return project.split('/').pop() ?? project
-}
-
-/**
- * Format a delegation step index for display.
- * Delegation steps use negative indices (-100, -99, ...).
- * Shows "D1", "D2", etc. based on position.
- */
-function formatDelegationIndex(stepIndex: number, delegationCount: number): string {
-  if (delegationCount <= 1) return 'D'
-  // -100 → D1, -99 → D2, etc.
-  const pos = stepIndex + 101
-  return `D${pos}`
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -268,7 +257,8 @@ export function StepTimelineSidebar({
                 const stepReason = stepMeta?.reason ?? null
                 const stepError = stepMeta?.error ?? null
 
-                const commandLabel = isDelegation ? 'Delegation' : (group.command || '(no command)')
+                const commandLabel = formatStepLabel(group)
+                const isContinuation = isContinuationStep(group)
 
                 const isRunning = group.status === 'running'
 
@@ -279,7 +269,9 @@ export function StepTimelineSidebar({
                       'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors duration-150 hover:bg-white/[0.03]',
                       isHighlighted
                         ? 'border-l-2 border-sky-400 bg-sky-500/5 ring-1 ring-sky-400/30'
-                        : 'border-l-2 border-transparent',
+                        : isContinuation
+                          ? 'border-l-2 border-amber-400/50'
+                          : 'border-l-2 border-transparent',
                     ].join(' ')}
                     onClick={() => {
                       if (group.stepIndex != null) onClickStep(group.stepIndex)
