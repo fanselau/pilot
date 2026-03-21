@@ -197,7 +197,7 @@ export function StepTimelineSidebar({
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span className="font-medium">{shortProject(job.project)}</span>
           <span className="font-mono">{duration}</span>
-          {job.currentStep != null && <span>Step {job.currentStep}</span>}
+          {job.currentStep != null && <span>#{job.currentStep}</span>}
         </div>
       </div>
 

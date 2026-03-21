@@ -114,14 +114,18 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
   const isCodeLike = useMemo(() => detectLanguage(displayText) !== null, [displayText])
 
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 max-w-full overflow-hidden">
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
-        {formatTime(item.createdAt)}
-      </span>
-      <Badge variant={roleVariant(item.role)} size="sm">
-        {item.role}
-      </Badge>
-      <div className="min-w-0 flex-1">
+    <div className="py-1.5 max-w-full overflow-hidden space-y-0.5">
+      {/* Header row: metadata */}
+      <div className="flex items-center gap-x-2">
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {formatTime(item.createdAt)}
+        </span>
+        <Badge variant={roleVariant(item.role)} size="sm">
+          {item.role}
+        </Badge>
+      </div>
+      {/* Content row */}
+      <div className="min-w-0">
         {fullText && isCodeLike ? (
           <SyntaxHighlight content={displayText} />
         ) : (
@@ -150,19 +154,23 @@ export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
 
   return (
     <Collapsible>
-      <div className={`flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 max-w-full overflow-hidden ${isError ? 'bg-rose-500/5 rounded' : ''}`}>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
-          {formatTime(item.createdAt)}
-        </span>
-        <span className={`shrink-0 text-xs font-mono font-medium mt-0.5 max-w-[120px] truncate ${isError ? 'text-rose-400' : 'text-sky-400'}`}>
-          {item.tool}
-        </span>
-        {item.toolStatus && (
-          <Badge variant={toolStatusVariant(item.toolStatus)} size="sm">
-            {item.toolStatus}
-          </Badge>
-        )}
-        <div className="min-w-0 flex-1">
+      <div className={`py-1.5 max-w-full overflow-hidden space-y-0.5 ${isError ? 'bg-rose-500/5 rounded' : ''}`}>
+        {/* Header row: metadata */}
+        <div className="flex items-center gap-x-2">
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {formatTime(item.createdAt)}
+          </span>
+          <span className={`shrink-0 text-xs font-mono font-medium max-w-[120px] truncate ${isError ? 'text-rose-400' : 'text-sky-400'}`}>
+            {item.tool}
+          </span>
+          {item.toolStatus && (
+            <Badge variant={toolStatusVariant(item.toolStatus)} size="sm">
+              {item.toolStatus}
+            </Badge>
+          )}
+        </div>
+        {/* Content row */}
+        <div className="min-w-0">
           {hasLongInput ? (
             <>
               <CollapsibleTrigger className="text-left text-xs text-muted-foreground hover:text-foreground">

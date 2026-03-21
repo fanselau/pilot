@@ -145,7 +145,7 @@ export function SplitPaneDetail({
               {snapshot.job.currentStep != null && (
                 currentGroup
                   ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep}`
-                  : `Step ${snapshot.job.currentStep}`
+                  : `#${snapshot.job.currentStep}`
               )}
               {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
             </span>
@@ -176,7 +176,7 @@ export function SplitPaneDetail({
             <span className="text-sky-300">
               {currentGroup
                 ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep ?? '…'}…`
-                : `Building step ${snapshot.job.currentStep ?? '\u2026'}`}
+                : `Running #${snapshot.job.currentStep ?? '…'}…`}
             </span>
             <span className="text-muted-foreground ml-auto">{elapsed}</span>
           </div>
