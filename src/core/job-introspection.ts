@@ -15,7 +15,9 @@ export type JobWhyCode =
   | 'undo-guarded-diverged'
   | 'undo-unavailable'
   | 'no-commit-delta'
-  | 'running';
+  | 'running'
+  | 'pending-human-review'
+  | 'review-hold';
 
 export interface JobWhy {
   code: JobWhyCode;
@@ -272,6 +274,28 @@ function buildJobWhy(job: Job, context: JobWhyContext = {}): JobWhy {
       what: 'Job is currently running.',
       why: 'Runner claimed this job and started execution.',
       next: 'Use pilot log <id> for live progress.',
+    };
+  }
+
+  if (job.status === 'completed_pending_review') {
+    return {
+      code: 'pending-human-review',
+      badge: 'review-pending',
+      what: 'Autonomous work is complete. Human review required.',
+      why: job.resumeHint
+        ? `Review items: ${job.resumeHint}`
+        : 'Judge determined remaining items require human verification.',
+      next: `Run: pilot review ${job.id} --approve  OR  pilot review ${job.id} --reject "reason"`,
+    };
+  }
+
+  if (job.status === 'review_hold') {
+    return {
+      code: 'review-hold',
+      badge: 'review-hold',
+      what: 'Execution paused for mid-phase human review.',
+      why: job.resumeHint ?? 'A checkpoint requires human verification before continuing.',
+      next: `Run: pilot review ${job.id} --approve  to resume execution`,
     };
   }
 
