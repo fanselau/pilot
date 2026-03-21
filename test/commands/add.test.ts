@@ -203,7 +203,7 @@ describe('addCommand', () => {
 
     // addJob receives the resolved absolute path (not the raw shorthand name)
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      expect.stringContaining('my-project'), 'quick', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
@@ -215,7 +215,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix the navbar', { as: 'phase' as JobScope, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      expect.stringContaining('my-project'), 'phase', 'fix the navbar', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -236,6 +236,7 @@ describe('addCommand', () => {
       undefined,
       undefined,
       0,
+      false,
     );
   });
 
@@ -272,7 +273,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { profile: 'budget', provider: 'hybrid', noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined, 0,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'budget', 'hybrid', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -280,7 +281,7 @@ describe('addCommand', () => {
     await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      expect.stringContaining('my-project'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -445,7 +446,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -460,7 +461,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -477,7 +478,7 @@ describe('project setup validation', () => {
     await addCommand('test-proj', 'fix stuff', { noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      path.join(tmpDir, 'test-proj'), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
     const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
     expect(stderrOutput).toContain('opencode.json');
@@ -490,7 +491,7 @@ describe('project setup validation', () => {
     await addCommand('.', 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      process.cwd(), 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 
@@ -500,7 +501,7 @@ describe('project setup validation', () => {
     await addCommand(absPath, 'fix stuff', { force: true, noNotify: true, noCategories: true });
 
     expect(addJob).toHaveBeenCalledWith(
-      absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0,
+      absPath, 'quick', 'fix stuff', undefined, 'balanced', 'claude-only', undefined, undefined, undefined, undefined, 0, false,
     );
   });
 });
@@ -700,7 +701,7 @@ describe('notify flag validation', () => {
       safeLegacyMain,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'main',
@@ -725,6 +726,7 @@ describe('notify flag validation', () => {
       undefined,    // callbackSessionKey = undefined (no notification)
       undefined,
       0,            // timeout
+      false,
     );
     // No error should have occurred
   });
@@ -746,7 +748,7 @@ describe('notify flag validation', () => {
       safeLegacyMain,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'main',
@@ -773,7 +775,7 @@ describe('notify flag validation', () => {
       safeLegacyOverride,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'override',
@@ -800,6 +802,7 @@ describe('notify flag validation', () => {
       undefined,    // --no-notify wins over env var
       undefined,
       0,            // timeout
+      false,
     );
   });
 
@@ -882,7 +885,7 @@ describe('notify flag validation', () => {
       safeLegacyMain,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'benefitu',
@@ -976,7 +979,7 @@ describe('project owner as fallback notify', () => {
       ownerSessionKey,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'main',
@@ -1214,7 +1217,7 @@ describe('optional notify behavior', () => {
       safeLegacyKey,
       undefined,
       0,
-      undefined,
+      false,
       {
         kind: 'openclaw-agent-deliver',
         agentId: 'main',
