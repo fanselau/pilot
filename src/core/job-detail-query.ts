@@ -469,17 +469,24 @@ function parseStepTime(value: string | null): number | null {
   return safeParseTimestamp(value);
 }
 
-function resolveStepIndex(candidate: TimelineCandidate, steps: TimelineStepRef[]): number | null {
+function resolveStepIndex(
+  candidate: TimelineCandidate,
+  steps: TimelineStepRef[],
+  childToStepIndex: Map<string, number>,
+): number | null {
+  // Tier 1: Direct sessionId match
   if (candidate.sessionId) {
     const bySessionId = steps.find((step) => step.sessionId === candidate.sessionId);
     if (bySessionId) return bySessionId.stepIndex;
   }
 
+  // Tier 2: sessionTitle match
   if (candidate.sessionTitle) {
     const bySessionTitle = steps.find((step) => step.sessionTitle === candidate.sessionTitle);
     if (bySessionTitle) return bySessionTitle.stepIndex;
   }
 
+  // Tier 3: Time window match
   const byWindow = steps.find((step) => {
     if (step.startedAtMs === null) return false;
     const windowStart = step.startedAtMs;
@@ -488,17 +495,38 @@ function resolveStepIndex(candidate: TimelineCandidate, steps: TimelineStepRef[]
   });
   if (byWindow) return byWindow.stepIndex;
 
+  // Tier 4: Child session transitivity — candidate's session is a child of a step's session
+  if (candidate.sessionId) {
+    const childMatch = childToStepIndex.get(candidate.sessionId);
+    if (childMatch !== undefined) return childMatch;
+  }
+
+  // Tier 5: Last-step fallback — attribute to the most recently started step
+  // Catches late judge/wrap-up activity that fires after all step windows close
+  let latestStep: TimelineStepRef | null = null;
+  for (const step of steps) {
+    if (step.startedAtMs === null) continue;
+    if (!latestStep || step.startedAtMs > latestStep.startedAtMs!) {
+      latestStep = step;
+    }
+  }
+  if (latestStep && candidate.createdAt >= latestStep.startedAtMs!) {
+    return latestStep.stepIndex;
+  }
+
   return null;
 }
 
 /**
  * Build a step-grouped chronological timeline for a job.
  *
- * Timeline attribution order is deterministic:
+ * Timeline attribution order is deterministic (5 tiers):
  * 1) job_steps.sessionId identity
  * 2) job_steps.sessionTitle match
- * 3) step time window
- * 4) unattributed bucket
+ * 3) step time window (startedAtMs..completedAtMs, open-ended if null)
+ * 4) child session transitivity (candidate's session is a child of a step's session)
+ * 5) last-step fallback (attribute to most recently started step)
+ * 6) unattributed bucket (genuinely unassignable content only)
  *
  * Child branches are represented as one lifecycle-aware object per child
  * session ID (no separate completion item).
@@ -595,6 +623,19 @@ function getJobTimeline(
   const candidates: TimelineCandidate[] = [];
   let totalChildCount = 0;
 
+  // ── Child-to-step-index map for tier 4 attribution ─────────────────────
+  // Maps child session IDs to the step that owns their parent session.
+  // Built during BFS; used by resolveStepIndex() for transitive attribution.
+  const childToStepIndex = new Map<string, number>();
+
+  // Build a sessionId → stepIndex lookup from allStepRefs for BFS ownership tracking
+  const sessionIdToStepIndex = new Map<string, number>();
+  for (const step of allStepRefs) {
+    if (step.sessionId) {
+      sessionIdToStepIndex.set(step.sessionId, step.stepIndex);
+    }
+  }
+
   while (queue.length > 0) {
     const current = queue.shift();
     if (!current) break;
@@ -644,7 +685,15 @@ function getJobTimeline(
     const children = getChildSessions(current.sessionId);
     totalChildCount += children.length;
 
+    // Track child → step ownership for tier 4 attribution
+    const owningStepIndex = sessionIdToStepIndex.get(current.sessionId)
+      ?? childToStepIndex.get(current.sessionId);
+
     for (const child of children) {
+      // Record transitive ownership: if parent is owned by a step, child inherits
+      if (owningStepIndex !== undefined && !childToStepIndex.has(child.id)) {
+        childToStepIndex.set(child.id, owningStepIndex);
+      }
       const done = isSessionDone(child.id);
       const messageCount = getAssistantMessageCount(child.id);
       const tokens = getSessionTokensRecursive(child.id);
@@ -722,7 +771,7 @@ function getJobTimeline(
   };
 
   for (const candidate of page) {
-    const attributedStepIndex = resolveStepIndex(candidate, allStepRefs);
+    const attributedStepIndex = resolveStepIndex(candidate, allStepRefs, childToStepIndex);
     if (attributedStepIndex === null) {
       unattributed.items.push(candidate.item);
       continue;
