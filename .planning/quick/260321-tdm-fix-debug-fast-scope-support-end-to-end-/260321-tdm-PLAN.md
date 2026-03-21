@@ -18,8 +18,8 @@ must_haves:
     - "`pilot add ... --as debug` inserts a job into the DB without CHECK constraint failure"
     - "Existing databases with old 3-scope CHECK constraint are migrated to 5-scope on startup"
     - "Fast jobs have skip_grace_period=1 so they start immediately without waiting for queue grace"
-    - "All views (status, info, history) display debug/fast jobs correctly"
-    - "A real fast case-study job queues and executes under fast scope"
+    - "All views (status, info, history) display debug/fast jobs correctly — verified with explicit pilot status, pilot info, and pilot history commands"
+    - "A real fast case-study job queues, the runner is restarted to pick up the rebuilt binary, and the job transitions from pending to running (runner pickup confirmed)"
   artifacts:
     - path: "src/core/db.ts"
       provides: "Updated CREATE_TABLE_SQL with 5-scope CHECK, new migrateScopeConstraint function, fast→skipGracePeriod in addJob"
@@ -47,7 +47,7 @@ Fix debug/fast scope support end-to-end in Pilot — update SQLite CHECK constra
 
 Purpose: `pilot add ... --as fast` and `--as debug` fail at runtime with `SQLiteError: CHECK constraint failed: scope IN ('quick', 'phase', 'milestone')`. The type system, CLI, runner, and delegate layers already support these scopes, but the DB schema still rejects them. This plan closes the gap at the persistence layer and validates the fix end-to-end.
 
-Output: Working fast/debug scope insertion, migrated schema, rebuilt binary, and a completed fast case-study job proving the fix.
+Output: Working fast/debug scope insertion, migrated schema, rebuilt binary, restarted runner, and a fast case-study job that queues and gets picked up by the runner — proving the fix end-to-end.
 </objective>
 
 <execution_context>
@@ -158,7 +158,7 @@ This already respects `skip_grace_period` — so once fast jobs are inserted wit
 </task>
 
 <task type="auto">
-  <name>Task 2: Rebuild, restart, verify end-to-end with real CLI, run fast case-study job</name>
+  <name>Task 2: Rebuild, restart runner, verify end-to-end with real CLI + pilot info, run fast case-study job and confirm runner pickup</name>
   <files>dist/</files>
   <action>
 1. **Run full test suite** to confirm nothing is broken:
@@ -173,47 +173,70 @@ This already respects `skip_grace_period` — so once fast jobs are inserted wit
    ```
    Confirm clean exit.
 
-3. **Verify debug scope works** by running a dry-run:
+3. **Restart the pilot runner** so it picks up the rebuilt binary:
+   ```bash
+   systemctl --user restart pilot-runner
+   sleep 2
+   systemctl --user status pilot-runner --no-pager | head -10
+   ```
+   Runner must show `active (running)`. This is critical — without restart, the running daemon uses the old binary with the 3-scope CHECK constraint.
+
+4. **Verify debug scope works** by running a dry-run:
    ```bash
    pilot add /home/luca/dev/punchlab/pilot "test debug scope" --as debug --dry-run --no-notify --no-categories
    ```
    Should print dry-run output without errors.
 
-4. **Verify fast scope works** by running a dry-run:
+5. **Verify fast scope works** by running a dry-run:
    ```bash
    pilot add /home/luca/dev/punchlab/pilot "test fast scope" --as fast --dry-run --no-notify --no-categories
    ```
    Should print dry-run output without errors.
 
-5. **Verify real fast job insertion** (not dry-run):
+6. **Verify real fast job insertion** (not dry-run) — the case-study job:
    ```bash
    pilot add /home/luca/dev/punchlab/pilot "use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior" --as fast --no-notify --categories frontend
    ```
-   Should succeed — job enters queue with scope=fast and skip_grace_period=1.
+   Should succeed — job enters queue with scope=fast and skip_grace_period=1. Note the job ID from output.
 
-6. **Verify the job appears in status**:
+7. **Verify the job appears in status**:
    ```bash
-   pilot status --json 2>/dev/null | head -30
+   pilot status --json 2>/dev/null | head -40
    ```
-   Should show the new fast job in pending state.
+   Should show the new fast job.
 
-7. **Verify real debug job insertion**:
+8. **Verify with `pilot info`** — use the job ID from step 6:
+   ```bash
+   pilot info <JOB_ID> --json 2>/dev/null | head -30
+   ```
+   Should show scope=fast and skip_grace_period=1 in the job details. This explicitly validates the `info` view for new scopes.
+
+9. **Verify real debug job insertion**:
    ```bash
    pilot add /home/luca/dev/punchlab/pilot "test debug scope e2e" --as debug --no-notify --categories testing --force
    ```
    Should succeed.
 
-8. **Check both jobs visible in history/info**:
-   ```bash
-   pilot history --json 2>/dev/null | head -20
-   ```
+10. **Check both jobs visible in history**:
+    ```bash
+    pilot history --json 2>/dev/null | head -30
+    ```
+    Both fast and debug jobs should appear.
 
-Note: The case-study fast job will be picked up by the runner when it next polls. We verify it enters the queue correctly — actual execution depends on the runner being active. If the runner is not active, note that in the summary but the insertion and schema are verified.
+11. **Wait for runner pickup of the fast case-study job** — the runner polls periodically, so wait briefly and check if the job transitions from `pending` to `running` or `launched`:
+    ```bash
+    sleep 15
+    pilot status --json 2>/dev/null | head -40
+    ```
+    The fast case-study job should show state `running` or `launched` (not still `pending`), confirming the runner picked it up. If after 15 seconds it's still pending, wait another 15 seconds and check again. The fast job has skip_grace_period=1 so it should be picked up on the next runner poll cycle.
+
+    If the runner picked it up, this confirms end-to-end: insertion → queue → runner pickup → execution start.
+    If the runner hasn't picked it up after 30s total, check runner logs with `journalctl --user -u pilot-runner --since "2 min ago" --no-pager | tail -20` to diagnose. Note the outcome in the summary either way.
   </action>
   <verify>
-    <automated>npm run build && npx vitest run 2>&1 | tail -5</automated>
+    <automated>npm run build && npx vitest run 2>&1 | tail -5 && systemctl --user is-active pilot-runner</automated>
   </verify>
-  <done>Build succeeds. Full test suite passes. `pilot add --as fast` and `--as debug` work against real DB (not just dry-run). Fast case-study job is queued with scope=fast. Debug test job is queued with scope=debug. No CHECK constraint errors.</done>
+  <done>Build succeeds. Full test suite passes. Runner restarted with new binary. `pilot add --as fast` and `--as debug` work against real DB (not just dry-run). `pilot info` shows scope=fast for the case-study job. Fast case-study job transitions from pending to running/launched (runner pickup confirmed). Debug test job is queued with scope=debug. No CHECK constraint errors.</done>
 </task>
 
 <task type="auto">
@@ -248,9 +271,12 @@ Follow the project's SUMMARY.md conventions.
 <verification>
 - `npx vitest run` — full test suite passes (including new db-scope tests)
 - `npm run build` — clean build with no errors
+- `systemctl --user restart pilot-runner && systemctl --user is-active pilot-runner` — runner active with new binary
 - `pilot add ... --as fast --dry-run` — no CHECK constraint error
 - `pilot add ... --as debug --dry-run` — no CHECK constraint error
 - Real fast job in queue with scope=fast and skip_grace_period=1
+- `pilot info <JOB_ID>` — shows scope=fast for the case-study job
+- `pilot status` — fast case-study job transitions to running/launched (runner pickup)
 - SUMMARY.md documents the fix
 </verification>
 
@@ -260,8 +286,10 @@ Follow the project's SUMMARY.md conventions.
 3. Fast jobs auto-skip queue grace period
 4. Full test suite passes (existing + new scope tests)
 5. Real `pilot add --as fast` and `--as debug` work against live database
-6. iOS Safari viewport-height fast case-study job is queued and visible in status
-7. SUMMARY.md written
+6. Runner restarted with new binary (`systemctl --user restart pilot-runner`)
+7. iOS Safari viewport-height fast case-study job queued, visible in status/info/history, and picked up by runner (transitions from pending to running/launched)
+8. `pilot info <JOB_ID>` explicitly shows scope=fast for the case-study job
+9. SUMMARY.md written
 </success_criteria>
 
 <output>
