@@ -9,7 +9,7 @@
  * which did PID/log scanning. This checks opencode binary, DB access, disk, memory.
  */
 
-import { accessSync, constants as fsConstants, readFileSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, readFileSync, realpathSync, statSync } from 'node:fs';
 import { access, readFile, readdir, lstat, stat } from 'node:fs/promises';
 import { execaSync, execa } from 'execa';
 import path from 'node:path';
@@ -19,6 +19,7 @@ import { resolveOpencodeBinary } from '../core/delegate.js';
 import { errMsg } from '../util/errors.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, yellow, dim, bold } from '../util/colors.js';
+import { resolvePilotBinary } from './service.js';
 
 interface Check {
   name: string;
@@ -556,6 +557,7 @@ async function systemHealthCheck(skipAgents?: boolean, fix?: boolean): Promise<C
 
   // ── Service unit health check ──────────────────────────────────────────────
 
+  let serviceExecBinaryPath: string | null = null;
   const unitPath = path.join(os.homedir(), '.config', 'systemd', 'user', 'pilot-runner.service');
   try {
     const unitContent = readFileSync(unitPath, 'utf8');
@@ -578,6 +580,7 @@ async function systemHealthCheck(skipAgents?: boolean, fix?: boolean): Promise<C
       }
 
       if (pilotBinaryPath) {
+        serviceExecBinaryPath = pilotBinaryPath;
         try {
           accessSync(pilotBinaryPath, fsConstants.X_OK);
           checks.push({
@@ -612,6 +615,35 @@ async function systemHealthCheck(skipAgents?: boolean, fix?: boolean): Promise<C
       status: 'warn',
       detail: 'Service not installed — run: pilot service install',
     });
+  }
+
+  // ── Binary drift detection ────────────────────────────────────────────────
+  // Warns when the service unit's ExecStart binary differs from the current
+  // build output (resolvePilotBinary). Skipped when no service unit exists.
+
+  if (serviceExecBinaryPath) {
+    try {
+      const buildBinary = resolvePilotBinary();
+      const normalizedService = realpathSync(serviceExecBinaryPath);
+      const normalizedBuild = realpathSync(buildBinary);
+
+      if (normalizedService === normalizedBuild) {
+        checks.push({
+          name: 'binary drift',
+          status: 'pass',
+          detail: `Service and build binary match: ${normalizedBuild}`,
+        });
+      } else {
+        checks.push({
+          name: 'binary drift',
+          status: 'warn',
+          detail: `Service binary drift: service uses ${normalizedService}, current build is ${normalizedBuild} — run: bun run build && pilot service install && pilot reload`,
+        });
+      }
+    } catch {
+      // resolvePilotBinary() threw or realpathSync failed — skip silently
+      // The existing service unit check already covers missing binary cases
+    }
   }
 
   // ── Shell exposure health check ──────────────────────────────────────────
