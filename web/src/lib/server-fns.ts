@@ -25,8 +25,9 @@ import {
   blockProjectAction,
 } from '@pilot/core/job-detail-query.js'
 import type { GroupedTimelinePage, ProjectWithStats } from '@pilot/core/types.js'
-import { getQueue, getRecent } from '@pilot/core/db.js'
+import { getQueue, getRecent, getJob } from '@pilot/core/db.js'
 import { getConfig } from '@pilot/core/config.js'
+import { buildJobObservability } from '@pilot/core/job-observability.js'
 
 // ── Grace Config ─────────────────────────────────────────────────────────
 
@@ -206,3 +207,43 @@ export const getProjectDetailFn = createServerFn({ method: 'GET' })
 export const getProjectJobsFn = createServerFn({ method: 'GET' })
   .inputValidator((d: { projectPath: string; limit?: number }) => d)
   .handler(async ({ data }) => getProjectJobs(data.projectPath, data.limit))
+
+// ── Job Observability ────────────────────────────────────────────────────
+
+export const getJobObservabilityFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: jobId }) => {
+    const job = getJob(jobId)
+    if (!job) return null
+    return buildJobObservability(job)
+  })
+
+// ── Job Verdict History ──────────────────────────────────────────────────
+
+export const getJobVerdictHistoryFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: jobId }) => {
+    const detail = getJobDetail(jobId)
+    if (!detail) return []
+    return detail.steps
+      .filter(s => s.source.startsWith('judge') && s.verdictReason)
+      .map((s, i) => ({
+        stepIndex: s.stepIndex,
+        iteration: i + 1,
+        verdict: s.status,
+        verdictReason: s.verdictReason,
+        confidence: null as number | null,
+      }))
+  })
+
+// ── Job Verdict (parsed) ─────────────────────────────────────────────────
+
+export const getJobVerdictFn = createServerFn({ method: 'GET' })
+  .inputValidator((d: string) => d)
+  .handler(async ({ data: jobId }) => {
+    const detail = getJobDetail(jobId)
+    if (!detail) return null
+    const raw = (detail.job as any).judgeVerdict
+    if (!raw) return null
+    try { return JSON.parse(raw) } catch { return null }
+  })
