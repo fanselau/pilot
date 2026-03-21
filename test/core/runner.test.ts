@@ -27,7 +27,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining } from '../../src/core/runner.js';
+import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause } from '../../src/core/runner.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -1033,5 +1033,27 @@ describe('review state detection', () => {
       gaps: [],
     });
     expect(result).toBe(true);
+  });
+});
+
+// ── detectCheckpointPause ─────────────────────────────────────────────────
+
+describe('detectCheckpointPause', () => {
+  it('returns { isCheckpoint: false, reason: "" } when sessionId is null', () => {
+    const result = detectCheckpointPause(null);
+    expect(result.isCheckpoint).toBe(false);
+    expect(result.reason).toBe('');
+  });
+
+  it('returns { isCheckpoint: false } when sessionId is an empty string', () => {
+    const result = detectCheckpointPause('');
+    expect(result.isCheckpoint).toBe(false);
+    expect(result.reason).toBe('');
+  });
+
+  it('returns { isCheckpoint: false } when opencode DB is unavailable (no DB file in test env)', () => {
+    // In test env, opencode DB file doesn't exist, so openDb() returns null
+    const result = detectCheckpointPause('some-nonexistent-session-id');
+    expect(result.isCheckpoint).toBe(false);
   });
 });

@@ -57,6 +57,9 @@ import {
   markReviewHold,
   approveReview,
   resumeFromReviewHold,
+  // Phase 83: resumed review_hold pickup
+  getResumedReviewHoldJobs,
+  clearResumedFlag,
 } from '../../src/core/db.js';
 
 describe('pilot.db', () => {
@@ -1497,6 +1500,81 @@ describe('managed projects', () => {
       const recent = getRecent();
       const ids = recent.map((j) => j.id);
       expect(ids).toContain(job.id);
+    });
+
+    it('resumeFromReviewHold sets resumed_from_hold so getResumedReviewHoldJobs can find it', () => {
+      const job = addJob('/proj', 'quick', 'resume hold job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'checkpoint reason');
+      resumeFromReviewHold(job.id);
+
+      const resumed = getResumedReviewHoldJobs();
+      const ids = resumed.map((j) => j.id);
+      expect(ids).toContain(job.id);
+    });
+  });
+
+  describe('getResumedReviewHoldJobs', () => {
+    it('returns empty array when no resumed jobs exist', () => {
+      const resumed = getResumedReviewHoldJobs();
+      expect(resumed).toEqual([]);
+    });
+
+    it('returns jobs in running status that were resumed from review_hold', () => {
+      const job = addJob('/proj', 'quick', 'resumed job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'mid-phase checkpoint');
+      resumeFromReviewHold(job.id);
+
+      const resumed = getResumedReviewHoldJobs();
+      expect(resumed.length).toBe(1);
+      expect(resumed[0].id).toBe(job.id);
+      expect(resumed[0].status).toBe('running');
+    });
+
+    it('does not return normal running jobs without resumed_from_hold flag', () => {
+      const job = addJob('/proj', 'quick', 'normal running job');
+      markRunning(job.id);
+
+      const resumed = getResumedReviewHoldJobs();
+      expect(resumed.length).toBe(0);
+    });
+
+    it('does not return review_hold jobs that have not been resumed yet', () => {
+      const job = addJob('/proj', 'quick', 'still held job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'waiting for approval');
+
+      const resumed = getResumedReviewHoldJobs();
+      expect(resumed.length).toBe(0);
+    });
+  });
+
+  describe('clearResumedFlag', () => {
+    it('clears the resumed_from_hold flag so job is no longer in resumed list', () => {
+      const job = addJob('/proj', 'quick', 'clear flag job');
+      markRunning(job.id);
+      markReviewHold(job.id, 'reason');
+      resumeFromReviewHold(job.id);
+
+      // Should be in resumed list before clearing
+      const before = getResumedReviewHoldJobs();
+      expect(before.map((j) => j.id)).toContain(job.id);
+
+      // Clear the flag
+      clearResumedFlag(job.id);
+
+      // Should no longer appear in resumed list
+      const after = getResumedReviewHoldJobs();
+      expect(after.map((j) => j.id)).not.toContain(job.id);
+    });
+
+    it('is a no-op for jobs without the resumed flag', () => {
+      const job = addJob('/proj', 'quick', 'no-op clear');
+      markRunning(job.id);
+
+      // Should not throw
+      expect(() => clearResumedFlag(job.id)).not.toThrow();
     });
   });
 
