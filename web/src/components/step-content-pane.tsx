@@ -297,7 +297,7 @@ export function StepContentPane({
                         {/* Row 4: Tool summary chips */}
                         <ToolSummaryChips items={group.items} />
                       </div>
-                      <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
+                      <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
                         {group.items.map((item, idx) => {
                           const globalIdx = groupStartIndex + idx
                           const isNew = globalIdx >= newItemStart && newItemStart < allItems.length

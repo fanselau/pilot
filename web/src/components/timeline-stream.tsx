@@ -113,7 +113,7 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
   const isCodeLike = useMemo(() => detectLanguage(displayText) !== null, [displayText])
 
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 max-w-full overflow-hidden">
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
         {formatTime(item.createdAt)}
       </span>
@@ -124,7 +124,7 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
         {fullText && isCodeLike ? (
           <SyntaxHighlight content={displayText} />
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
             {fullText ? displayText : truncate(displayText, 220)}
           </span>
         )}
@@ -149,11 +149,11 @@ export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
 
   return (
     <Collapsible>
-      <div className={`flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 ${isError ? 'bg-rose-500/5 rounded' : ''}`}>
+      <div className={`flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 max-w-full overflow-hidden ${isError ? 'bg-rose-500/5 rounded' : ''}`}>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
           {formatTime(item.createdAt)}
         </span>
-        <span className={`shrink-0 text-xs font-mono font-medium mt-0.5 ${isError ? 'text-rose-400' : 'text-sky-400'}`}>
+        <span className={`shrink-0 text-xs font-mono font-medium mt-0.5 max-w-[120px] truncate ${isError ? 'text-rose-400' : 'text-sky-400'}`}>
           {item.tool}
         </span>
         {item.toolStatus && (
@@ -228,7 +228,7 @@ function StepGroupSection({
         <span className="text-sm text-muted-foreground">{group.command}</span>
       </div>
 
-      <div className="relative min-w-0 max-w-full space-y-0.5 border-l-2 border-border/40 pl-4">
+      <div className="relative min-w-0 max-w-full overflow-hidden space-y-0.5 border-l-2 border-border/40 pl-2 sm:pl-4">
         {group.items.map((item, idx) => {
           const itemKey = item.kind === 'fork-card'
             ? `fork-${item.sessionId}-${item.createdAt}-${idx}`

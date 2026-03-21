@@ -28,7 +28,7 @@ export function ToolSummaryChips({ items, className }: {
     .slice(0, 6)
 
   return (
-    <div className={`flex flex-wrap gap-1 ${className ?? ''}`}>
+    <div className={`flex flex-wrap gap-1 max-w-full overflow-hidden ${className ?? ''}`}>
       {sorted.map(([tool, count]) => (
         <Badge key={tool} variant="outline" size="sm" className="text-[10px] font-mono gap-0.5 py-0">
           {tool} <span className="text-muted-foreground">×{count}</span>

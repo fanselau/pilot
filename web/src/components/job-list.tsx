@@ -368,14 +368,14 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPrevi
                     {job.scope}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]">
                   {shortProject(job.project)}
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                <TableCell className="max-w-[300px]">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                     {job.description.length > 60 ? (
                       <Tooltip>
-                        <TooltipTrigger className="cursor-default text-left text-sm text-muted-foreground">
+                        <TooltipTrigger className="cursor-default text-left text-sm text-muted-foreground truncate">
                           {desc}
                         </TooltipTrigger>
                         <TooltipPopup className="max-w-xs">
@@ -383,7 +383,7 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPrevi
                         </TooltipPopup>
                       </Tooltip>
                     ) : (
-                      <span className="text-sm text-muted-foreground">{desc}</span>
+                      <span className="text-sm text-muted-foreground truncate">{desc}</span>
                     )}
                     {job.categories?.slice(0, 3).map((cat) => (
                       <Badge key={cat} variant="outline" size="sm" className="text-[10px]">
