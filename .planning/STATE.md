@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 79-01-PLAN.md
-last_updated: "2026-03-21T08:45:34.755Z"
+stopped_at: Completed 80-02-PLAN.md
+last_updated: "2026-03-21T09:12:52.867Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
-  total_phases: 78
+  total_phases: 79
   completed_phases: 36
-  total_plans: 138
-  completed_plans: 126
+  total_plans: 140
+  completed_plans: 127
   percent: 93
 ---
 
@@ -350,6 +350,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 77 added: Web UI Fixes — Post-Overhaul Regressions + Missing Features
 - Phase 78 added: Web UI Premium — Data-Rich, Dense, Modern Dashboard
 - Phase 79 added: Web UI Job Activity Regression — Restore visible activity under jobs
+- Phase 80 added: Web UI Attribution + Mobile Overflow Hardening
 
 ## Decisions
 
@@ -901,6 +902,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 78]: Message count parity confirmed — no code change needed; both card and drill-in use getAssistantMessageCount()
 - [Phase quick-260321-61z]: Seed registers all tiers (tier 'all') by default; old stale entries left intact since different names
 - [Phase 79]: Root cause was missing SSR loader for timeline data — Client-only useQuery rendered empty state on server; added route loader as fix
+- [Phase 80]: Added overflow-x-hidden to body as global safety net while fixing individual components
+- [Phase 80]: Used responsive margin classes (pl-2 ml-2 sm:pl-3 sm:ml-4) to reclaim mobile space without affecting desktop
 
 ## Blockers/Concerns Carried Forward
 
@@ -909,6 +912,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:45:34.748Z
-Stopped at: Completed 79-01-PLAN.md
+Last session: 2026-03-21T09:12:52.860Z
+Stopped at: Completed 80-02-PLAN.md
 Resume file: None
