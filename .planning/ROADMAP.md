@@ -1540,3 +1540,18 @@ Plans:
 Wave structure:
 - Wave 1: 84-01 + 84-02 (independent: web UI fix and runner fix, no file overlap)
 - Wave 2: 84-03 (test updates, depends on 84-01 and 84-02)
+
+### Phase 85: Pilot CLI: Disable Milestones for Now + Realign Top-Level GSD Commands (debug + fast)
+
+**Goal:** Make Pilot safer and more expressive at the CLI level by disabling milestone queuing, adding first-class debug and fast job scopes, and updating the delegation prompt with explicit autonomy guidance for workflow selection.
+**Requirements**: TBD
+**Depends on:** Phase 84
+**Plans:** 2 plans
+
+Plans:
+- [ ] 85-01-PLAN.md — Foundation: types, models, add command, config, delegation prompt (debug/fast scopes + milestone blocking)
+- [ ] 85-02-PLAN.md — Runner routing: intentToSteps for debug/fast, delegate validation, milestone guard note, full test pass
+
+Wave structure:
+- Wave 1: 85-01 (type foundation + CLI + delegation prompt)
+- Wave 2: 85-02 (runner execution routing + integration verification, depends on 85-01)
