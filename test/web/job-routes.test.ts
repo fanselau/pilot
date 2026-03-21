@@ -11,6 +11,7 @@ describe('job detail route contract', () => {
     const layoutRoute = read('web/src/routes/jobs.$jobId.tsx');
     const indexRoute = read('web/src/routes/jobs.$jobId.index.tsx');
 
+    // Route structure
     expect(layoutRoute).toContain("createFileRoute('/jobs/$jobId')");
     expect(layoutRoute).toContain('component: JobLayout');
     expect(layoutRoute).toContain('<Outlet />');
@@ -18,7 +19,15 @@ describe('job detail route contract', () => {
 
     expect(indexRoute).toContain("createFileRoute('/jobs/$jobId/')");
     expect(indexRoute).toContain('component: JobDetailIndexPage');
-    expect(indexRoute).toContain('<JobDetail snapshot={snapshot} />');
+    expect(indexRoute).toContain('<SplitPaneDetail');
+
+    // Regression: live-status must use reactive snapshot, not stale loader
+    expect(layoutRoute).not.toContain("loaderData?.job.status === 'running'");
+    expect(layoutRoute).toContain('refetchInterval: (query)');
+
+    expect(indexRoute).not.toContain("layoutLoaderData?.job.status === 'running'");
+    expect(indexRoute).toContain("snapshot?.job.status === 'running'");
+    expect(indexRoute).toContain('refetchInterval: (query)');
   });
 
   it('keeps generated route tree aligned with layout/index/session topology', () => {
@@ -35,8 +44,8 @@ describe('job detail route contract', () => {
   it('preserves child-page breadcrumb context and session reset invariants', () => {
     const childRoute = read('web/src/routes/jobs.$jobId.sessions.$sessionId.tsx');
 
-    expect(childRoute).toContain('Dashboard');
-    expect(childRoute).toContain('Nested child session');
+    expect(childRoute).toContain('Back to Job');
+    expect(childRoute).toContain('Sub-Agent Session');
     expect(childRoute).toContain('to="/jobs/$jobId"');
     expect(childRoute).toContain('key={sessionId}');
   });
