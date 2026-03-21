@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 78-04-PLAN.md
-last_updated: "2026-03-21T03:52:03.567Z"
+last_updated: "2026-03-21T03:52:09.409Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 77
@@ -893,6 +893,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 78]: Used buildJobObservability(job) with getJob() lookup instead of non-existent getJobObservability
 - [Phase 78]: Used item.kind === 'tool-summary' instead of plan's incorrect 'activity' + 'type' check for tool counting
 - [Phase 78]: ObservabilityCard fetches via getJobObservabilityFn with 5s refetch for active jobs
+- [Phase 78]: Parse judgeVerdict JSON client-side for inline verdict display — Same pattern as job-detail-query.ts; avoids unnecessary server round-trip
 
 ## Blockers/Concerns Carried Forward
 
