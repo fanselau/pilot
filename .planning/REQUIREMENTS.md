@@ -84,6 +84,30 @@ Requirements for initial release. Each maps to roadmap phases.
 | MOB-05 | Phase 80 | Complete |
 | SUB-01 | Phase 80 | Complete |
 
+### Timeline Semantics + Renderer Unification
+
+- [x] **TSEM-01**: Steps with known session lineage are attributed to correct step groups (not Unattributed)
+- [x] **TSEM-02**: Each step group has a semantic label derived from source + command (e.g., "Execution", "Judge", "Gap Closure")
+- [x] **TSEM-03**: A shared helper module (`step-semantics.ts`) maps step source/command to human-readable labels
+- [x] **TSEM-04**: Child/sub-session drill-in views use the same renderer primitives as main view
+- [ ] **TSEM-05**: Session activity metadata (timestamp/badges) sits in a header row above content, not inline
+- [x] **TSEM-06**: Steps tab renamed to Timeline
+- [x] **TSEM-07**: Continuation/gap-closure steps are visually distinct (badge + amber accent)
+- [ ] **TSEM-08**: Judge verdict is surfaced as a first-class visual object in the timeline
+- [ ] **TSEM-09**: All step label surfaces use semantic names (no remaining generic "Step N" fallbacks)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TSEM-01 | Phase 82 | Complete |
+| TSEM-02 | Phase 82 | Complete |
+| TSEM-03 | Phase 82 | Complete |
+| TSEM-04 | Phase 82 | Complete |
+| TSEM-05 | Phase 82 | In Progress |
+| TSEM-06 | Phase 82 | Complete |
+| TSEM-07 | Phase 82 | Complete |
+| TSEM-08 | Phase 82 | In Progress |
+| TSEM-09 | Phase 82 | In Progress |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -148,8 +172,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLEN-04 | Phase 68 | Pending |
 
 **Coverage:**
-- v1 requirements: 42 total (31 Phase 68 + 11 Phase 80)
-- Mapped to phases: 42
+- v1 requirements: 51 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82)
+- Mapped to phases: 51
 - Unmapped: 0 ✓
 
 ---
