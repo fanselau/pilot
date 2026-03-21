@@ -1497,13 +1497,16 @@ Wave structure:
 **Goal:** Make Pilot's timeline and session rendering feel semantically truthful, visually coherent, and consistent across main and child views. Replace generic "Step N" labels with semantic names, improve attribution logic, unify child/sub-session renderers with main view quality, and fix contradictory top-level status narratives.
 **Requirements**: requirements/pilot-timeline-semantics-and-renderer-unification.md
 **Depends on:** Phase 81
-**Plans:** 3/3 plans complete
+**Plans:** 5 plans (3 complete + 2 gap closure)
 
 Plans:
-- [ ] 82-01-PLAN.md — Core semantics: improve attribution logic, add semantic labels to StepTimelineGroup, create step-semantics.ts helper module
-- [ ] 82-02-PLAN.md — Renderer unification: rewrite session-activity.tsx to use shared TimelineItemRenderer, update child drill-in route
-- [ ] 82-03-PLAN.md — UI surface application: semantic labels across all components, Steps→Timeline tab rename, continuation markers, status narrative fixes
+- [x] 82-01-PLAN.md — Core semantics: improve attribution logic, add semantic labels to StepTimelineGroup, create step-semantics.ts helper module
+- [x] 82-02-PLAN.md — Renderer unification: rewrite session-activity.tsx to use shared TimelineItemRenderer, update child drill-in route
+- [x] 82-03-PLAN.md — UI surface application: semantic labels across all components, Steps→Timeline tab rename, continuation markers, status narrative fixes
+- [ ] 82-04-PLAN.md — Gap closure: metadata header-row layout, generic Step N fallback removal, judge verdict in timeline
+- [ ] 82-05-PLAN.md — Gap closure: Phase 82 requirement traceability in REQUIREMENTS.md
 
 Wave structure:
 - Wave 1: 82-01 + 82-02 (independent: core data/helpers and renderer unification, no file overlap)
 - Wave 2: 82-03 (UI wiring, depends on 82-01 for step-semantics.ts and 82-02 for unified renderer)
+- Wave 3: 82-04 + 82-05 (gap closure: UI fixes and requirements traceability, independent)
