@@ -63,15 +63,28 @@ function nextStepGuidance(job: Job): string {
   if (job.status === 'completed') {
     return 'Acknowledge completion and continue with the next planned item.';
   }
+  if (job.status === 'completed_pending_review') {
+    return `Autonomous work is complete. Human review is needed. Run: pilot review ${job.id} --approve  OR  pilot review ${job.id} --reject "reason"`;
+  }
+  if (job.status === 'review_hold') {
+    return `Execution is paused for mid-phase human review. Run: pilot review ${job.id} --approve  to resume, or pilot review ${job.id} --reject "reason" to cancel.`;
+  }
   return `The project is now blocked. Run: pilot log ${job.id} to read the full build transcript, then pilot unblock "${job.project}" to unblock. Queue a new job with pilot add.`;
 }
 
 function buildDeliveryPrompt(job: Job): string {
   const verdict = parseJudgeVerdict(job.judgeVerdict);
   const failed = job.status === 'failed';
+  const reviewPending = job.status === 'completed_pending_review';
+  const reviewHold = job.status === 'review_hold';
+
+  const statusWord = failed ? 'failed'
+    : reviewPending ? 'completed (pending human review)'
+    : reviewHold ? 'paused for human review'
+    : 'completed';
 
   const lines: string[] = [
-    `A Pilot job just ${failed ? 'failed' : 'completed'}. Reply in your target chat with a concise, natural-language update for the team.`,
+    `A Pilot job just ${statusWord}. Reply in your target chat with a concise, natural-language update for the team.`,
     '',
     'Job details:',
     `job_id: ${job.id}`,
@@ -138,6 +151,12 @@ function buildDeliveryPrompt(job: Job): string {
   if (failed) {
     lines.push(`Flag the failure clearly. The project is now blocked — no further jobs will run until someone unblocks it.`);
     lines.push(`Tell the team to run pilot log ${job.id} to inspect the transcript, then pilot unblock "${job.project}" and queue a new job with pilot add.`);
+  } else if (reviewPending) {
+    lines.push('The autonomous work is complete but human review is needed. This is NOT a failure — the project is NOT blocked.');
+    lines.push(`Tell the team to run pilot review ${job.id} --approve when review passes, or pilot review ${job.id} --reject "reason" to note issues.`);
+  } else if (reviewHold) {
+    lines.push('Execution is paused for mid-phase human review. This is NOT a failure — the project is NOT blocked.');
+    lines.push(`Tell the team to run pilot review ${job.id} --approve to resume execution.`);
   } else {
     lines.push('Acknowledge success, mention the project and what was done, and note the natural next action.');
   }

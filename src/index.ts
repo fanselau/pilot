@@ -223,6 +223,16 @@ program
   });
 
 program
+  .command('review <jobId>')
+  .description('Handle human review for jobs pending review')
+  .option('--approve', 'Approve the review and continue')
+  .option('--reject <reason>', 'Accept as-is with note (completed_pending_review) or cancel (review_hold)')
+  .action(async (jobId: string, opts: { approve?: boolean; reject?: string }) => {
+    const { reviewCommand } = await import('./commands/review.js');
+    await reviewCommand(jobId, opts);
+  });
+
+program
   .command('update')
   .description('Update GSD commands for all projects')
   .action(async () => {
