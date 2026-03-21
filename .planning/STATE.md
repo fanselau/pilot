@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 78-03-PLAN.md
-last_updated: "2026-03-21T03:51:50.799Z"
+stopped_at: Completed 78-04-PLAN.md
+last_updated: "2026-03-21T03:52:03.567Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 77
@@ -892,6 +892,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 77]: Delegation steps identified by command === delegation; per-step model info via fork-card items; block reason hardcoded for TUI
 - [Phase 78]: Used buildJobObservability(job) with getJob() lookup instead of non-existent getJobObservability
 - [Phase 78]: Used item.kind === 'tool-summary' instead of plan's incorrect 'activity' + 'type' check for tool counting
+- [Phase 78]: ObservabilityCard fetches via getJobObservabilityFn with 5s refetch for active jobs
 
 ## Blockers/Concerns Carried Forward
 
@@ -900,6 +901,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:51:37.176Z
-Stopped at: Completed 78-03-PLAN.md
+Last session: 2026-03-21T03:52:03.557Z
+Stopped at: Completed 78-04-PLAN.md
 Resume file: None
