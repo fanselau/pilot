@@ -19,6 +19,10 @@ let mockUnitContent: string | null = null; // null = file doesn't exist (ENOENT)
 let mockAccessiblePaths: Set<string> = new Set();
 const mockHomedir = '/home/testuser';
 
+// Binary drift mock state
+let mockResolvePilotBinaryResult = '/home/testuser/dev/pilot/dist/index.js';
+let mockResolvePilotBinaryThrows = false;
+
 // Shell exposure mock state
 let mockShellExposureResult: {
   findings: Array<{ tool: string; status: string; stablePath: string; resolvedTarget: string; detail: string }>;
@@ -66,6 +70,13 @@ vi.mock('../../src/core/agents-md.js', () => ({
   spawnAgentsMdSession: (...args: unknown[]) => mockSpawnAgentsMdSession(...args),
 }));
 
+vi.mock('../../src/commands/service.js', () => ({
+  resolvePilotBinary: () => {
+    if (mockResolvePilotBinaryThrows) throw new Error('Cannot resolve pilot binary');
+    return mockResolvePilotBinaryResult;
+  },
+}));
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
   return {
@@ -93,6 +104,7 @@ vi.mock('node:fs', async (importOriginal) => {
       }
       return actual.readFileSync(filePath, _encoding as BufferEncoding);
     }),
+    realpathSync: vi.fn((p: string) => p), // identity — return input as-is for test paths
     statSync: vi.fn((filePath: string) => {
       if (typeof filePath === 'string' && filePath.includes('config.json')) {
         return { mode: 0o100600 };
@@ -189,6 +201,8 @@ beforeEach(() => {
   // Always make the get-shit-done-cc binary accessible by default
   mockAccessiblePaths.add(GSD_BIN_PATH);
   mockJsonMode = true; // Use JSON mode for structured assertions
+  mockResolvePilotBinaryResult = '/home/testuser/dev/pilot/dist/index.js';
+  mockResolvePilotBinaryThrows = false;
   mockShellExposureError = null;
   mockShellExposureResult = {
     findings: [
@@ -586,5 +600,72 @@ describe('doctor system health — --fix shell exposure repair', () => {
     const nodeCheck = findCheck('shell: node');
     expect(nodeCheck!.status).toBe('warn');
     expect(nodeCheck!.detail).toContain('pilot doctor --fix');
+  });
+});
+
+// ── Binary drift detection ────────────────────────────────────────────────
+
+describe('doctor system health — binary drift check', () => {
+  it('reports pass when service ExecStart binary matches resolvePilotBinary()', async () => {
+    const binaryPath = '/home/testuser/dev/pilot/dist/index.js';
+    mockUnitContent = `[Service]\nExecStart=/usr/bin/env bun ${binaryPath} run --daemon\n`;
+    mockAccessiblePaths.add(binaryPath);
+    mockResolvePilotBinaryResult = binaryPath;
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const check = findCheck('binary drift');
+    expect(check).toBeDefined();
+    expect(check!.status).toBe('pass');
+    expect(check!.detail).toContain(binaryPath);
+  });
+
+  it('reports warn when service ExecStart binary differs from resolvePilotBinary()', async () => {
+    const serviceBinary = '/home/testuser/.bun/bin/pilot';
+    const buildBinary = '/home/testuser/dev/pilot/dist/index.js';
+    mockUnitContent = `[Service]\nExecStart=/usr/bin/env bun ${serviceBinary} run --daemon\n`;
+    mockAccessiblePaths.add(serviceBinary);
+    mockResolvePilotBinaryResult = buildBinary;
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const check = findCheck('binary drift');
+    expect(check).toBeDefined();
+    expect(check!.status).toBe('warn');
+    expect(check!.detail).toContain(serviceBinary);
+    expect(check!.detail).toContain(buildBinary);
+  });
+
+  it('warn message contains actionable fix command', async () => {
+    const serviceBinary = '/home/testuser/.bun/bin/pilot';
+    const buildBinary = '/home/testuser/dev/pilot/dist/index.js';
+    mockUnitContent = `[Service]\nExecStart=/usr/bin/env bun ${serviceBinary} run --daemon\n`;
+    mockAccessiblePaths.add(serviceBinary);
+    mockResolvePilotBinaryResult = buildBinary;
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    const check = findCheck('binary drift');
+    expect(check).toBeDefined();
+    expect(check!.detail).toContain('bun run build && pilot service install && pilot reload');
+  });
+
+  it('skips drift check gracefully when no service unit exists', async () => {
+    mockUnitContent = null; // No service unit file
+    mockAccessiblePaths.add('/home/testuser/.local/share/pilot');
+
+    await doctorCommand(undefined, false, true);
+
+    // Drift check should not appear — the existing service unit warn covers it
+    const driftCheck = findCheck('binary drift');
+    expect(driftCheck).toBeUndefined();
+
+    // Existing service unit check still warns
+    const serviceCheck = findCheck('service unit');
+    expect(serviceCheck).toBeDefined();
+    expect(serviceCheck!.status).toBe('warn');
   });
 });
