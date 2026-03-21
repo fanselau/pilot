@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 82-01-PLAN.md
-last_updated: "2026-03-21T11:51:36.082Z"
+stopped_at: Completed 82-03-PLAN.md
+last_updated: "2026-03-21T12:03:24.525Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
   total_phases: 81
-  completed_phases: 38
+  completed_phases: 39
   total_plans: 147
-  completed_plans: 134
+  completed_plans: 135
   percent: 93
 ---
 
@@ -914,6 +914,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Use jobId='' for child session TimelineItemRenderer calls — Show full button gracefully degrades — No breaking change; child session context doesn't have job-level message access, acceptable per plan
 - [Phase 82-01]: Tier 5 restricted to judge steps only — non-judge last steps fall through to Unattributed — Reduces false attribution; late activity after all windows close is most commonly judge/verdict wrap-up, not arbitrary execution steps
 - [Phase 82-01]: step-semantics.ts shared module with pre-computed semanticLabel fallback derivation — All UI surfaces use same label logic; semanticLabel from core is authoritative, local derivation is backward-compat safety net
+- [Phase 82-pilot-timeline-semantics-renderer-unification]: Renamed 'Timeline' tab to 'Summary' in split-pane-detail to avoid naming conflict when renaming 'Steps' tab to 'Timeline' — Preserves user-visible tab distinction while satisfying requirement to rename 'Steps' to 'Timeline'
 
 ## Blockers/Concerns Carried Forward
 
@@ -922,6 +923,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:51:15.458Z
-Stopped at: Completed 82-01-PLAN.md
+Last session: 2026-03-21T12:03:18.819Z
+Stopped at: Completed 82-03-PLAN.md
 Resume file: None
