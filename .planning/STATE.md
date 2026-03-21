@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 82-05-PLAN.md
-last_updated: "2026-03-21T12:19:30.469Z"
+stopped_at: Completed 82-04-PLAN.md
+last_updated: "2026-03-21T12:24:44.926Z"
 last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
   total_phases: 81
-  completed_phases: 38
+  completed_phases: 39
   total_plans: 149
-  completed_plans: 136
+  completed_plans: 137
   percent: 93
 ---
 
@@ -916,6 +916,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 82-01]: step-semantics.ts shared module with pre-computed semanticLabel fallback derivation — All UI surfaces use same label logic; semanticLabel from core is authoritative, local derivation is backward-compat safety net
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Renamed 'Timeline' tab to 'Summary' in split-pane-detail to avoid naming conflict when renaming 'Steps' tab to 'Timeline' — Preserves user-visible tab distinction while satisfying requirement to rename 'Steps' to 'Timeline'
 - [Phase 82-pilot-timeline-semantics-renderer-unification]: Added Phase 82 requirements as v1 section before v2 Requirements, following Phase 80 traceability table — Matches existing REQUIREMENTS.md structure; 6 of 9 TSEM requirements marked Complete based on requirement file indicators
+- [Phase 82-04]: isJudgeStep uses command.includes judge/verify OR source.startsWith judge: to cover both step types
 
 ## Blockers/Concerns Carried Forward
 
@@ -924,6 +925,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:19:30.462Z
-Stopped at: Completed 82-05-PLAN.md
+Last session: 2026-03-21T12:24:44.919Z
+Stopped at: Completed 82-04-PLAN.md
 Resume file: None
