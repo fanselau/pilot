@@ -35,6 +35,8 @@ const ID_LENGTH = 4;
 
 const VALID_DELEGATION_INTENT_TYPES = new Set([
   'quick',
+  'debug',
+  'fast',
   'init-project',
   'new-milestone',
   'plan-and-execute',
