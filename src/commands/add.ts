@@ -374,66 +374,39 @@ async function addCommand(
     notifyRouteSnapshot = routeResolution.route;
   }
 
-  const job = opts.startImmediately
-    ? (notifyRouteSnapshot
-      ? addJob(
-        resolvedProject,
-        scope,
-        description,
-        requirementPath ?? undefined,
-        modelProfile,
-        providerMode,
-        undefined,             // dependsOn (not used in add command)
-        undefined,             // parentJobId (not used in add command)
-        resolvedNotifyKey,     // callbackSessionKey (resolved)
-        opts.notifyUrl,        // callbackUrl
-        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-        true,
-        notifyRouteSnapshot,
-      )
-      : addJob(
-        resolvedProject,
-        scope,
-        description,
-        requirementPath ?? undefined,
-        modelProfile,
-        providerMode,
-        undefined,             // dependsOn (not used in add command)
-        undefined,             // parentJobId (not used in add command)
-        resolvedNotifyKey,     // callbackSessionKey (resolved)
-        opts.notifyUrl,        // callbackUrl
-        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-        true,
-      ))
-    : (notifyRouteSnapshot
-      ? addJob(
-        resolvedProject,
-        scope,
-        description,
-        requirementPath ?? undefined,
-        modelProfile,
-        providerMode,
-        undefined,             // dependsOn (not used in add command)
-        undefined,             // parentJobId (not used in add command)
-        resolvedNotifyKey,     // callbackSessionKey (resolved)
-        opts.notifyUrl,        // callbackUrl
-        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-        undefined,
-        notifyRouteSnapshot,
-      )
-      : addJob(
-        resolvedProject,
-        scope,
-        description,
-        requirementPath ?? undefined,
-        modelProfile,
-        providerMode,
-        undefined,             // dependsOn (not used in add command)
-        undefined,             // parentJobId (not used in add command)
-        resolvedNotifyKey,     // callbackSessionKey (resolved)
-        opts.notifyUrl,        // callbackUrl
-        opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-      ));
+  // Fast scope always skips grace period so the runner picks it up immediately
+  const skipGrace = scope === 'fast' || opts.startImmediately === true;
+
+  const job = notifyRouteSnapshot
+    ? addJob(
+      resolvedProject,
+      scope,
+      description,
+      requirementPath ?? undefined,
+      modelProfile,
+      providerMode,
+      undefined,             // dependsOn (not used in add command)
+      undefined,             // parentJobId (not used in add command)
+      resolvedNotifyKey,     // callbackSessionKey (resolved)
+      opts.notifyUrl,        // callbackUrl
+      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+      skipGrace,
+      notifyRouteSnapshot,
+    )
+    : addJob(
+      resolvedProject,
+      scope,
+      description,
+      requirementPath ?? undefined,
+      modelProfile,
+      providerMode,
+      undefined,             // dependsOn (not used in add command)
+      undefined,             // parentJobId (not used in add command)
+      resolvedNotifyKey,     // callbackSessionKey (resolved)
+      opts.notifyUrl,        // callbackUrl
+      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+      skipGrace,
+    );
 
   // --next: bump to front of queue (same mechanism as `pilot bump`)
   if (opts.next) {

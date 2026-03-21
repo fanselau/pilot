@@ -50,7 +50,7 @@ const CREATE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   project TEXT NOT NULL,
-  scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone')),
+  scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone', 'debug', 'fast')),
   description TEXT NOT NULL,
   requirement_path TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused', 'completed_pending_review', 'review_hold')),
@@ -421,7 +421,7 @@ function migrateReviewStates(db: DatabaseType): void {
       CREATE TABLE jobs_review_migration (
         id TEXT PRIMARY KEY,
         project TEXT NOT NULL,
-        scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone')),
+  scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone', 'debug', 'fast')),
         description TEXT NOT NULL,
         requirement_path TEXT,
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused', 'completed_pending_review', 'review_hold')),
@@ -479,6 +479,97 @@ function migrateReviewStates(db: DatabaseType): void {
 
       DROP TABLE jobs;
       ALTER TABLE jobs_review_migration RENAME TO jobs;
+    `);
+  } finally {
+    db.pragma('foreign_keys = on');
+  }
+}
+
+/**
+ * Migrate existing databases with the old 3-scope CHECK constraint to the 5-scope constraint.
+ *
+ * SQLite does not support ALTER TABLE to modify CHECK constraints, so we detect
+ * whether the current schema is outdated (doesn't include 'debug' scope) and
+ * recreate the table with the updated constraint if necessary.
+ *
+ * New databases already use the updated CREATE_TABLE_SQL — this is a no-op for them.
+ */
+function migrateScopeConstraint(db: DatabaseType): void {
+  const tableRow = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'",
+  ).get() as { sql: string } | undefined;
+
+  // Already migrated or new database — nothing to do
+  if (!tableRow || tableRow.sql.includes("'debug'")) {
+    return;
+  }
+
+  // Old CHECK constraint detected — recreate table with 5-scope constraint
+  db.pragma('foreign_keys = off');
+  try {
+    db.exec(`
+      CREATE TABLE jobs_scope_migration (
+        id TEXT PRIMARY KEY,
+        project TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK(scope IN ('quick', 'phase', 'milestone', 'debug', 'fast')),
+        description TEXT NOT NULL,
+        requirement_path TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'paused', 'completed_pending_review', 'review_hold')),
+        priority INTEGER DEFAULT 0,
+        depends_on TEXT,
+        parent_job_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        started_at TEXT,
+        completed_at TEXT,
+        error TEXT,
+        resume_hint TEXT,
+        attempts INTEGER DEFAULT 0,
+        timeout INTEGER DEFAULT 0,
+        delegation_plan TEXT,
+        current_step INTEGER DEFAULT 0,
+        session_titles TEXT,
+        model_profile TEXT NOT NULL DEFAULT 'balanced',
+        provider_mode TEXT NOT NULL DEFAULT 'claude-only',
+        judge_verdict TEXT,
+        actual_models TEXT,
+        callback_url TEXT,
+        callback_session_key TEXT,
+        notify_route TEXT,
+        categories TEXT,
+        git_base_commit TEXT,
+        git_head_commit TEXT,
+        started_dirty INTEGER NOT NULL DEFAULT 0,
+        skip_grace_period INTEGER NOT NULL DEFAULT 0,
+        retry_budget INTEGER NOT NULL DEFAULT 2,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        retry_hint TEXT,
+        last_failure_fingerprint TEXT,
+        hung_count INTEGER NOT NULL DEFAULT 0,
+        last_hung_reason TEXT,
+        resumed_from_hold INTEGER NOT NULL DEFAULT 0
+      );
+
+      INSERT INTO jobs_scope_migration (
+        id, project, scope, description, requirement_path, status, priority,
+        depends_on, parent_job_id, created_at, started_at, completed_at, error,
+        resume_hint, attempts, timeout, delegation_plan, current_step, session_titles,
+        model_profile, provider_mode, judge_verdict, actual_models, callback_url,
+        callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
+        started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
+        last_failure_fingerprint, hung_count, last_hung_reason, resumed_from_hold
+      )
+      SELECT
+        id, project, scope, description, requirement_path, status, priority,
+        depends_on, parent_job_id, created_at, started_at, completed_at, error,
+        resume_hint, attempts, timeout, delegation_plan, current_step, session_titles,
+        model_profile, provider_mode, judge_verdict, actual_models, callback_url,
+        callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
+        started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
+        last_failure_fingerprint, hung_count, last_hung_reason, resumed_from_hold
+      FROM jobs;
+
+      DROP TABLE jobs;
+      ALTER TABLE jobs_scope_migration RENAME TO jobs;
     `);
   } finally {
     db.pragma('foreign_keys = on');
@@ -581,6 +672,7 @@ function openPilotDb(): DatabaseType {
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
   migrateReviewStates(cachedDb!);
+  migrateScopeConstraint(cachedDb!);
   seedModelTables(cachedDb!);
 
   // Restrict DB file permissions to owner-only (chmod 600)
@@ -613,6 +705,7 @@ function _getTestDb(): DatabaseType {
   cachedDb!.exec(CREATE_PROVIDER_MODES_TABLE_SQL);
   migrateSchema(cachedDb!);
   migrateReviewStates(cachedDb!);
+  migrateScopeConstraint(cachedDb!);
   seedModelTables(cachedDb!);
   return cachedDb!;
 }
@@ -669,7 +762,7 @@ function addJob(
     callbackSessionKey ?? null,
     callbackUrl ?? null,
     timeout ?? 0,
-    skipGracePeriod ? 1 : 0,
+    (skipGracePeriod || scope === 'fast') ? 1 : 0,
     notifyRoute ? JSON.stringify(notifyRoute) : null,
     0,
   );
