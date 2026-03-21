@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Completed quick task 260321-61z: Fix skills JIT loading — seed manifest from catalog"
-last_updated: "2026-03-21T04:26:33.400Z"
-last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
+stopped_at: Completed 79-01-PLAN.md
+last_updated: "2026-03-21T08:45:34.755Z"
+last_activity: "2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog"
 progress:
-  total_phases: 77
-  completed_phases: 35
-  total_plans: 137
-  completed_plans: 125
+  total_phases: 78
+  completed_phases: 36
+  total_plans: 138
+  completed_plans: 126
   percent: 93
 ---
 
@@ -349,6 +349,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 76 added: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
 - Phase 77 added: Web UI Fixes — Post-Overhaul Regressions + Missing Features
 - Phase 78 added: Web UI Premium — Data-Rich, Dense, Modern Dashboard
+- Phase 79 added: Web UI Job Activity Regression — Restore visible activity under jobs
 
 ## Decisions
 
@@ -899,6 +900,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 78]: Main CSS file is styles.css not app.css; Tabs API uses TabsTrigger/TabsContent re-exports; Sheet uses render prop pattern
 - [Phase 78]: Message count parity confirmed — no code change needed; both card and drill-in use getAssistantMessageCount()
 - [Phase quick-260321-61z]: Seed registers all tiers (tier 'all') by default; old stale entries left intact since different names
+- [Phase 79]: Root cause was missing SSR loader for timeline data — Client-only useQuery rendered empty state on server; added route loader as fix
 
 ## Blockers/Concerns Carried Forward
 
@@ -907,6 +909,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:26:29.221Z
-Stopped at: Completed quick task 260321-61z: Fix skills JIT loading — seed manifest from catalog
+Last session: 2026-03-21T08:45:34.748Z
+Stopped at: Completed 79-01-PLAN.md
 Resume file: None

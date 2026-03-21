@@ -1455,7 +1455,7 @@ Read requirements/web-ui-premium.md for full spec.
 **Goal:** Restore visible, trustworthy job activity in the web UI — diagnose and fix the regression that hides timeline activity on the job detail page, and add compact activity previews to the dashboard job list so users can immediately see that jobs have real underlying session activity.
 **Requirements**: TBD
 **Depends on:** Phase 78
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 79-01-PLAN.md — Diagnose + fix job detail timeline regression, add dashboard activity previews
