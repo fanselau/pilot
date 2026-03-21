@@ -1475,3 +1475,19 @@ Plans:
 Wave structure:
 - Wave 1: 80-01 + 80-02 (independent: core data-layer attribution fix and web UI overflow/polish, no file overlap)
 - Wave 2: 80-03 (gap closure: requirements traceability, depends on 80-01 + 80-02 completion)
+
+### Phase 81: Pilot Human Review Semantics — Autonomy-First, No False Failure
+
+**Goal:** Make Pilot treat human verification as a first-class autonomy-compatible review state rather than a failure mode, supporting both final review pending (job done, human validates) and mid-phase review hold (checkpoint hit mid-execution) without project blocking or failure semantics.
+**Requirements**: REVIEW-01, REVIEW-02, REVIEW-03, REVIEW-04, REVIEW-05, REVIEW-06, REVIEW-07, REVIEW-08, REVIEW-09, REVIEW-10, REVIEW-11, REVIEW-12, REVIEW-13, REVIEW-14, REVIEW-15, REVIEW-16
+**Depends on:** Phase 80
+**Plans:** 3 plans
+
+Plans:
+- [ ] 81-01-PLAN.md — Foundation: extend JobStatus type, DB schema, and state transition functions for review states
+- [ ] 81-02-PLAN.md — Runner integration: verdict-to-review detection, review CLI command, callback notifications
+- [ ] 81-03-PLAN.md — Status display: CLI/TUI/web UI consistency for review states with non-failure styling
+
+Wave structure:
+- Wave 1: 81-01 (foundation — types, DB, state transitions)
+- Wave 2: 81-02 + 81-03 (parallel — runner/CLI and UI updates, both depend on 81-01 contracts)
