@@ -19,16 +19,23 @@ function JobDetailIndexPage() {
   const timelineLoaderData = Route.useLoaderData()
   const queryClient = useQueryClient()
 
-  const isActive =
-    layoutLoaderData?.job.status === 'running' ||
-    layoutLoaderData?.job.status === 'pending'
-
+  // Use the callback form so the job-detail query self-regulates against
+  // the latest cached data, not the stale initial loader snapshot.
   const { data: snapshot } = useQuery({
     queryKey: ['job-detail', jobId],
     queryFn: () => getJobDetailFn({ data: jobId }),
     initialData: layoutLoaderData,
-    refetchInterval: isActive ? 3000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const active = data?.job.status === 'running' || data?.job.status === 'pending'
+      return active ? 3000 : false
+    },
   })
+
+  // Derive isActive from the latest snapshot for all downstream consumers
+  const isActive =
+    snapshot?.job.status === 'running' ||
+    snapshot?.job.status === 'pending'
 
   const { data: timelineData } = useQuery({
     queryKey: ['job-timeline-full', jobId],
