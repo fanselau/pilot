@@ -104,7 +104,7 @@ import { truncateTitle } from '../util/format.js';
 import { errMsg, HungSessionError } from '../util/errors.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationResult, DelegationIntent, JobStep, StepSource } from './types.js';
-import { MAX_STEPS_PER_JOB, MAX_CONTINUATION_CYCLES } from './types.js';
+import { MAX_STEPS_PER_JOB, MAX_CONTINUATION_CYCLES, MIN_CONTINUATION_BUDGET } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1115,6 +1115,25 @@ class Runner {
     verdict: JudgeVerdict,
   ): Promise<void> {
     const cycles = this.continuationCycles.get(job.id) ?? 0;
+
+    // Budget gate — check BEFORE cycle count (proactive, not reactive)
+    const remaining = getRemainingBudget(job.id);
+    if (remaining < MIN_CONTINUATION_BUDGET) {
+      // Gaps found but budget insufficient — this is substantially done, not a failure
+      const totalSteps = getTotalStepCount(job.id);
+      const msg = buildBudgetExhaustedMessage(remaining, MIN_CONTINUATION_BUDGET, totalSteps, 'judge:gaps', verdict.reason);
+      const checklist = verdict.gaps && verdict.gaps.length > 0
+        ? `Budget exhausted. Remaining review items:\n- ${verdict.gaps.join('\n- ')}`
+        : `Budget exhausted. ${verdict.reason ?? 'Remaining work needs review.'}`;
+      markCompletedPendingReview(job.id, checklist);
+      this.log(msg);
+      this.collectActualModels(job.id);
+      await this.captureRecoveryHead(job.id, projectDir);
+      const reviewJob = getJob(job.id);
+      if (reviewJob) notifyJobCompletion(reviewJob).catch(() => {});
+      return;
+    }
+
     if (cycles >= MAX_CONTINUATION_CYCLES) {
       const totalSteps = getTotalStepCount(job.id);
       const steps = getJobSteps(job.id);
@@ -1164,6 +1183,18 @@ class Runner {
     verdict: JudgeVerdict,
   ): Promise<void> {
     const cycles = this.continuationCycles.get(job.id) ?? 0;
+
+    // Budget gate — check BEFORE cycle count (proactive, not reactive)
+    const remaining = getRemainingBudget(job.id);
+    if (remaining < MIN_CONTINUATION_BUDGET) {
+      const totalSteps = getTotalStepCount(job.id);
+      const msg = buildBudgetExhaustedMessage(remaining, MIN_CONTINUATION_BUDGET, totalSteps, 'judge:failed', verdict.reason);
+      markFailed(job.id, msg);
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
     if (cycles >= MAX_CONTINUATION_CYCLES) {
       const totalSteps = getTotalStepCount(job.id);
       const steps = getJobSteps(job.id);
@@ -2101,6 +2132,16 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
   return new Runner(options);
 }
 
+// ── Budget helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Calculate remaining step budget for a job.
+ * Pure helper — uses getTotalStepCount from db.ts.
+ */
+function getRemainingBudget(jobId: string): number {
+  return MAX_STEPS_PER_JOB - getTotalStepCount(jobId);
+}
+
 // ── Message builder helpers ────────────────────────────────────────────────
 
 /**
@@ -2135,6 +2176,30 @@ function buildContinuationLimitMessage(
     `Continuation cycle limit reached (${maxCycles}). ` +
     `${continuationSteps}/${totalSteps} steps were continuation-driven. ` +
     `Last verdict: ${lastVerdict.slice(0, 200)}`
+  );
+}
+
+/**
+ * Build the budget-exhaustion message — explains proactively that budget is insufficient.
+ * Differentiates from step-cap (reactive) and continuation-limit (cycle-based).
+ * For gaps_found: suggests completed_pending_review since work is substantially done.
+ * For failed: explains budget ran out during recovery.
+ */
+function buildBudgetExhaustedMessage(
+  remaining: number,
+  required: number,
+  totalSteps: number,
+  source: 'judge:gaps' | 'judge:failed',
+  lastReason?: string,
+): string {
+  const sourceLabel = source === 'judge:gaps' ? 'gap closure' : 'failure recovery';
+  return (
+    `Budget insufficient for ${sourceLabel}: ${remaining} steps remaining, ${required} needed. ` +
+    `${totalSteps} steps already completed. ` +
+    (lastReason ? `Last verdict: ${lastReason.slice(0, 200)}. ` : '') +
+    (source === 'judge:gaps'
+      ? 'The work is substantially complete — remaining items may need human review.'
+      : 'Recovery could not proceed within remaining step budget.')
   );
 }
 
@@ -2176,3 +2241,9 @@ export { buildStepCapMessage as _buildStepCapMessage };
  * @internal — exported for tests only
  */
 export { buildContinuationLimitMessage as _buildContinuationLimitMessage };
+
+/**
+ * Build the budget-exhaustion failure message.
+ * @internal — exported for tests only
+ */
+export { buildBudgetExhaustedMessage as _buildBudgetExhaustedMessage };

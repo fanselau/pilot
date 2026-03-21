@@ -276,6 +276,9 @@ export const MAX_STEPS_PER_JOB = 10;
 /** Maximum judge-driven continuation cycles (gaps/failed) per job — prevents infinite replan loops. */
 export const MAX_CONTINUATION_CYCLES = 2;
 
+/** Minimum remaining steps needed for a useful continuation cycle (plan-gaps + execute-gaps + judge). */
+export const MIN_CONTINUATION_BUDGET = 3;
+
 export interface JobStep {
   id: number;                     // auto-increment
   jobId: string;                  // FK to jobs.id
