@@ -728,13 +728,30 @@ describe('getConfigFileDefaults scope variations', () => {
     expect(defaults.scope).toBe('phase');
   });
 
-  it('returns scope: "milestone" when set in config', () => {
+  it('rejects scope: "milestone" as no longer valid for config defaults', () => {
     tempConfigPath = writeTempConfig({
       defaults: { scope: 'milestone' },
     });
     process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    expect(() => getConfigFileDefaults()).toThrow('defaults.scope');
+  });
+
+  it('returns scope: "fast" when set in config', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'fast' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
     const defaults = getConfigFileDefaults();
-    expect(defaults.scope).toBe('milestone');
+    expect(defaults.scope).toBe('fast');
+  });
+
+  it('returns scope: "debug" when set in config', () => {
+    tempConfigPath = writeTempConfig({
+      defaults: { scope: 'debug' },
+    });
+    process.env.PILOT_CONFIG_FILE = tempConfigPath;
+    const defaults = getConfigFileDefaults();
+    expect(defaults.scope).toBe('debug');
   });
 
   it('returns all valid modelProfile values from config', () => {
