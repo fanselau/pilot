@@ -5,7 +5,7 @@ milestone_name: milestone
 status: completed
 stopped_at: "Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end"
 last_updated: "2026-03-21T21:38:53.785Z"
-last_activity: "2026-03-21 - Completed quick task 260321-s79: Mobile header density cleanup - compress job-detail header on mobile"
+last_activity: "2026-03-21 - Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study"
 progress:
   total_phases: 84
   completed_phases: 42
@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-s79: Mobile header density cleanup - compress job-detail header on mobile
+Last activity: 2026-03-21 - Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study
 
 Progress: [█████████░] 93%
 
@@ -194,8 +194,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
 | 001 | Fix pilot log — Show actual message content | 2026-03-02 | 8a74897 | [001-fix-pilot-log-show-actual-message-content](./quick/001-fix-pilot-log-show-actual-message-content/) |
 | 009 | Fix TUI — Register @opentui/solid bun plugin | 2026-03-02 | a5e4a57 | [009-fix-tui-replace-react-ink-with-solid-open](./quick/009-fix-tui-replace-react-ink-with-solid-open/) |
 | 010 | Flesh out pilot log — show full session activity | 2026-03-02 | d73c13d | [010-flesh-out-pilot-log-show-full-session-act](./quick/010-flesh-out-pilot-log-show-full-session-act/) |
@@ -277,7 +277,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260320-vju | Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions | 2026-03-20 | 98df0ea | [260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru](./quick/260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru/) |
 | 260321-61z | Fix skills JIT loading — seed manifest from built-in catalog | 2026-03-21 | b61a92d | [260321-61z-fix-skills-jit-loading-seed-manifest-fro](./quick/260321-61z-fix-skills-jit-loading-seed-manifest-fro/) |
 | 260321-kd9 | Budget-aware continuation/re-delegation and human-needed control-flow cleanup | 2026-03-21 | 16de453 | Verified | [260321-kd9-implement-budget-aware-continuation-re-d](./quick/260321-kd9-implement-budget-aware-continuation-re-d/) |
-| 260321-s79 | Mobile header density cleanup - compress job-detail header on mobile | 2026-03-21 | 9394bea | [260321-s79-mobile-header-density-cleanup-compress-j](./quick/260321-s79-mobile-header-density-cleanup-compress-j/) |
+| 260321-s79 | Mobile header density cleanup - compress job-detail header on mobile | 2026-03-21 | 9394bea | | [260321-s79-mobile-header-density-cleanup-compress-j](./quick/260321-s79-mobile-header-density-cleanup-compress-j/) |
+| 260321-tdm | Fix debug/fast scope support end-to-end in Pilot DB schema migration rebuild and case study | 2026-03-21 | 2e4fa8a | Verified | [260321-tdm-fix-debug-fast-scope-support-end-to-end-](./quick/260321-tdm-fix-debug-fast-scope-support-end-to-end-/) |
 
 ## Accumulated Context
 
