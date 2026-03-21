@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-s79: Mobile header density cleanup"
-last_updated: "2026-03-21T20:25:38.510Z"
-last_activity: "2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup"
+stopped_at: "Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end"
+last_updated: "2026-03-21T21:38:53.785Z"
+last_activity: "2026-03-21 - Completed quick task 260321-s79: Mobile header density cleanup - compress job-detail header on mobile"
 progress:
   total_phases: 84
   completed_phases: 42
@@ -927,6 +927,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 85-01]: Kept milestone in JobScope union for backward compat with DB; blocked at CLI add layer only
 - [Phase 85]: debug intent appends symptoms to description; fast uses buildQuickArgs bare (no flags)
 - [Phase quick-260321-s79]: Hide AppHeader via useMatches() route detection rather than prop drilling
+- [Phase 260321-tdm]: Handle fast→skipGracePeriod at both addJob() and add.ts level for defense-in-depth
 
 ## Blockers/Concerns Carried Forward
 
@@ -935,6 +936,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T20:25:35.381Z
-Stopped at: Completed quick task 260321-s79: Mobile header density cleanup
+Last session: 2026-03-21T21:38:49.427Z
+Stopped at: Completed quick task 260321-tdm: Fix debug/fast scope support end-to-end
 Resume file: None
