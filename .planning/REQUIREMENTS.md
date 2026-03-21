@@ -108,6 +108,44 @@ Requirements for initial release. Each maps to roadmap phases.
 | TSEM-08 | Phase 82 | In Progress |
 | TSEM-09 | Phase 82 | In Progress |
 
+### Pilot Human Review Semantics
+
+- [x] **REVIEW-01**: JobStatus type includes `completed_pending_review` and `review_hold` values
+- [x] **REVIEW-02**: DB schema allows `completed_pending_review` and `review_hold` status values in CHECK constraint
+- [x] **REVIEW-03**: `markCompletedPendingReview()` sets status without calling `blockProject()`
+- [x] **REVIEW-04**: `markReviewHold()` sets status without calling `blockProject()`
+- [x] **REVIEW-05**: `claimNextLaunchable()` does not skip jobs for projects that have jobs in review states
+- [x] **REVIEW-06**: `approveReview()` transitions `completed_pending_review` to `completed`; `resumeFromReviewHold()` transitions `review_hold` to `running`
+- [x] **REVIEW-07**: Runner detects when judge verdict leaves only human-review items and transitions to `completed_pending_review`
+- [ ] **REVIEW-08**: Runner detects mid-phase checkpoint pauses and transitions to `review_hold`
+- [ ] **REVIEW-09**: `pilot review <id> --approve` on `review_hold` job resumes step execution
+- [x] **REVIEW-10**: Notification callback says "review pending" for `completed_pending_review` jobs, not "failed"
+- [x] **REVIEW-11**: `pilot review` CLI command with `--approve` and `--reject` flows
+- [x] **REVIEW-12**: No auto-job creation happens for review handling
+- [x] **REVIEW-13**: CLI `pilot status` shows review states with amber non-failure styling
+- [x] **REVIEW-14**: CLI `pilot log` shows review checklist from `resumeHint`
+- [ ] **REVIEW-15**: TUI dashboard shows review states with distinct non-failure colors in completed panel
+- [x] **REVIEW-16**: Web UI `StatusBadge` renders review states with warning/info variant, not destructive
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| REVIEW-01 | Phase 81 | Complete |
+| REVIEW-02 | Phase 81 | Complete |
+| REVIEW-03 | Phase 81 | Complete |
+| REVIEW-04 | Phase 81 | Complete |
+| REVIEW-05 | Phase 81 | Complete |
+| REVIEW-06 | Phase 81 | Complete |
+| REVIEW-07 | Phase 81 | Complete |
+| REVIEW-08 | Phase 83 | Pending |
+| REVIEW-09 | Phase 83 | Pending |
+| REVIEW-10 | Phase 81 | Complete |
+| REVIEW-11 | Phase 81 | Complete |
+| REVIEW-12 | Phase 81 | Complete |
+| REVIEW-13 | Phase 81 | Complete |
+| REVIEW-14 | Phase 81 | Complete |
+| REVIEW-15 | Phase 83 | Pending |
+| REVIEW-16 | Phase 81 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -172,10 +210,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLEN-04 | Phase 68 | Pending |
 
 **Coverage:**
-- v1 requirements: 51 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82)
-- Mapped to phases: 51
+- v1 requirements: 67 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83)
+- Mapped to phases: 67
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-21 after adding REVIEW-01 through REVIEW-16 traceability*
