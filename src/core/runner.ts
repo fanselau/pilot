@@ -104,7 +104,7 @@ import { truncateTitle } from '../util/format.js';
 import { errMsg, HungSessionError } from '../util/errors.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationResult, DelegationIntent, JobStep, StepSource } from './types.js';
-import { MAX_STEPS_PER_JOB } from './types.js';
+import { MAX_STEPS_PER_JOB, MAX_CONTINUATION_CYCLES } from './types.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -384,6 +384,8 @@ class Runner {
   private lockPath: string | null = null;
   // Low-memory logging: only log once per state change (transition to 0)
   private loggedLowMemory = false;
+  /** Per-job continuation cycle counter — tracks judge:gaps/judge:failed append rounds. */
+  private continuationCycles = new Map<string, number>();
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -791,6 +793,7 @@ class Runner {
       }
 
       // Step 3: Execute step loop
+      this.continuationCycles.set(job.id, 0);
       await this.executeStepLoop(job, projectDir);
 
       // Check if job was already handled (failed by continuation handlers, etc.)
@@ -846,6 +849,7 @@ class Runner {
         }
       }
     } finally {
+      this.continuationCycles.delete(job.id);
       this.activeJobs.delete(job.id);
       try {
         unlinkSync(path.join(getConfig().pilotDir, 'pids', `${job.id}.pid`));
@@ -955,7 +959,12 @@ class Runner {
 
       // Step cap check
       if (getTotalStepCount(job.id) > MAX_STEPS_PER_JOB) {
-        markFailed(job.id, `Step cap reached (${MAX_STEPS_PER_JOB}). Job has too many steps.`);
+        const stepList = getJobSteps(job.id);
+        const delegationSteps = stepList.filter(s => s.source === 'delegation').length;
+        const gapSteps = stepList.filter(s => s.source === 'judge:gaps').length;
+        const failSteps = stepList.filter(s => s.source === 'judge:failed').length;
+        const hungSteps = stepList.filter(s => s.source === 'judge:hung').length;
+        markFailed(job.id, buildStepCapMessage(MAX_STEPS_PER_JOB, delegationSteps, gapSteps, failSteps, hungSteps));
         const failedJob = getJob(job.id);
         if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
         return;
@@ -1098,12 +1107,27 @@ class Runner {
   /**
    * Handle gaps_found verdict: re-delegate for continuation steps.
    * Appends new steps (plan-phase --gaps + execute-phase --gaps-only + judge).
+   * Guards against unbounded continuation loops via MAX_CONTINUATION_CYCLES.
    */
   private async handleGapsContinuation(
     job: Job,
     projectDir: string,
     verdict: JudgeVerdict,
   ): Promise<void> {
+    const cycles = this.continuationCycles.get(job.id) ?? 0;
+    if (cycles >= MAX_CONTINUATION_CYCLES) {
+      const totalSteps = getTotalStepCount(job.id);
+      const steps = getJobSteps(job.id);
+      const continuationSteps = steps.filter(s => s.source.startsWith('judge:')).length;
+      markFailed(
+        job.id,
+        buildContinuationLimitMessage(MAX_CONTINUATION_CYCLES, continuationSteps, totalSteps, verdict.reason ?? 'unknown'),
+      );
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
     try {
       const result = await reDelegateForContinuation(job, projectDir, {
         source: 'judge:gaps',
@@ -1115,7 +1139,8 @@ class Runner {
 
       if (result.steps.length > 0) {
         appendSteps(job.id, result.steps, 'judge:gaps', verdict.reason);
-        this.log(`Appended ${result.steps.length} gap-closure step(s) for ${job.id}`);
+        this.continuationCycles.set(job.id, cycles + 1);
+        this.log(`Appended ${result.steps.length} gap-closure step(s) for ${job.id} (cycle ${cycles + 1}/${MAX_CONTINUATION_CYCLES})`);
       } else {
         markFailed(job.id, 'No continuation steps available for gaps');
         const failedJob = getJob(job.id);
@@ -1131,12 +1156,27 @@ class Runner {
   /**
    * Handle failed verdict: re-delegate for recovery steps.
    * May append new steps or mark job as failed if no recovery path.
+   * Guards against unbounded continuation loops via MAX_CONTINUATION_CYCLES.
    */
   private async handleFailedContinuation(
     job: Job,
     projectDir: string,
     verdict: JudgeVerdict,
   ): Promise<void> {
+    const cycles = this.continuationCycles.get(job.id) ?? 0;
+    if (cycles >= MAX_CONTINUATION_CYCLES) {
+      const totalSteps = getTotalStepCount(job.id);
+      const steps = getJobSteps(job.id);
+      const continuationSteps = steps.filter(s => s.source.startsWith('judge:')).length;
+      markFailed(
+        job.id,
+        buildContinuationLimitMessage(MAX_CONTINUATION_CYCLES, continuationSteps, totalSteps, verdict.reason ?? 'unknown'),
+      );
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
     try {
       const result = await reDelegateForContinuation(job, projectDir, {
         source: 'judge:failed',
@@ -1147,7 +1187,8 @@ class Runner {
 
       if (result.steps.length > 0) {
         appendSteps(job.id, result.steps, 'judge:failed', verdict.reason);
-        this.log(`Appended ${result.steps.length} recovery step(s) for ${job.id}`);
+        this.continuationCycles.set(job.id, cycles + 1);
+        this.log(`Appended ${result.steps.length} recovery step(s) for ${job.id} (cycle ${cycles + 1}/${MAX_CONTINUATION_CYCLES})`);
       } else {
         markFailed(job.id, verdict.reason);
         const failedJob = getJob(job.id);
@@ -2060,6 +2101,43 @@ function createRunner(options?: Partial<RunnerOptions>): Runner {
   return new Runner(options);
 }
 
+// ── Message builder helpers ────────────────────────────────────────────────
+
+/**
+ * Build the step-cap failure message with per-source step breakdown.
+ * Pure function — extracted for testability.
+ */
+function buildStepCapMessage(
+  totalCap: number,
+  delegationSteps: number,
+  gapSteps: number,
+  failSteps: number,
+  hungSteps: number,
+): string {
+  return (
+    `Step cap reached (${totalCap}). ` +
+    `Breakdown: ${delegationSteps} initial, ${gapSteps} gap-closure, ${failSteps} failure-recovery, ${hungSteps} hung-recovery. ` +
+    `This usually means the judge kept finding issues that continuation could not resolve.`
+  );
+}
+
+/**
+ * Build the continuation cycle limit failure message.
+ * Pure function — extracted for testability.
+ */
+function buildContinuationLimitMessage(
+  maxCycles: number,
+  continuationSteps: number,
+  totalSteps: number,
+  lastVerdict: string,
+): string {
+  return (
+    `Continuation cycle limit reached (${maxCycles}). ` +
+    `${continuationSteps}/${totalSteps} steps were continuation-driven. ` +
+    `Last verdict: ${lastVerdict.slice(0, 200)}`
+  );
+}
+
 // ── Exports ────────────────────────────────────────────────────────────────
 
 export { Runner, createRunner, killJobSession, parseJudgeVerdict };
@@ -2086,3 +2164,15 @@ export { isWellFormedVerificationEvidence as _isWellFormedVerificationEvidence }
 
 export { hasSystemdRunUser, getDynamicMaxParallel, _resetSystemdRunCache };
 export { isHumanOnlyRemaining };
+
+/**
+ * Build the step-cap failure message with per-source breakdown.
+ * @internal — exported for tests only
+ */
+export { buildStepCapMessage as _buildStepCapMessage };
+
+/**
+ * Build the continuation cycle limit failure message.
+ * @internal — exported for tests only
+ */
+export { buildContinuationLimitMessage as _buildContinuationLimitMessage };

@@ -273,6 +273,9 @@ export type StepSource = 'delegation' | 'judge:gaps' | 'judge:hung' | 'judge:fai
 /** Maximum total steps per job — prevents infinite append loops. */
 export const MAX_STEPS_PER_JOB = 10;
 
+/** Maximum judge-driven continuation cycles (gaps/failed) per job — prevents infinite replan loops. */
+export const MAX_CONTINUATION_CYCLES = 2;
+
 export interface JobStep {
   id: number;                     // auto-increment
   jobId: string;                  // FK to jobs.id
