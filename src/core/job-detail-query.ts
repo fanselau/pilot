@@ -487,13 +487,43 @@ function resolveStepIndex(
   }
 
   // Tier 3: Time window match
-  const byWindow = steps.find((step) => {
-    if (step.startedAtMs === null) return false;
-    const windowStart = step.startedAtMs;
-    const windowEnd = step.completedAtMs ?? Number.POSITIVE_INFINITY;
-    return candidate.createdAt >= windowStart && candidate.createdAt <= windowEnd;
-  });
-  if (byWindow) return byWindow.stepIndex;
+  // For completed steps: use the actual completedAtMs as the window end.
+  // For running steps (completedAtMs === null): cap the window at the NEXT step's startedAtMs
+  // to prevent open-ended running steps from greedily attributing all subsequent activity.
+  const stepsWithStart = steps
+    .filter((s) => s.startedAtMs !== null)
+    .sort((a, b) => a.startedAtMs! - b.startedAtMs!);
+
+  for (let i = 0; i < stepsWithStart.length; i++) {
+    const step = stepsWithStart[i];
+    const windowStart = step.startedAtMs!;
+    let windowEnd: number;
+
+    if (step.completedAtMs !== null) {
+      windowEnd = step.completedAtMs;
+    } else {
+      // Running step: use next step's start time as effective window end.
+      // Only attribute if candidate is before the next step begins.
+      const nextStep = i + 1 < stepsWithStart.length ? stepsWithStart[i + 1] : null;
+      windowEnd = nextStep?.startedAtMs ?? Number.POSITIVE_INFINITY;
+    }
+
+    if (candidate.createdAt >= windowStart && candidate.createdAt <= windowEnd) {
+      return step.stepIndex;
+    }
+  }
+
+  // Tier 3.5: Delegation session containment
+  // Explicitly handles candidates from children of delegation sessions (negative step indices).
+  // Delegation sessions are synthetic; their children are mapped in childToStepIndex via
+  // a post-BFS explicit pass in getJobTimeline(). This tier catches delegation children
+  // before the general child transitivity check in Tier 4.
+  if (candidate.sessionId) {
+    const delegChildMatch = childToStepIndex.get(candidate.sessionId);
+    if (delegChildMatch !== undefined && delegChildMatch < 0) {
+      return delegChildMatch;
+    }
+  }
 
   // Tier 4: Child session transitivity — candidate's session is a child of a step's session
   if (candidate.sessionId) {
@@ -501,8 +531,10 @@ function resolveStepIndex(
     if (childMatch !== undefined) return childMatch;
   }
 
-  // Tier 5: Last-step fallback — attribute to the most recently started step
-  // Catches late judge/wrap-up activity that fires after all step windows close
+  // Tier 5: Last-step fallback — restricted to judge/wrap-up steps only.
+  // Late activity after all step windows close is most commonly judge verdict processing.
+  // Only attribute if the most recently started step is a judge step (command contains 'judge'
+  // or source starts with 'judge:'). Non-judge last steps fall through to Unattributed.
   let latestStep: TimelineStepRef | null = null;
   for (const step of steps) {
     if (step.startedAtMs === null) continue;
@@ -510,7 +542,11 @@ function resolveStepIndex(
       latestStep = step;
     }
   }
-  if (latestStep && candidate.createdAt >= latestStep.startedAtMs!) {
+  if (
+    latestStep !== null &&
+    candidate.createdAt >= latestStep.startedAtMs! &&
+    (latestStep.command.includes('judge') || latestStep.source.startsWith('judge:'))
+  ) {
     return latestStep.stepIndex;
   }
 
@@ -518,14 +554,36 @@ function resolveStepIndex(
 }
 
 /**
+ * Compute a human-readable semantic label for a step group.
+ * Maps source + command pairs to meaningful display names used in the UI.
+ * At least 12 distinct mappings are handled explicitly; all others fall back
+ * to capitalizing the command string.
+ */
+function computeSemanticLabel(command: string, source: string): string {
+  if (command === 'delegation') return 'Delegation';
+  if (command === 'unattributed') return 'Unattributed';
+  if (source === 'judge:gaps') return 'Gap Closure';
+  if (source === 'judge:hung') return 'Recovery';
+  if (source === 'judge:failed') return 'Retry';
+  if (source === 'operator') return 'Manual';
+  if (source === 'delegation' && command.includes('plan')) return 'Planning';
+  if (source === 'delegation' && command.includes('execute')) return 'Execution';
+  if (source === 'delegation' && command.includes('judge')) return 'Judge';
+  if (source === 'delegation' && command.includes('verify')) return 'Verification';
+  if (source === 'delegation' && command === 'quick') return 'Quick Task';
+  return command.charAt(0).toUpperCase() + command.slice(1);
+}
+
+/**
  * Build a step-grouped chronological timeline for a job.
  *
- * Timeline attribution order is deterministic (5 tiers):
+ * Timeline attribution order is deterministic (6 tiers):
  * 1) job_steps.sessionId identity
  * 2) job_steps.sessionTitle match
- * 3) step time window (startedAtMs..completedAtMs, open-ended if null)
+ * 3) step time window (startedAtMs..completedAtMs; running steps capped at next step's start)
+ * 3.5) delegation session containment (children of delegation synthetic steps)
  * 4) child session transitivity (candidate's session is a child of a step's session)
- * 5) last-step fallback (attribute to most recently started step)
+ * 5) last-step fallback (judge steps only — catches verdict wrap-up activity)
  * 6) unattributed bucket (genuinely unassignable content only)
  *
  * Child branches are represented as one lifecycle-aware object per child
@@ -730,6 +788,20 @@ function getJobTimeline(
     }
   }
 
+  // After BFS: explicitly map delegation session children to their delegation step index.
+  // Delegation sessions may spawn sub-agents whose sessions are not tracked in the
+  // normal opencode parent-child graph. This ensures Tier 3.5 attribution works correctly
+  // for content originating in delegation sub-sessions.
+  for (const delegStep of delegationStepRefs) {
+    if (!delegStep.sessionId) continue;
+    const delegChildren = getChildSessions(delegStep.sessionId);
+    for (const child of delegChildren) {
+      if (!childToStepIndex.has(child.id)) {
+        childToStepIndex.set(child.id, delegStep.stepIndex);
+      }
+    }
+  }
+
   for (const branch of branchByChildSessionId.values()) {
     candidates.push({
       item: branch,
@@ -758,6 +830,7 @@ function getJobTimeline(
       source: step.source,
       sessionId: step.sessionId,
       items: [],
+      semanticLabel: computeSemanticLabel(step.command, step.source),
     });
   }
 
@@ -768,6 +841,7 @@ function getJobTimeline(
     source: 'delegation',
     sessionId: null,
     items: [],
+    semanticLabel: 'Unattributed',
   };
 
   for (const candidate of page) {

@@ -534,6 +534,7 @@ export interface StepTimelineGroup {
   source: string;               // 'delegation' | 'judge:gaps' | etc.
   sessionId: string | null;
   items: StepTimelineItem[];
+  semanticLabel?: string;       // Pre-computed human-readable label (e.g., "Execution", "Judge", "Gap Closure")
 }
 
 /** Grouped timeline payload for step-first rendering. */

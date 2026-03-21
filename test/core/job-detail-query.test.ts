@@ -94,6 +94,12 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     gitHeadCommit: 'bbb222',
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 2,
+    retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }
@@ -105,6 +111,9 @@ function makeStep(overrides: Partial<JobStep> = {}): JobStep {
     stepIndex: 0,
     command: 'execute-phase',
     args: '61 --auto',
+    source: 'delegation',
+    reason: null,
+    error: null,
     sessionTitle: 'pilot-session-ab12',
     sessionId: 'sess-root-1',
     status: 'completed',
@@ -803,7 +812,7 @@ describe('getJobTimeline', () => {
     expect(forkCards[0].kind === 'fork-card' && forkCards[0].completedAt).toBe(5000);
     expect(forkCards[0].kind === 'fork-card' && forkCards[0].durationMs).toBe(4000);
 
-    const completionCards = page.items.filter((i) => i.kind === 'completion-card');
+    const completionCards = page.items.filter((i) => (i as { kind: string }).kind === 'completion-card');
     expect(completionCards).toHaveLength(0);
   });
 
@@ -1107,9 +1116,9 @@ describe('unblockProjectAction', () => {
   });
 });
 
-// ── resolveStepIndex 5-tier attribution tests ─────────────────────────────
+// ── resolveStepIndex 6-tier attribution tests ─────────────────────────────
 
-describe('resolveStepIndex 5-tier attribution', () => {
+describe('resolveStepIndex 6-tier attribution', () => {
   // Consistent timestamp helpers
   const BASE = Date.parse('2026-06-01T00:00:00Z');
   const t = (secs: number) => BASE + secs * 1000;
@@ -1122,6 +1131,8 @@ describe('resolveStepIndex 5-tier attribution', () => {
       sessionTitle: string;
       startedAt: string;
       completedAt: string | null;
+      command?: string;   // optional — defaults to 'execute-phase' via makeStep
+      source?: string;    // optional — defaults to undefined (resolves to 'delegation' in stepRefs)
     }>;
     sessionTitles: string[];
     sessionIdMap: Record<string, string>;
@@ -1140,6 +1151,8 @@ describe('resolveStepIndex 5-tier attribution', () => {
           sessionTitle: s.sessionTitle,
           startedAt: s.startedAt,
           completedAt: s.completedAt,
+          ...(s.command != null ? { command: s.command } : {}),
+          ...(s.source != null ? { source: s.source as import('../../src/core/types.js').StepSource } : {}),
         }),
       ),
     );
@@ -1300,11 +1313,13 @@ describe('resolveStepIndex 5-tier attribution', () => {
     expect(judgeInUnattributed).toBeUndefined();
   });
 
-  it('tier 5: attributes late activity to most recent step via last-step fallback', () => {
+  it('tier 5: attributes late activity to judge step via last-step fallback', () => {
+    // Tier 5 only fires when the last step is a judge step (command contains 'judge').
+    // Use command='judge-gaps' for step 1 to verify the judge-only restriction.
     setupAttribution({
       steps: [
         { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
-        { stepIndex: 1, sessionId: 'sess-s1', sessionTitle: 'title-s1', startedAt: iso(30), completedAt: iso(40) },
+        { stepIndex: 1, sessionId: 'sess-s1', sessionTitle: 'title-s1', startedAt: iso(30), completedAt: iso(40), command: 'judge-gaps' },
       ],
       sessionTitles: ['title-s0', 'title-s1', 'late-title'],
       sessionIdMap: {
@@ -1324,7 +1339,7 @@ describe('resolveStepIndex 5-tier attribution', () => {
 
     const page = getJobTimeline('ab12')!;
 
-    // late-p1 should be attributed to step 1 (latest startedAtMs) via last-step fallback
+    // late-p1 should be attributed to step 1 (latest startedAtMs, and it is a judge step) via tier 5 fallback
     const step1Group = page.groups.find(g => g.stepIndex === 1);
     expect(step1Group).toBeDefined();
 
@@ -1339,6 +1354,48 @@ describe('resolveStepIndex 5-tier attribution', () => {
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
     );
     expect(lateInUnattributed).toBeUndefined();
+  });
+
+  it('tier 5: non-judge last step — late activity falls through to unattributed', () => {
+    // Tier 5 must NOT fire when the last step is not a judge step.
+    // Late activity after all windows close should go to Unattributed, not the last step.
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
+        { stepIndex: 1, sessionId: 'sess-s1', sessionTitle: 'title-s1', startedAt: iso(30), completedAt: iso(40) },
+        // Step 1 has default command='execute-phase', which is NOT a judge command
+      ],
+      sessionTitles: ['title-s0', 'title-s1', 'late-title'],
+      sessionIdMap: {
+        'title-s0': 'sess-s0',
+        'title-s1': 'sess-s1',
+        'late-title': 'sess-late',
+      },
+      childSessionMap: {},
+      partsMap: {
+        'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0', createdAt: t(15) })],
+        'sess-s1': [makePart({ id: 's1-p1', type: 'text', text: 'step 1', createdAt: t(35) })],
+        // Late activity AFTER all windows — last step is not judge, so tier 5 must not fire
+        'sess-late': [makePart({ id: 'late-p1', type: 'text', text: 'Late wrap-up', createdAt: t(50) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // late-p1 should be in Unattributed (tier 5 skipped — last step is execute-phase, not judge)
+    const unattributed = page.groups.find(g => g.command === 'unattributed');
+    expect(unattributed).toBeDefined();
+    const lateItem = unattributed!.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
+    );
+    expect(lateItem).toBeDefined();
+
+    // Must NOT be in step 1's group
+    const step1Group = page.groups.find(g => g.stepIndex === 1);
+    const lateInStep1 = step1Group?.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
+    );
+    expect(lateInStep1).toBeUndefined();
   });
 
   it('genuinely unassignable content remains in unattributed bucket', () => {
