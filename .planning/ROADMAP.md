@@ -1524,3 +1524,19 @@ Plans:
 
 Wave structure:
 - Wave 1: 83-01 + 83-02 (independent, no file overlap)
+
+### Phase 84: Pilot Control-Flow + Live Status Bugs — Fix False Failure Presentation and Continuation Churn
+
+**Goal:** Make Pilot's runner + web status surfaces reflect live job truth correctly, and stop productive runs from degrading into misleading failed/stale labels and unnecessary continuation churn.
+**Requirements**: Per requirements/pilot-control-flow-and-live-status-bugs.md
+**Depends on:** Phase 83
+**Plans:** 3 plans
+
+Plans:
+- [ ] 84-01-PLAN.md — Fix web UI live-status desync: derive isActive from reactive snapshot
+- [ ] 84-02-PLAN.md — Fix continuation churn: add per-job continuation cycle guard and improved step-cap messaging
+- [ ] 84-03-PLAN.md — Update web route contract tests for live-status fix regression assertions
+
+Wave structure:
+- Wave 1: 84-01 + 84-02 (independent: web UI fix and runner fix, no file overlap)
+- Wave 2: 84-03 (test updates, depends on 84-01 and 84-02)
