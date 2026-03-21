@@ -62,6 +62,9 @@ import {
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
+  markCompletedPendingReview,
+  markReviewHold,
+  resumeFromReviewHold,
 } from './db.js';
 import {
   delegate,
@@ -293,6 +296,34 @@ function setOomScore(score: number): void {
   } catch {
     // Non-Linux or insufficient permissions — skip silently
   }
+}
+
+// ── Review state helpers ──────────────────────────────────────────────────
+
+/**
+ * Detect if a judge verdict's remaining gaps are all human-review items.
+ * Heuristic: gaps containing keywords like "human", "manual", "visual", "UX",
+ * "mobile sweep", "review", "verify" with no code/test/implementation gaps.
+ * Also checks if the verdict reason mentions human verification.
+ *
+ * Exported for direct unit testing.
+ */
+function isHumanOnlyRemaining(verdict: JudgeVerdict): boolean {
+  const humanKeywords = /\b(human|manual|visual|ux|mobile\s*sweep|review|verify\s*by\s*hand|user\s*test|accessibility\s*check|design\s*review)\b/i;
+  const codeKeywords = /\b(bug|error|crash|test\s*fail|missing\s*implementation|broken|type\s*error|compile|build\s*fail)\b/i;
+
+  // If there are explicit gaps, check if they're all human-type
+  if (verdict.gaps && verdict.gaps.length > 0) {
+    const allHuman = verdict.gaps.every(gap => humanKeywords.test(gap) && !codeKeywords.test(gap));
+    if (allHuman) return true;
+  }
+
+  // Check reason for human-review indicators (only when no code problems found)
+  if (verdict.reason && humanKeywords.test(verdict.reason) && !codeKeywords.test(verdict.reason)) {
+    return true;
+  }
+
+  return false;
 }
 
 // ── Runner Class ───────────────────────────────────────────────────────────
@@ -719,6 +750,9 @@ class Runner {
         markCompleted(job.id);
         const completedJob = getJob(job.id);
         if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
+      } else if (latestJob2 && (latestJob2.status === 'completed_pending_review' || latestJob2.status === 'review_hold')) {
+        // Already set by judge step handler — just ensure notification is sent
+        notifyJobCompletion(latestJob2).catch(() => {});
       }
     } catch (err) {
       // ── Generic error catch-all ──────────────────────────────────────
@@ -956,6 +990,20 @@ class Runner {
 
     if (verdict.verdict === 'gaps_found' || verdict.verdict === 'doubting' || verdict.verdict === 'partial') {
       dbMarkStepCompleted(step.id);
+
+      // Check if all remaining gaps are human-only review items
+      if (isHumanOnlyRemaining(verdict)) {
+        const checklist = verdict.gaps && verdict.gaps.length > 0
+          ? verdict.gaps.join('\n- ')
+          : verdict.reason;
+        markCompletedPendingReview(job.id, checklist ? `Review items:\n- ${checklist}` : undefined);
+        this.collectActualModels(job.id);
+        await this.captureRecoveryHead(job.id, projectDir);
+        const reviewJob = getJob(job.id);
+        if (reviewJob) notifyJobCompletion(reviewJob).catch(() => {});
+        return;
+      }
+
       // Re-delegate for gap closure
       await this.handleGapsContinuation(job, projectDir, verdict);
       return;
@@ -1959,3 +2007,4 @@ export { _resetSpawnRateLimit };
 export { isWellFormedVerificationEvidence as _isWellFormedVerificationEvidence };
 
 export { hasSystemdRunUser, getDynamicMaxParallel, _resetSystemdRunCache };
+export { isHumanOnlyRemaining };
