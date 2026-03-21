@@ -312,8 +312,9 @@ function setOomScore(score: number): void {
  * Exported for direct unit testing.
  */
 function isHumanOnlyRemaining(verdict: JudgeVerdict): boolean {
-  const humanKeywords = /\b(human|manual|visual|ux|mobile\s*sweep|review|verify\s*by\s*hand|user\s*test|accessibility\s*check|design\s*review)\b/i;
+  const humanKeywords = /\b(human|manual|visual|ux|mobile\s*sweep|review|verify\s*by\s*hand|user\s*test|accessibility\s*check|design\s*review|approve|sign[\s-]?off|QA|stakeholder|product\s*owner|deploy|release|publish|ship|polish|tweak|copy\s*edit|wording|screenshot|check\s*in|demo|walk[\s-]?through|walkthrough)\b/i;
   const codeKeywords = /\b(bug|error|crash|test\s*fail|missing\s*implementation|broken|type\s*error|compile|build\s*fail)\b/i;
+  const softGapKeywords = /\b(polish|tweak|copy\s*edit|wording|spacing|alignment|color\s*adjust|font|padding|margin|screenshot|demo|approve|sign[\s-]?off|stakeholder|QA\s*pass|product\s*owner|ship|deploy|release|publish)\b/i;
 
   // If there are explicit gaps, check if they're all human-type
   if (verdict.gaps && verdict.gaps.length > 0) {
@@ -324,6 +325,12 @@ function isHumanOnlyRemaining(verdict: JudgeVerdict): boolean {
   // Check reason for human-review indicators (only when no code problems found)
   if (verdict.reason && humanKeywords.test(verdict.reason) && !codeKeywords.test(verdict.reason)) {
     return true;
+  }
+
+  // High-confidence verdict with soft-only gaps → likely human-review
+  if (verdict.confidence >= 85 && verdict.gaps && verdict.gaps.length > 0) {
+    const allSoft = verdict.gaps.every(gap => softGapKeywords.test(gap) && !codeKeywords.test(gap));
+    if (allSoft) return true;
   }
 
   return false;
