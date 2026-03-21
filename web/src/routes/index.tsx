@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTab, TabsPanel } from '~/components/ui/tabs'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
 import { JobList } from '~/components/job-list'
 import { SessionOverview } from '~/components/session-overview'
 import { ProjectsList } from '~/components/projects-list'
@@ -21,12 +22,16 @@ function Home() {
   const loaderData = Route.useLoaderData()
   const queryClient = useQueryClient()
 
-  // Auto-refresh every 5 seconds via React Query
+  // Adaptive polling: 3s when active jobs exist, 30s when idle
   const { data, isLoading } = useQuery({
     queryKey: ['jobs-list'],
     queryFn: () => getJobsListFn(),
     initialData: loaderData,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (d && (d.active.length > 0 || d.queued.length > 0)) return 3_000
+      return 30_000
+    },
   })
 
   const { active, queued, recent } = data ?? loaderData
@@ -161,14 +166,32 @@ function Home() {
           </TabsList>
 
           <TabsPanel value="active">
-            <JobList data={{ active, queued: [], recent: [] }} queueGraceSeconds={queueGraceSeconds} />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Running ({activeCount})
+            </h2>
+            {activeCount === 0 ? (
+              <Empty className="py-8">
+                <EmptyHeader>
+                  <EmptyTitle className="text-base">All quiet</EmptyTitle>
+                  <EmptyDescription>No jobs running or queued. Use <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">pilot add</code> to queue a job.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <JobList data={{ active, queued: [], recent: [] }} queueGraceSeconds={queueGraceSeconds} />
+            )}
           </TabsPanel>
 
           <TabsPanel value="queued">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Queued ({queuedCount})
+            </h2>
             <JobList data={{ active: [], queued, recent: [] }} queueGraceSeconds={queueGraceSeconds} />
           </TabsPanel>
 
           <TabsPanel value="recent">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Recent ({recentCount})
+            </h2>
             <JobList data={{ active: [], queued: [], recent }} queueGraceSeconds={queueGraceSeconds} />
           </TabsPanel>
 
