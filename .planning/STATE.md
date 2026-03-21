@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions
+Last activity: 2026-03-21 - Completed quick task 260321-61z: Fix skills JIT loading: seed manifest from catalog
 
 Progress: [█████████░] 93%
 
