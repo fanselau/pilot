@@ -334,7 +334,15 @@ skillsCmd
     await skillsTagCommand(name, opts as { categories: string });
   });
 
-
+skillsCmd
+  .command('seed')
+  .description('Populate manifest from built-in skill catalog (Tier 1 + detected Tier 2)')
+  .option('--yes', 'Skip confirmation')
+  .option('--project-dir <dir>', 'Project directory for stack detection', process.cwd())
+  .action(async (opts: Record<string, unknown>) => {
+    const { skillsSeedCommand } = await import('./commands/skills.js');
+    await skillsSeedCommand(opts as { yes?: boolean; projectDir?: string });
+  });
 
 const modelsCmd = program
   .command('models')

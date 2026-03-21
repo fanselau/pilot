@@ -16,8 +16,9 @@ import {
   CATEGORY_INFO,
   loadManifest,
 } from '../core/skills.js';
+import { bootstrapDefaultSkills, recommendDefaultSkills } from '../core/default-skills.js';
 import { outputHuman } from '../util/output.js';
-import { bold, dim, green } from '../util/colors.js';
+import { bold, dim, green, yellow } from '../util/colors.js';
 
 function parseCategoriesInput(raw: string | undefined): string[] | undefined {
   if (raw === undefined) return undefined;
@@ -154,6 +155,51 @@ async function skillsTagCommand(
   outputHuman(`Updated ${name} categories: ${result.categories.join(', ')}`);
 }
 
+// ── Seed ──────────────────────────────────────────────────────────────────
+
+async function skillsSeedCommand(
+  options: { yes?: boolean; projectDir?: string },
+): Promise<void> {
+  const projectDir = options.projectDir ?? process.cwd();
+
+  // Preview what will be registered
+  const recommendation = recommendDefaultSkills(projectDir, { tier: 'all' });
+  const tier1Count = recommendation.skills.filter(s => s.tier === 1).length;
+  const tier2Count = recommendation.skills.filter(s => s.tier === 2).length;
+  const stackItems = recommendation.detectedStack.items;
+
+  outputHuman('');
+  outputHuman(`  ${bold('Skills Seed Preview')}`);
+  outputHuman('');
+  outputHuman(`  Total skills: ${recommendation.skills.length} (${tier1Count} tier-1, ${tier2Count} tier-2)`);
+  if (stackItems.length > 0) {
+    outputHuman(`  Detected stack: ${stackItems.join(', ')}`);
+    for (const key of stackItems) {
+      const signal = recommendation.detectedStack.signals[key];
+      if (signal) {
+        outputHuman(`    ${dim(key)}: ${dim(signal)}`);
+      }
+    }
+  } else {
+    outputHuman(`  Detected stack: ${dim('(none — only tier-1 universal skills)')}`);
+  }
+  outputHuman('');
+
+  // Register all recommended skills (bootstrapDefaultSkills uses registerSkill which overwrites by name)
+  const result = await bootstrapDefaultSkills({ projectDir, yes: true, tier: 'all' });
+
+  outputHuman(`  ${green('✓')} Seeded ${result.installed} skills (${tier1Count} tier-1, ${tier2Count} tier-2). ${result.failed} failed.`);
+
+  if (result.errors.length > 0) {
+    outputHuman('');
+    for (const err of result.errors) {
+      outputHuman(`  ${yellow('⚠')} ${err.skill}: ${err.error}`);
+    }
+  }
+
+  outputHuman('');
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export {
@@ -162,4 +208,5 @@ export {
   skillsRemoveCommand,
   skillsCategoriesCommand,
   skillsTagCommand,
+  skillsSeedCommand,
 };
