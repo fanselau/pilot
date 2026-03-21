@@ -403,6 +403,54 @@ describe('statusCommand', () => {
     expect(quickLine).not.toContain('judge:');
   });
 
+  it('shows review pending label for completed_pending_review jobs in recent section', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'rv11',
+        status: 'completed_pending_review',
+        project: 'review-proj',
+        description: 'review task',
+        completedAt: '2026-03-21T10:00:00',
+        resumeHint: '- Check output quality\n- Verify edge cases',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('review-proj');
+    expect(output).toContain('review pending');
+    // Should NOT show failure icon — ✗ is reserved for failed jobs
+    const lines = mockOutputHuman.mock.calls.map((c: unknown[]) => String(c[0]));
+    const reviewLine = lines.find((line) => line.includes('rv11'));
+    expect(reviewLine).toBeDefined();
+    expect(reviewLine).not.toContain('✗');
+  });
+
+  it('shows review hold label for review_hold jobs', async () => {
+    mockQueue = [
+      makeJob({
+        id: 'rh11',
+        status: 'review_hold',
+        project: 'hold-proj',
+        description: 'hold task',
+        startedAt: '2026-03-21T10:00:00',
+        resumeHint: 'Security review required',
+      }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('hold-proj');
+    expect(output).toContain('review hold');
+    // Should NOT show failure icon
+    const lines = mockOutputHuman.mock.calls.map((c: unknown[]) => String(c[0]));
+    const holdLine = lines.find((line) => line.includes('rh11'));
+    expect(holdLine).toBeDefined();
+    expect(holdLine).not.toContain('✗');
+  });
+
   it('outputs JSON with correct structure', async () => {
     mockJsonMode = true;
     mockQueue = [

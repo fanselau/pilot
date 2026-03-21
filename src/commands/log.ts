@@ -853,6 +853,23 @@ async function logCommand(
     const actualStr = job.actualModels.join(', ');
     outputHuman(`  ${dim(`Actual model: ${actualStr}`)}`);
   }
+
+  // Show review items for review-state jobs (amber, not red — not a failure)
+  if (job.status === 'completed_pending_review' && job.resumeHint) {
+    outputHuman('');
+    outputHuman(`  ${yellow('Review items:')}`);
+    for (const line of job.resumeHint.split('\n')) {
+      if (line.trim()) {
+        outputHuman(`    ${dim(line)}`);
+      }
+    }
+  }
+  if (job.status === 'review_hold' && job.resumeHint) {
+    outputHuman('');
+    outputHuman(`  ${yellow('Review hold reason:')}`);
+    outputHuman(`    ${dim(job.resumeHint)}`);
+  }
+
   outputHuman('');
 
   // Step summary (if steps exist)
@@ -1026,8 +1043,8 @@ async function logCommand(
       let currentTitles: string[] = [];
       const updatedJob = getJob(jobId);
 
-      // Stop following when job reaches terminal state
-      if (updatedJob && ['completed', 'failed', 'cancelled'].includes(updatedJob.status)) {
+      // Stop following when job reaches terminal state (including review states — session is done)
+      if (updatedJob && ['completed', 'failed', 'cancelled', 'completed_pending_review', 'review_hold'].includes(updatedJob.status)) {
         outputHuman(dim(`  Job ${jobId} ${updatedJob.status}. Done.`));
         break;
       }

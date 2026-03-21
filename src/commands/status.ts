@@ -284,6 +284,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
 
   const active = queue.filter((j) => j.status === 'running');
   const pending = queue.filter((j) => j.status === 'pending');
+  const reviewHold = queue.filter((j) => j.status === 'review_hold');
   const runningProjects = new Set(active.map((job) => job.project));
 
   // Status integrity: separate active jobs into healthy (session alive) and stale (session gone)
@@ -297,12 +298,13 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     ...staleActive.map((job) => [job.id, buildJobWhy(job)] as const),
     ...pending.map((job) => [job.id, getPendingWhy(job, nowEpochSeconds, queueGraceSeconds, runningProjects)] as const),
     ...recent.map((job) => [job.id, buildJobWhy(job)] as const),
+    ...reviewHold.map((job) => [job.id, buildJobWhy(job)] as const),
   ];
   const why = Object.fromEntries(whyEntries);
-  const observability = buildObservabilityMap([...healthyActive, ...staleActive, ...pending, ...recent]);
+  const observability = buildObservabilityMap([...healthyActive, ...staleActive, ...pending, ...recent, ...reviewHold]);
 
   if (isJsonMode()) {
-    const recovery = buildRecoveryMap([...healthyActive, ...staleActive, ...pending, ...recent]);
+    const recovery = buildRecoveryMap([...healthyActive, ...staleActive, ...pending, ...recent, ...reviewHold]);
     outputJson({
       version: '2.0.0',
       daemon: { active: daemon.status === 'active', pid: daemon.pid, detail: daemon.detail },
@@ -310,6 +312,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       stale: staleActive,
       queue: pending,
       recent,
+      reviewHold,
       recovery,
       why,
       observability,
@@ -358,6 +361,22 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     outputHuman('');
   }
 
+  // Review Hold section (jobs intentionally paused awaiting human review)
+  if (reviewHold.length > 0) {
+    outputHuman(`  ${bold('Review Hold')} (${reviewHold.length}) — awaiting human review`);
+    for (const job of reviewHold) {
+      const elapsed = getJobElapsed(job);
+      const desc = sanitizeDesc(job.description);
+      outputHuman(
+        `  ${yellow('●')} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${yellow('review hold')}  ${dim(`[${formatRecoveryTag(job)}]`)}`,
+      );
+      if (job.resumeHint) {
+        outputHuman(`    ${dim('└ ' + job.resumeHint.split('\n')[0])}`);
+      }
+    }
+    outputHuman('');
+  }
+
   // Queue section
   if (pending.length > 0) {
     outputHuman(`  ${bold('Queue')} (${pending.length})`);
@@ -385,7 +404,11 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
           ? judgeSignal.outcome === 'inconclusive' ? yellow('⚠') : green('✓')
           : job.status === 'failed'
             ? red('✗')
-            : dim('◌');
+            : job.status === 'completed_pending_review'
+              ? yellow('◑')   // amber — work done, review pending
+              : job.status === 'review_hold'
+                ? yellow('◐') // amber — actively paused for review
+                : dim('◌');
       const elapsed = job.completedAt ? formatRelativeTime(job.completedAt) : '';
       const desc = sanitizeDesc(job.description);
       const judgeBadge =
@@ -396,9 +419,13 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       const statusBadge =
         job.status === 'failed' || job.status === 'cancelled'
           ? `${dim(`[${statusWhy.badge}]`)} `
-          : statusWhy.code === 'no-commit-delta'
-            ? `${dim('[no-op]')} `
-            : '';
+          : job.status === 'completed_pending_review'
+            ? `${yellow('review pending')} `   // amber, not red
+            : job.status === 'review_hold'
+              ? `${yellow('review hold')} `    // amber, not red
+              : statusWhy.code === 'no-commit-delta'
+                ? `${dim('[no-op]')} `
+                : '';
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
         `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${judgeBadge}${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
@@ -410,7 +437,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
     outputHuman('');
   }
 
-  if (healthyActive.length === 0 && staleActive.length === 0 && pending.length === 0 && recent.length === 0) {
+  if (healthyActive.length === 0 && staleActive.length === 0 && pending.length === 0 && recent.length === 0 && reviewHold.length === 0) {
     outputHuman(`  ${dim('No jobs. Run: pilot add <project> <requirement>')}`);
     outputHuman('');
   }

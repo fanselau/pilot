@@ -68,6 +68,9 @@ function formatStatusColor(status: string): string {
     case 'failed':    return red(status);
     case 'running':   return yellow(status);
     case 'cancelled': return dim(status);
+    // Review states — amber/yellow, NOT red (not failures)
+    case 'completed_pending_review': return yellow('review pending');
+    case 'review_hold': return yellow('review hold');
     default:          return cyan(status);
   }
 }
