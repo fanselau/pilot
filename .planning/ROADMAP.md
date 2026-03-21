@@ -1465,11 +1465,13 @@ Plans:
 **Goal:** Make timeline attribution trustworthy, bring child/sub-session views up to the same quality bar as the main interface, and eliminate viewport-breaking horizontal overflow on mobile.
 **Requirements**: ATTR-01, ATTR-02, ATTR-03, ATTR-04, ATTR-05, MOB-01, MOB-02, MOB-03, MOB-04, MOB-05, SUB-01
 **Depends on:** Phase 79
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete + 1 gap closure)
 
 Plans:
-- [ ] 80-01-PLAN.md — Fix timeline attribution: improve resolveStepIndex() with child-session transitivity and last-step fallback
-- [ ] 80-02-PLAN.md — Mobile overflow hardening + child/sub-session drill-in polish
+- [x] 80-01-PLAN.md — Fix timeline attribution: improve resolveStepIndex() with child-session transitivity and last-step fallback
+- [x] 80-02-PLAN.md — Mobile overflow hardening + child/sub-session drill-in polish
+- [ ] 80-03-PLAN.md — Gap closure: Add Phase 80 requirement definitions to REQUIREMENTS.md
 
 Wave structure:
 - Wave 1: 80-01 + 80-02 (independent: core data-layer attribution fix and web UI overflow/polish, no file overlap)
+- Wave 2: 80-03 (gap closure: requirements traceability, depends on 80-01 + 80-02 completion)
