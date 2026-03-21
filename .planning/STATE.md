@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-kd9: Budget-aware continuation/re-delegation and human-needed control-flow cleanup
+Last activity: 2026-03-21 - Completed quick task 260321-s79: Mobile header density cleanup - compress job-detail header on mobile
 
 Progress: [█████████░] 93%
 
@@ -277,6 +277,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260320-vju | Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions | 2026-03-20 | 98df0ea | [260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru](./quick/260320-vju-bug-fix-pilot-kill-force-doesn-t-stop-ru/) |
 | 260321-61z | Fix skills JIT loading — seed manifest from built-in catalog | 2026-03-21 | b61a92d | [260321-61z-fix-skills-jit-loading-seed-manifest-fro](./quick/260321-61z-fix-skills-jit-loading-seed-manifest-fro/) |
 | 260321-kd9 | Budget-aware continuation/re-delegation and human-needed control-flow cleanup | 2026-03-21 | 16de453 | Verified | [260321-kd9-implement-budget-aware-continuation-re-d](./quick/260321-kd9-implement-budget-aware-continuation-re-d/) |
+| 260321-s79 | Mobile header density cleanup - compress job-detail header on mobile | 2026-03-21 | 9394bea | [260321-s79-mobile-header-density-cleanup-compress-j](./quick/260321-s79-mobile-header-density-cleanup-compress-j/) |
 
 ## Accumulated Context
 
