@@ -27,7 +27,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache } from '../../src/core/runner.js';
+import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining } from '../../src/core/runner.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -951,3 +951,87 @@ import {
 // hung session retry logic tests removed — retry budget concept eliminated (quick task 260320-nc6).
 // The step-continuation model (Phase 73) handles hung sessions via re-delegation,
 // not via resetToPending/canRetry.
+
+// ── review state detection ─────────────────────────────────────────────────
+
+describe('review state detection', () => {
+  it('returns true when all gaps are human review items', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'gaps_found',
+      confidence: 70,
+      reason: 'Some gaps found',
+      gaps: ['Manual visual review of dashboard layout', 'Human verification of accessibility'],
+    });
+    expect(result).toBe(true);
+  });
+
+  it('returns false when gaps include code implementation items', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'gaps_found',
+      confidence: 60,
+      reason: 'Tests fail',
+      gaps: ['Missing implementation in auth.ts', 'Bug in component'],
+    });
+    expect(result).toBe(false);
+  });
+
+  it('returns true when reason contains only human review keywords and no code keywords', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'doubting',
+      confidence: 65,
+      reason: 'Manual UX review needed for the mobile sweep',
+      gaps: [],
+    });
+    expect(result).toBe(true);
+  });
+
+  it('returns false when reason mentions code errors', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'failed',
+      confidence: 80,
+      reason: 'Type error in TypeScript compilation',
+      gaps: [],
+    });
+    expect(result).toBe(false);
+  });
+
+  it('returns false when no gaps and reason has no human keywords', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'gaps_found',
+      confidence: 70,
+      reason: 'Some remaining work to complete',
+      gaps: [],
+    });
+    expect(result).toBe(false);
+  });
+
+  it('returns false when gaps mix human and code items', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'gaps_found',
+      confidence: 60,
+      reason: 'Mixed items',
+      gaps: ['visual review needed', 'missing error handling in auth.ts'],
+    });
+    expect(result).toBe(false);
+  });
+
+  it('returns true when gaps contain "review by hand" keyword', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'gaps_found',
+      confidence: 75,
+      reason: 'Needs manual verification',
+      gaps: ['verify by hand that the form submits correctly'],
+    });
+    expect(result).toBe(true);
+  });
+
+  it('returns true when reason mentions design review without code problems', () => {
+    const result = isHumanOnlyRemaining({
+      verdict: 'doubting',
+      confidence: 72,
+      reason: 'Design review required for the UI components — no code issues found',
+      gaps: [],
+    });
+    expect(result).toBe(true);
+  });
+});
