@@ -92,7 +92,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background text-foreground antialiased overflow-x-hidden">
+      <body className="min-h-dvh bg-background text-foreground antialiased overflow-x-hidden">
         {children}
         <Scripts />
       </body>

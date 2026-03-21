@@ -180,6 +180,14 @@
 }
 
 @layer base {
+  :root {
+    --app-dvh: 100dvh;
+  }
+  @supports not (height: 100dvh) {
+    :root {
+      --app-dvh: 100vh;
+    }
+  }
   * {
     @apply border-border outline-ring/50;
     }

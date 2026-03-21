@@ -262,7 +262,7 @@ export function SplitPaneDetail({
   return (
     <Group
       orientation="horizontal"
-      style={{ height: 'calc(100vh - 4rem)' }}
+      style={{ height: 'calc(100dvh - 4rem)' }}
     >
       <Panel defaultSize="34%" minSize={280}>
         <StepTimelineSidebar

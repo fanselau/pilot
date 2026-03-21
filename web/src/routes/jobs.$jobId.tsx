@@ -30,7 +30,7 @@ function JobLayout() {
   })
 
   return (
-    <div className={`flex flex-col overflow-hidden ${isMobile ? 'h-screen' : 'h-[calc(100vh-3rem)]'}`}>
+    <div className={`flex flex-col overflow-hidden ${isMobile ? 'h-dvh' : 'h-[calc(100dvh-3rem)]'}`}>
       <Outlet />
 
       {/* Command palette with job context */}
