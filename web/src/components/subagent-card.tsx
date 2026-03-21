@@ -41,8 +41,8 @@ export function SubagentCard({ session, jobId }: SubagentCardProps) {
       params={{ jobId, sessionId: session.sessionId }}
       className="block group"
     >
-      <Card className="transition-colors group-hover:bg-accent/50">
-        <CardContent className="py-3">
+      <Card className="min-w-0 max-w-full overflow-hidden transition-colors group-hover:bg-accent/50">
+        <CardContent className="py-3 min-w-0 max-w-full overflow-hidden">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">

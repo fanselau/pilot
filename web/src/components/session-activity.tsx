@@ -53,7 +53,7 @@ function PartCard({ part }: { part: SessionPart }) {
 
   return (
     <Collapsible>
-      <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 max-w-full">
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
           {formatTime(part.createdAt)}
         </span>
@@ -91,7 +91,7 @@ function PartCard({ part }: { part: SessionPart }) {
             </span>
           )}
           {part.toolInput && (
-            <p className="mt-0.5 text-xs text-muted-foreground/70 line-clamp-1 font-mono">
+            <p className="mt-0.5 text-xs text-muted-foreground/70 line-clamp-1 font-mono break-all [overflow-wrap:anywhere]">
               {truncatePreview(part.toolInput, 100)}
             </p>
           )}
@@ -165,8 +165,8 @@ export function SessionActivity({ sessionId }: SessionActivityProps) {
   }
 
   return (
-    <Card>
-      <CardContent className="py-3">
+    <Card className="min-w-0 max-w-full overflow-hidden">
+      <CardContent className="py-3 min-w-0 max-w-full overflow-hidden">
         <div className="divide-y divide-border/50">
           {allParts.map((part) => (
             <PartCard key={part.id} part={part} />

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
+import { StatusBadge } from '~/components/ui/status-badge'
 import { SessionActivity } from '~/components/session-activity'
 import { SubagentCard } from '~/components/subagent-card'
 import { getSessionChildrenFn } from '~/lib/server-fns'
@@ -20,32 +21,45 @@ function SessionDrillIn() {
     queryFn: () => getSessionChildrenFn({ data: sessionId }),
   })
 
+  // Derive session status from children data (if session has completed children, it's likely done)
+  const sessionStatus = children && children.length > 0
+    ? (children.every((c) => c.status === 'done') ? 'done' : 'active')
+    : undefined
+
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden max-w-full">
       {/* Compact breadcrumb header — matches job detail header style */}
-      <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+      <div className="flex shrink-0 items-center gap-3 border-b px-3 sm:px-4 py-2 min-w-0">
         <Link to="/jobs/$jobId" params={{ jobId }}>
           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
             &larr; Back to Job
           </Button>
         </Link>
-        <span className="font-mono text-sm font-semibold">
+        <span className="font-mono text-sm font-semibold min-w-0 truncate">
           Session {sessionId.slice(0, 8)}
         </span>
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 overflow-auto p-4 space-y-4">
+      <div className="flex-1 overflow-auto overflow-x-hidden p-3 sm:p-4 space-y-4 max-w-full">
         {/* Session info card */}
-        <div className="rounded-xl border bg-card p-4 space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Child Session
-          </p>
+        <div className="rounded-xl border bg-card p-3 sm:p-4 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" size="sm" className="font-mono">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Child Session
+            </p>
+            <Badge variant="outline" size="sm" className="font-mono truncate max-w-[200px]">
               {sessionId.slice(0, 8)}
             </Badge>
+            {sessionStatus && (
+              <StatusBadge status={sessionStatus === 'done' ? 'completed' : 'running'} size="sm" />
+            )}
           </div>
+          {children && children.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{children.length} child session{children.length !== 1 ? 's' : ''}</span>
+            </div>
+          )}
         </div>
 
         {/* Session Activity */}
