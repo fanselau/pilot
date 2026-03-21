@@ -1430,7 +1430,7 @@ Read requirements/web-ui-fixes-v2.md for full spec.
 **Goal:** Transform the web UI into a premium build pipeline control room with inline token/cost observability, judge verdict visualization, step enrichment (duration/source/model/tool summaries), session state badges, git checkpoint display, queue enrichment (position/categories/deps), micro-interactions, syntax-highlighted logs, and mobile-first tabs/bottom-sheets.
 **Requirements**: TBD
 **Depends on:** Phase 77
-**Plans:** 7 plans (6 complete + 1 gap closure)
+**Plans:** 7/7 plans complete
 
 Plans:
 - [x] 78-01-PLAN.md — Foundation: install deps (motion, shiki), add server fns (observability, verdict, session state), create shared UI primitives (sparkline, copy-button, status-badge, format helpers)
