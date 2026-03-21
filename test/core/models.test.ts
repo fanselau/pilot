@@ -112,6 +112,29 @@ describe('resolveTopLevelModel with _top: keys', () => {
   });
 });
 
+describe('debug and fast scope support', () => {
+  it('resolveTopLevelModel: debug scope maps to _top:quick (same as quick)', () => {
+    // TypeScript will reject 'debug' until the scope union is updated — that is the RED check.
+    // The runtime assertion confirms explicit routing (not just fallback).
+    expect(resolveTopLevelModel('debug', 'balanced', 'claude-only')).toEqual(
+      resolveTopLevelModel('quick', 'balanced', 'claude-only'),
+    );
+  });
+
+  it('resolveTopLevelModel: fast scope maps to _top:quick (same as quick)', () => {
+    // TypeScript will reject 'fast' until the scope union is updated — that is the RED check.
+    expect(resolveTopLevelModel('fast', 'balanced', 'claude-only')).toEqual(
+      resolveTopLevelModel('quick', 'balanced', 'claude-only'),
+    );
+  });
+
+  it('resolveTopLevelModel: milestone scope still maps to _top:phase (internals not broken)', () => {
+    expect(resolveTopLevelModel('milestone', 'balanced', 'claude-only')).toEqual(
+      resolveTopLevelModel('phase', 'balanced', 'claude-only'),
+    );
+  });
+});
+
 describe('hybrid role-based routing', () => {
   const buildAgents = [
     'gsd-planner',
