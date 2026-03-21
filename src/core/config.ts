@@ -108,7 +108,7 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
       }
     }
     if (defaults.scope !== undefined && defaults.scope !== null) {
-      assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'milestone']);
+      assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'debug', 'fast']);
     }
 
   }
