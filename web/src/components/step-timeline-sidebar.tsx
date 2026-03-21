@@ -270,20 +270,25 @@ export function StepTimelineSidebar({
 
                 const commandLabel = isDelegation ? 'Delegation' : (group.command || '(no command)')
 
+                const isRunning = group.status === 'running'
+
                 return (
                   <button
                     key={`step-${group.stepIndex}`}
                     className={[
-                      'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors hover:bg-accent/30',
+                      'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors duration-150 hover:bg-white/[0.03]',
                       isHighlighted
-                        ? 'border-l-2 border-primary bg-accent/50'
+                        ? 'border-l-2 border-sky-400 bg-sky-500/5 ring-1 ring-sky-400/30'
                         : 'border-l-2 border-transparent',
                     ].join(' ')}
                     onClick={() => {
                       if (group.stepIndex != null) onClickStep(group.stepIndex)
                     }}
                   >
-                    <span className="w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
+                    <span className={[
+                      'w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground',
+                      isRunning ? 'animate-pulse text-sky-400' : '',
+                    ].join(' ')}>
                       {isDelegation
                         ? formatDelegationIndex(group.stepIndex!, delegationCount)
                         : group.stepIndex}

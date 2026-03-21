@@ -169,11 +169,14 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition }: { job: Job; queu
   const isCompleted = job.status === 'completed' || job.status === 'failed'
   return (
     <Link to="/jobs/$jobId" params={{ jobId: job.id }} className="block group">
-      <Card className="transition-colors group-hover:bg-accent/50">
+      <Card className="transition-all duration-200 group-hover:bg-accent/50">
         <CardContent className="flex items-center justify-between py-4">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm font-bold">{job.id}</span>
+              {isRunning && (
+                <span className="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+              )}
               <Badge variant={statusVariant(job.status)} size="sm">
                 {job.status}
               </Badge>
@@ -293,7 +296,10 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job
             return (
               <TableRow
                 key={job.id}
-                className="cursor-pointer"
+                className={[
+                  'cursor-pointer transition-colors duration-150 hover:bg-white/[0.03]',
+                  isRunning ? 'border-l-2 border-sky-400' : '',
+                ].join(' ')}
               >
                 <TableCell>
                   <Link

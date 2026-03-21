@@ -10,7 +10,7 @@
  * Auto-scrolls to bottom for running jobs when autoFollow=true.
  */
 
-import { useRef, useEffect, useCallback, type MutableRefObject } from 'react'
+import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { StepTimelineGroup, StepTimelineItem, JobStepSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
@@ -70,6 +70,21 @@ export function StepContentPane({
   // All items flattened (for virtualization threshold check)
   const allItems: StepTimelineItem[] = groups.flatMap((g) => g.items)
   const useVirtual = allItems.length >= VIRTUALIZE_THRESHOLD
+
+  // ── New-activity highlight tracking ──────────────────────────────────
+  const prevItemCountRef = useRef(0)
+  const [newItemStart, setNewItemStart] = useState<number>(allItems.length)
+
+  useEffect(() => {
+    if (allItems.length > prevItemCountRef.current && prevItemCountRef.current > 0) {
+      setNewItemStart(prevItemCountRef.current)
+      // Clear the highlight class after animation completes (1.5s)
+      const timer = setTimeout(() => setNewItemStart(allItems.length), 1500)
+      prevItemCountRef.current = allItems.length
+      return () => clearTimeout(timer)
+    }
+    prevItemCountRef.current = allItems.length
+  }, [allItems.length])
 
   const virtualizer = useVirtualizer({
     count: allItems.length,
@@ -153,11 +168,34 @@ export function StepContentPane({
     )
   }
 
+  // ── Jump to first error ──────────────────────────────────────────────────
+
+  const firstErrorGroup = useMemo(
+    () => groups.find((g) => g.status === 'failed'),
+    [groups],
+  )
+
+  const handleJumpToError = useCallback(() => {
+    if (firstErrorGroup?.stepIndex != null) {
+      scrollToStep(firstErrorGroup.stepIndex)
+    }
+  }, [firstErrorGroup, scrollToStep])
+
   // ── Header ──────────────────────────────────────────────────────────────
 
   const header = (
     <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
       <span className="text-sm font-medium">All steps</span>
+      {firstErrorGroup && (
+        <Button
+          variant="destructive"
+          size="sm"
+          className="text-xs"
+          onClick={handleJumpToError}
+        >
+          Jump to error
+        </Button>
+      )}
       <span className="ml-auto text-xs text-muted-foreground">
         {allItems.length} item{allItems.length !== 1 ? 's' : ''}
         {useVirtual ? ' (virtualized)' : ''}
@@ -206,70 +244,77 @@ export function StepContentPane({
           ) : (
             /* Continuous scroll: all groups rendered as sections */
             <div className="space-y-0">
-              {groups.map((group) => {
-                // Look up step metadata for enriched header
-                const stepMeta = steps?.find((s) => s.stepIndex === group.stepIndex)
-                return (
-                  <section
-                    key={group.stepIndex ?? 'unattributed'}
-                    id={`step-section-${group.stepIndex}`}
-                    data-step-index={group.stepIndex}
-                  >
-                    <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-4 py-2 space-y-1">
-                      {/* Row 1: Step label + status + source + command + duration */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary" size="sm">
-                          {group.command === 'delegation'
-                            ? 'Delegation'
-                            : group.stepIndex === null
-                              ? 'Unattributed'
-                              : `Step ${group.stepIndex}`}
-                        </Badge>
-                        <Badge variant={stepStatusVariant(group.status)} size="sm">
-                          {group.status}
-                        </Badge>
-                        {group.source && group.source !== 'delegation' && (
-                          <SourceBadge source={group.source} />
-                        )}
-                        <span className="truncate text-xs text-muted-foreground">
-                          {group.command}
-                        </span>
-                        {stepMeta?.durationMs != null && (
-                          <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
-                            {formatCompactDuration(stepMeta.durationMs)}
+              {(() => {
+                let runningIndex = 0
+                return groups.map((group) => {
+                  // Look up step metadata for enriched header
+                  const stepMeta = steps?.find((s) => s.stepIndex === group.stepIndex)
+                  const groupStartIndex = runningIndex
+                  runningIndex += group.items.length
+                  return (
+                    <section
+                      key={group.stepIndex ?? 'unattributed'}
+                      id={`step-section-${group.stepIndex}`}
+                      data-step-index={group.stepIndex}
+                    >
+                      <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-4 py-2 space-y-1">
+                        {/* Row 1: Step label + status + source + command + duration */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" size="sm" data-status={group.status}>
+                            {group.command === 'delegation'
+                              ? 'Delegation'
+                              : group.stepIndex === null
+                                ? 'Unattributed'
+                                : `Step ${group.stepIndex}`}
+                          </Badge>
+                          <Badge variant={stepStatusVariant(group.status)} size="sm" data-status={group.status}>
+                            {group.status}
+                          </Badge>
+                          {group.source && group.source !== 'delegation' && (
+                            <SourceBadge source={group.source} />
+                          )}
+                          <span className="truncate text-xs text-muted-foreground">
+                            {group.command}
                           </span>
-                        )}
-                      </div>
-                      {/* Row 2: Reason text (if present) */}
-                      {stepMeta?.reason && (
-                        <p className="text-[10px] text-muted-foreground italic leading-tight line-clamp-2">
-                          {stepMeta.reason}
-                        </p>
-                      )}
-                      {/* Row 3: Error alert (if present) */}
-                      {stepMeta?.error && (
-                        <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
-                          {stepMeta.error}
+                          {stepMeta?.durationMs != null && (
+                            <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
+                              {formatCompactDuration(stepMeta.durationMs)}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {/* Row 4: Tool summary chips */}
-                      <ToolSummaryChips items={group.items} />
-                    </div>
-                    <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
-                      {group.items.map((item, idx) => {
-                        const key = item.kind === 'fork-card'
-                          ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                          : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
-                        return (
-                          <div key={key}>
-                            <TimelineItemRenderer item={item} jobId={jobId} />
+                        {/* Row 2: Reason text (if present) */}
+                        {stepMeta?.reason && (
+                          <p className="text-[10px] text-muted-foreground italic leading-tight line-clamp-2">
+                            {stepMeta.reason}
+                          </p>
+                        )}
+                        {/* Row 3: Error alert (if present) */}
+                        {stepMeta?.error && (
+                          <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
+                            {stepMeta.error}
                           </div>
-                        )
-                      })}
-                    </div>
-                  </section>
-                )
-              })}
+                        )}
+                        {/* Row 4: Tool summary chips */}
+                        <ToolSummaryChips items={group.items} />
+                      </div>
+                      <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
+                        {group.items.map((item, idx) => {
+                          const globalIdx = groupStartIndex + idx
+                          const isNew = globalIdx >= newItemStart && newItemStart < allItems.length
+                          const key = item.kind === 'fork-card'
+                            ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
+                            : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
+                          return (
+                            <div key={key} className={isNew ? 'animate-highlight-fade' : ''}>
+                              <TimelineItemRenderer item={item} jobId={jobId} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )
+                })
+              })()}
             </div>
           )}
         </div>

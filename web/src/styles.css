@@ -151,6 +151,34 @@
     --sidebar-ring: var(--color-neutral-400);
 }
 
+/* ── Micro-interaction animations ──────────────────────────────────────── */
+
+/* New activity highlight: sky-500/10 → transparent over 1.5s */
+@keyframes highlight-fade {
+  0% { background-color: rgb(14 165 233 / 0.1); }
+  100% { background-color: transparent; }
+}
+
+.animate-highlight-fade {
+  animation: highlight-fade 1.5s ease-out forwards;
+}
+
+/* Smooth expand/collapse for collapsible sections */
+@keyframes expand {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: 500px; opacity: 1; }
+}
+
+.animate-expand {
+  animation: expand 200ms ease-out forwards;
+  overflow: hidden;
+}
+
+/* Status color transition — applies to all badges/indicators with data-status */
+[data-status] {
+  transition: color 300ms ease-out, background-color 300ms ease-out;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
