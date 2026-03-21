@@ -20,8 +20,23 @@ import {
   TooltipProvider,
 } from '~/components/ui/tooltip'
 import { useIsMobile } from '~/hooks/use-media-query'
+import { VerdictBadge } from '~/components/ui/status-badge'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Parse judgeVerdict JSON string into verdict + confidence. */
+function parseJudgeVerdict(raw: string | null): { verdict: string | null; confidence: number | null } {
+  if (!raw) return { verdict: null, confidence: null }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return {
+      verdict: typeof parsed.verdict === 'string' ? parsed.verdict : null,
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null,
+    }
+  } catch {
+    return { verdict: null, confidence: null }
+  }
+}
 
 function statusVariant(status: string) {
   switch (status) {
@@ -147,8 +162,11 @@ function SortableHead({
 
 // ── Job Card (mobile fallback) ───────────────────────────────────────────
 
-function JobCard({ job, queueGraceSeconds = 0 }: { job: Job; queueGraceSeconds?: number }) {
+function JobCard({ job, queueGraceSeconds = 0, queuePosition }: { job: Job; queueGraceSeconds?: number; queuePosition?: number }) {
   const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
+  const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict)
+  const isRunning = job.status === 'running'
+  const isCompleted = job.status === 'completed' || job.status === 'failed'
   return (
     <Link to="/jobs/$jobId" params={{ jobId: job.id }} className="block group">
       <Card className="transition-colors group-hover:bg-accent/50">
@@ -164,6 +182,19 @@ function JobCard({ job, queueGraceSeconds = 0 }: { job: Job; queueGraceSeconds?:
                   Starting in {graceSeconds}s
                 </Badge>
               )}
+              {queuePosition != null && (
+                <Badge variant="outline" size="sm" className="text-[10px] font-mono">
+                  #{queuePosition}
+                </Badge>
+              )}
+              {isRunning && job.currentStep > 0 && (
+                <Badge variant="outline" size="sm" className="text-[10px] font-mono">
+                  Step {job.currentStep}
+                </Badge>
+              )}
+              {isCompleted && verdict && (
+                <VerdictBadge verdict={verdict} confidence={confidence} />
+              )}
               <Badge variant={scopeVariant(job.scope)} size="sm">
                 {job.scope}
               </Badge>
@@ -171,16 +202,28 @@ function JobCard({ job, queueGraceSeconds = 0 }: { job: Job; queueGraceSeconds?:
                 {job.modelProfile}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-1">
-              {truncate(job.description, 80)}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {truncate(job.description, 80)}
+              </p>
+              {job.categories?.slice(0, 3).map((cat) => (
+                <Badge key={cat} variant="outline" size="sm" className="text-[10px]">
+                  {cat}
+                </Badge>
+              ))}
+              {job.dependsOn && (
+                <Badge variant="outline" size="sm" className="text-[10px] font-mono">
+                  → {job.dependsOn}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="ml-4 flex shrink-0 flex-col items-end gap-1">
             <span className="text-xs text-muted-foreground">
               {shortProject(job.project)}
             </span>
             <span className="font-mono text-xs text-muted-foreground">
-              {job.status === 'running'
+              {isRunning
                 ? formatDuration(job.startedAt, null)
                 : formatDuration(job.startedAt, job.completedAt)}
             </span>
@@ -193,7 +236,7 @@ function JobCard({ job, queueGraceSeconds = 0 }: { job: Job; queueGraceSeconds?:
 
 // ── Job Table (desktop) ──────────────────────────────────────────────────
 
-function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeconds?: number }) {
+function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap }: { jobs: Job[]; queueGraceSeconds?: number; queuePositionMap?: Map<string, number> }) {
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -223,7 +266,7 @@ function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeco
               currentField={sortField}
               currentDir={sortDir}
               onSort={handleSort}
-              className="w-24"
+              className="w-28"
             />
             <TableHead className="w-20">Scope</TableHead>
             <TableHead className="w-28">Project</TableHead>
@@ -243,7 +286,10 @@ function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeco
           {sorted.map((job) => {
             const desc = truncate(job.description, 60)
             const isRunning = job.status === 'running'
+            const isCompleted = job.status === 'completed' || job.status === 'failed'
             const graceSeconds = getGraceSecondsRemaining(job, queueGraceSeconds)
+            const queuePos = queuePositionMap?.get(job.id)
+            const { verdict, confidence } = parseJudgeVerdict(job.judgeVerdict)
             return (
               <TableRow
                 key={job.id}
@@ -259,7 +305,7 @@ function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeco
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-wrap">
                     <Badge
                       variant={statusVariant(job.status)}
                       size="sm"
@@ -269,7 +315,17 @@ function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeco
                     </Badge>
                     {graceSeconds != null && (
                       <Badge variant="outline" size="sm" className="text-[10px]">
-                        Starting in {graceSeconds}s
+                        {graceSeconds}s
+                      </Badge>
+                    )}
+                    {queuePos != null && (
+                      <Badge variant="outline" size="sm" className="text-[10px] font-mono text-muted-foreground">
+                        #{queuePos}
+                      </Badge>
+                    )}
+                    {isRunning && job.currentStep > 0 && (
+                      <Badge variant="outline" size="sm" className="text-[10px] font-mono">
+                        Step {job.currentStep}
                       </Badge>
                     )}
                   </div>
@@ -283,18 +339,38 @@ function JobTable({ jobs, queueGraceSeconds = 0 }: { jobs: Job[]; queueGraceSeco
                   {shortProject(job.project)}
                 </TableCell>
                 <TableCell>
-                  {job.description.length > 60 ? (
-                    <Tooltip>
-                      <TooltipTrigger className="cursor-default text-left text-sm text-muted-foreground">
-                        {desc}
-                      </TooltipTrigger>
-                      <TooltipPopup className="max-w-xs">
-                        {job.description}
-                      </TooltipPopup>
-                    </Tooltip>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">{desc}</span>
-                  )}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {job.description.length > 60 ? (
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-default text-left text-sm text-muted-foreground">
+                          {desc}
+                        </TooltipTrigger>
+                        <TooltipPopup className="max-w-xs">
+                          {job.description}
+                        </TooltipPopup>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{desc}</span>
+                    )}
+                    {job.categories?.slice(0, 3).map((cat) => (
+                      <Badge key={cat} variant="outline" size="sm" className="text-[10px]">
+                        {cat}
+                      </Badge>
+                    ))}
+                    {job.dependsOn && (
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-default">
+                          <Badge variant="outline" size="sm" className="text-[10px] font-mono">
+                            → {job.dependsOn}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipPopup>Depends on job {job.dependsOn}</TooltipPopup>
+                      </Tooltip>
+                    )}
+                    {isCompleted && verdict && (
+                      <VerdictBadge verdict={verdict} confidence={confidence} />
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs text-muted-foreground">
                   {isRunning
@@ -322,11 +398,13 @@ function JobSection({
   emptyMessage,
   isMobile,
   queueGraceSeconds = 0,
+  queuePositionMap,
 }: {
   jobs: Job[]
   emptyMessage: string
   isMobile: boolean
   queueGraceSeconds?: number
+  queuePositionMap?: Map<string, number>
 }) {
   if (jobs.length === 0) {
     return (
@@ -343,13 +421,13 @@ function JobSection({
     return (
       <div className="space-y-2">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job} queueGraceSeconds={queueGraceSeconds} />
+          <JobCard key={job.id} job={job} queueGraceSeconds={queueGraceSeconds} queuePosition={queuePositionMap?.get(job.id)} />
         ))}
       </div>
     )
   }
 
-  return <JobTable jobs={jobs} queueGraceSeconds={queueGraceSeconds} />
+  return <JobTable jobs={jobs} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} />
 }
 
 // ── Main Export ───────────────────────────────────────────────────────────
@@ -367,6 +445,13 @@ export interface JobListData {
  */
 export function JobList({ data, queueGraceSeconds = 0 }: { data: JobListData; queueGraceSeconds?: number }) {
   const isMobile = useIsMobile()
+
+  // Build queue position map: queued array order = queue order
+  const queuePositionMap = useMemo(() => {
+    const map = new Map<string, number>()
+    data.queued.forEach((job, i) => map.set(job.id, i + 1))
+    return map
+  }, [data.queued])
 
   // Auto-refresh every second when any pending job has a grace countdown
   const [, setTick] = useState(0)
@@ -389,7 +474,7 @@ export function JobList({ data, queueGraceSeconds = 0 }: { data: JobListData; qu
         <JobSection jobs={data.active} emptyMessage="No active jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
       )}
       {data.queued.length > 0 && (
-        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
+        <JobSection jobs={data.queued} emptyMessage="No queued jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} queuePositionMap={queuePositionMap} />
       )}
       {data.recent.length > 0 && (
         <JobSection jobs={data.recent} emptyMessage="No recent jobs" isMobile={isMobile} queueGraceSeconds={queueGraceSeconds} />
