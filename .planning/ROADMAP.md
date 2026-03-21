@@ -1424,3 +1424,26 @@ Wave structure:
 
 **Details:**
 Read requirements/web-ui-fixes-v2.md for full spec.
+
+### Phase 78: Web UI Premium — Data-Rich, Dense, Modern Dashboard
+
+**Goal:** Transform the web UI into a premium build pipeline control room with inline token/cost observability, judge verdict visualization, step enrichment (duration/source/model/tool summaries), session state badges, git checkpoint display, queue enrichment (position/categories/deps), micro-interactions, syntax-highlighted logs, and mobile-first tabs/bottom-sheets.
+**Requirements**: TBD
+**Depends on:** Phase 77
+**Plans:** 6 plans
+
+Plans:
+- [ ] 78-01-PLAN.md — Foundation: install deps (motion, shiki), add server fns (observability, verdict, session state), create shared UI primitives (sparkline, copy-button, status-badge, format helpers)
+- [ ] 78-02-PLAN.md — Job detail left pane: ObservabilityCard (tokens/cost/models), VerdictCard (confidence/gaps/history), GitCheckpointCard (SHAs/dirty), step sidebar enrichment (duration bars, source/model badges)
+- [ ] 78-03-PLAN.md — Tool call summaries (aggregated chips per step), SessionStateBadge (5 states with hung preview), step content header enrichment (source/reason/error)
+- [ ] 78-04-PLAN.md — Queue and job list enrichment: inline verdict/cost badges, queue position numbers, category chips, depends-on badges, step counts, consistent polling
+- [ ] 78-05-PLAN.md — Log/activity improvements: shiki syntax highlighting (JSON/shell/TS), "Show full" for truncated messages, "Jump to first error" button, polling normalization
+- [ ] 78-06-PLAN.md — Micro-interactions (highlight-fade, status transitions, hover states, selected step accent) + mobile experience (swipeable tabs, bottom sheets, live banner)
+
+Wave structure:
+- Wave 1: 78-01 (foundation — server fns, shared components, deps)
+- Wave 2: 78-02 + 78-03 + 78-04 (job detail cards, tool/session enrichment, job list enrichment — all depend on 78-01, independent of each other)
+- Wave 3: 78-05 + 78-06 (log improvements + micro-interactions/mobile — depend on 78-02/03/04)
+
+**Details:**
+Read requirements/web-ui-premium.md for full spec.
