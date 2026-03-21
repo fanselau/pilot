@@ -1510,3 +1510,17 @@ Wave structure:
 - Wave 1: 82-01 + 82-02 (independent: core data/helpers and renderer unification, no file overlap)
 - Wave 2: 82-03 (UI wiring, depends on 82-01 for step-semantics.ts and 82-02 for unified renderer)
 - Wave 3: 82-04 + 82-05 (gap closure: UI fixes and requirements traceability, independent)
+
+### Phase 83: Pilot Human Review Semantics — Phase 81 Follow-up Completion
+
+**Goal:** Finish the remaining Phase 81 human-review semantics work: mid-phase hold checkpoint detection, resume-from-hold execution wiring, TUI completed-panel review rendering, and REQUIREMENTS.md traceability entries.
+**Requirements**: REVIEW-08, REVIEW-09, REVIEW-12, REVIEW-13, REVIEW-15
+**Depends on:** Phase 82
+**Plans:** 2 plans
+
+Plans:
+- [ ] 83-01-PLAN.md — Mid-phase hold checkpoint detection + resume-from-hold execution wiring
+- [ ] 83-02-PLAN.md — TUI completed-panel review rendering + REQUIREMENTS.md traceability
+
+Wave structure:
+- Wave 1: 83-01 + 83-02 (independent, no file overlap)
