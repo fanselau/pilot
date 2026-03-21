@@ -19,12 +19,25 @@ export function StatusBadge({ status, pulse, size = 'sm', className }: {
       case 'failed': case 'fail': case 'crashed': return 'destructive' as const
       case 'gaps_found': case 'partial': case 'doubting': return 'warning' as const
       case 'hung-on-prompt': case 'hung-on-tool': return 'warning' as const
+      // Review states — warning/info variant, NOT destructive (not failures)
+      case 'completed_pending_review': return 'warning' as const
+      case 'review_hold': return 'info' as const
       default: return 'secondary' as const
     }
   })()
+
+  // Human-readable labels for review states
+  const label = (() => {
+    switch (status) {
+      case 'completed_pending_review': return 'review pending'
+      case 'review_hold': return 'review hold'
+      default: return status
+    }
+  })()
+
   return (
     <Badge variant={variant} size={size} className={`${pulse ? 'animate-pulse' : ''} ${className ?? ''}`}>
-      {status}
+      {label}
     </Badge>
   )
 }

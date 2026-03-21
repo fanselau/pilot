@@ -17,6 +17,9 @@ export const statusColors = {
   failed: '#F87171',     // red
   cancelled: '#A1A1AA',  // zinc
   warning: '#EAB308',    // yellow — for inconclusive/benefit-of-doubt completions
+  // Review states — NOT red (not failures)
+  completed_pending_review: '#FBBF24', // amber — work done, review needed
+  review_hold: '#60A5FA',             // blue  — active pause awaiting review
 } as const;
 
 // ── Global theme ──────────────────────────────────────────────────────────

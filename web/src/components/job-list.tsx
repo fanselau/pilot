@@ -52,8 +52,22 @@ function statusVariant(status: string) {
       return 'secondary' as const
     case 'paused':
       return 'outline' as const
+    // Review states — warning/info, NOT destructive (not failures)
+    case 'completed_pending_review':
+      return 'warning' as const
+    case 'review_hold':
+      return 'info' as const
     default:
       return 'secondary' as const
+  }
+}
+
+/** Human-readable label for job status strings. */
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'completed_pending_review': return 'review pending'
+    case 'review_hold': return 'review hold'
+    default: return status
   }
 }
 
@@ -103,11 +117,13 @@ type SortDir = 'asc' | 'desc'
 
 const STATUS_ORDER: Record<string, number> = {
   running: 0,
-  pending: 1,
-  paused: 2,
-  failed: 3,
-  cancelled: 4,
-  completed: 5,
+  review_hold: 1,           // active pause — near top with running
+  pending: 2,
+  paused: 3,
+  completed_pending_review: 4, // done but needs review
+  failed: 5,
+  cancelled: 6,
+  completed: 7,
 }
 
 function getDurationMs(job: Job): number {
@@ -180,7 +196,7 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition, activityPreview }:
                 <span className="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
               )}
               <Badge variant={statusVariant(job.status)} size="sm">
-                {job.status}
+                {statusLabel(job.status)}
               </Badge>
               {graceSeconds != null && (
                 <Badge variant="outline" size="sm" className="text-[10px]">
@@ -339,7 +355,7 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPrevi
                       size="sm"
                       className={isRunning ? 'animate-pulse' : ''}
                     >
-                      {job.status}
+                      {statusLabel(job.status)}
                     </Badge>
                     {graceSeconds != null && (
                       <Badge variant="outline" size="sm" className="text-[10px]">

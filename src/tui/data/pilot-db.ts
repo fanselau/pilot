@@ -21,7 +21,8 @@ export function fetchQueueData(): { pending: Job[]; running: Job[] } {
   const all = getQueue();
   return {
     pending: all.filter(j => j.status === 'pending'),
-    running: all.filter(j => j.status === 'running'),
+    // review_hold jobs appear alongside running — they're active work paused for review, not failures
+    running: all.filter(j => j.status === 'running' || j.status === 'review_hold'),
   };
 }
 
