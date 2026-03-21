@@ -9,7 +9,7 @@
  * Truncated activity rows have a "Show full" button that fetches complete content.
  */
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   StepTimelineGroup,
@@ -30,6 +30,7 @@ import { ScrollArea } from '~/components/ui/scroll-area'
 import { Separator } from '~/components/ui/separator'
 import { Skeleton } from '~/components/ui/skeleton'
 import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
+import { SyntaxHighlight, detectLanguage } from '~/components/syntax-highlight'
 import { useJobDetailStream } from '~/lib/sse'
 import { getFullJobTimelineFn, getFullMessageFn } from '~/lib/server-fns'
 
@@ -109,6 +110,7 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
   }
 
   const displayText = fullText ?? item.text
+  const isCodeLike = useMemo(() => detectLanguage(displayText) !== null, [displayText])
 
   return (
     <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
@@ -119,9 +121,13 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
         {item.role}
       </Badge>
       <div className="min-w-0 flex-1">
-        <span className="text-xs text-muted-foreground">
-          {fullText ? displayText : truncate(displayText, 220)}
-        </span>
+        {fullText && isCodeLike ? (
+          <SyntaxHighlight content={displayText} />
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {fullText ? displayText : truncate(displayText, 220)}
+          </span>
+        )}
         {isTruncated && !fullText && (
           <Button
             variant="ghost"
@@ -164,9 +170,10 @@ export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
               </CollapsibleTrigger>
               <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
                 <div className="mt-1 max-w-full rounded-md border bg-muted/50 p-2">
-                  <pre className="whitespace-pre-wrap break-words text-xs text-foreground/90 font-mono [overflow-wrap:anywhere]">
-                    {item.toolInput}
-                  </pre>
+                  <SyntaxHighlight
+                    content={item.toolInput ?? ''}
+                    className="whitespace-pre-wrap break-words text-foreground/90 [overflow-wrap:anywhere]"
+                  />
                 </div>
               </CollapsibleContent>
             </>
@@ -249,7 +256,7 @@ export function TimelineStream({ jobId, isActive }: TimelineStreamProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['job-timeline-full', jobId],
     queryFn: () => getFullJobTimelineFn({ data: jobId }),
-    refetchInterval: isActive ? 5000 : false,
+    refetchInterval: isActive ? 3000 : 30_000,
   })
 
   const { events } = useJobDetailStream(
