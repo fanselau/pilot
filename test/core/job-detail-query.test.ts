@@ -19,6 +19,7 @@ const mockGetAssistantMessageCount = vi.fn<(sessionId: string) => number>();
 const mockIsSessionDone = vi.fn<(sessionId: string) => boolean>();
 const mockGetSessionTokensRecursive = vi.fn<(sessionId: string) => { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }>();
 const mockGetSessionModelsRecursive = vi.fn<(sessionId: string) => string[]>();
+const mockGetSessionMeta = vi.fn<(sessionId: string) => { id: string; title: string; timeCreated: number; timeUpdated: number } | null>();
 
 const mockRetry = vi.fn<(id: string) => void>();
 const mockCancel = vi.fn<(id: string) => void>();
@@ -43,6 +44,7 @@ vi.mock('../../src/core/opencode-db.js', () => ({
   isSessionDone: (...args: unknown[]) => mockIsSessionDone(args[0] as string),
   getSessionTokensRecursive: (...args: unknown[]) => mockGetSessionTokensRecursive(args[0] as string),
   getSessionModelsRecursive: (...args: unknown[]) => mockGetSessionModelsRecursive(args[0] as string),
+  getSessionMeta: (...args: unknown[]) => mockGetSessionMeta(args[0] as string),
 }));
 
 import {
@@ -166,6 +168,7 @@ function setupDefaultMocks(): void {
     cacheWrite: 200,
   });
   mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+  mockGetSessionMeta.mockReturnValue(null);
 }
 
 beforeEach(() => {
@@ -1101,5 +1104,269 @@ describe('unblockProjectAction', () => {
   it('calls db.unblockProject with the given path', () => {
     unblockProjectAction('/test/path');
     expect(mockUnblockProject).toHaveBeenCalledWith('/test/path');
+  });
+});
+
+// ── resolveStepIndex 5-tier attribution tests ─────────────────────────────
+
+describe('resolveStepIndex 5-tier attribution', () => {
+  // Consistent timestamp helpers
+  const BASE = Date.parse('2026-06-01T00:00:00Z');
+  const t = (secs: number) => BASE + secs * 1000;
+  const iso = (secs: number) => new Date(t(secs)).toISOString();
+
+  function setupAttribution(config: {
+    steps: Array<{
+      stepIndex: number;
+      sessionId: string;
+      sessionTitle: string;
+      startedAt: string;
+      completedAt: string | null;
+    }>;
+    sessionTitles: string[];
+    sessionIdMap: Record<string, string>;
+    childSessionMap: Record<string, Array<{ id: string; title: string; timeCreated: number; timeUpdated: number }>>;
+    partsMap: Record<string, SessionPart[]>;
+  }) {
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(config.sessionTitles) }),
+    );
+    mockGetJobSteps.mockReturnValue(
+      config.steps.map((s, i) =>
+        makeStep({
+          id: i + 1,
+          stepIndex: s.stepIndex,
+          sessionId: s.sessionId,
+          sessionTitle: s.sessionTitle,
+          startedAt: s.startedAt,
+          completedAt: s.completedAt,
+        }),
+      ),
+    );
+    mockFindSessionByTitle.mockImplementation(
+      (title: string) => config.sessionIdMap[title] ?? null,
+    );
+    mockGetChildSessions.mockImplementation(
+      (parentId: string) => config.childSessionMap[parentId] ?? [],
+    );
+    mockGetSessionParts.mockImplementation(
+      (sessionId: string) => config.partsMap[sessionId] ?? [],
+    );
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(1);
+    mockGetSessionTokensRecursive.mockReturnValue({
+      input: 10, output: 5, reasoning: 1, cacheRead: 0, cacheWrite: 0,
+    });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+    mockGetSessionMeta.mockReturnValue(null);
+  }
+
+  it('tier 1: attributes candidate via direct sessionId match', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
+      ],
+      sessionTitles: ['title-s0'],
+      sessionIdMap: { 'title-s0': 'sess-s0' },
+      childSessionMap: {},
+      partsMap: {
+        'sess-s0': [makePart({ id: 'p1', type: 'text', text: 'direct match', createdAt: t(15) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page.groups).toHaveLength(1);
+    expect(page.groups[0].stepIndex).toBe(0);
+    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
+  });
+
+  it('tier 2: attributes candidate via sessionTitle match', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'shared-title', startedAt: iso(10), completedAt: iso(20) },
+      ],
+      // Session title matches step's sessionTitle but findSessionByTitle returns different sessionId
+      sessionTitles: ['shared-title'],
+      sessionIdMap: { 'shared-title': 'sess-different' },
+      childSessionMap: {},
+      partsMap: {
+        'sess-different': [makePart({ id: 'p1', type: 'text', text: 'title match', createdAt: t(15) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // candidate sessionId='sess-different' ≠ step.sessionId='sess-s0' → tier 1 fail
+    // candidate sessionTitle='shared-title' = step.sessionTitle → tier 2 match
+    expect(page.groups).toHaveLength(1);
+    expect(page.groups[0].stepIndex).toBe(0);
+    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
+  });
+
+  it('tier 3: attributes candidate via time window match', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
+      ],
+      // Session with different sessionId and title than the step
+      sessionTitles: ['unrelated-title'],
+      sessionIdMap: { 'unrelated-title': 'sess-unrelated' },
+      childSessionMap: {},
+      partsMap: {
+        // Part at t(15) falls within step 0's window [t(10), t(20)]
+        'sess-unrelated': [makePart({ id: 'p1', type: 'text', text: 'time window', createdAt: t(15) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // tier 1: sess-unrelated ≠ sess-s0 → fail
+    // tier 2: unrelated-title ≠ title-s0 → fail
+    // tier 3: t(15) within [t(10), t(20)] → match
+    expect(page.groups).toHaveLength(1);
+    expect(page.groups[0].stepIndex).toBe(0);
+    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
+  });
+
+  it('tier 3: attributes candidate to open-ended step (completedAtMs null)', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: null },
+      ],
+      sessionTitles: ['other-root'],
+      sessionIdMap: { 'other-root': 'sess-other' },
+      childSessionMap: {},
+      partsMap: {
+        // Part well after step started, but step has no completedAt (window extends to +∞)
+        'sess-other': [makePart({ id: 'p-late', type: 'text', text: 'late activity', createdAt: t(1000) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // tier 3: t(1000) within [t(10), +∞] → match
+    expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
+    const step0Group = page.groups.find(g => g.stepIndex === 0);
+    expect(step0Group).toBeDefined();
+    expect(step0Group!.items).toHaveLength(1);
+  });
+
+  it('tier 4: attributes candidate via child session transitivity', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
+        { stepIndex: 1, sessionId: 'sess-s1', sessionTitle: 'title-s1', startedAt: iso(30), completedAt: iso(40) },
+      ],
+      sessionTitles: ['title-s0', 'title-s1', 'judge-title'],
+      sessionIdMap: {
+        'title-s0': 'sess-s0',
+        'title-s1': 'sess-s1',
+        'judge-title': 'sess-judge',
+      },
+      childSessionMap: {
+        // sess-s1 (step 1's session) spawned sess-judge as a child
+        'sess-s1': [{ id: 'sess-judge', title: 'judge-title', timeCreated: t(35), timeUpdated: t(50) }],
+      },
+      partsMap: {
+        'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0 work', createdAt: t(15) })],
+        'sess-s1': [makePart({ id: 's1-p1', type: 'text', text: 'step 1 work', createdAt: t(35) })],
+        // Judge activity AFTER all step windows — sessionId=sess-judge, not matching any step
+        'sess-judge': [makePart({ id: 'judge-p1', type: 'text', text: 'Judge verdict', createdAt: t(50) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // judge-p1 from sess-judge should be attributed to step 1 via child session transitivity
+    // because sess-judge is a child of sess-s1 (step 1's session)
+    const step1Group = page.groups.find(g => g.stepIndex === 1);
+    expect(step1Group).toBeDefined();
+
+    const judgeItem = step1Group!.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'judge-p1',
+    );
+    expect(judgeItem).toBeDefined();
+
+    // Should NOT be in unattributed
+    const unattributed = page.groups.find(g => g.command === 'unattributed');
+    const judgeInUnattributed = unattributed?.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'judge-p1',
+    );
+    expect(judgeInUnattributed).toBeUndefined();
+  });
+
+  it('tier 5: attributes late activity to most recent step via last-step fallback', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
+        { stepIndex: 1, sessionId: 'sess-s1', sessionTitle: 'title-s1', startedAt: iso(30), completedAt: iso(40) },
+      ],
+      sessionTitles: ['title-s0', 'title-s1', 'late-title'],
+      sessionIdMap: {
+        'title-s0': 'sess-s0',
+        'title-s1': 'sess-s1',
+        'late-title': 'sess-late',
+      },
+      childSessionMap: {}, // No children — so tier 4 won't help
+      partsMap: {
+        'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0', createdAt: t(15) })],
+        'sess-s1': [makePart({ id: 's1-p1', type: 'text', text: 'step 1', createdAt: t(35) })],
+        // Late activity from a session that's NOT a child of any step's session
+        // createdAt t(50) is AFTER all step windows have closed
+        'sess-late': [makePart({ id: 'late-p1', type: 'text', text: 'Late wrap-up', createdAt: t(50) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // late-p1 should be attributed to step 1 (latest startedAtMs) via last-step fallback
+    const step1Group = page.groups.find(g => g.stepIndex === 1);
+    expect(step1Group).toBeDefined();
+
+    const lateItem = step1Group!.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
+    );
+    expect(lateItem).toBeDefined();
+
+    // Should NOT be in unattributed
+    const unattributed = page.groups.find(g => g.command === 'unattributed');
+    const lateInUnattributed = unattributed?.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
+    );
+    expect(lateInUnattributed).toBeUndefined();
+  });
+
+  it('genuinely unassignable content remains in unattributed bucket', () => {
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(100), completedAt: iso(200) },
+      ],
+      sessionTitles: ['title-s0', 'early-title'],
+      sessionIdMap: {
+        'title-s0': 'sess-s0',
+        'early-title': 'sess-early',
+      },
+      childSessionMap: {},
+      partsMap: {
+        'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0', createdAt: t(150) })],
+        // Activity BEFORE any step started — genuinely unassignable
+        // No session match, no child relationship, createdAt < all startedAtMs
+        'sess-early': [makePart({ id: 'early-p1', type: 'text', text: 'Pre-step', createdAt: t(5) })],
+      },
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    const unattributed = page.groups.find(g => g.command === 'unattributed');
+    expect(unattributed).toBeDefined();
+    const earlyItem = unattributed!.items.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'early-p1',
+    );
+    expect(earlyItem).toBeDefined();
   });
 });
