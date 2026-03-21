@@ -53,7 +53,24 @@ What is the `scope` from job args?
 - Add `flags: ['research']` for unfamiliar domains or exploratory tasks
 - Stop here — no further checks needed for quick scope
 
+#### Debug scope
+
+- Output `{ type: 'debug', description: <description>, symptoms: <symptoms_if_present> }`
+- Use `description` from job args
+- If the description mentions errors, stack traces, or symptoms, extract them into `symptoms`
+- Debug is for diagnosis-first work: runtime failures, broken behavior, unclear root cause
+- Stop here — no further checks needed for debug scope
+
+#### Fast scope
+
+- Output `{ type: 'fast', description: <description> }`
+- Use `description` from job args
+- Fast is for truly trivial inline tasks that should skip all planning overhead
+- Stop here — no further checks needed for fast scope
+
 #### Milestone scope
+
+> **Note:** Milestone scope is currently disabled at the CLI layer. If you receive a milestone-scoped job, treat it as if scope were 'phase' and continue to Step 3.
 
 Does ROADMAP.md have any `### Phase N:` entries?
 
@@ -156,6 +173,23 @@ In re-query mode, you output a JSON object with `continuation_steps` instead of 
    - Keep continuation_steps minimal (2-4 steps typical)
    - Never output more than 5 steps in a continuation
 
+## Autonomy Guidance — Choosing the Right Scope
+
+When agents or operators are deciding which scope to use, follow these explicit rules:
+
+| Scope | When to Use | Examples |
+|-------|------------|---------|
+| **debug** | Runtime failures, broken behavior, diagnosis-first work. The problem is *failing behavior* — something worked before or should work but doesn't. | "login button doesn't work", "API returns 500 on valid input", "tests pass locally but fail in CI" |
+| **fast** | Truly trivial inline tasks. One file, one change, obvious implementation. No ambiguity. | "add a comment to file X", "update version number", "rename variable foo to bar" |
+| **quick** | Small self-contained tasks that need a planner but not full phase overhead. | "add error handling to webhook handler", "refactor auth middleware", "write tests for module X" |
+| **phase** | Requirement-file-driven work needing full planning, multiple tasks, and verification. | "implement feature from requirements/foo.md", "build complete dashboard", "migrate database schema" |
+
+**Do NOT:**
+- Use `quick` when the problem is broken behavior → use `debug`
+- Use `quick` or `phase` when the task is truly trivial → use `fast`
+- Use `fast` when there's real complexity or uncertainty → use `quick` or `phase`
+- Use `phase` for debugging situations → use `debug`
+
 ## JSON Output Format
 
 There are two output modes depending on whether this is a standard query or a re-query.
@@ -201,6 +235,22 @@ When `<step_history>` and `<continuation_context>` blocks are present, output co
 {
   "intent": { "type": "quick", "description": "Evaluate WebRTC vs WebSocket for real-time sync", "flags": ["research"] },
   "reasoning": "Unfamiliar domain — adding research flag for broader exploration"
+}
+```
+
+**Debug task (diagnosis-first):**
+```json
+{
+  "intent": { "type": "debug", "description": "Login button doesn't redirect after authentication", "symptoms": "TypeError: Cannot read property 'redirect' of undefined in auth callback" },
+  "reasoning": "Scope is debug — runtime failure requiring diagnosis before fix"
+}
+```
+
+**Fast task (trivial inline):**
+```json
+{
+  "intent": { "type": "fast", "description": "Update copyright year in footer from 2025 to 2026" },
+  "reasoning": "Scope is fast — trivial one-line change, no planning needed"
 }
 ```
 
@@ -321,3 +371,5 @@ If `retry_context` is not "none", read it carefully. Adjust your intent if appro
 - **Do NOT include `complete-milestone` as an intent type.** It is runner-internal only.
 - **Do NOT include `setup-agents` or `lessons` as intent types.** These are removed.
 - **Read before deciding.** Always read `.planning/STATE.md` and `.planning/ROADMAP.md` before outputting an intent.
+- **Do NOT use `quick` for debugging.** If the job describes broken behavior or runtime failures, output `debug` intent.
+- **Do NOT use `quick` for trivial tasks.** If the task is a simple one-line change with no ambiguity, output `fast` intent.
