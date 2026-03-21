@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 77-04-PLAN.md
-last_updated: "2026-03-20T23:34:56.750Z"
+stopped_at: Completed 78-01-PLAN.md
+last_updated: "2026-03-21T03:45:36.591Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
-  total_phases: 76
+  total_phases: 77
   completed_phases: 34
-  total_plans: 130
-  completed_plans: 118
+  total_plans: 136
+  completed_plans: 119
   percent: 93
 ---
 
@@ -347,6 +347,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 75 added: Codex First-Class Citizen — Model-Adaptive Content Patching
 - Phase 76 added: Pilot Web UI Overhaul — Full-Width Dashboard + Dense Step Visualization
 - Phase 77 added: Web UI Fixes — Post-Overhaul Regressions + Missing Features
+- Phase 78 added: Web UI Premium — Data-Rich, Dense, Modern Dashboard
 
 ## Decisions
 
@@ -889,6 +890,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 77]: {"phase":"77","summary":"IntersectionObserver scroll-spy with -10% 0px -70% 0px rootMargin for upper viewport triggering"}
 - [Phase 77]: Used existing useIsMobile hook (800px) rather than creating a new 768px breakpoint
 - [Phase 77]: Delegation steps identified by command === delegation; per-step model info via fork-card items; block reason hardcoded for TUI
+- [Phase 78]: Used buildJobObservability(job) with getJob() lookup instead of non-existent getJobObservability
 
 ## Blockers/Concerns Carried Forward
 
@@ -897,6 +899,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-20T23:34:52.210Z
-Stopped at: Completed 77-04-PLAN.md
+Last session: 2026-03-21T03:45:31.804Z
+Stopped at: Completed 78-01-PLAN.md
 Resume file: None
