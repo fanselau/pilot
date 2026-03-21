@@ -13,16 +13,18 @@ function JobLayout() {
   const { jobId } = Route.useParams()
   const navigate = useNavigate()
 
-  // Auto-refresh the detail view every 3 seconds for active jobs
-  const isActive =
-    loaderData?.job.status === 'running' ||
-    loaderData?.job.status === 'pending'
-
+  // Auto-refresh the detail view every 3 seconds for active jobs.
+  // Use the callback form so the interval re-evaluates against the
+  // latest cached data, not the stale initial loader snapshot.
   const { data: snapshot } = useQuery({
     queryKey: ['job-detail', jobId],
     queryFn: () => getJobDetailFn({ data: jobId }),
     initialData: loaderData,
-    refetchInterval: isActive ? 3000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const active = data?.job.status === 'running' || data?.job.status === 'pending'
+      return active ? 3000 : false
+    },
   })
 
   return (
