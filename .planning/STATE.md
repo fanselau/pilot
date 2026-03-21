@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 78-01-PLAN.md
-last_updated: "2026-03-21T03:45:36.591Z"
+stopped_at: Completed 78-03-PLAN.md
+last_updated: "2026-03-21T03:51:50.799Z"
 last_activity: "2026-03-20 - Completed quick task 260320-vju: Bug fix: pilot kill --force doesn't stop runner polling + stale child sessions"
 progress:
   total_phases: 77
   completed_phases: 34
   total_plans: 136
-  completed_plans: 119
+  completed_plans: 122
   percent: 93
 ---
 
@@ -891,6 +891,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 77]: Used existing useIsMobile hook (800px) rather than creating a new 768px breakpoint
 - [Phase 77]: Delegation steps identified by command === delegation; per-step model info via fork-card items; block reason hardcoded for TUI
 - [Phase 78]: Used buildJobObservability(job) with getJob() lookup instead of non-existent getJobObservability
+- [Phase 78]: Used item.kind === 'tool-summary' instead of plan's incorrect 'activity' + 'type' check for tool counting
 
 ## Blockers/Concerns Carried Forward
 
@@ -899,6 +900,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:45:31.804Z
-Stopped at: Completed 78-01-PLAN.md
+Last session: 2026-03-21T03:51:37.176Z
+Stopped at: Completed 78-03-PLAN.md
 Resume file: None
