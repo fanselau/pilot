@@ -28,8 +28,21 @@ import { VerdictCard } from '~/components/verdict-card'
 import { GitCheckpointCard } from '~/components/git-checkpoint-card'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
+import { formatStepLabel, isContinuationStep } from '~/lib/step-semantics'
 
 // ── Mobile step indicator ─────────────────────────────────────────────────
+
+function mobileStepChar(group: StepTimelineGroup): string {
+  if (group.command === 'delegation') return 'D'
+  const label = formatStepLabel(group)
+  if (label === 'Execution') return 'E'
+  if (label === 'Planning') return 'P'
+  if (label === 'Judge' || label === 'Verification') return 'J'
+  if (label === 'Gap Closure') return 'G'
+  if (label === 'Recovery') return 'R'
+  if (label === 'Quick Task') return 'Q'
+  return group.stepIndex !== null ? `${group.stepIndex}` : '?'
+}
 
 function MobileStepIndicator({
   groups,
@@ -48,8 +61,8 @@ function MobileStepIndicator({
       <div className="flex gap-1 p-2">
         {stepGroups.map((group) => {
           const isActive = visibleStep === group.stepIndex
-          const label =
-            group.command === 'delegation' ? 'D' : `${group.stepIndex}`
+          const label = mobileStepChar(group)
+          const isCont = isContinuationStep(group)
           return (
             <button
               key={`mobile-step-${group.stepIndex}`}
@@ -58,7 +71,8 @@ function MobileStepIndicator({
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-accent',
-              ].join(' ')}
+                isCont && !isActive ? 'ring-1 ring-amber-400/50' : '',
+              ].filter(Boolean).join(' ')}
               onClick={() =>
                 group.stepIndex !== null && onClickStep(group.stepIndex)
               }
@@ -109,6 +123,14 @@ export function SplitPaneDetail({
     [groups],
   )
 
+  // Look up the current step's group for semantic label in running banner
+  const currentGroup = useMemo(
+    () => snapshot.job.currentStep != null
+      ? groups.find((g) => g.stepIndex === snapshot.job.currentStep) ?? null
+      : null,
+    [groups, snapshot.job.currentStep],
+  )
+
   // ── Mobile: tabbed layout ──────────────────────────────────────────────
 
   if (isMobile) {
@@ -120,7 +142,11 @@ export function SplitPaneDetail({
             <StatusBadge status={snapshot.job.status} pulse={isActive} size="sm" />
             <span className="font-mono text-sm font-bold">{snapshot.job.id}</span>
             <span className="text-xs text-muted-foreground ml-auto">
-              {snapshot.job.currentStep != null && `Step ${snapshot.job.currentStep}`}
+              {snapshot.job.currentStep != null && (
+                currentGroup
+                  ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep}`
+                  : `Step ${snapshot.job.currentStep}`
+              )}
               {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
             </span>
 
@@ -147,7 +173,11 @@ export function SplitPaneDetail({
         {isActive && (
           <div className="flex-shrink-0 bg-sky-500/10 border-b border-sky-500/20 px-3 py-1.5 flex items-center gap-2 text-xs">
             <span className="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-            <span className="text-sky-300">Building step {snapshot.job.currentStep ?? '\u2026'}</span>
+            <span className="text-sky-300">
+              {currentGroup
+                ? `${formatStepLabel(currentGroup)} #${snapshot.job.currentStep ?? '…'}…`
+                : `Building step ${snapshot.job.currentStep ?? '\u2026'}`}
+            </span>
             <span className="text-muted-foreground ml-auto">{elapsed}</span>
           </div>
         )}
@@ -155,8 +185,8 @@ export function SplitPaneDetail({
         {/* Tabs */}
         <Tabs defaultValue="steps" className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="flex-shrink-0 border-b overflow-x-auto">
-            <TabsTrigger value="steps">Steps</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="steps">Timeline</TabsTrigger>
+            <TabsTrigger value="timeline">Summary</TabsTrigger>
             <TabsTrigger value="meta">Meta</TabsTrigger>
           </TabsList>
 
@@ -177,7 +207,7 @@ export function SplitPaneDetail({
             <div className="space-y-2">
               {stepGroups.map((group) => {
                 const stepMeta = snapshot.steps.find((s) => s.stepIndex === group.stepIndex)
-                const label = group.command === 'delegation' ? 'Delegation' : `Step ${group.stepIndex}`
+                const label = formatStepLabel(group)
                 return (
                   <button
                     key={`timeline-${group.stepIndex}`}

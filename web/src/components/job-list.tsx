@@ -210,7 +210,7 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition, activityPreview }:
               )}
               {isRunning && job.currentStep > 0 && (
                 <Badge variant="outline" size="sm" className="text-[10px] font-mono">
-                  Step {job.currentStep}
+                  #{job.currentStep}
                 </Badge>
               )}
               {isCompleted && verdict && (
@@ -369,7 +369,7 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPrevi
                     )}
                     {isRunning && job.currentStep > 0 && (
                       <Badge variant="outline" size="sm" className="text-[10px] font-mono">
-                        Step {job.currentStep}
+                        #{job.currentStep}
                       </Badge>
                     )}
                     {activityPreview && activityPreview.stepCount > 0 && (
