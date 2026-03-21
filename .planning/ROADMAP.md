@@ -1465,7 +1465,7 @@ Plans:
 **Goal:** Make timeline attribution trustworthy, bring child/sub-session views up to the same quality bar as the main interface, and eliminate viewport-breaking horizontal overflow on mobile.
 **Requirements**: ATTR-01, ATTR-02, ATTR-03, ATTR-04, ATTR-05, MOB-01, MOB-02, MOB-03, MOB-04, MOB-05, SUB-01
 **Depends on:** Phase 79
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 80-01-PLAN.md — Fix timeline attribution: improve resolveStepIndex() with child-session transitivity and last-step fallback
