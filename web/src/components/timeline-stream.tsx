@@ -139,16 +139,17 @@ export function ActivityRow({ item }: { item: TimelineActivityItem }) {
 
 export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
   const hasLongInput = (item.toolInput?.length ?? 0) > 100
+  const isError = item.toolStatus === 'error'
 
   return (
     <Collapsible>
-      <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5">
+      <div className={`flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1.5 ${isError ? 'bg-rose-500/5 rounded' : ''}`}>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums mt-0.5">
           {formatTime(item.createdAt)}
         </span>
-        <Badge variant="info" size="sm">
+        <span className={`shrink-0 text-xs font-mono font-medium mt-0.5 ${isError ? 'text-rose-400' : 'text-sky-400'}`}>
           {item.tool}
-        </Badge>
+        </span>
         {item.toolStatus && (
           <Badge variant={toolStatusVariant(item.toolStatus)} size="sm">
             {item.toolStatus}

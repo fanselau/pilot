@@ -12,9 +12,12 @@
 
 import { useRef, useEffect, useCallback, type MutableRefObject } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { StepTimelineGroup, StepTimelineItem } from '@pilot/core/types.js'
+import type { StepTimelineGroup, StepTimelineItem, JobStepSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { SourceBadge } from '~/components/ui/status-badge'
+import { ToolSummaryChips } from '~/components/tool-summary-chips'
+import { formatCompactDuration } from '~/lib/format'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 
 /** Minimum item count before virtual scrolling is activated. */
@@ -29,6 +32,8 @@ export interface StepContentPaneProps {
   scrollToStepRef: MutableRefObject<((idx: number) => void) | null>
   /** Callback when the visible step changes (scroll-spy). */
   onVisibleStepChange: (idx: number | null) => void
+  /** Optional step summaries for enriched headers (source, reason, error, duration). */
+  steps?: JobStepSummary[]
 }
 
 function stepStatusVariant(status: string) {
@@ -58,6 +63,7 @@ export function StepContentPane({
   onFollowToggle,
   scrollToStepRef,
   onVisibleStepChange,
+  steps,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -200,41 +206,70 @@ export function StepContentPane({
           ) : (
             /* Continuous scroll: all groups rendered as sections */
             <div className="space-y-0">
-              {groups.map((group) => (
-                <section
-                  key={group.stepIndex ?? 'unattributed'}
-                  id={`step-section-${group.stepIndex}`}
-                  data-step-index={group.stepIndex}
-                >
-                  <div className="flex items-center gap-2 py-2 px-4 sticky top-0 bg-background/95 backdrop-blur z-10 border-b">
-                    <Badge variant="secondary" size="sm">
-                      {group.command === 'delegation'
-                        ? 'Delegation'
-                        : group.stepIndex === null
-                          ? 'Unattributed'
-                          : `Step ${group.stepIndex}`}
-                    </Badge>
-                    <Badge variant={stepStatusVariant(group.status)} size="sm">
-                      {group.status}
-                    </Badge>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {group.command}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
-                    {group.items.map((item, idx) => {
-                      const key = item.kind === 'fork-card'
-                        ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                        : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
-                      return (
-                        <div key={key}>
-                          <TimelineItemRenderer item={item} jobId={jobId} />
+              {groups.map((group) => {
+                // Look up step metadata for enriched header
+                const stepMeta = steps?.find((s) => s.stepIndex === group.stepIndex)
+                return (
+                  <section
+                    key={group.stepIndex ?? 'unattributed'}
+                    id={`step-section-${group.stepIndex}`}
+                    data-step-index={group.stepIndex}
+                  >
+                    <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-4 py-2 space-y-1">
+                      {/* Row 1: Step label + status + source + command + duration */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" size="sm">
+                          {group.command === 'delegation'
+                            ? 'Delegation'
+                            : group.stepIndex === null
+                              ? 'Unattributed'
+                              : `Step ${group.stepIndex}`}
+                        </Badge>
+                        <Badge variant={stepStatusVariant(group.status)} size="sm">
+                          {group.status}
+                        </Badge>
+                        {group.source && group.source !== 'delegation' && (
+                          <SourceBadge source={group.source} />
+                        )}
+                        <span className="truncate text-xs text-muted-foreground">
+                          {group.command}
+                        </span>
+                        {stepMeta?.durationMs != null && (
+                          <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
+                            {formatCompactDuration(stepMeta.durationMs)}
+                          </span>
+                        )}
+                      </div>
+                      {/* Row 2: Reason text (if present) */}
+                      {stepMeta?.reason && (
+                        <p className="text-[10px] text-muted-foreground italic leading-tight line-clamp-2">
+                          {stepMeta.reason}
+                        </p>
+                      )}
+                      {/* Row 3: Error alert (if present) */}
+                      {stepMeta?.error && (
+                        <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
+                          {stepMeta.error}
                         </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              ))}
+                      )}
+                      {/* Row 4: Tool summary chips */}
+                      <ToolSummaryChips items={group.items} />
+                    </div>
+                    <div className="space-y-0.5 border-l-2 border-border/40 pl-3 ml-4">
+                      {group.items.map((item, idx) => {
+                        const key = item.kind === 'fork-card'
+                          ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
+                          : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
+                        return (
+                          <div key={key}>
+                            <TimelineItemRenderer item={item} jobId={jobId} />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           )}
         </div>

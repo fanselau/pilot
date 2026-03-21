@@ -105,6 +105,7 @@ export function SplitPaneDetail({
             onFollowToggle={() => setAutoFollow(true)}
             scrollToStepRef={scrollToStepRef}
             onVisibleStepChange={setVisibleStepIndex}
+            steps={snapshot.steps}
           />
         </div>
       </div>
@@ -123,6 +124,7 @@ export function SplitPaneDetail({
           snapshot={snapshot}
           groups={groups}
           highlightedStep={visibleStepIndex}
+          isActive={isActive}
           onClickStep={(idx) => {
             scrollToStepRef.current?.(idx)
             setAutoFollow(false)
@@ -138,6 +140,7 @@ export function SplitPaneDetail({
           onFollowToggle={() => setAutoFollow(true)}
           scrollToStepRef={scrollToStepRef}
           onVisibleStepChange={setVisibleStepIndex}
+          steps={snapshot.steps}
         />
       </Panel>
     </Group>
