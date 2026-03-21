@@ -1459,3 +1459,17 @@ Read requirements/web-ui-premium.md for full spec.
 
 Plans:
 - [ ] 79-01-PLAN.md — Diagnose + fix job detail timeline regression, add dashboard activity previews
+
+### Phase 80: Web UI Attribution + Mobile Overflow Hardening
+
+**Goal:** Make timeline attribution trustworthy, bring child/sub-session views up to the same quality bar as the main interface, and eliminate viewport-breaking horizontal overflow on mobile.
+**Requirements**: ATTR-01, ATTR-02, ATTR-03, ATTR-04, ATTR-05, MOB-01, MOB-02, MOB-03, MOB-04, MOB-05, SUB-01
+**Depends on:** Phase 79
+**Plans:** 2 plans
+
+Plans:
+- [ ] 80-01-PLAN.md — Fix timeline attribution: improve resolveStepIndex() with child-session transitivity and last-step fallback
+- [ ] 80-02-PLAN.md — Mobile overflow hardening + child/sub-session drill-in polish
+
+Wave structure:
+- Wave 1: 80-01 + 80-02 (independent: core data-layer attribution fix and web UI overflow/polish, no file overlap)
