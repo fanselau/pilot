@@ -174,3 +174,60 @@ describe('hasNoCommitDelta', () => {
     expect(hasNoCommitDelta(job)).toBe(true);
   });
 });
+
+describe('buildJobWhy — review states (Phase 81)', () => {
+  it('returns pending-human-review code for completed_pending_review status', () => {
+    const job = makeJob({ status: 'completed_pending_review' });
+    const why = buildJobWhy(job);
+    expect(why.code).toBe('pending-human-review');
+    expect(why.badge).toBe('review-pending');
+  });
+
+  it('includes resume_hint in why text for completed_pending_review with checklist', () => {
+    const job = makeJob({
+      status: 'completed_pending_review',
+      resumeHint: 'Verify auth flow, check API shapes',
+    });
+    const why = buildJobWhy(job);
+    expect(why.code).toBe('pending-human-review');
+    expect(why.why).toContain('Verify auth flow');
+  });
+
+  it('falls back to default why text when no resumeHint for completed_pending_review', () => {
+    const job = makeJob({ status: 'completed_pending_review', resumeHint: null });
+    const why = buildJobWhy(job);
+    expect(why.code).toBe('pending-human-review');
+    expect(why.why).toBeTruthy();
+  });
+
+  it('returns review-hold code for review_hold status', () => {
+    const job = makeJob({ status: 'review_hold' });
+    const why = buildJobWhy(job);
+    expect(why.code).toBe('review-hold');
+    expect(why.badge).toBe('review-hold');
+  });
+
+  it('includes resume_hint in why text for review_hold', () => {
+    const job = makeJob({
+      status: 'review_hold',
+      resumeHint: 'Check migration output before continuing',
+    });
+    const why = buildJobWhy(job);
+    expect(why.code).toBe('review-hold');
+    expect(why.why).toContain('Check migration output');
+  });
+
+  it('buildJobWhy for failed status still returns existing failure codes (no regression)', () => {
+    const why = buildJobWhy(makeJob({ status: 'failed', error: 'network timeout' }));
+    expect(why.code).toBe('failed');
+  });
+
+  it('buildJobWhy for completed status still returns undo codes (no regression)', () => {
+    const why = buildJobWhy(makeJob({
+      status: 'completed',
+      gitBaseCommit: '111',
+      gitHeadCommit: '222',
+    }));
+    expect(why.code).toBe('undo-safe');
+  });
+});
