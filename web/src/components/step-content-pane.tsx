@@ -163,7 +163,7 @@ export function StepContentPane({
   if (groups.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No timeline activity yet — waiting for job to run.
+        No timeline data available. This may indicate the job&apos;s sessions could not be resolved.
       </div>
     )
   }

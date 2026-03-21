@@ -9,28 +9,31 @@ import { Route as JobLayoutRoute } from './jobs.$jobId'
 import { useJobDetailStream } from '~/lib/sse'
 
 export const Route = createFileRoute('/jobs/$jobId/')({
+  loader: ({ params }) => getFullJobTimelineFn({ data: params.jobId }),
   component: JobDetailIndexPage,
 })
 
 function JobDetailIndexPage() {
   const { jobId } = Route.useParams()
-  const loaderData = JobLayoutRoute.useLoaderData()
+  const layoutLoaderData = JobLayoutRoute.useLoaderData()
+  const timelineLoaderData = Route.useLoaderData()
   const queryClient = useQueryClient()
 
   const isActive =
-    loaderData?.job.status === 'running' ||
-    loaderData?.job.status === 'pending'
+    layoutLoaderData?.job.status === 'running' ||
+    layoutLoaderData?.job.status === 'pending'
 
   const { data: snapshot } = useQuery({
     queryKey: ['job-detail', jobId],
     queryFn: () => getJobDetailFn({ data: jobId }),
-    initialData: loaderData,
+    initialData: layoutLoaderData,
     refetchInterval: isActive ? 3000 : false,
   })
 
   const { data: timelineData } = useQuery({
     queryKey: ['job-timeline-full', jobId],
     queryFn: () => getFullJobTimelineFn({ data: jobId }),
+    initialData: timelineLoaderData ?? undefined,
     refetchInterval: isActive ? 5000 : false,
   })
 
