@@ -368,4 +368,83 @@ describe('notifyJobCompletion', () => {
     expect(prompt).toContain('hung_count: 2');
     expect(prompt).not.toContain('session_title:');
   });
+
+  // ── Review state notifications ─────────────────────────────────────────
+
+  it('completed_pending_review prompt says "pending human review" not "failed"', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'completed_pending_review',
+    }));
+
+    expect(prompt).toContain('pending human review');
+    expect(prompt).not.toContain('just failed');
+    expect(prompt).not.toContain('Flag the failure');
+    expect(prompt).not.toContain('project is now blocked');
+  });
+
+  it('completed_pending_review prompt instructs pilot review --approve', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'completed_pending_review',
+      id: 'ab12',
+    }));
+
+    expect(prompt).toContain('pilot review ab12 --approve');
+    expect(prompt).toContain('NOT a failure');
+    expect(prompt).toContain('NOT blocked');
+  });
+
+  it('review_hold prompt says "paused for human review" not "failed"', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'review_hold',
+    }));
+
+    expect(prompt).toContain('paused for human review');
+    expect(prompt).not.toContain('just failed');
+    expect(prompt).not.toContain('Flag the failure');
+    expect(prompt).not.toContain('project is now blocked');
+  });
+
+  it('review_hold prompt instructs pilot review --approve to resume', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'review_hold',
+      id: 'ab12',
+    }));
+
+    expect(prompt).toContain('pilot review ab12 --approve');
+    expect(prompt).toContain('NOT a failure');
+    expect(prompt).toContain('NOT blocked');
+  });
+
+  it('failed job prompt still uses "failed" language (no regression)', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'failed',
+      error: 'Build error',
+    }));
+
+    expect(prompt).toContain('just failed');
+    expect(prompt).toContain('Flag the failure');
+    expect(prompt).toContain('project is now blocked');
+  });
+
+  it('completed_pending_review next_step guidance contains review command', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'completed_pending_review',
+      id: 'ab12',
+    }));
+
+    const nextStepLine = prompt.split('\n').find(l => l.startsWith('next_step:'));
+    expect(nextStepLine).toContain('pilot review');
+    expect(nextStepLine).not.toContain('pilot unblock');
+  });
+
+  it('review_hold next_step guidance contains review command', () => {
+    const prompt = buildDeliveryPrompt(makeJob({
+      status: 'review_hold',
+      id: 'ab12',
+    }));
+
+    const nextStepLine = prompt.split('\n').find(l => l.startsWith('next_step:'));
+    expect(nextStepLine).toContain('pilot review');
+    expect(nextStepLine).not.toContain('pilot unblock');
+  });
 });
