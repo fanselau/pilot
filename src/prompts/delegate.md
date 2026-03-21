@@ -146,17 +146,26 @@ In re-query mode, you output a JSON object with `continuation_steps` instead of 
 {
   "continuation_steps": [
     { "command": "plan-phase", "args": "31 --gaps" },
-    { "command": "execute-phase", "args": "phase: 31\nactive_flags: --gaps-only" },
+    { "command": "execute-phase", "args": "31 --gaps-only --auto" },
     { "command": "judge", "args": "" }
   ],
   "reasoning": "Judge found 3 gaps in phase 31. Using GSD gap-closure flow: plan --gaps to create gap closure plans, execute --gaps-only to run only those plans, then re-judge."
 }
 ```
 
+### Args Format for `execute-phase`
+
+**Always** include `--auto` in execute-phase args (Pilot is unattended).
+
+- Normal execution: `"31 --auto"`
+- Gap closure: `"31 --gaps-only --auto"`
+
+Only add `--gaps-only` when the judge returned `gaps_found` and gap closure plans exist. Do **not** add `--gaps-only` for normal execution or failure recovery.
+
 ### Decision Logic for Re-Query
 
 1. **Judge returned `gaps_found`:**
-   - Output gap-closure flow: `plan-phase N --gaps` → `execute-phase N --gaps-only` → `judge`
+   - Output gap-closure flow: `plan-phase N --gaps` → `execute-phase N --gaps-only --auto` → `judge`
    - This is GSD's native gap-closure mechanism
 
 2. **Session hung on interactive prompt:**

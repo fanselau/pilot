@@ -927,8 +927,8 @@ class Runner {
         steps.push({ command: 'plan-phase', args: planArgs });
 
         const executeArgs = intent.isGapClosure
-          ? `${phaseNumber} --gaps-only`
-          : `${phaseNumber}`;
+          ? `${phaseNumber} --gaps-only --auto`
+          : `${phaseNumber} --auto`;
         steps.push({ command: 'execute-phase', args: executeArgs });
 
         steps.push({ command: 'judge', args: '' });
@@ -937,7 +937,7 @@ class Runner {
       }
       case 'execute-only':
         return [
-          { command: 'execute-phase', args: `${intent.phaseNumber}` },
+          { command: 'execute-phase', args: `${intent.phaseNumber} --auto` },
           { command: 'judge', args: '' },
         ];
 
@@ -1126,7 +1126,7 @@ class Runner {
 
   /**
    * Handle gaps_found verdict: re-delegate for continuation steps.
-   * Appends new steps (plan-phase --gaps + execute-phase --gaps-only + judge).
+   * Appends new steps (plan-phase --gaps + execute-phase --gaps-only --auto + judge).
    * Guards against unbounded continuation loops via MAX_CONTINUATION_CYCLES.
    */
   private async handleGapsContinuation(
@@ -1295,6 +1295,7 @@ class Runner {
   /**
    * Extract phase number from completed steps in the DB.
    * Looks for plan-phase or execute-phase step args and extracts the phase number.
+   * Args format: "31 --auto" or "31 --gaps-only --auto" or legacy "31"
    */
   private extractPhaseNumberFromSteps(jobId: string): number | null {
     const steps = getJobSteps(jobId);
@@ -1302,7 +1303,6 @@ class Runner {
     for (let i = steps.length - 1; i >= 0; i--) {
       const step = steps[i];
       if (step.command === 'plan-phase' || step.command === 'execute-phase') {
-        // Args format: "31" or "31 --gaps" or "31 --gaps-only"
         const match = step.args.match(/^(\d+)/);
         if (match) return parseInt(match[1], 10);
       }
