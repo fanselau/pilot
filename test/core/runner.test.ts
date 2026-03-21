@@ -377,6 +377,9 @@ describe('runner dispatch wiring', () => {
       getProject: vi.fn(() => null),
       updateJobRecoveryStart: vi.fn(),
       updateJobRecoveryHead: vi.fn(),
+      // Phase 83: resumed review_hold pickup
+      getResumedReviewHoldJobs: vi.fn(() => []),
+      clearResumedFlag: vi.fn(),
     }));
 
     vi.doMock('../../src/core/config.js', () => ({
@@ -423,6 +426,7 @@ describe('runner dispatch wiring', () => {
       notifyJobCompletion: vi.fn(async () => {}),
     }));
     vi.doMock('../../src/core/opencode-db.js', () => ({
+      openDb: vi.fn(() => null),
       findSessionByTitle: vi.fn(() => null),
       exportSessionFromDb: vi.fn(() => ({ messages: [] })),
       isSessionDone: vi.fn(() => false),

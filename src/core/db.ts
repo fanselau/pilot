@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   retry_hint TEXT,
   last_failure_fingerprint TEXT,
   hung_count INTEGER NOT NULL DEFAULT 0,
-  last_hung_reason TEXT
+  last_hung_reason TEXT,
+  resumed_from_hold INTEGER NOT NULL DEFAULT 0
 );
 `;
 
@@ -220,6 +221,7 @@ interface JobRow {
   last_failure_fingerprint: string | null;
   hung_count: number;
   last_hung_reason: string | null;
+  resumed_from_hold: number;
 }
 
 interface ProjectRow {
@@ -516,6 +518,8 @@ function migrateSchema(db: DatabaseType): void {
     "ALTER TABLE job_steps ADD COLUMN source TEXT NOT NULL DEFAULT 'delegation'",
     'ALTER TABLE job_steps ADD COLUMN reason TEXT',
     'ALTER TABLE job_steps ADD COLUMN error TEXT',
+    // Phase 83: resumed review_hold pickup marker
+    'ALTER TABLE jobs ADD COLUMN resumed_from_hold INTEGER NOT NULL DEFAULT 0',
   ];
   for (const sql of migrations) {
     try {
@@ -773,11 +777,36 @@ function resumeFromReviewHold(id: string): Job | null {
   const db = getDb();
   const result = db.prepare(`
     UPDATE jobs
-    SET status = 'running', resume_hint = NULL
+    SET status = 'running', resume_hint = NULL, resumed_from_hold = 1
     WHERE id = ? AND status = 'review_hold'
   `).run(id);
   if (result.changes === 0) return null;
   return getJob(id);
+}
+
+/**
+ * Get jobs that were resumed from review_hold and need the runner to continue their step loop.
+ * These are 'running' jobs with resumed_from_hold=1 — set by resumeFromReviewHold().
+ * The runner should detect these on its next poll cycle and launch their step loop continuation.
+ */
+function getResumedReviewHoldJobs(): Job[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT * FROM jobs
+    WHERE status = 'running'
+      AND resumed_from_hold = 1
+    ORDER BY created_at ASC
+  `).all() as JobRow[];
+  return rows.map(rowToJob);
+}
+
+/**
+ * Clear the resumed_from_hold flag after the runner picks up the job.
+ * Prevents the runner from launching the step loop continuation multiple times.
+ */
+function clearResumedFlag(id: string): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET resumed_from_hold = 0 WHERE id = ?').run(id);
 }
 
 /**
@@ -1936,4 +1965,7 @@ export {
   markReviewHold,
   approveReview,
   resumeFromReviewHold,
+  // Phase 83: resumed review_hold pickup
+  getResumedReviewHoldJobs,
+  clearResumedFlag,
 };

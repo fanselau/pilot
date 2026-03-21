@@ -65,6 +65,8 @@ import {
   markCompletedPendingReview,
   markReviewHold,
   resumeFromReviewHold,
+  getResumedReviewHoldJobs,
+  clearResumedFlag,
 } from './db.js';
 import {
   delegate,
@@ -85,6 +87,7 @@ import {
 } from './skills.js';
 import { notifyJobCompletion } from './callback.js';
 import {
+  openDb,
   findSessionByTitle,
   exportSessionFromDb,
   getLastMessage,
@@ -324,6 +327,47 @@ function isHumanOnlyRemaining(verdict: JudgeVerdict): boolean {
   }
 
   return false;
+}
+
+/**
+ * Detect whether a completed opencode session ended at a GSD checkpoint.
+ * Heuristic: queries the opencode DB's part table for the last assistant text
+ * message containing "CHECKPOINT" (case-insensitive).
+ *
+ * GSD executors output "## CHECKPOINT REACHED" or similar when hitting a
+ * checkpoint:human-verify / checkpoint:decision / checkpoint:human-action task.
+ *
+ * Returns { isCheckpoint: true, reason: <excerpt> } when detected,
+ * or { isCheckpoint: false, reason: '' } otherwise.
+ *
+ * Exported for direct unit testing.
+ */
+export function detectCheckpointPause(sessionId: string | null): { isCheckpoint: boolean; reason: string } {
+  if (!sessionId) return { isCheckpoint: false, reason: '' };
+
+  const db = openDb();
+  if (!db) return { isCheckpoint: false, reason: '' };
+
+  try {
+    const checkpointPart = db.prepare(`
+      SELECT json_extract(data, '$.content') as content
+      FROM part
+      WHERE session_id = ?
+        AND json_extract(data, '$.type') = 'text'
+        AND json_extract(data, '$.role') = 'assistant'
+        AND UPPER(json_extract(data, '$.content')) LIKE '%CHECKPOINT%'
+      ORDER BY time_created DESC LIMIT 1
+    `).get(sessionId) as { content: string } | undefined;
+
+    if (checkpointPart) {
+      const reason = checkpointPart.content.slice(0, 200);
+      return { isCheckpoint: true, reason };
+    }
+  } catch {
+    // DB query failure — treat as no checkpoint (defensive)
+  }
+
+  return { isCheckpoint: false, reason: '' };
 }
 
 // ── Runner Class ───────────────────────────────────────────────────────────
@@ -577,6 +621,25 @@ class Runner {
         } else if (effectiveMaxParallel > 0) {
           this.loggedLowMemory = false;
         }
+        // Check for jobs resumed from review_hold that need step loop continuation.
+        // These are 'running' jobs with resumed_from_hold=1 — set by resumeFromReviewHold().
+        // The runner was not aware of these (they bypass claimNextLaunchable), so we pick them up here.
+        const resumedJobs = getResumedReviewHoldJobs();
+        for (const resumedJob of resumedJobs) {
+          if (this.activeJobs.has(resumedJob.id)) continue; // Already being handled
+          if (this.shuttingDown) break;
+
+          // Clear the resumed flag before launching so we don't relaunch on next poll
+          clearResumedFlag(resumedJob.id);
+
+          process.stderr.write(`[runner] Resuming review_hold job ${resumedJob.id} (${resumedJob.project})\n`);
+          this.activeJobs.set(resumedJob.id, { job: resumedJob, title: '' });
+          this.launch(resumedJob).catch((err) => {
+            process.stderr.write(`[runner] Error resuming review_hold job ${resumedJob.id}: ${errMsg(err)}\n`);
+          });
+          launched = true;
+        }
+
         while (this.activeJobs.size < effectiveMaxParallel && !this.shuttingDown) {
           const job = claimNextLaunchable(config.queueGraceSeconds ?? 0);
           if (!job) break;
@@ -936,6 +999,21 @@ class Runner {
     try {
       await this.spawnAndWait(projectDir, step.command, step.args, title);
       const sessionId = findSessionByTitle(title);
+
+      // Check for mid-phase checkpoint pause before completing the step normally.
+      // If the session ended at a GSD checkpoint AND there are remaining pending steps,
+      // transition the job to review_hold instead of continuing execution.
+      const { isCheckpoint, reason } = detectCheckpointPause(sessionId);
+      const pendingCount = getPendingStepCount(job.id);
+      if (isCheckpoint && pendingCount > 0) {
+        dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+        const holdReason = `Checkpoint paused after step: ${step.command} ${step.args}. Remaining steps: ${pendingCount}. Reason: ${reason.slice(0, 100)}`;
+        markReviewHold(job.id, holdReason);
+        const heldJob = getJob(job.id);
+        if (heldJob) notifyJobCompletion(heldJob).catch(() => {});
+        return;
+      }
+
       dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
     } catch (err) {
       if (err instanceof HungSessionError) {
