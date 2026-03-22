@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks"
-last_updated: "2026-03-21T23:17:18.796Z"
+stopped_at: Completed 86-03-PLAN.md
+last_updated: "2026-03-22T00:12:50.944Z"
 last_activity: "2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior"
 progress:
-  total_phases: 84
+  total_phases: 85
   completed_phases: 42
-  total_plans: 156
-  completed_plans: 144
+  total_plans: 161
+  completed_plans: 145
   percent: 93
 ---
 
@@ -362,6 +362,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 83 added: Pilot Human Review Semantics — Phase 81 Follow-up Completion
 - Phase 84 added: Pilot Control-Flow + Live Status Bugs — Fix False Failure Presentation and Continuation Churn
 - Phase 85 added: Pilot CLI: Disable Milestones for Now + Realign Top-Level GSD Commands (debug + fast)
+- Phase 86 added: Pilot Web UI — Realtime, Navigation, Header Hierarchy, and Observability Polish
 
 ## Decisions
 
@@ -933,6 +934,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase quick-260321-s79]: Hide AppHeader via useMatches() route detection rather than prop drilling
 - [Phase 260321-tdm]: Handle fast→skipGracePeriod at both addJob() and add.ts level for defense-in-depth
 - [Phase 260321-ujl]: Remove milestone from config defaults allowed list (Phase 85 disabled milestone scope, config LOAD now aligns with types.ts and config SET)
+- [Phase 86]: synthesizeHeaderFields in step-semantics.ts centralizes header field derivation for all UI surfaces — Ensures consistent header data across current and future components without code duplication
 
 ## Blockers/Concerns Carried Forward
 
@@ -941,6 +943,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-21T23:17:18.789Z
-Stopped at: Completed quick task 260321-w8r: Use modern iOS Safari viewport height (dvh)
+Last session: 2026-03-22T00:12:46.339Z
+Stopped at: Completed 86-03-PLAN.md
 Resume file: None
