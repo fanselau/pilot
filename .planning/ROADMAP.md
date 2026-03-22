@@ -1580,7 +1580,7 @@ Wave structure:
 **Goal:** Make ui-phase a first-class delegation step in Pilot — delegation AI decides whether a phase needs UI design contract, runner executes ui-phase explicitly before planning, with async-safe policies for upstream interactive branches and full observability of the decision/outcome.
 **Requirements**: UI-PHASE-INTENT, UI-PHASE-DELEGATION, UI-PHASE-RUNNER, UI-PHASE-ASYNC-SAFE, UI-PHASE-OBSERVABILITY, UI-PHASE-COMPAT
 **Depends on:** Phase 86
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 87-01-PLAN.md — Types + delegation prompt + intent parser (DelegationIntent uiPhase field, delegate.md guidance, parseIntentOutput normalization)
