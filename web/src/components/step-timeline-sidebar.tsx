@@ -13,15 +13,15 @@
 import { useRef, useMemo } from 'react'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import { formatStepLabel, formatDelegationIndex, isContinuationStep } from '~/lib/step-semantics'
 import { parseSqliteTimestamp } from '~/lib/time-utils'
 import { formatCompactDuration } from '~/lib/format'
 import { DurationBar } from '~/components/ui/sparkline'
 import { SourceBadge } from '~/components/ui/status-badge'
 import { Tooltip, TooltipTrigger, TooltipPopup, TooltipProvider } from '~/components/ui/tooltip'
-import { ObservabilityCard } from '~/components/observability-card'
-import { VerdictCard } from '~/components/verdict-card'
-import { GitCheckpointCard } from '~/components/git-checkpoint-card'
+import { JobInfoPanel } from '~/components/job-info-panel'
+import { SummaryOverlay } from '~/components/summary-overlay'
 
 // ── Status helpers ────────────────────────────────────────────────────────
 
@@ -226,14 +226,26 @@ export function StepTimelineSidebar({
         </div>
       </div>
 
-      {/* Observability, Verdict, Git cards */}
-      <ObservabilityCard jobId={job.id} isActive={isActive} />
-      <VerdictCard jobId={job.id} />
-      <GitCheckpointCard
-        gitBaseCommit={job.gitBaseCommit ?? null}
-        gitHeadCommit={job.gitHeadCommit ?? null}
-        startedDirty={job.startedDirty}
-      />
+      {/* Info + Summary sheet triggers */}
+      <div className="flex-shrink-0 border-b px-3 py-1.5 flex items-center gap-1.5">
+        <SummaryOverlay
+          jobId={job.id}
+          trigger={
+            <Button variant="ghost" size="sm" className="h-6 text-xs">
+              Summary
+            </Button>
+          }
+        />
+        <JobInfoPanel
+          snapshot={snapshot}
+          isActive={isActive}
+          trigger={
+            <Button variant="ghost" size="sm" className="h-6 text-xs">
+              Info
+            </Button>
+          }
+        />
+      </div>
 
       {/* Step timeline — keyboard navigable */}
       <div

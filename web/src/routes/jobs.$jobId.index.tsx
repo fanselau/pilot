@@ -8,6 +8,8 @@ import { getJobDetailFn, getFullJobTimelineFn } from '~/lib/server-fns'
 import { Route as JobLayoutRoute } from './jobs.$jobId'
 import { useJobDetailStream } from '~/lib/sse'
 import { useIsMobile } from '~/hooks/use-media-query'
+import { shortProject } from '~/components/job-detail'
+import { StatusBadge } from '~/components/ui/status-badge'
 
 export const Route = createFileRoute('/jobs/$jobId/')({
   loader: ({ params }) => getFullJobTimelineFn({ data: params.jobId }),
@@ -73,16 +75,20 @@ function JobDetailIndexPage() {
 
   return (
     <div className="flex flex-col overflow-hidden">
-      {/* Compact breadcrumb header — ultra-compact on mobile */}
-      <div className={`flex shrink-0 items-center border-b px-4 ${isMobile ? 'gap-2 py-1' : 'gap-3 py-2'}`}>
+      {/* Minimal content-first header — project + id + status */}
+      <div className={`flex shrink-0 items-center border-b px-3 ${isMobile ? 'gap-1.5 py-1' : 'gap-2 py-1.5'}`}>
         <Link to="/">
-          <Button variant="ghost" size="sm" className={`px-2 text-xs ${isMobile ? 'h-6' : 'h-7'}`}>
-            &larr; Dashboard
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs">
+            &larr;
           </Button>
         </Link>
-        <span className={`font-mono font-semibold ${isMobile ? 'text-xs' : 'text-sm'}`}>
-          Job {snapshot.job.id}
+        <span className="text-xs font-mono text-muted-foreground truncate">
+          {shortProject(snapshot.job.project)}
         </span>
+        <span className="text-xs font-mono font-medium truncate">
+          #{snapshot.job.id}
+        </span>
+        <StatusBadge status={snapshot.job.status} pulse={isActive} size="sm" />
       </div>
 
       {/* Split-pane detail */}
