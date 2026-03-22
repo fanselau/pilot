@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 88-03-PLAN.md
-last_updated: "2026-03-22T23:49:45.054Z"
+stopped_at: Completed 88-02-PLAN.md
+last_updated: "2026-03-22T23:52:43.017Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
   total_phases: 87
-  completed_phases: 44
+  completed_phases: 45
   total_plans: 168
-  completed_plans: 155
+  completed_plans: 156
   percent: 93
 ---
 
@@ -949,6 +949,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 88]: Sheet-based secondary surfaces for Info+Summary replacing fragmented tab/actions model
 - [Phase 88]: toLocaleString timezone rendering: parseSqliteTimestamp normalizes to UTC, toLocaleString renders in browser locale
 - [Phase 88]: 80px CANCEL_THRESHOLD for deliberate-scroll detection in Follow mode — Distinguishes intentional upward scroll from mobile touch drift; 5-8mm of movement
+- [Phase 88]: Sticky applied to CollapsibleTrigger button element directly — valid CSS, simpler than wrapper div
 
 ## Blockers/Concerns Carried Forward
 
@@ -957,6 +958,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:49:40.420Z
-Stopped at: Completed 88-03-PLAN.md
+Last session: 2026-03-22T23:52:39.456Z
+Stopped at: Completed 88-02-PLAN.md
 Resume file: None
