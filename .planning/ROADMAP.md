@@ -1596,3 +1596,22 @@ Wave structure:
 
 **Details:**
 Read requirements/pilot-ui-phase-as-first-class-delegation-step.md for full spec.
+
+### Phase 88: Pilot Web UI — Job Detail Content-First Redesign (Info Panel, Summary Overlay, Nested Sticky Sessions, Follow Mode)
+
+**Goal:** Redesign Pilot's job detail UI into a content-first execution reader — unified Info panel replacing fragmented actions/meta, tab bar removal with summary overlay, nested child sessions without card chrome using sticky headers, and Follow mode for live activity tailing.
+**Requirements**: INFO-PANEL, TAB-REMOVAL, SUMMARY-OVERLAY, TIMEZONE-FIX, TOP-LAYOUT, NESTED-CHILDREN, STICKY-HEADERS, COLLAPSIBLE, FOLLOW-MODE, CROSS-DEVICE
+**Depends on:** Phase 87
+**Plans:** 3 plans
+
+Plans:
+- [ ] 88-01-PLAN.md — Unified Info panel + Summary overlay + tab bar removal + top layout redesign + timezone fix
+- [ ] 88-02-PLAN.md — Nested child session redesign: remove card chrome, normal-flow embedding, sticky header hierarchy
+- [ ] 88-03-PLAN.md — Follow mode: auto-scroll, deliberate-scroll cancellation, jump-to-latest bar + visual verification
+
+Wave structure:
+- Wave 1: 88-01 (surfaces: Info panel, Summary overlay, tab removal, layout)
+- Wave 2: 88-02 + 88-03 in parallel (nested children + follow mode, both depend on 88-01 for layout foundation)
+
+**Details:**
+Read requirements/pilot-web-ui-job-detail-content-first-info-panel-and-follow-mode.md for full spec.
