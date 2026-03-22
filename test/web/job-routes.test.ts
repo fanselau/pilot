@@ -41,12 +41,14 @@ describe('job detail route contract', () => {
     expect(routeTree).toContain('JobsJobIdSessionsSessionIdRoute: typeof JobsJobIdSessionsSessionIdRoute');
   });
 
-  it('preserves child-page breadcrumb context and session reset invariants', () => {
+  it('session drill-in route redirects to job detail (subsessions are now inline)', () => {
     const childRoute = read('web/src/routes/jobs.$jobId.sessions.$sessionId.tsx');
 
-    expect(childRoute).toContain('Back to Job');
-    expect(childRoute).toContain('Sub-Agent Session');
-    expect(childRoute).toContain('to="/jobs/$jobId"');
-    expect(childRoute).toContain('key={sessionId}');
+    // Phase 86-04: Session drill-in was replaced with inline collapsible subsessions.
+    // The route file still exists (TanStack Router requires it for route tree generation)
+    // but it is now a redirect to the parent job detail page.
+    expect(childRoute).toContain('redirect');
+    expect(childRoute).toContain("to: '/jobs/$jobId'");
+    expect(childRoute).toContain('beforeLoad');
   });
 });

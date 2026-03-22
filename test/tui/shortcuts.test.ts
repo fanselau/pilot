@@ -72,7 +72,7 @@ import type { PilotStateStore } from '../../src/tui/state.js';
 const IMPLEMENTED_KEYS = new Set([
   'q', '?', '/', 'Esc', 'Tab', 's',
   '1', '2', '3',
-  'u', 'd',
+  'b', 'u', 'd',
   'K',
   'r', 'x',
   'j', 'k', '↓', '↑',
@@ -426,6 +426,12 @@ function mockJob(overrides?: Partial<Job>): Job {
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
+    retryBudget: 2,
+    retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
+    hungCount: 0,
+    lastHungReason: null,
     ...overrides,
   };
 }

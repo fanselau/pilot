@@ -1015,7 +1015,10 @@ describe('getSessionState', () => {
     expect(result.state).toBe('done');
   });
 
-  it("returns 'done' when parent is done and child session has no activity for 5+ minutes (stale child)", () => {
+  it("returns 'working' when parent is done but child session has no step-finish (regardless of inactivity)", () => {
+    // Design decision: child sessions are NOT timed out based on inactivity.
+    // A child may be waiting for rate limits for hours — that is a legitimate working state.
+    // The only way to stop this is `pilot kill --force`.
     const now = Date.now();
     const sixMinutesAgo = now - 6 * 60 * 1000;
 
@@ -1031,7 +1034,9 @@ describe('getSessionState', () => {
     insertPart(db, 'p-child-stale', 'msg-child-stale', 'sess-child-stale', sixMinutesAgo, { type: 'text', text: 'Working...' });
 
     const result = getSessionState('sess-parent-stale');
-    expect(result.state).toBe('done');
+    // Child has no terminal step-finish → state is 'working', not 'done'.
+    // Inactivity timeout is deliberately not implemented to avoid false positives.
+    expect(result.state).toBe('working');
   });
 
   it("returns 'working' when parent is done and child session has recent activity (< 5 min)", () => {

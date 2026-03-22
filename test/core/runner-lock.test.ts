@@ -45,6 +45,7 @@ vi.mock('../../src/core/db.js', () => ({
   updateJudgeVerdict: vi.fn(),
   updateActualModels: vi.fn(),
   reconcileStaleJobs: vi.fn(),
+  getResumedReviewHoldJobs: vi.fn(() => []),
 }));
 
 vi.mock('../../src/core/delegate.js', () => ({
