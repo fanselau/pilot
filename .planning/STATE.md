@@ -25,7 +25,7 @@ Phase: 73 of 73 (Phase 1: Judge & Step Continuation — Replace Retry with Appen
 **Next Plan:** 73-02-PLAN.md
 Plan: 2 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior
+Last activity: 2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels
 
 Progress: [█████████░] 93%
 
@@ -282,6 +282,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 260321-ujl | Fix debug/fast scope support end-to-end: DB schema, migration, runtime compatibility | 2026-03-21 | d003c04 | | [260321-ujl-fix-debug-fast-scope-support-end-to-end-](./quick/260321-ujl-fix-debug-fast-scope-support-end-to-end-/) |
 | 260321-vga | Pilot Runtime / Install Path Unification + Operator Documentation | 2026-03-21 | 0245edc | Needs Review | [260321-vga-pilot-runtime-install-path-unification-o](./quick/260321-vga-pilot-runtime-install-path-unification-o/) |
 | 260321-w8r | use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior | 2026-03-21 | 6fe716b | | [260321-w8r-use-modern-ios-safari-viewport-height-ha](./quick/260321-w8r-use-modern-ios-safari-viewport-height-ha/) |
+| 260322-uyd | Pilot fast scope native detection + compat fallback + UI labels | 2026-03-22 | ec41458 | | [260322-uyd-pilot-fast-scope-should-use-native-upstr](./quick/260322-uyd-pilot-fast-scope-should-use-native-upstr/) |
 
 ## Accumulated Context
 
