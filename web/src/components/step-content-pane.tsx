@@ -325,7 +325,7 @@ export function StepContentPane({
                         const borderClass = stepHeaderBorderClass(group)
                         return (
                           <div className={[
-                            'sticky top-0 bg-background/95 backdrop-blur z-20 px-3 py-2.5 space-y-1',
+                            'sticky top-0 bg-background/95 backdrop-blur z-30 px-3 py-2.5 space-y-1',
                             borderClass,
                             synth.isActive ? 'border-l-[3px] border-l-sky-500' : '',
                           ].filter(Boolean).join(' ')}>

@@ -227,7 +227,8 @@ function StepGroupSection({
 
   return (
     <section className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Step group header — sticky with z-30 to stack above nested session headers */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 flex flex-wrap items-center gap-2 px-2 py-1.5">
         <Badge variant={group.stepIndex === null ? 'outline' : 'secondary'}>
           {stepLabel}
         </Badge>
