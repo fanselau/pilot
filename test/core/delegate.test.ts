@@ -305,16 +305,19 @@ describe('parseIntentOutput', () => {
   });
 
   it('parses plan-and-execute with uiPhase: true', () => {
-    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":87,"uiPhase":true},"reasoning":"UI phase needed"}';
+    const content = asJsonCodeBlock(loadDelegationIntentFixture('plan-and-execute-ui.json'));
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('plan-and-execute');
     if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.phaseNumber).toBe(87);
       expect(result.intent.uiPhase).toBe(true);
+      expect(result.intent.prdPath).toBe('requirements/pilot-ui-phase-as-first-class-delegation-step.md');
+      expect(result.intent.addPhaseTitle).toBe('Pilot UI Phase — First-Class Delegation Step');
     }
   });
 
   it('parses plan-and-execute with uiPhase: false', () => {
-    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":42,"uiPhase":false},"reasoning":"No UI phase"}';
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":10,"uiPhase":false},"reasoning":"Backend phase"}';
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('plan-and-execute');
     if (result.intent.type === 'plan-and-execute') {
@@ -323,7 +326,8 @@ describe('parseIntentOutput', () => {
   });
 
   it('parses plan-and-execute without uiPhase (backward compat)', () => {
-    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":5},"reasoning":"No uiPhase field"}';
+    // Existing fixture has no uiPhase field — should parse without error
+    const content = asJsonCodeBlock(loadDelegationIntentFixture('plan-and-execute.json'));
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('plan-and-execute');
     if (result.intent.type === 'plan-and-execute') {
@@ -331,14 +335,24 @@ describe('parseIntentOutput', () => {
     }
   });
 
-  it('preserves uiPhase field on parsed plan-and-execute intent', () => {
-    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":10,"prdPath":"requirements/ui.md","uiPhase":true},"reasoning":"Has UI"}';
+  it('normalizes string uiPhase to boolean', () => {
+    // AI might output "true" as string instead of boolean
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":15,"uiPhase":"true"},"reasoning":"String coercion test"}';
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('plan-and-execute');
     if (result.intent.type === 'plan-and-execute') {
-      expect(result.intent.phaseNumber).toBe(10);
-      expect(result.intent.prdPath).toBe('requirements/ui.md');
       expect(result.intent.uiPhase).toBe(true);
+      expect(typeof result.intent.uiPhase).toBe('boolean');
+    }
+  });
+
+  it('preserves uiPhase alongside isGapClosure', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":5,"isGapClosure":true,"uiPhase":false},"reasoning":"Gap closure with explicit no-UI"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.isGapClosure).toBe(true);
+      expect(result.intent.uiPhase).toBe(false);
     }
   });
 });

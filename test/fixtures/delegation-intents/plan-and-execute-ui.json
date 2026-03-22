@@ -1,0 +1,10 @@
+{
+  "intent": {
+    "type": "plan-and-execute",
+    "phaseNumber": 87,
+    "prdPath": "requirements/pilot-ui-phase-as-first-class-delegation-step.md",
+    "addPhaseTitle": "Pilot UI Phase — First-Class Delegation Step",
+    "uiPhase": true
+  },
+  "reasoning": "Phase involves creating new web UI components — delegation determined UI design contract needed before planning."
+}
