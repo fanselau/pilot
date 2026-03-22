@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 87-01-PLAN.md
-last_updated: "2026-03-22T22:47:53.837Z"
+stopped_at: Completed 87-02-PLAN.md
+last_updated: "2026-03-22T22:51:45.078Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
   total_phases: 86
   completed_phases: 43
   total_plans: 164
-  completed_plans: 150
+  completed_plans: 151
   percent: 93
 ---
 
@@ -942,6 +942,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 86]: Depth-based auto-expand: active depth<2 expands, done always collapses, MAX_DEPTH=4 guards recursion
 - [Phase 86]: COALESCE for token paths handles both nested and flat DB formats simultaneously without test rewrites — Provider DB schema evolved; old tests use flat format, real DB uses nested — COALESCE avoids migration
 - [Phase 87-01]: uiPhase as optional boolean on plan-and-execute variant (not a new intent type) — simpler than new intent type, validTypes unchanged
+- [Phase 87-pilot-ui-phase-first-class-delegation-step-for-async-runner-mode]: findExistingUiSpec scans by phase number prefix to find phase dir and *-UI-SPEC.md inside — Same pattern used by existing getValidVerificationEvidence helper in runner.ts
 
 ## Blockers/Concerns Carried Forward
 
@@ -950,6 +951,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:47:34.128Z
-Stopped at: Completed 87-01-PLAN.md
+Last session: 2026-03-22T22:51:38.903Z
+Stopped at: Completed 87-02-PLAN.md
 Resume file: None
