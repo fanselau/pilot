@@ -303,6 +303,44 @@ describe('parseIntentOutput', () => {
     const result = parseIntentOutput(content);
     expect(result.intent.type).toBe('quick');
   });
+
+  it('parses plan-and-execute with uiPhase: true', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":87,"uiPhase":true},"reasoning":"UI phase needed"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.uiPhase).toBe(true);
+    }
+  });
+
+  it('parses plan-and-execute with uiPhase: false', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":42,"uiPhase":false},"reasoning":"No UI phase"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.uiPhase).toBe(false);
+    }
+  });
+
+  it('parses plan-and-execute without uiPhase (backward compat)', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":5},"reasoning":"No uiPhase field"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.uiPhase).toBeUndefined();
+    }
+  });
+
+  it('preserves uiPhase field on parsed plan-and-execute intent', () => {
+    const content = '{"intent":{"type":"plan-and-execute","phaseNumber":10,"prdPath":"requirements/ui.md","uiPhase":true},"reasoning":"Has UI"}';
+    const result = parseIntentOutput(content);
+    expect(result.intent.type).toBe('plan-and-execute');
+    if (result.intent.type === 'plan-and-execute') {
+      expect(result.intent.phaseNumber).toBe(10);
+      expect(result.intent.prdPath).toBe('requirements/ui.md');
+      expect(result.intent.uiPhase).toBe(true);
+    }
+  });
 });
 
 describe('getNextPhaseNumber', () => {
