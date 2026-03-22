@@ -104,6 +104,8 @@ function scopeVariant(scope: string) {
   switch (scope) {
     case 'quick':
       return 'outline' as const
+    case 'fast':
+      return 'secondary' as const
     case 'phase':
       return 'secondary' as const
     case 'milestone':

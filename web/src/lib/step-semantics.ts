@@ -31,6 +31,7 @@ export function formatStepLabel(group: StepTimelineGroup): string {
   if (group.source === 'delegation' && group.command.includes('plan')) return 'Planning'
   if (group.source === 'delegation' && group.command.includes('execute')) return 'Execution'
   if (group.source === 'delegation' && (group.command.includes('judge') || group.command.includes('verify'))) return 'Judge'
+  if (group.source === 'delegation' && group.command === 'fast') return 'Fast Task'
   if (group.source === 'delegation' && group.command === 'quick') return 'Quick Task'
   return group.command.charAt(0).toUpperCase() + group.command.slice(1)
 }
@@ -76,6 +77,7 @@ export function stepSemanticClass(group: StepTimelineGroup): string {
   if (group.command.includes('plan')) return 'step-planning'
   if (group.command.includes('execute')) return 'step-execution'
   if (group.command.includes('judge') || group.command.includes('verify')) return 'step-judge'
+  if (group.command === 'fast') return 'step-fast'
   if (group.command === 'quick') return 'step-quick'
 
   return 'step-default'
@@ -169,6 +171,7 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
     if (group.command.includes('plan')) stage = 'Planning'
     else if (group.command.includes('execute')) stage = 'Execution'
     else if (group.command.includes('judge') || group.command.includes('verify')) stage = 'Verification'
+    else if (group.command === 'fast') stage = 'Fast Task'
     else if (group.command === 'quick') stage = 'Quick Task'
   }
 
