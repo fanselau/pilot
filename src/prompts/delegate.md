@@ -102,9 +102,10 @@ Output:
 {
   "intent": {
     "type": "plan-and-execute",
-    "phaseNumber": <next_phase_number>,
+    "phaseNumber": "<next_phase_number>",
     "prdPath": "<requirement_path>",
-    "addPhaseTitle": "<title_from_requirement_heading>"
+    "addPhaseTitle": "<title_from_requirement_heading>",
+    "uiPhase": true
   },
   "reasoning": "<explanation>"
 }
@@ -114,6 +115,24 @@ Output:
 - `prdPath`: use `requirement_path` from job args (may be null/none)
 - `addPhaseTitle`: read first `# Heading` from the requirement file; fall back to filename without `.md` extension and leading digits
 
+### Step 3.5: Determine if phase needs UI-phase
+
+After determining the phase number (Step 3 or Step 4), decide if the phase needs a UI design contract before planning.
+
+Set `uiPhase: true` on the intent when ALL of these are true:
+- The phase involves creating or significantly modifying **user-facing frontend** (web pages, UI components, dashboards, forms, layouts)
+- The requirement describes visual elements, user interactions, or design-sensitive work
+- This is NOT a backend-only, API-only, CLI-only, infrastructure, refactor, or test-only phase
+
+Set `uiPhase: false` (or omit the field) when:
+- The phase is backend, API, database, CLI, infrastructure, testing, or refactoring work
+- The phase modifies existing UI with only minor/functional changes (bug fixes, data wiring, config)
+- The phase is gap closure or execute-only
+
+**Do NOT** set `uiPhase: true` for every phase that happens to touch a .tsx file. The bar is: "Does this phase introduce new visual design that a designer would need to review?"
+
+The `uiPhase` field is optional. If omitted, it defaults to false (no UI-phase step).
+
 ### Step 4: Phase exists — check completion state
 
 Read the phase directory at `.planning/phases/<NN>-*/`:
@@ -121,7 +140,8 @@ Read the phase directory at `.planning/phases/<NN>-*/`:
 Count `*-PLAN.md` files and `*-SUMMARY.md` files.
 
 **No PLAN.md files (phase dir exists but empty/no plans):**
-- Output `{ type: 'plan-and-execute', phaseNumber: N, prdPath: <requirement_path> }`
+- Output `{ type: 'plan-and-execute', phaseNumber: N, prdPath: <requirement_path>, uiPhase: false }`
+- Apply Step 3.5 criteria to set `uiPhase` appropriately
 
 **PLAN.md files exist, some SUMMARY.md files missing (incomplete execution):**
 - Output `{ type: 'execute-only', phaseNumber: N }`
@@ -279,28 +299,30 @@ When `<step_history>` and `<continuation_context>` blocks are present, output co
 }
 ```
 
-**Plan and execute new phase (not in roadmap):**
+**Plan and execute new phase (not in roadmap, with UI-phase):**
 ```json
 {
   "intent": {
     "type": "plan-and-execute",
     "phaseNumber": 67,
     "prdPath": "requirements/new-feature.md",
-    "addPhaseTitle": "New Feature Implementation"
+    "addPhaseTitle": "New Feature Implementation",
+    "uiPhase": true
   },
-  "reasoning": "No matching phase found in ROADMAP.md — creating phase 67 (next after current max)"
+  "reasoning": "No matching phase found in ROADMAP.md — creating phase 67. Requirement describes new dashboard UI with forms and layouts — setting uiPhase: true."
 }
 ```
 
-**Plan and execute existing phase (no plans yet):**
+**Plan and execute existing phase (no plans yet, no UI):**
 ```json
 {
   "intent": {
     "type": "plan-and-execute",
     "phaseNumber": 42,
-    "prdPath": "requirements/existing-feature.md"
+    "prdPath": "requirements/existing-feature.md",
+    "uiPhase": false
   },
-  "reasoning": "Phase 42 exists in ROADMAP.md but has no PLAN.md files — needs planning and execution"
+  "reasoning": "Phase 42 exists in ROADMAP.md but has no PLAN.md files — needs planning and execution. Backend API work only, no new visual design."
 }
 ```
 
