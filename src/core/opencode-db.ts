@@ -765,11 +765,11 @@ function getSessionTokens(sessionId: string): { input: number; output: number; r
   try {
     const row = db.prepare(
       `SELECT
-         COALESCE(SUM(json_extract(data, '$.tokens.input')), 0) as total_input,
-         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.input'), json_extract(data, '$.inputTokens'))), 0) as total_input,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.output'), json_extract(data, '$.outputTokens'))), 0) as total_output,
          COALESCE(SUM(json_extract(data, '$.tokens.reasoning')), 0) as total_reasoning,
-         COALESCE(SUM(json_extract(data, '$.tokens.cache_read')), 0) as total_cache_read,
-         COALESCE(SUM(json_extract(data, '$.tokens.cache_write')), 0) as total_cache_write
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.cache.read'), json_extract(data, '$.tokens.cache_read'))), 0) as total_cache_read,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.cache.write'), json_extract(data, '$.tokens.cache_write'))), 0) as total_cache_write
        FROM message
        WHERE session_id = ?
          AND json_extract(data, '$.role') = 'assistant'`,
@@ -839,11 +839,11 @@ function getSessionTokenUsageByModel(sessionId: string): SessionTokenUsageByMode
       `SELECT
          json_extract(data, '$.providerID') as provider_id,
          json_extract(data, '$.modelID') as model_id,
-         COALESCE(SUM(json_extract(data, '$.tokens.input')), 0) as total_input,
-         COALESCE(SUM(json_extract(data, '$.tokens.output')), 0) as total_output,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.input'), json_extract(data, '$.inputTokens'))), 0) as total_input,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.output'), json_extract(data, '$.outputTokens'))), 0) as total_output,
          COALESCE(SUM(json_extract(data, '$.tokens.reasoning')), 0) as total_reasoning,
-         COALESCE(SUM(json_extract(data, '$.tokens.cache_read')), 0) as total_cache_read,
-         COALESCE(SUM(json_extract(data, '$.tokens.cache_write')), 0) as total_cache_write
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.cache.read'), json_extract(data, '$.tokens.cache_read'))), 0) as total_cache_read,
+         COALESCE(SUM(COALESCE(json_extract(data, '$.tokens.cache.write'), json_extract(data, '$.tokens.cache_write'))), 0) as total_cache_write
        FROM message
        WHERE session_id = ?
          AND json_extract(data, '$.role') = 'assistant'
