@@ -1574,3 +1574,23 @@ Wave structure:
 - Wave 1: 86-01 + 86-02 + 86-03 (independent: token/grace, dashboard/projects, sticky headers)
 - Wave 2: 86-04 (inline nesting, depends on 86-03 for sticky header foundation)
 - Wave 3: 86-05 (summary + verification, depends on all above)
+
+### Phase 87: Pilot UI Phase — First-Class Delegation Step for Async Runner Mode
+
+**Goal:** Make ui-phase a first-class delegation step in Pilot — delegation AI decides whether a phase needs UI design contract, runner executes ui-phase explicitly before planning, with async-safe policies for upstream interactive branches and full observability of the decision/outcome.
+**Requirements**: UI-PHASE-INTENT, UI-PHASE-DELEGATION, UI-PHASE-RUNNER, UI-PHASE-ASYNC-SAFE, UI-PHASE-OBSERVABILITY, UI-PHASE-COMPAT
+**Depends on:** Phase 86
+**Plans:** 3 plans
+
+Plans:
+- [ ] 87-01-PLAN.md — Types + delegation prompt + intent parser (DelegationIntent uiPhase field, delegate.md guidance, parseIntentOutput normalization)
+- [ ] 87-02-PLAN.md — Runner integration (intentToSteps ui-phase insertion, UI-SPEC existence check, async-safe skip/fail logging)
+- [ ] 87-03-PLAN.md — Tests (parseIntentOutput uiPhase parsing, fixture, backward compat, string normalization)
+
+Wave structure:
+- Wave 1: 87-01 (types + delegation prompt + parser — foundation)
+- Wave 2: 87-02 (runner integration, depends on 87-01 for DelegationIntent type)
+- Wave 3: 87-03 (tests, depends on 87-01 + 87-02)
+
+**Details:**
+Read requirements/pilot-ui-phase-as-first-class-delegation-step.md for full spec.
