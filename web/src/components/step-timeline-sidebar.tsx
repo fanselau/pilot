@@ -262,69 +262,97 @@ export function StepTimelineSidebar({
 
                 const isRunning = group.status === 'running'
 
+                const hasVerdict = !!group.verdictReason
+
                 return (
-                  <button
+                  <div
                     key={`step-${group.stepIndex}`}
                     className={[
-                      'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors duration-150 hover:bg-white/[0.03]',
+                      'w-full flex items-start gap-0 transition-colors duration-150',
                       isHighlighted
                         ? 'border-l-2 border-sky-400 bg-sky-500/5 ring-1 ring-sky-400/30'
                         : isContinuation
                           ? 'border-l-2 border-amber-400/50'
                           : 'border-l-2 border-transparent',
                     ].join(' ')}
-                    onClick={() => {
-                      if (group.stepIndex != null) onClickStep(group.stepIndex)
-                    }}
                   >
-                    <span className={[
-                      'w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground',
-                      isRunning ? 'animate-pulse text-sky-400' : '',
-                    ].join(' ')}>
-                      {isDelegation
-                        ? formatDelegationIndex(group.stepIndex!, delegationCount)
-                        : group.stepIndex}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      {/* Row 1: command + duration text */}
-                      <div className="flex items-center gap-1.5">
-                        {stepReason ? (
-                          <Tooltip>
-                            <TooltipTrigger className="truncate text-xs font-mono leading-tight text-left">
+                    {/* Main step button */}
+                    <button
+                      className="flex-1 min-w-0 text-left px-3 py-2 flex items-start gap-2 hover:bg-white/[0.03]"
+                      onClick={() => {
+                        if (group.stepIndex != null) onClickStep(group.stepIndex)
+                      }}
+                    >
+                      <span className={[
+                        'w-5 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground',
+                        isRunning ? 'animate-pulse text-sky-400' : '',
+                      ].join(' ')}>
+                        {isDelegation
+                          ? formatDelegationIndex(group.stepIndex!, delegationCount)
+                          : group.stepIndex}
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        {/* Row 1: command + duration text */}
+                        <div className="flex items-center gap-1.5">
+                          {stepReason ? (
+                            <Tooltip>
+                              <TooltipTrigger className="truncate text-xs font-mono leading-tight text-left">
+                                {commandLabel}
+                              </TooltipTrigger>
+                              <TooltipPopup side="right" className="max-w-[280px]">
+                                <p className="text-[11px] leading-snug">{stepReason}</p>
+                              </TooltipPopup>
+                            </Tooltip>
+                          ) : (
+                            <p className="truncate text-xs font-mono leading-tight">
                               {commandLabel}
-                            </TooltipTrigger>
-                            <TooltipPopup side="right" className="max-w-[280px]">
-                              <p className="text-[11px] leading-snug">{stepReason}</p>
-                            </TooltipPopup>
-                          </Tooltip>
-                        ) : (
-                          <p className="truncate text-xs font-mono leading-tight">
-                            {commandLabel}
-                          </p>
-                        )}
-                        {stepDurationMs != null && (
-                          <span className="shrink-0 text-[10px] font-mono text-muted-foreground">
-                            {formatCompactDuration(stepDurationMs)}
-                          </span>
-                        )}
-                        {stepError && (
-                          <span className="shrink-0 w-2 h-2 rounded-full bg-rose-500" title={stepError} />
-                        )}
+                            </p>
+                          )}
+                          {stepDurationMs != null && (
+                            <span className="shrink-0 text-[10px] font-mono text-muted-foreground">
+                              {formatCompactDuration(stepDurationMs)}
+                            </span>
+                          )}
+                          {stepError && (
+                            <span className="shrink-0 w-2 h-2 rounded-full bg-rose-500" title={stepError} />
+                          )}
+                        </div>
+                        {/* Row 2: status badge + source badge + duration bar */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant={stepStatusVariant(group.status)} size="sm">
+                            {group.status}
+                          </Badge>
+                          {stepSource && stepSource !== 'delegation' && !isDelegation && (
+                            <SourceBadge source={stepSource} />
+                          )}
+                          {stepDurationMs != null && maxMs > 0 && (
+                            <DurationBar ms={stepDurationMs} maxMs={maxMs} className="ml-auto shrink-0" />
+                          )}
+                        </div>
                       </div>
-                      {/* Row 2: status badge + source badge + duration bar */}
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <Badge variant={stepStatusVariant(group.status)} size="sm">
-                          {group.status}
-                        </Badge>
-                        {stepSource && stepSource !== 'delegation' && !isDelegation && (
-                          <SourceBadge source={stepSource} />
-                        )}
-                        {stepDurationMs != null && maxMs > 0 && (
-                          <DurationBar ms={stepDurationMs} maxMs={maxMs} className="ml-auto shrink-0" />
-                        )}
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    {/* Summary deep-link button — only for steps with a verdict */}
+                    {hasVerdict && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          className="shrink-0 self-center px-1.5 py-1 text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const el = document.getElementById(`step-${group.stepIndex}-summary`)
+                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          }}
+                          aria-label="Jump to verdict summary"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                            <path d="M2 2h8v1H2V2zm0 2h8v1H2V4zm0 2h6v1H2V6zm0 3l2-2 1.5 1.5L8 5l2 3H2z" />
+                          </svg>
+                        </TooltipTrigger>
+                        <TooltipPopup side="right" className="max-w-[220px]">
+                          <p className="text-[11px] leading-snug">Jump to verdict summary</p>
+                        </TooltipPopup>
+                      </Tooltip>
+                    )}
+                  </div>
                 )
               })}
             </div>
