@@ -203,7 +203,7 @@ export type DelegationIntent =
   | { type: 'fast'; description: string }
   | { type: 'init-project'; prdPath: string }
   | { type: 'new-milestone'; prdPath: string }
-  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string }
+  | { type: 'plan-and-execute'; phaseNumber: number; prdPath?: string; isGapClosure?: boolean; addPhaseTitle?: string; uiPhase?: boolean }
   | { type: 'execute-only'; phaseNumber: number }
   | { type: 'audit-milestone'; version: string }
   | { type: 'noop'; reason: string }
