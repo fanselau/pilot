@@ -1,16 +1,35 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import type { SessionSummary, BranchLifecycleItem } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import { StatusBadge } from '~/components/ui/status-badge'
 import { SessionActivity } from '~/components/session-activity'
-import { SubagentCard } from '~/components/subagent-card'
+import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
 import { getSessionChildrenFn } from '~/lib/server-fns'
 
 export const Route = createFileRoute('/jobs/$jobId/sessions/$sessionId')({
   component: SessionDrillIn,
 })
+
+function sessionToBranchItem(session: SessionSummary, parentId: string): BranchLifecycleItem {
+  return {
+    kind: 'fork-card',
+    sessionId: session.sessionId,
+    parentSessionId: parentId,
+    title: session.title,
+    createdAt: session.startedAt,
+    updatedAt: session.updatedAt,
+    status: session.status,
+    messageCount: session.messageCount,
+    tokenTotal: session.tokenTotal,
+    models: session.models,
+    latestMessagePreview: session.latestMessagePreview,
+    childCount: session.childCount,
+    durationMs: session.durationMs,
+  }
+}
 
 function SessionDrillIn() {
   const { jobId, sessionId } = Route.useParams()
@@ -70,7 +89,7 @@ function SessionDrillIn() {
           <SessionActivity key={sessionId} sessionId={sessionId} />
         </div>
 
-        {/* Child sessions */}
+        {/* Child sessions — rendered via BranchLifecycleBlock (inline collapsible) */}
         {childrenLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-5 w-32" />
@@ -83,10 +102,11 @@ function SessionDrillIn() {
             </h3>
             <div className="space-y-2 max-w-full overflow-hidden">
               {children.map((child) => (
-                <SubagentCard
+                <BranchLifecycleBlock
                   key={child.sessionId}
-                  session={child}
+                  item={sessionToBranchItem(child, sessionId)}
                   jobId={jobId}
+                  depth={1}
                 />
               ))}
             </div>
