@@ -1076,6 +1076,116 @@ describe('getSessionState', () => {
   });
 });
 
+// ── Multi-provider token extraction (nested $.tokens.cache.read format) ───────
+
+describe('multi-provider token extraction with real DB nested cache format', () => {
+  it('returns correct cacheRead for Anthropic messages with nested cache object ($.tokens.cache.read)', () => {
+    insertSession(db, 'sess-ant', 'anthropic-session', 1000, 2000);
+    // Real Anthropic opencode DB format: {"tokens": {"input": 1, "output": 406, "cache": {"read": 59333, "write": 1166}}}
+    insertMessage(db, 'm-ant', 'sess-ant', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-6',
+      tokens: { input: 1, output: 406, reasoning: 0, cache: { read: 59333, write: 1166 } },
+    });
+
+    const result = getSessionTokenUsageByModel('sess-ant');
+    expect(result['anthropic/claude-sonnet-4-6']).toBeDefined();
+    expect(result['anthropic/claude-sonnet-4-6'].cacheRead).toBe(59333);
+    expect(result['anthropic/claude-sonnet-4-6'].cacheWrite).toBe(1166);
+    expect(result['anthropic/claude-sonnet-4-6'].input).toBe(1);
+    expect(result['anthropic/claude-sonnet-4-6'].output).toBe(406);
+  });
+
+  it('returns correct cacheRead for OpenAI messages with nested cache object', () => {
+    insertSession(db, 'sess-oai', 'openai-session', 1000, 2000);
+    // Real OpenAI opencode DB format: {"tokens": {"input": 7605, "output": 325, "cache": {"read": 22656, "write": 0}}}
+    insertMessage(db, 'm-oai', 'sess-oai', 1100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 7605, output: 325, reasoning: 64, cache: { read: 22656, write: 0 } },
+    });
+
+    const result = getSessionTokenUsageByModel('sess-oai');
+    expect(result['openai/gpt-5']).toBeDefined();
+    expect(result['openai/gpt-5'].cacheRead).toBe(22656);
+    expect(result['openai/gpt-5'].input).toBe(7605);
+    expect(result['openai/gpt-5'].output).toBe(325);
+  });
+
+  it('maps anthropic/claude-sonnet-4-6 to the correct key via normalizeModelKey', () => {
+    insertSession(db, 'sess-nm', 'normalize-session', 1000, 2000);
+    insertMessage(db, 'm-nm', 'sess-nm', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-6',
+      tokens: { input: 100, output: 50, cache: { read: 500, write: 100 } },
+    });
+
+    const result = getSessionTokenUsageByModel('sess-nm');
+    expect(Object.keys(result)).toContain('anthropic/claude-sonnet-4-6');
+    expect(result['anthropic/claude-sonnet-4-6'].cacheRead).toBe(500);
+  });
+
+  it('getSessionTokenUsageByModelRecursive returns correct nested-cache totals for mixed-provider tree', () => {
+    insertSession(db, 'r-tree', 'root-tree', 1000, 4000);
+    insertSession(db, 'c-tree', 'child-tree', 2000, 3500, 'r-tree');
+
+    insertMessage(db, 'm-root-tree', 'r-tree', 1100, {
+      role: 'assistant',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-6',
+      tokens: { input: 1, output: 400, reasoning: 0, cache: { read: 50000, write: 1000 } },
+    });
+    insertMessage(db, 'm-child-tree', 'c-tree', 2100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-5',
+      tokens: { input: 5000, output: 300, reasoning: 100, cache: { read: 20000, write: 0 } },
+    });
+
+    const result = getSessionTokenUsageByModelRecursive('r-tree');
+    expect(result['anthropic/claude-sonnet-4-6']).toBeDefined();
+    expect(result['anthropic/claude-sonnet-4-6'].cacheRead).toBe(50000);
+    expect(result['anthropic/claude-sonnet-4-6'].cacheWrite).toBe(1000);
+    expect(result['openai/gpt-5']).toBeDefined();
+    expect(result['openai/gpt-5'].cacheRead).toBe(20000);
+  });
+
+  it('still extracts legacy flat cache_read/cache_write fields via COALESCE fallback', () => {
+    insertSession(db, 'sess-leg', 'legacy-session', 1000, 2000);
+    insertMessage(db, 'm-leg', 'sess-leg', 1100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-4',
+      tokens: { input: 100, output: 50, reasoning: 0, cache_read: 200, cache_write: 50 },
+    });
+
+    const result = getSessionTokenUsageByModel('sess-leg');
+    expect(result['openai/gpt-4']).toBeDefined();
+    expect(result['openai/gpt-4'].cacheRead).toBe(200);
+    expect(result['openai/gpt-4'].cacheWrite).toBe(50);
+  });
+
+  it('falls back to legacy inputTokens/outputTokens when $.tokens is absent', () => {
+    insertSession(db, 'sess-ltok', 'legacy-tokens-session', 1000, 2000);
+    // Legacy format without nested tokens object
+    insertMessage(db, 'm-ltok', 'sess-ltok', 1100, {
+      role: 'assistant',
+      providerID: 'openai',
+      modelID: 'gpt-4',
+      inputTokens: 300,
+      outputTokens: 150,
+    });
+
+    const result = getSessionTokenUsageByModel('sess-ltok');
+    expect(result['openai/gpt-4']).toBeDefined();
+    expect(result['openai/gpt-4'].input).toBe(300);
+    expect(result['openai/gpt-4'].output).toBe(150);
+  });
+});
+
 // ── Safe defaults when DB unavailable ──────────────────────────────────────
 
 describe('safe defaults when DB unavailable', () => {
