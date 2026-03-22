@@ -18,7 +18,7 @@ import { Button } from '~/components/ui/button'
 import { SourceBadge } from '~/components/ui/status-badge'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
-import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep } from '~/lib/step-semantics'
+import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 
 /** Minimum item count before virtual scrolling is activated. */
@@ -53,6 +53,17 @@ function stepStatusVariant(status: string) {
     default:
       return 'secondary' as const
   }
+}
+
+/** Returns the colored bottom border class for a step group header based on step type. */
+function stepHeaderBorderClass(group: StepTimelineGroup): string {
+  if (group.command === 'delegation') return 'border-b-2 border-muted-foreground/20'
+  if (group.source === 'judge:gaps' || group.source === 'judge:hung') return 'border-b-2 border-orange-500/30'
+  if (group.source === 'judge:failed') return 'border-b-2 border-red-500/30'
+  if (group.command.includes('judge') || group.command.includes('verify')) return 'border-b-2 border-amber-500/30'
+  if (group.command === 'quick' || group.command === 'unattributed') return 'border-b-2 border-muted-foreground/20'
+  // Delegation/Execution steps
+  return 'border-b-2 border-primary/30'
 }
 
 /**
@@ -261,56 +272,99 @@ export function StepContentPane({
                       id={`step-section-${group.stepIndex}`}
                       data-step-index={group.stepIndex}
                     >
-                      <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-4 py-2 space-y-1">
-                        {/* Row 1: Step label + status + source + command + duration */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary" size="sm" data-status={group.status}>
-                            {formatStepLabel(group)}
-                          </Badge>
-                          {isContinuationStep(group) && (
-                            <Badge variant="warning" size="sm" className="text-[10px]">
-                              continuation
-                            </Badge>
-                          )}
-                          {group.stepIndex !== null && group.stepIndex >= 0 && (
-                            <span className="text-[10px] font-mono text-muted-foreground/60">
-                              #{group.stepIndex}
-                            </span>
-                          )}
-                          <Badge variant={stepStatusVariant(group.status)} size="sm" data-status={group.status}>
-                            {group.status}
-                          </Badge>
-                          {group.source && group.source !== 'delegation' && (
-                            <SourceBadge source={group.source} />
-                          )}
-                          <span className="truncate text-xs text-muted-foreground">
-                            {group.command !== group.semanticLabel?.toLowerCase() ? group.command : ''}
-                            {stepMeta?.args ? ` ${stepMeta.args}` : ''}
-                          </span>
-                          {stepMeta?.durationMs != null && (
-                            <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
-                              {formatCompactDuration(stepMeta.durationMs)}
-                            </span>
-                          )}
-                        </div>
-                        {/* Row 2: Reason text (if present) */}
-                        {stepMeta?.reason && (
-                          <p className="text-[10px] text-muted-foreground italic leading-tight line-clamp-2">
-                            {stepMeta.reason}
-                          </p>
-                        )}
-                        {/* Row 3: Error alert (if present) */}
-                        {stepMeta?.error && (
-                          <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
-                            {stepMeta.error}
+                      {(() => {
+                        const synth = synthesizeHeaderFields(group)
+                        const borderClass = stepHeaderBorderClass(group)
+                        return (
+                          <div className={[
+                            'sticky top-0 bg-background/95 backdrop-blur z-20 px-3 py-2.5 space-y-1',
+                            borderClass,
+                            synth.isActive ? 'border-l-[3px] border-l-sky-500' : '',
+                          ].filter(Boolean).join(' ')}>
+                            {/* Row 1: Semantic label + status + active pulse + model + duration + summary link */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {synth.isActive && (
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
+                              )}
+                              <Badge variant="secondary" size="sm" className="font-semibold">
+                                {synth.label}
+                              </Badge>
+                              {group.stepIndex !== null && group.stepIndex >= 0 && (
+                                <span className="text-[10px] font-mono text-muted-foreground/60">
+                                  #{group.stepIndex}
+                                </span>
+                              )}
+                              <Badge variant={stepStatusVariant(group.status)} size="sm">
+                                {group.status}
+                              </Badge>
+                              {synth.model && (
+                                <Badge variant="outline" size="sm" className="font-mono text-[10px] max-w-[160px] truncate">
+                                  {synth.model}
+                                </Badge>
+                              )}
+                              {stepMeta?.durationMs != null && (
+                                <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
+                                  {formatCompactDuration(stepMeta.durationMs)}
+                                </span>
+                              )}
+                              {synth.hasSummary && (
+                                <button
+                                  className="ml-auto text-[10px] text-amber-400/80 hover:text-amber-400 underline-offset-2 hover:underline transition-colors"
+                                  onClick={() => {
+                                    const el = document.getElementById(`step-${group.stepIndex}-summary`)
+                                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                  }}
+                                >
+                                  View Summary ↓
+                                </button>
+                              )}
+                            </div>
+                            {/* Row 2: Stage context + continuation reason + status counters + tool chips */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                              {synth.stage && (
+                                <span className="text-[10px] text-muted-foreground/70">
+                                  {synth.stage}
+                                </span>
+                              )}
+                              {synth.continuationReason && (
+                                <span className="text-[10px] text-amber-400/70 italic">
+                                  {synth.continuationReason}
+                                </span>
+                              )}
+                              {synth.statusCounters && (
+                                <span className="text-[10px] font-mono text-muted-foreground/60">
+                                  {synth.statusCounters.done}/{synth.statusCounters.total} sessions
+                                </span>
+                              )}
+                              {stepMeta?.reason && (
+                                <span className="text-[10px] text-muted-foreground/60 italic truncate max-w-[260px]">
+                                  {stepMeta.reason}
+                                </span>
+                              )}
+                              <ToolSummaryChips items={group.items} />
+                            </div>
+                            {/* Error alert (if present) */}
+                            {stepMeta?.error && (
+                              <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
+                                {stepMeta.error}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {/* Row 4: Tool summary chips */}
-                        <ToolSummaryChips items={group.items} />
-                      </div>
-                      {/* Judge verdict inline block */}
+                        )
+                      })()}
+                      {/* Judge verdict summary card — deep-link target */}
                       {isJudgeStep(group) && group.verdictReason && (
-                        <div className="mx-4 my-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-1">
+                        <div
+                          id={`step-${group.stepIndex}-summary`}
+                          className={[
+                            'mx-4 my-2 rounded-md border px-3 py-2 space-y-1',
+                            group.status === 'completed' || group.status === 'done'
+                              ? 'border-green-500/30 bg-green-500/5 border-l-2 border-l-green-500'
+                              : group.status === 'failed'
+                                ? 'border-red-500/30 bg-red-500/5 border-l-2 border-l-red-500'
+                                : 'border-amber-500/30 bg-amber-500/5 border-l-2 border-l-amber-500',
+                          ].join(' ')}
+                        >
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
                               Verdict
@@ -333,7 +387,7 @@ export function StepContentPane({
                           const isNew = globalIdx >= newItemStart && newItemStart < allItems.length
                           const key = item.kind === 'fork-card'
                             ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                            : `${item.kind}-${item.partId}-${item.createdAt}-${idx}`
+                            : `${item.kind}-${(item as { partId: string }).partId}-${item.createdAt}-${idx}`
                           return (
                             <div key={key} className={isNew ? 'animate-highlight-fade' : ''}>
                               <TimelineItemRenderer item={item} jobId={jobId} />

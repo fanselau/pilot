@@ -8,7 +8,7 @@
  * derivation for backward compatibility with older data.
  */
 
-import type { StepTimelineGroup } from '@pilot/core/types.js'
+import type { StepTimelineGroup, BranchLifecycleItem } from '@pilot/core/types.js'
 
 /**
  * Format a human-readable label for a step group.
@@ -117,4 +117,99 @@ export function formatDelegationIndex(stepIndex: number, delegationCount: number
   // -100 → D1, -99 → D2, etc.
   const pos = stepIndex + 101
   return `D${pos}`
+}
+
+/**
+ * Structured fields for rich sticky headers — synthesized from a StepTimelineGroup.
+ *
+ * Provides all the high-signal context needed to differentiate headers visually
+ * at each hierarchy level (step group vs branch/fork vs job).
+ */
+export interface SynthesizedHeaderFields {
+  /** Human-readable label: "Execution", "Judge", "Gap Closure", etc. */
+  label: string
+  /** Stage context: "Planning", "Execution", "Verification", "Gap Closure", etc. */
+  stage: string | null
+  /** Short verdict summary from verdictReason (first 40 chars), null if not a judge step. */
+  verdict: string | null
+  /** First model observed in fork-card items, null if not available. */
+  model: string | null
+  /** Fork-card session counts: active/done/total. Null if no fork sessions. */
+  statusCounters: { active: number; done: number; total: number } | null
+  /** Why this step exists as a continuation: "gaps found", "hung recovery", etc. */
+  continuationReason: string | null
+  /** True when this step has a judge verdict/summary to deep-link to. */
+  hasSummary: boolean
+  /** True when step is currently running. */
+  isActive: boolean
+}
+
+/**
+ * Synthesize all display fields for a sticky step header from a StepTimelineGroup.
+ *
+ * Centralises all header field derivation in one place so step-content-pane,
+ * timeline-stream, and any future surfaces can all use consistent data.
+ */
+export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHeaderFields {
+  const label = formatStepLabel(group)
+
+  // Stage context — more specific than the label, adds contextual nuance
+  let stage: string | null = null
+  if (group.command === 'delegation') {
+    stage = 'Orchestration'
+  } else if (group.source === 'judge:gaps') {
+    stage = 'Gap Closure'
+  } else if (group.source === 'judge:hung') {
+    stage = 'Hung Recovery'
+  } else if (group.source === 'judge:failed') {
+    stage = 'Retry'
+  } else if (group.source === 'operator') {
+    stage = 'Manual'
+  } else if (group.source === 'delegation') {
+    if (group.command.includes('plan')) stage = 'Planning'
+    else if (group.command.includes('execute')) stage = 'Execution'
+    else if (group.command.includes('judge') || group.command.includes('verify')) stage = 'Verification'
+    else if (group.command === 'quick') stage = 'Quick Task'
+  }
+
+  // Verdict — first 40 chars of verdictReason for compact header display
+  const verdict = group.verdictReason
+    ? group.verdictReason.slice(0, 40)
+    : null
+
+  // Model — extracted from the first fork-card item that has model data
+  let model: string | null = null
+  for (const item of group.items) {
+    if (item.kind === 'fork-card' && (item as BranchLifecycleItem).models.length > 0) {
+      model = (item as BranchLifecycleItem).models[0]
+      break
+    }
+  }
+
+  // Status counters — fork-card (child session) items only
+  const forkCards = group.items.filter((item): item is BranchLifecycleItem => item.kind === 'fork-card')
+  const statusCounters = forkCards.length > 0
+    ? {
+        active: forkCards.filter((item) => item.status === 'active').length,
+        done: forkCards.filter((item) => item.status === 'done').length,
+        total: forkCards.length,
+      }
+    : null
+
+  // Continuation reason — short explanation why this step exists
+  let continuationReason: string | null = null
+  if (group.source === 'judge:gaps') continuationReason = 'gaps found'
+  else if (group.source === 'judge:hung') continuationReason = 'hung recovery'
+  else if (group.source === 'judge:failed') continuationReason = 'failed retry'
+
+  return {
+    label,
+    stage,
+    verdict,
+    model,
+    statusCounters,
+    continuationReason,
+    hasSummary: isJudgeStep(group) && !!group.verdictReason,
+    isActive: group.status === 'running',
+  }
 }
