@@ -178,6 +178,14 @@ function _resetSystemdRunCache(): void {
  * Returns aggregated content string, or null if none found.
  * Evidence files must be well-formed and >100 bytes.
  */
+/**
+ * Check if a project has native gsd-fast command installed.
+ * Synchronous — runs once per fast job, not in a hot loop.
+ */
+function hasNativeFast(projectDir: string): boolean {
+  return existsSync(path.join(projectDir, '.opencode', 'command', 'gsd-fast.md'));
+}
+
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
   const entries = getValidVerificationEvidence(projectDir, phaseNumber);
   if (entries.length === 0) return null;
@@ -796,7 +804,7 @@ class Runner {
       // Step 2: Convert delegation intent to pending step records
       const steps = this.intentToSteps(intent, job, projectDir);
       for (let i = 0; i < steps.length; i++) {
-        createPendingStep(job.id, i, steps[i].command, steps[i].args, 'delegation');
+        createPendingStep(job.id, i, steps[i].command, steps[i].args, 'delegation', steps[i].reason);
       }
 
       // Step 3: Execute step loop
@@ -893,7 +901,7 @@ class Runner {
     intent: DelegationIntent,
     job: Job,
     projectDir: string,
-  ): Array<{ command: string; args: string }> {
+  ): Array<{ command: string; args: string; reason?: string }> {
     switch (intent.type) {
       case 'quick': {
         let args = buildQuickArgs(job);
@@ -954,9 +962,15 @@ class Runner {
         return [{ command: 'debug', args: debugArgs }];
       }
       case 'fast': {
-        // Fast jobs map to gsd-quick with no flags (lightest path)
-        // Unlike 'quick' which may add --full or --research flags, fast is always bare
-        return [{ command: 'quick', args: buildQuickArgs(job) }];
+        // Fast jobs use native gsd-fast when the project has it installed;
+        // fall back to gsd-quick compat mode when gsd-fast.md is absent.
+        // spawnAndWait auto-prepends gsd- so command 'fast' → '--command gsd-fast'
+        const args = buildQuickArgs(job);
+        if (hasNativeFast(projectDir)) {
+          return [{ command: 'fast', args }];
+        }
+        process.stderr.write(`[runner] Fast scope: gsd-fast not available in ${projectDir}, falling back to gsd-quick compat\n`);
+        return [{ command: 'quick', args, reason: 'compat: gsd-fast not available in project, using gsd-quick' }];
       }
       case 'noop':
         return [];
