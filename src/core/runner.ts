@@ -186,6 +186,35 @@ function hasNativeFast(projectDir: string): boolean {
   return existsSync(path.join(projectDir, '.opencode', 'command', 'gsd-fast.md'));
 }
 
+/**
+ * Check if a UI-SPEC.md already exists for the given phase in a project's .planning/ directory.
+ * Returns the path to the UI-SPEC if found, null otherwise.
+ *
+ * The UI-SPEC file follows the pattern: {phase_dir}/{padded_phase}-UI-SPEC.md
+ * in the phase directory under .planning/phases/.
+ */
+function findExistingUiSpec(projectDir: string, phaseNumber: number): string | null {
+  try {
+    const phasesDir = path.join(projectDir, '.planning', 'phases');
+    if (!existsSync(phasesDir)) return null;
+    const entries = readdirSync(phasesDir);
+    // Find the phase directory matching this phase number (format: NN-slug or N-slug)
+    const phasePrefix = String(phaseNumber);
+    const phaseDir = entries.find(e => {
+      const match = e.match(/^(\d+)-/);
+      return match && match[1] === phasePrefix;
+    });
+    if (!phaseDir) return null;
+    const phasePath = path.join(phasesDir, phaseDir);
+    const phaseFiles = readdirSync(phasePath);
+    const uiSpec = phaseFiles.find(f => f.endsWith('-UI-SPEC.md'));
+    if (uiSpec) return path.join(phasePath, uiSpec);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
   const entries = getValidVerificationEvidence(projectDir, phaseNumber);
   if (entries.length === 0) return null;
@@ -919,7 +948,7 @@ class Runner {
         return [{ command: 'new-milestone', args }];
       }
       case 'plan-and-execute': {
-        const steps: Array<{ command: string; args: string }> = [];
+        const steps: Array<{ command: string; args: string; reason?: string }> = [];
         const phaseNumber = intent.phaseNumber;
 
         if (intent.addPhaseTitle) {
@@ -927,6 +956,22 @@ class Runner {
             ? `"${intent.addPhaseTitle}" @${intent.prdPath}`
             : `"${intent.addPhaseTitle}"`;
           steps.push({ command: 'add-phase', args: addArgs });
+        }
+
+        // UI-phase insertion: delegation decided this phase needs a UI design contract
+        if (intent.uiPhase && !intent.isGapClosure) {
+          const existingUiSpec = findExistingUiSpec(projectDir, phaseNumber);
+          if (existingUiSpec) {
+            process.stderr.write(
+              `[runner] UI-phase requested but UI-SPEC already exists: ${existingUiSpec} — skipping ui-phase step\n`,
+            );
+          } else {
+            steps.push({
+              command: 'ui-phase',
+              args: String(phaseNumber),
+              reason: 'Delegation determined phase needs UI design contract',
+            });
+          }
         }
 
         const planArgs = intent.prdPath
