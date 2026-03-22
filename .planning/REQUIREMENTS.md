@@ -146,6 +146,24 @@ Requirements for initial release. Each maps to roadmap phases.
 | REVIEW-15 | Phase 83 | Complete |
 | REVIEW-16 | Phase 81 | Complete |
 
+### Pilot UI Phase — First-Class Delegation Step
+
+- [x] **UI-PHASE-INTENT**: DelegationIntent `plan-and-execute` variant includes optional `uiPhase?: boolean` field; no new intent type added
+- [x] **UI-PHASE-DELEGATION**: Delegation prompt includes Step 3.5 with explicit criteria for when to set `uiPhase: true` (bar: new visual design a designer would review)
+- [x] **UI-PHASE-RUNNER**: Runner `intentToSteps()` conditionally inserts `ui-phase` step between `add-phase` and `plan-phase` when `intent.uiPhase` is true; skips when UI-SPEC already exists
+- [x] **UI-PHASE-ASYNC-SAFE**: UI-phase step is gated by `!intent.isGapClosure`; existing UI-SPEC triggers skip (not re-run); no upstream interactive branches invoked
+- [x] **UI-PHASE-OBSERVABILITY**: UI-phase step has `reason` field for `pilot info` display; skip events logged to stderr with specific reason; step visible in execution step list
+- [x] **UI-PHASE-COMPAT**: Existing `validTypes` array unchanged; `parseIntentOutput` backward-compatible (undefined `uiPhase` = no UI phase); string `uiPhase` normalized to boolean defensively
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| UI-PHASE-INTENT | Phase 87 | Complete |
+| UI-PHASE-DELEGATION | Phase 87 | Complete |
+| UI-PHASE-RUNNER | Phase 87 | Complete |
+| UI-PHASE-ASYNC-SAFE | Phase 87 | Complete |
+| UI-PHASE-OBSERVABILITY | Phase 87 | Complete |
+| UI-PHASE-COMPAT | Phase 87 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -210,10 +228,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLEN-04 | Phase 68 | Pending |
 
 **Coverage:**
-- v1 requirements: 67 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83)
-- Mapped to phases: 67
+- v1 requirements: 73 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87)
+- Mapped to phases: 73
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-21 after adding REVIEW-01 through REVIEW-16 traceability*
+*Last updated: 2026-03-22 after adding UI-PHASE-INTENT through UI-PHASE-COMPAT traceability*
