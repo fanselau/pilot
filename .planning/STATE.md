@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 87-04-PLAN.md
-last_updated: "2026-03-22T23:20:06.335Z"
+stopped_at: Completed 88-01-PLAN.md
+last_updated: "2026-03-22T23:43:00.922Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
-  total_phases: 86
+  total_phases: 87
   completed_phases: 44
-  total_plans: 165
-  completed_plans: 153
+  total_plans: 168
+  completed_plans: 154
   percent: 93
 ---
 
@@ -365,6 +365,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 85 added: Pilot CLI: Disable Milestones for Now + Realign Top-Level GSD Commands (debug + fast)
 - Phase 86 added: Pilot Web UI — Realtime, Navigation, Header Hierarchy, and Observability Polish
 - Phase 87 added: Pilot UI Phase — First-Class Delegation Step for Async Runner Mode
+- Phase 88 added: Pilot Web UI — Job Detail Content-First Redesign (Info Panel, Summary Overlay, Nested Sticky Sessions, Follow Mode)
 
 ## Decisions
 
@@ -945,6 +946,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 87-pilot-ui-phase-first-class-delegation-step-for-async-runner-mode]: findExistingUiSpec scans by phase number prefix to find phase dir and *-UI-SPEC.md inside — Same pattern used by existing getValidVerificationEvidence helper in runner.ts
 - [Phase 87-pilot-ui-phase-first-class-delegation-step-for-async-runner-mode]: Fixture-based tests for canonical intent shapes over inline JSON (plan-and-execute-ui.json) — More representative of real delegation AI output; single source of truth for uiPhase intent shape
 - [Phase 87-04]: Gap closure plan: add requirement definitions retroactively after implementation is verified complete — Phase 87 implementation was fully verified (14/14 must-haves) before requirements registry entries were added; retroactive definition is valid for gap closure plans
+- [Phase 88]: Sheet-based secondary surfaces for Info+Summary replacing fragmented tab/actions model
+- [Phase 88]: toLocaleString timezone rendering: parseSqliteTimestamp normalizes to UTC, toLocaleString renders in browser locale
 
 ## Blockers/Concerns Carried Forward
 
@@ -953,6 +956,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:12:46.480Z
-Stopped at: Completed 87-04-PLAN.md
+Last session: 2026-03-22T23:42:55.578Z
+Stopped at: Completed 88-01-PLAN.md
 Resume file: None

@@ -1602,7 +1602,7 @@ Read requirements/pilot-ui-phase-as-first-class-delegation-step.md for full spec
 **Goal:** Redesign Pilot's job detail UI into a content-first execution reader — unified Info panel replacing fragmented actions/meta, tab bar removal with summary overlay, nested child sessions without card chrome using sticky headers, and Follow mode for live activity tailing.
 **Requirements**: INFO-PANEL, TAB-REMOVAL, SUMMARY-OVERLAY, TIMEZONE-FIX, TOP-LAYOUT, NESTED-CHILDREN, STICKY-HEADERS, COLLAPSIBLE, FOLLOW-MODE, CROSS-DEVICE
 **Depends on:** Phase 87
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 88-01-PLAN.md — Unified Info panel + Summary overlay + tab bar removal + top layout redesign + timezone fix
