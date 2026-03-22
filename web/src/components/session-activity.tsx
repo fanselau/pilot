@@ -37,9 +37,11 @@ function partToTimelineItem(part: SessionPart, sessionId: string): StepTimelineI
 
 interface SessionActivityProps {
   sessionId: string
+  /** When true, polls for updates every 3s (for active sessions). */
+  isActive?: boolean
 }
 
-export function SessionActivity({ sessionId }: SessionActivityProps) {
+export function SessionActivity({ sessionId, isActive = false }: SessionActivityProps) {
   // Load all parts in a single query — no pagination / Load More
   const { data, isLoading } = useQuery({
     queryKey: ['session-activity-full', sessionId],
@@ -51,6 +53,7 @@ export function SessionActivity({ sessionId }: SessionActivityProps) {
           includeToolDetails: true,
         },
       }),
+    refetchInterval: isActive ? 3000 : false,
   })
 
   // Reset query on sessionId change is handled automatically by the queryKey

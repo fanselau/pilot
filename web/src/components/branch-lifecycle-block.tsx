@@ -1,13 +1,23 @@
-import { Link } from '@tanstack/react-router'
-import type { BranchLifecycleItem } from '@pilot/core/types.js'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { BranchLifecycleItem, SessionSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
-import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '~/components/ui/collapsible'
+import { ChevronRightIcon } from 'lucide-react'
 import {
   deriveBranchIdentity,
   selectBranchPreview,
-  getBranchDrillInPath,
 } from '~/components/branch-lifecycle-block.helpers'
+import { SessionActivity } from '~/components/session-activity'
+import { getSessionChildrenFn } from '~/lib/server-fns'
+import { useIsMobile } from '~/hooks/use-media-query'
+
+// ── Utilities ─────────────────────────────────────────────────────────────
 
 function statusVariant(status: BranchLifecycleItem['status']) {
   switch (status) {
@@ -49,81 +59,155 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, max).trimEnd()}...`
 }
 
+// ── Adapter: SessionSummary → BranchLifecycleItem ─────────────────────────
+
+function sessionToBranchItem(session: SessionSummary, parentId: string): BranchLifecycleItem {
+  return {
+    kind: 'fork-card',
+    sessionId: session.sessionId,
+    parentSessionId: parentId,
+    title: session.title,
+    createdAt: session.startedAt,
+    updatedAt: session.updatedAt,
+    status: session.status,
+    messageCount: session.messageCount,
+    tokenTotal: session.tokenTotal,
+    models: session.models,
+    latestMessagePreview: session.latestMessagePreview,
+    childCount: session.childCount,
+    durationMs: session.durationMs,
+  }
+}
+
+// ── Max nesting depth ─────────────────────────────────────────────────────
+
+const MAX_DEPTH = 4
+
+// ── Component ─────────────────────────────────────────────────────────────
+
 interface BranchLifecycleBlockProps {
   item: BranchLifecycleItem
   jobId: string
+  depth?: number
 }
 
-export function BranchLifecycleBlock({ item, jobId }: BranchLifecycleBlockProps) {
+export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycleBlockProps) {
   const identity = deriveBranchIdentity(item.title)
   const preview = selectBranchPreview(item)
   const branchPurpose = identity.purpose
+  const isMobile = useIsMobile()
+
+  // Active branches at depth < 2 expand by default; done branches and deep branches collapse
+  const defaultOpen = item.status === 'active' && depth < 2
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+
+  // Load children only when expanded and within depth limit
+  const { data: children } = useQuery({
+    queryKey: ['session-children', item.sessionId],
+    queryFn: () => getSessionChildrenFn({ data: item.sessionId }),
+    enabled: isOpen && depth < MAX_DEPTH,
+  })
+
+  const marginClass = isMobile ? 'ml-2' : 'ml-4'
+  const paddingClass = depth > 2 ? 'py-1.5' : 'py-3'
 
   return (
-    <Card className="min-w-0 max-w-full overflow-hidden border-l-4 border-l-primary/40 bg-muted/25">
-      <CardContent className="space-y-2.5 py-3">
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Badge variant="outline" size="sm">
-                branch
-              </Badge>
-              <span className="text-sm font-medium truncate">{identity.label}</span>
-              <Badge variant={statusVariant(item.status)} size="sm">
-                {item.status}
-              </Badge>
-              {identity.role && (
-                <Badge variant="secondary" size="sm">
-                  {identity.role}
-                </Badge>
+    <div
+      className={
+        depth > 0
+          ? `${marginClass} border-l-2 border-l-muted overflow-hidden max-w-full`
+          : 'overflow-hidden max-w-full'
+      }
+    >
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <Card
+          className={`min-w-0 max-w-full overflow-hidden border-l-4 border-l-primary/40 ${
+            isOpen ? 'bg-accent/10' : 'bg-muted/25'
+          }`}
+        >
+          <CollapsibleTrigger className="w-full text-left hover:bg-accent/30 transition-colors">
+            <CardContent className={`space-y-2.5 ${paddingClass}`}>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <ChevronRightIcon
+                      className={`h-3 w-3 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+                    />
+                    <Badge variant="outline" size="sm">
+                      branch
+                    </Badge>
+                    <span className="text-sm font-medium truncate">{identity.label}</span>
+                    <Badge variant={statusVariant(item.status)} size="sm">
+                      {item.status}
+                    </Badge>
+                    {identity.role && (
+                      <Badge variant="secondary" size="sm">
+                        {identity.role}
+                      </Badge>
+                    )}
+                    {item.models.length > 0 && (
+                      <Badge variant="outline" size="sm" className="font-mono text-[10px] max-w-[120px] truncate">
+                        {(item.models[0].split('/').pop() ?? item.models[0])}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {branchPurpose && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {truncate(branchPurpose, 220)}
+                    </p>
+                  )}
+
+                  {preview && (
+                    <p className="text-sm text-foreground/90 line-clamp-3">
+                      {truncate(preview, 280)}
+                    </p>
+                  )}
+
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="tabular-nums">started {formatTime(item.createdAt)}</span>
+                    {item.completedAt != null && (
+                      <span className="tabular-nums">done {formatTime(item.completedAt)}</span>
+                    )}
+                    <span className="tabular-nums">{formatDurationMs(item.durationMs)}</span>
+                    <span className="tabular-nums">{item.messageCount} msgs</span>
+                    {item.tokenTotal > 0 && (
+                      <span className="tabular-nums">{formatTokens(item.tokenTotal)} tokens</span>
+                    )}
+                    {item.childCount > 0 && (
+                      <span className="tabular-nums">{item.childCount} children</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="px-3 pb-3 pt-1 space-y-2 overflow-hidden max-w-full">
+              {/* Live session activity stream */}
+              <SessionActivity
+                sessionId={item.sessionId}
+                isActive={item.status === 'active'}
+              />
+
+              {/* Nested child sessions — recursive, limited to MAX_DEPTH */}
+              {depth < MAX_DEPTH && children && children.length > 0 && (
+                <div className="space-y-2">
+                  {children.map((child) => (
+                    <BranchLifecycleBlock
+                      key={child.sessionId}
+                      item={sessionToBranchItem(child, item.sessionId)}
+                      jobId={jobId}
+                      depth={depth + 1}
+                    />
+                  ))}
+                </div>
               )}
             </div>
-
-            {branchPurpose && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {truncate(branchPurpose, 220)}
-              </p>
-            )}
-
-            {preview && (
-              <p className="text-sm text-foreground/90 line-clamp-3">
-                {truncate(preview, 280)}
-              </p>
-            )}
-
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span className="tabular-nums">started {formatTime(item.createdAt)}</span>
-              {item.completedAt != null && (
-                <span className="tabular-nums">done {formatTime(item.completedAt)}</span>
-              )}
-              <span className="tabular-nums">{formatDurationMs(item.durationMs)}</span>
-              <span className="tabular-nums">{item.messageCount} msgs</span>
-              {item.tokenTotal > 0 && (
-                <span className="tabular-nums">{formatTokens(item.tokenTotal)} tokens</span>
-              )}
-              {item.childCount > 0 && (
-                <span className="tabular-nums">{item.childCount} children</span>
-              )}
-            </div>
-          </div>
-
-          <div className="self-start sm:shrink-0">
-            <Link
-              to="/jobs/$jobId/sessions/$sessionId"
-              params={{ jobId, sessionId: item.sessionId }}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-                title={getBranchDrillInPath(jobId, item.sessionId)}
-              >
-                Open branch
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+    </div>
   )
 }
