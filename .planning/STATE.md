@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 87-03-PLAN.md
-last_updated: "2026-03-22T22:57:08.851Z"
+stopped_at: Completed 87-04-PLAN.md
+last_updated: "2026-03-22T23:12:51.889Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
   total_phases: 86
   completed_phases: 44
-  total_plans: 164
-  completed_plans: 152
+  total_plans: 165
+  completed_plans: 153
   percent: 93
 ---
 
@@ -944,6 +944,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 87-01]: uiPhase as optional boolean on plan-and-execute variant (not a new intent type) — simpler than new intent type, validTypes unchanged
 - [Phase 87-pilot-ui-phase-first-class-delegation-step-for-async-runner-mode]: findExistingUiSpec scans by phase number prefix to find phase dir and *-UI-SPEC.md inside — Same pattern used by existing getValidVerificationEvidence helper in runner.ts
 - [Phase 87-pilot-ui-phase-first-class-delegation-step-for-async-runner-mode]: Fixture-based tests for canonical intent shapes over inline JSON (plan-and-execute-ui.json) — More representative of real delegation AI output; single source of truth for uiPhase intent shape
+- [Phase 87-04]: Gap closure plan: add requirement definitions retroactively after implementation is verified complete — Phase 87 implementation was fully verified (14/14 must-haves) before requirements registry entries were added; retroactive definition is valid for gap closure plans
 
 ## Blockers/Concerns Carried Forward
 
@@ -952,6 +953,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:57:03.344Z
-Stopped at: Completed 87-03-PLAN.md
+Last session: 2026-03-22T23:12:46.480Z
+Stopped at: Completed 87-04-PLAN.md
 Resume file: None
