@@ -646,6 +646,10 @@ function parseIntentOutput(content: string): DelegationResult {
       if (typeof intent.phaseNumber !== 'number') {
         throw new Error('Intent "plan-and-execute" must have a numeric "phaseNumber" field');
       }
+      // Normalize uiPhase to boolean (optional field — omission means false)
+      if (intent.uiPhase !== undefined && typeof intent.uiPhase !== 'boolean') {
+        (intent as Record<string, unknown>).uiPhase = Boolean(intent.uiPhase);
+      }
       break;
     case 'execute-only':
       if (typeof intent.phaseNumber !== 'number') {
