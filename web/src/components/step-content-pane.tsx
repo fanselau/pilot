@@ -10,7 +10,7 @@
  * Auto-scrolls to bottom for running jobs when autoFollow=true.
  */
 
-import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState } from 'react'
+import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState, type UIEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { StepTimelineGroup, StepTimelineItem, JobStepSummary } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
@@ -20,15 +20,27 @@ import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
 import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
+import { FollowModeBar } from '~/components/follow-mode-bar'
 
 /** Minimum item count before virtual scrolling is activated. */
 const VIRTUALIZE_THRESHOLD = 200
+
+/**
+ * Cumulative upward-scroll pixels before Follow mode auto-cancels.
+ * 80px ≈ 5-8mm — distinguishes intentional upward scroll from
+ * incidental touch drift on mobile.
+ */
+const CANCEL_THRESHOLD = 80
 
 export interface StepContentPaneProps {
   groups: StepTimelineGroup[]
   jobId: string
   autoFollow: boolean
   onFollowToggle: () => void
+  /** Called when user deliberately scrolls upward (cancels follow mode). */
+  onFollowCancel?: () => void
+  /** Whether the job is currently active/running — controls FollowModeBar visibility. */
+  isActive?: boolean
   /** Ref that the parent sets; content pane registers its scrollTo function here. */
   scrollToStepRef: MutableRefObject<((idx: number) => void) | null>
   /** Callback when the visible step changes (scroll-spy). */
@@ -75,12 +87,18 @@ export function StepContentPane({
   jobId,
   autoFollow,
   onFollowToggle,
+  onFollowCancel,
+  isActive,
   scrollToStepRef,
   onVisibleStepChange,
   steps,
   hideHeader = false,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
+
+  // ── Scroll-direction detection for follow-mode auto-cancel ────────────────
+  const lastScrollTopRef = useRef(0)
+  const consecutiveUpScrollRef = useRef(0)
 
   // All items flattened (for virtualization threshold check)
   const allItems: StepTimelineItem[] = groups.flatMap((g) => g.items)
@@ -100,6 +118,33 @@ export function StepContentPane({
     }
     prevItemCountRef.current = allItems.length
   }, [allItems.length])
+
+  // Reset consecutive-scroll counter when follow mode is re-enabled
+  useEffect(() => {
+    if (autoFollow) {
+      consecutiveUpScrollRef.current = 0
+    }
+  }, [autoFollow])
+
+  // Scroll handler — detects deliberate upward scroll to auto-cancel follow mode
+  const handleScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const scrollTop = el.scrollTop
+    const delta = scrollTop - lastScrollTopRef.current
+    lastScrollTopRef.current = scrollTop
+
+    if (delta < 0) {
+      // Scrolling up — accumulate upward movement
+      consecutiveUpScrollRef.current += Math.abs(delta)
+      if (consecutiveUpScrollRef.current > CANCEL_THRESHOLD && autoFollow) {
+        onFollowCancel?.()
+        consecutiveUpScrollRef.current = 0
+      }
+    } else {
+      // Scrolling down or no movement — reset accumulator
+      consecutiveUpScrollRef.current = 0
+    }
+  }, [autoFollow, onFollowCancel])
 
   const virtualizer = useVirtualizer({
     count: allItems.length,
@@ -169,7 +214,7 @@ export function StepContentPane({
     if (useVirtual) {
       virtualizer.scrollToIndex(allItems.length - 1, { align: 'end' })
     } else if (parentRef.current) {
-      parentRef.current.scrollTop = parentRef.current.scrollHeight
+      parentRef.current.scrollTo({ top: parentRef.current.scrollHeight, behavior: 'smooth' })
     }
   }, [autoFollow, allItems.length, useVirtual, virtualizer])
 
@@ -225,37 +270,40 @@ export function StepContentPane({
       {header}
 
       <div className="relative min-h-0 flex-1">
-        <div ref={parentRef} className="h-full overflow-auto">
+          <div ref={parentRef} className="h-full overflow-auto" onScroll={handleScroll}>
           {useVirtual ? (
             /* Virtualized rendering for large item counts */
-            <div
-              style={{
-                height: `${virtualizer.getTotalSize()}px`,
-                width: '100%',
-                position: 'relative',
-              }}
-            >
-              {virtualizer.getVirtualItems().map((virtualRow) => {
-                const item = allItems[virtualRow.index]
-                return (
-                  <div
-                    key={virtualRow.key}
-                    data-index={virtualRow.index}
-                    ref={virtualizer.measureElement}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                    className="border-b border-border/30 px-4"
-                  >
-                    <TimelineItemRenderer item={item} jobId={jobId} />
-                  </div>
-                )
-              })}
-            </div>
+            <>
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = allItems[virtualRow.index]
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                      className="border-b border-border/30 px-4"
+                    >
+                      <TimelineItemRenderer item={item} jobId={jobId} />
+                    </div>
+                  )
+                })}
+              </div>
+              <FollowModeBar visible={!autoFollow && !!isActive} onFollow={onFollowToggle} />
+            </>
           ) : (
             /* Continuous scroll: all groups rendered as sections */
             <div className="space-y-0">
@@ -399,13 +447,14 @@ export function StepContentPane({
                   )
                 })
               })()}
+              <FollowModeBar visible={!autoFollow && !!isActive} onFollow={onFollowToggle} />
             </div>
           )}
         </div>
 
-        {/* Floating buttons — follow + jump to error (when header hidden) */}
-        <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col gap-2 items-end">
-          {hideHeader && firstErrorGroup && (
+        {/* Floating buttons — jump to error (when header hidden) */}
+        {hideHeader && firstErrorGroup && (
+          <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col gap-2 items-end">
             <Button
               variant="destructive"
               size="sm"
@@ -414,18 +463,8 @@ export function StepContentPane({
             >
               ↑ Error
             </Button>
-          )}
-          {!autoFollow && (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="pointer-events-auto shadow-md"
-              onClick={onFollowToggle}
-            >
-              ↓ Follow
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

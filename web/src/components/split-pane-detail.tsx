@@ -13,7 +13,7 @@
  * Tab bar is completely removed — activity/timeline is the only surface.
  */
 
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { StepTimelineSidebar } from '~/components/step-timeline-sidebar'
@@ -46,6 +46,11 @@ export function SplitPaneDetail({
   const [visibleStepIndex, setVisibleStepIndex] = useState<number | null>(null)
 
   const [autoFollow, setAutoFollow] = useState(isActive)
+
+  // Re-enable follow mode when the job transitions to active
+  useEffect(() => {
+    if (isActive) setAutoFollow(true)
+  }, [isActive])
 
   const isMobile = useIsMobile()
 
@@ -120,6 +125,8 @@ export function SplitPaneDetail({
             jobId={snapshot.job.id}
             autoFollow={autoFollow}
             onFollowToggle={() => setAutoFollow(true)}
+            onFollowCancel={() => setAutoFollow(false)}
+            isActive={isActive}
             scrollToStepRef={scrollToStepRef}
             onVisibleStepChange={setVisibleStepIndex}
             steps={snapshot.steps}
@@ -156,6 +163,8 @@ export function SplitPaneDetail({
           jobId={snapshot.job.id}
           autoFollow={autoFollow}
           onFollowToggle={() => setAutoFollow(true)}
+          onFollowCancel={() => setAutoFollow(false)}
+          isActive={isActive}
           scrollToStepRef={scrollToStepRef}
           onVisibleStepChange={setVisibleStepIndex}
           steps={snapshot.steps}
