@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 86-04-PLAN.md
-last_updated: "2026-03-22T00:24:28.772Z"
+stopped_at: Completed 86-05-PLAN.md
+last_updated: "2026-03-22T00:33:53.070Z"
 last_activity: "2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior"
 progress:
   total_phases: 85
-  completed_phases: 42
+  completed_phases: 43
   total_plans: 161
-  completed_plans: 148
+  completed_plans: 149
   percent: 93
 ---
 
@@ -938,6 +938,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 86-pilot-web-ui-realtime-navigation-header-hierarchy-and-observability-polish]: COALESCE($.tokens.cache.read, $.tokens.cache_read) handles both nested real DB format and legacy flat format
 - [Phase 86]: Controlled Collapsible state: useState + onOpenChange enables useQuery enabled:isOpen for lazy child loading
 - [Phase 86]: Depth-based auto-expand: active depth<2 expands, done always collapses, MAX_DEPTH=4 guards recursion
+- [Phase 86]: COALESCE for token paths handles both nested and flat DB formats simultaneously without test rewrites — Provider DB schema evolved; old tests use flat format, real DB uses nested — COALESCE avoids migration
 
 ## Blockers/Concerns Carried Forward
 
@@ -946,6 +947,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T00:24:23.152Z
-Stopped at: Completed 86-04-PLAN.md
+Last session: 2026-03-22T00:33:48.859Z
+Stopped at: Completed 86-05-PLAN.md
 Resume file: None
