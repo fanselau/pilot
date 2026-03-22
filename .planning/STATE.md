@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 88-01-PLAN.md
-last_updated: "2026-03-22T23:43:00.922Z"
+stopped_at: Completed 88-03-PLAN.md
+last_updated: "2026-03-22T23:49:45.054Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
   total_phases: 87
   completed_phases: 44
   total_plans: 168
-  completed_plans: 154
+  completed_plans: 155
   percent: 93
 ---
 
@@ -948,6 +948,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 87-04]: Gap closure plan: add requirement definitions retroactively after implementation is verified complete — Phase 87 implementation was fully verified (14/14 must-haves) before requirements registry entries were added; retroactive definition is valid for gap closure plans
 - [Phase 88]: Sheet-based secondary surfaces for Info+Summary replacing fragmented tab/actions model
 - [Phase 88]: toLocaleString timezone rendering: parseSqliteTimestamp normalizes to UTC, toLocaleString renders in browser locale
+- [Phase 88]: 80px CANCEL_THRESHOLD for deliberate-scroll detection in Follow mode — Distinguishes intentional upward scroll from mobile touch drift; 5-8mm of movement
 
 ## Blockers/Concerns Carried Forward
 
@@ -956,6 +957,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:42:55.578Z
-Stopped at: Completed 88-01-PLAN.md
+Last session: 2026-03-22T23:49:40.420Z
+Stopped at: Completed 88-03-PLAN.md
 Resume file: None
