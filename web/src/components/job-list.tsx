@@ -24,6 +24,35 @@ import { VerdictBadge } from '~/components/ui/status-badge'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+/** Format grace countdown seconds as human-readable string: "1m 42s" or "42s" */
+function formatGraceCountdown(seconds: number): string {
+  if (seconds >= 60) {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return s > 0 ? `${m}m ${s}s` : `${m}m`
+  }
+  return `${seconds}s`
+}
+
+/** Grace period badge with amber warning variant, animated pulse dot, and tooltip. */
+function GraceBadge({ seconds }: { seconds: number }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger className="cursor-default">
+          <Badge variant="warning" size="sm" className="gap-1 font-mono">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse opacity-75 shrink-0" />
+            Grace: {formatGraceCountdown(seconds)}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipPopup className="max-w-xs text-xs">
+          This job is in its grace period. It will launch automatically after the timer expires.
+        </TooltipPopup>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 /** Parse judgeVerdict JSON string into verdict + confidence. */
 function parseJudgeVerdict(raw: string | null): { verdict: string | null; confidence: number | null } {
   if (!raw) return { verdict: null, confidence: null }
@@ -195,12 +224,11 @@ function JobCard({ job, queueGraceSeconds = 0, queuePosition, activityPreview }:
               {isRunning && (
                 <span className="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
               )}
-              <Badge variant={statusVariant(job.status)} size="sm">
-                {statusLabel(job.status)}
-              </Badge>
-              {graceSeconds != null && (
-                <Badge variant="outline" size="sm" className="text-[10px]">
-                  Starting in {graceSeconds}s
+              {graceSeconds != null ? (
+                <GraceBadge seconds={graceSeconds} />
+              ) : (
+                <Badge variant={statusVariant(job.status)} size="sm">
+                  {statusLabel(job.status)}
                 </Badge>
               )}
               {queuePosition != null && (
@@ -350,16 +378,15 @@ function JobTable({ jobs, queueGraceSeconds = 0, queuePositionMap, activityPrevi
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1 flex-wrap">
-                    <Badge
-                      variant={statusVariant(job.status)}
-                      size="sm"
-                      className={isRunning ? 'animate-pulse' : ''}
-                    >
-                      {statusLabel(job.status)}
-                    </Badge>
-                    {graceSeconds != null && (
-                      <Badge variant="outline" size="sm" className="text-[10px]">
-                        {graceSeconds}s
+                    {graceSeconds != null ? (
+                      <GraceBadge seconds={graceSeconds} />
+                    ) : (
+                      <Badge
+                        variant={statusVariant(job.status)}
+                        size="sm"
+                        className={isRunning ? 'animate-pulse' : ''}
+                      >
+                        {statusLabel(job.status)}
                       </Badge>
                     )}
                     {queuePos != null && (
