@@ -7,11 +7,9 @@ import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '~/components/ui/empty'
 import { JobList } from '~/components/job-list'
-import { SessionOverview } from '~/components/session-overview'
 import { ProjectsList } from '~/components/projects-list'
-import { getJobsListFn, getJobDetailFn, getProjectsListFn, getGraceConfigFn, getJobsActivityPreviewFn } from '~/lib/server-fns'
+import { getJobsListFn, getProjectsListFn, getGraceConfigFn, getJobsActivityPreviewFn } from '~/lib/server-fns'
 import { toastManager } from '~/components/ui/toast'
-import type { SessionSummary } from '@pilot/core/types.js'
 
 export const Route = createFileRoute('/')({
   loader: () => getJobsListFn(),
@@ -35,37 +33,6 @@ function Home() {
   })
 
   const { active, queued, recent } = data ?? loaderData
-
-  // Collect job IDs for session data loading
-  const sessionJobIds = useMemo(() => {
-    const ids: string[] = []
-    for (const job of active) ids.push(job.id)
-    for (const job of recent.slice(0, 5)) ids.push(job.id) // limit to 5 recent
-    return ids
-  }, [active, recent])
-
-  // Load job detail snapshots for session data (active + 5 recent)
-  const sessionQueries = useQuery({
-    queryKey: ['session-overview', sessionJobIds],
-    queryFn: async () => {
-      if (sessionJobIds.length === 0) return [] as SessionSummary[]
-      const results = await Promise.allSettled(
-        sessionJobIds.map((id) => getJobDetailFn({ data: id })),
-      )
-      const sessions: SessionSummary[] = []
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) {
-          sessions.push(...result.value.rootSessions)
-          sessions.push(...result.value.subagents)
-        }
-      }
-      return sessions
-    },
-    refetchInterval: 10_000, // slower refresh for session data
-    enabled: sessionJobIds.length > 0,
-  })
-
-  const sessions = sessionQueries.data ?? []
 
   // Load projects list
   const projectsQuery = useQuery({
@@ -160,23 +127,23 @@ function Home() {
         </div>
 
         <Tabs defaultValue="active">
-          <TabsList>
-            <TabsTab value="active">
-              Active{activeCount > 0 ? ` (${activeCount})` : ''}
-            </TabsTab>
-            <TabsTab value="queued">
-              Queued{queuedCount > 0 ? ` (${queuedCount})` : ''}
-            </TabsTab>
-            <TabsTab value="recent">
-              Recent{recentCount > 0 ? ` (${recentCount})` : ''}
-            </TabsTab>
-            <TabsTab value="sessions">
-              Sessions{sessions.length > 0 ? ` (${sessions.length})` : ''}
-            </TabsTab>
-            <TabsTab value="projects">
-              Projects{projects.length > 0 ? ` (${projects.length})` : ''}
-            </TabsTab>
-          </TabsList>
+          {/* Scrollable tab bar — prevents horizontal overflow on mobile */}
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-w-full">
+            <TabsList>
+              <TabsTab value="active">
+                Active{activeCount > 0 ? ` (${activeCount})` : ''}
+              </TabsTab>
+              <TabsTab value="queued">
+                Queued{queuedCount > 0 ? ` (${queuedCount})` : ''}
+              </TabsTab>
+              <TabsTab value="recent">
+                Recent{recentCount > 0 ? ` (${recentCount})` : ''}
+              </TabsTab>
+              <TabsTab value="projects">
+                Projects{projects.length > 0 ? ` (${projects.length})` : ''}
+              </TabsTab>
+            </TabsList>
+          </div>
 
           <TabsPanel value="active">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -206,10 +173,6 @@ function Home() {
               Recent ({recentCount})
             </h2>
             <JobList data={{ active: [], queued: [], recent }} queueGraceSeconds={queueGraceSeconds} activityPreviews={activityPreviews} />
-          </TabsPanel>
-
-          <TabsPanel value="sessions">
-            <SessionOverview sessions={sessions} />
           </TabsPanel>
 
           <TabsPanel value="projects">
