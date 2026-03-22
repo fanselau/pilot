@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick-260322-uyd-PLAN.md
-last_updated: "2026-03-22T22:28:26.606Z"
-last_activity: "2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior"
+stopped_at: Completed 87-01-PLAN.md
+last_updated: "2026-03-22T22:47:53.837Z"
+last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
-  total_phases: 85
+  total_phases: 86
   completed_phases: 43
-  total_plans: 161
-  completed_plans: 149
+  total_plans: 164
+  completed_plans: 150
   percent: 93
 ---
 
@@ -364,6 +364,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 84 added: Pilot Control-Flow + Live Status Bugs — Fix False Failure Presentation and Continuation Churn
 - Phase 85 added: Pilot CLI: Disable Milestones for Now + Realign Top-Level GSD Commands (debug + fast)
 - Phase 86 added: Pilot Web UI — Realtime, Navigation, Header Hierarchy, and Observability Polish
+- Phase 87 added: Pilot UI Phase — First-Class Delegation Step for Async Runner Mode
 
 ## Decisions
 
@@ -940,6 +941,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 86]: Controlled Collapsible state: useState + onOpenChange enables useQuery enabled:isOpen for lazy child loading
 - [Phase 86]: Depth-based auto-expand: active depth<2 expands, done always collapses, MAX_DEPTH=4 guards recursion
 - [Phase 86]: COALESCE for token paths handles both nested and flat DB formats simultaneously without test rewrites — Provider DB schema evolved; old tests use flat format, real DB uses nested — COALESCE avoids migration
+- [Phase 87-01]: uiPhase as optional boolean on plan-and-execute variant (not a new intent type) — simpler than new intent type, validTypes unchanged
 
 ## Blockers/Concerns Carried Forward
 
@@ -948,6 +950,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:28:26.599Z
-Stopped at: Completed quick-260322-uyd-PLAN.md
+Last session: 2026-03-22T22:47:34.128Z
+Stopped at: Completed 87-01-PLAN.md
 Resume file: None
