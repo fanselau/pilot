@@ -1561,7 +1561,7 @@ Wave structure:
 **Goal:** Make the Pilot web UI feel more realtime, more trustworthy, and more informative — especially around live sessions, navigation, sticky headers, grace period visibility, and token observability. Inline subsession nesting replaces the separate drill-in model, sticky headers get a fuller hierarchy rework with synthesized high-signal fields, and token accounting is fixed across all providers.
 **Requirements**: TOK86-01, TOK86-02, TOK86-03, GRACE86-01, GRACE86-02, NAV86-01, NAV86-02, PROJ86-01, STICK86-01, STICK86-02, STICK86-03, STICK86-04, SUMM86-01, SUMM86-02, RT86-01, RT86-02, RT86-03, RT86-04, RT86-05, RT86-06, RT86-07
 **Depends on:** Phase 85
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [ ] 86-01-PLAN.md — Token accounting fix across providers + grace period visibility

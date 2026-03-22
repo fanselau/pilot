@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 86-02-PLAN.md
-last_updated: "2026-03-22T00:14:53.022Z"
+stopped_at: Completed 86-04-PLAN.md
+last_updated: "2026-03-22T00:24:28.772Z"
 last_activity: "2026-03-21 - Completed quick task 260321-w8r: use modern iOS Safari viewport-height handling / units / fallbacks so Pilot pages do not create page-level scroll from browser chrome / 100vh behavior"
 progress:
   total_phases: 85
   completed_phases: 42
   total_plans: 161
-  completed_plans: 147
+  completed_plans: 148
   percent: 93
 ---
 
@@ -936,6 +936,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 260321-ujl]: Remove milestone from config defaults allowed list (Phase 85 disabled milestone scope, config LOAD now aligns with types.ts and config SET)
 - [Phase 86]: synthesizeHeaderFields in step-semantics.ts centralizes header field derivation for all UI surfaces — Ensures consistent header data across current and future components without code duplication
 - [Phase 86-pilot-web-ui-realtime-navigation-header-hierarchy-and-observability-polish]: COALESCE($.tokens.cache.read, $.tokens.cache_read) handles both nested real DB format and legacy flat format
+- [Phase 86]: Controlled Collapsible state: useState + onOpenChange enables useQuery enabled:isOpen for lazy child loading
+- [Phase 86]: Depth-based auto-expand: active depth<2 expands, done always collapses, MAX_DEPTH=4 guards recursion
 
 ## Blockers/Concerns Carried Forward
 
@@ -944,6 +946,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-22T00:14:53.015Z
-Stopped at: Completed 86-02-PLAN.md
+Last session: 2026-03-22T00:24:23.152Z
+Stopped at: Completed 86-04-PLAN.md
 Resume file: None
