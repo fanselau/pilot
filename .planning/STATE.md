@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-03-23T15:10:12.834Z"
-last_activity: 2026-03-23
+status: executing
+stopped_at: Completed 91-01-PLAN.md
+last_updated: "2026-03-23T16:26:04.712Z"
 progress:
-  total_phases: 90
+  total_phases: 91
   completed_phases: 47
-  total_plans: 176
-  completed_plans: 164
-  percent: 93
+  total_plans: 178
+  completed_plans: 165
 ---
 
 # State
@@ -22,24 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 90 of 89 (Phase 89: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes)
-**Next Plan:** None — Phase 89 complete (4/4 plans)
-Plan: Not started
-Status: Complete
-Last activity: 2026-03-23
-
-Progress: [█████████░] 93%
+Phase: 91 (pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration) — EXECUTING
+Plan: 2 of 2
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 72 cleanup documentation and active-surface coupling audit are complete; follow-up concerns remain migration remediation on external projects and fork repo archive permissions.
+**Current focus:** Phase 91 — pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Milestone complete
+- **Status:** Ready to execute
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -422,6 +415,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 88 added: Pilot Web UI — Job Detail Content-First Redesign (Info Panel, Summary Overlay, Nested Sticky Sessions, Follow Mode)
 - Phase 89 added: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes
 - Phase 90 added: Pilot Web UI — Native Subsession Flow, Single-Scroll Integration, and Follow Mode
+- Phase 91 added: Pilot Debug Lane — Caller-Side Autonomous gsd-debugger Orchestration
 
 ## Decisions
 
@@ -1015,6 +1009,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 89-pilot-web-ui-nested-sticky-hierarchy-summary-and-label-fixes]: All 10 Phase 89 requirement IDs marked as complete in REQUIREMENTS.md with traceability rows — Work was done in prior plans 89-01 through 89-04; this plan adds missing documentation traceability
 - [Phase 90]: FollowModeBar SVG changed from fill to stroke rendering for line-based path commands
 - [Phase 90]: All 10 Phase 90 requirements marked Complete — matching UI-SPEC contract verification
+- [Phase 91]: debug-lane.ts as separate module: enables unit testing without mocking runner infrastructure
 
 ## Blockers/Concerns Carried Forward
 
@@ -1023,6 +1018,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T15:05:47.306Z
-Stopped at: Completed 90-02-PLAN.md
+Last session: 2026-03-23T16:25:55.606Z
+Stopped at: Completed 91-01-PLAN.md
 Resume file: None
