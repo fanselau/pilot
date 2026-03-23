@@ -1126,6 +1126,9 @@ class Runner {
       }
 
       dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+      if (step.command === 'ui-phase') {
+        process.stderr.write(`[runner] ui-phase completed, handing off to plan-phase [job=${job.id}]\n`);
+      }
     } catch (err) {
       if (err instanceof HungSessionError) {
         const sessionId = findSessionByTitle(title);
@@ -1134,6 +1137,21 @@ class Runner {
         // Re-delegate for continuation
         await this.handleHungContinuation(job, projectDir, step, err);
       } else {
+        // Artifact-based recovery: if this was a ui-phase step and the UI-SPEC was
+        // successfully created (but the process died non-cleanly, e.g., WAL flush race),
+        // treat it as completed rather than failing the entire job.
+        if (step.command === 'ui-phase') {
+          const phaseMatch = step.args.match(/^(\d+)/);
+          const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
+          if (phaseNum !== null && isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum)) {
+            const sessionId = findSessionByTitle(title);
+            process.stderr.write(
+              `[runner] ui-phase completed (artifact recovery: UI-SPEC exists for phase ${phaseNum}) — handing off to plan-phase [job=${job.id}]\n`,
+            );
+            dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+            return; // Step completed via artifact detection — continue to next step (plan-phase)
+          }
+        }
         const sessionId = findSessionByTitle(title);
         dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
         throw err; // Propagate non-hung errors to launch() catch
