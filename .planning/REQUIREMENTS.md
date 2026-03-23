@@ -216,6 +216,32 @@ Requirements for initial release. Each maps to roadmap phases.
 | ATTRIBUTION-FIX | Phase 89 | Complete |
 | VALIDATION | Phase 89 | Complete |
 
+### Phase 90: Pilot Web UI — Native Subsession Flow, Single-Scroll Integration, and Follow Mode
+
+- [x] **NSSF-01**: Subsessions render inline as collapsible blocks (Radix Collapsible) within the single-scroll flow — no separate route, no modal, no card chrome breaking scroll continuity
+- [x] **NSSF-02**: Active subsessions at depth < 2 expand by default; done and deep (depth >= 2) subsessions collapse by default
+- [x] **NSSF-03**: Nested sticky headers use `position: sticky` with `top = (depth + 1) × 2.25rem` and z-index descending by depth (20 - depth)
+- [x] **NSSF-04**: Collapsed identity row shows: semantic icon + label + status badge + role badge (if present) + duration + model (truncated to 100px)
+- [x] **SSI-01**: Step sections rendered as `<section>` elements with `id="step-section-{idx}"` and `data-step-index`; sidebar click triggers `scrollIntoView({ behavior: 'smooth', block: 'start' })`
+- [x] **SSI-02**: IntersectionObserver scroll-spy with `rootMargin: '-10% 0px -70% 0px'` drives sidebar highlight; virtualization activates at 200+ items via `@tanstack/react-virtual`
+- [x] **FM-01**: Follow mode auto-scrolls to bottom on new items; cancels on 80px cumulative upward scroll
+- [x] **FM-02**: FollowModeBar appears (`sticky bottom-2 z-40`) only when `isActive=true` AND `autoFollow=false`; "Follow latest" pill re-engages auto-scroll
+- [x] **FM-03**: Job active transition re-enables follow mode via useEffect; sidebar step click always cancels follow mode
+- [x] **CLEAN-01**: Dead exports (`getBranchDrillInPath`, `selectBranchPreview`, `isPresent`) removed from `branch-lifecycle-block.helpers.ts`
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| NSSF-01 | Phase 90 | Complete |
+| NSSF-02 | Phase 90 | Complete |
+| NSSF-03 | Phase 90 | Complete |
+| NSSF-04 | Phase 90 | Complete |
+| SSI-01 | Phase 90 | Complete |
+| SSI-02 | Phase 90 | Complete |
+| FM-01 | Phase 90 | Complete |
+| FM-02 | Phase 90 | Complete |
+| FM-03 | Phase 90 | Complete |
+| CLEAN-01 | Phase 90 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -298,12 +324,22 @@ Deferred to future release. Tracked but not in current roadmap.
 | GAP-LABELS | Phase 89 | Complete |
 | ATTRIBUTION-FIX | Phase 89 | Complete |
 | VALIDATION | Phase 89 | Complete |
+| NSSF-01 | Phase 90 | Complete |
+| NSSF-02 | Phase 90 | Complete |
+| NSSF-03 | Phase 90 | Complete |
+| NSSF-04 | Phase 90 | Complete |
+| SSI-01 | Phase 90 | Complete |
+| SSI-02 | Phase 90 | Complete |
+| FM-01 | Phase 90 | Complete |
+| FM-02 | Phase 90 | Complete |
+| FM-03 | Phase 90 | Complete |
+| CLEAN-01 | Phase 90 | Complete |
 
 **Coverage:**
-- v1 requirements: 93 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89)
-- Mapped to phases: 93
+- v1 requirements: 103 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90)
+- Mapped to phases: 103
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-23 after adding Phase 89 requirement traceability*
+*Last updated: 2026-03-23 after adding Phase 90 requirement traceability*
