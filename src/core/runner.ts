@@ -216,6 +216,15 @@ function findExistingUiSpec(projectDir: string, phaseNumber: number): string | n
   }
 }
 
+/**
+ * Check if a ui-phase command has completed its work by producing the UI-SPEC artifact.
+ * Returns true when `command` is 'ui-phase' AND a matching UI-SPEC.md exists on disk.
+ */
+function isUiPhaseArtifactComplete(command: string, projectDir: string, phaseNumber: number): boolean {
+  if (command !== 'ui-phase') return false;
+  return findExistingUiSpec(projectDir, phaseNumber) !== null;
+}
+
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
   const entries = getValidVerificationEvidence(projectDir, phaseNumber);
   if (entries.length === 0) return null;
@@ -2599,3 +2608,10 @@ export { buildContinuationLimitMessage as _buildContinuationLimitMessage };
  * @internal — exported for tests only
  */
 export { buildBudgetExhaustedMessage as _buildBudgetExhaustedMessage };
+
+/**
+ * Artifact-based UI-phase completion helpers.
+ * @internal — exported for tests only
+ */
+export { findExistingUiSpec as _findExistingUiSpec };
+export { isUiPhaseArtifactComplete as _isUiPhaseArtifactComplete };

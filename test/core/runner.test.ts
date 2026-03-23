@@ -27,7 +27,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause } from '../../src/core/runner.js';
+import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete } from '../../src/core/runner.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -1059,5 +1059,90 @@ describe('detectCheckpointPause', () => {
     // In test env, opencode DB file doesn't exist, so openDb() returns null
     const result = detectCheckpointPause('some-nonexistent-session-id');
     expect(result.isCheckpoint).toBe(false);
+  });
+});
+
+// ── findExistingUiSpec ────────────────────────────────────────────────────
+
+describe('findExistingUiSpec', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = path.join(tmpdir(), `pilot-uispec-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns full path when *-UI-SPEC.md exists in matching phase dir', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '90-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '90-UI-SPEC.md'), '# UI Spec');
+
+    const result = _findExistingUiSpec(tmpDir, 90);
+    expect(result).toBe(path.join(phaseDir, '90-UI-SPEC.md'));
+  });
+
+  it('returns null when phase dir exists but no UI-SPEC file', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '90-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '90-01-PLAN.md'), '# Plan');
+
+    const result = _findExistingUiSpec(tmpDir, 90);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when .planning/phases/ dir does not exist', () => {
+    const result = _findExistingUiSpec(tmpDir, 90);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when phase dir does not match the requested phase number', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '91-other-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '91-UI-SPEC.md'), '# UI Spec');
+
+    const result = _findExistingUiSpec(tmpDir, 90);
+    expect(result).toBeNull();
+  });
+});
+
+// ── isUiPhaseArtifactComplete ─────────────────────────────────────────────
+
+describe('isUiPhaseArtifactComplete', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = path.join(tmpdir(), `pilot-artifact-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns true when command is ui-phase and UI-SPEC exists', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '90-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '90-UI-SPEC.md'), '# UI Spec');
+
+    expect(_isUiPhaseArtifactComplete('ui-phase', tmpDir, 90)).toBe(true);
+  });
+
+  it('returns false when command is not ui-phase (even if UI-SPEC exists)', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '90-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '90-UI-SPEC.md'), '# UI Spec');
+
+    expect(_isUiPhaseArtifactComplete('plan-phase', tmpDir, 90)).toBe(false);
+  });
+
+  it('returns false when command is ui-phase but no UI-SPEC exists', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '90-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+
+    expect(_isUiPhaseArtifactComplete('ui-phase', tmpDir, 90)).toBe(false);
   });
 });
