@@ -22,7 +22,7 @@ export function FollowModeBar({ visible, onFollow }: FollowModeBarProps) {
         onClick={onFollow}
         className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 active:scale-95"
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 2v7M3 6l3 3 3-3" />
         </svg>
         Follow latest

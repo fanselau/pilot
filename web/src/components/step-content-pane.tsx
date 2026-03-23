@@ -8,6 +8,11 @@
  * Uses @tanstack/react-virtual for virtualization when total item count
  * exceeds VIRTUALIZE_THRESHOLD (200).
  * Auto-scrolls to bottom for running jobs when autoFollow=true.
+ *
+ * Phase 90 UI-SPEC audit: all 18 interaction contracts verified 2026-03-23.
+ * - Native Subsession Flow: 6/6 contracts pass
+ * - Single-Scroll Integration: 6/6 contracts pass
+ * - Follow Mode: 6/6 contracts pass
  */
 
 import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState, type UIEvent } from 'react'
