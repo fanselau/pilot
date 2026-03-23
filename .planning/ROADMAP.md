@@ -1617,3 +1617,23 @@ Wave structure:
 
 **Details:**
 Read requirements/pilot-web-ui-job-detail-content-first-info-panel-and-follow-mode.md for full spec.
+
+### Phase 89: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes
+
+**Goal:** Make the job detail view a clear, native, single-scroll execution tree with stacked sticky headers showing Step → sub-agent → nested sub-agent hierarchy. Create a semantic session type model with Lucide icons and pastel depth system, fix Summary popup empty state, eliminate Unattributed sessions, and replace internal jargon with human-readable semantic labels.
+**Requirements**: SEMANTIC-TYPE-MODEL, SUMMARY-FIX, LABEL-FOUNDATION, STICKY-HIERARCHY, PASTEL-COLORS, HEADER-RENDERING, EXECUTION-PARENT, GAP-LABELS, ATTRIBUTION-FIX, VALIDATION
+**Depends on:** Phase 88
+**Plans:** 3 plans
+
+Plans:
+- [ ] 89-01-PLAN.md — Semantic session type model + Lucide icon mappings + Summary popup fix
+- [ ] 89-02-PLAN.md — Sticky header hierarchy + pastel color system + header rendering overhaul
+- [ ] 89-03-PLAN.md — Attribution hardening + visual verification against real job data
+
+Wave structure:
+- Wave 1: 89-01 (semantic foundation — types, icons, colors, summary fix)
+- Wave 2: 89-02 (visual hierarchy — sticky headers, pastels, icons in all surfaces, depends on 89-01)
+- Wave 3: 89-03 (attribution + validation checkpoint, depends on 89-01 + 89-02)
+
+**Details:**
+Read requirements/pilot-web-ui-nested-sticky-hierarchy-summary-and-label-fixes.md for full spec.
