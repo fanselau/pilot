@@ -1640,3 +1640,18 @@ Wave structure:
 
 **Details:**
 Read requirements/pilot-web-ui-nested-sticky-hierarchy-summary-and-label-fixes.md for full spec.
+
+### Phase 90: Pilot Web UI — Native Subsession Flow, Single-Scroll Integration, and Follow Mode
+
+**Goal:** Verify and harden the three Phase 90 features (Native Subsession Flow, Single-Scroll Integration, Follow Mode) against UI-SPEC contracts, remove dead code from branch helpers, and add requirement traceability. Core implementations exist from Phases 88-89 — this is the contract verification and cleanup pass.
+**Requirements**: NSSF-01, NSSF-02, NSSF-03, NSSF-04, SSI-01, SSI-02, FM-01, FM-02, FM-03, CLEAN-01
+**Depends on:** Phase 89
+**Plans:** 2 plans
+
+Plans:
+- [ ] 90-01-PLAN.md — Dead code cleanup + UI-SPEC contract audit across 6 components
+- [ ] 90-02-PLAN.md — Phase 90 requirement definitions in REQUIREMENTS.md
+
+Wave structure:
+- Wave 1: 90-01 (implementation cleanup + contract verification)
+- Wave 2: 90-02 (requirements traceability, depends on 90-01)
