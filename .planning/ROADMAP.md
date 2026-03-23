@@ -1676,3 +1676,13 @@ Wave structure:
 
 **Details:**
 Read requirements/pilot-debug-lane-caller-side-autonomous-gsd-debugger.md for full spec.
+
+### Phase 92: Pilot Web UI — Native Subsession Flow Actual Implementation Follow-Up
+
+**Goal:** Ship the actual runtime UI rewrite for native subsession flow — subsession content integrated into the same main scroll stream at the same indentation level, nested sticky headers stacking by depth, foldable subsessions open by default, and follow mode working inside open subsessions.
+**Requirements**: NSFF-01, NSFF-02, NSFF-03, NSFF-04, NSFF-05, NSFF-06, NSFF-07, NSFF-08, NSFF-09, NSFF-10, NSFF-11, NSFF-12
+**Depends on:** Phase 91
+**Plans:** 1 plan
+
+Plans:
+- [ ] 92-01-PLAN.md — Flatten subsession layout (BranchLifecycleBlock + SessionActivity rewrite) + human verify
