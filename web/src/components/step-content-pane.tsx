@@ -335,7 +335,7 @@ export function StepContentPane({
                               )}
                               <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <Badge variant="secondary" size="sm" className="font-semibold">
-                                {config.label}
+                                {group.semanticLabel || config.label}
                               </Badge>
                               {config.isGap && (
                                 <Badge variant="outline" size="sm" className="text-[10px] text-amber-500 border-amber-500/30 px-1">
