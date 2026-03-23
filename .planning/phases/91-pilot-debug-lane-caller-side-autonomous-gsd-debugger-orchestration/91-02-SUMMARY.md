@@ -125,3 +125,12 @@ Ready for next phase. The debug lane is production-ready with full regression co
 ---
 *Phase: 91-pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration*
 *Completed: 2026-03-23*
+
+## Self-Check: PASSED
+
+- `test/core/runner-debug-lane.test.ts`: FOUND ✓
+- `91-02-SUMMARY.md`: FOUND ✓
+- Commit `b798f56` (test): FOUND ✓
+- Commit `6576ac1` (docs): FOUND ✓
+- All 17 tests pass: `npx vitest run test/core/runner-debug-lane.test.ts` → 17 passed ✓
+- Full test suite: 1316 passed (pre-existing web test failure unrelated to changes) ✓
