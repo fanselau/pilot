@@ -1904,9 +1904,11 @@ class Runner {
     await ensureAutonomousGsdConfig(cwd);
 
     // Resolve top-level model for --model flag
-    const isJudge = inlinePrompt !== undefined;
+    // Use the job's actual scope when available — inline prompts are used for both
+    // judge sessions AND debug sessions, so inlinePrompt alone does not imply judge scope.
     const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
-    const scope = isJudge ? 'judge' as const : (jobEntry?.job.scope ?? 'quick');
+    const jobScope = jobEntry?.job.scope;
+    const scope = jobScope ?? (inlinePrompt !== undefined ? 'judge' as const : 'quick' as const);
     const profile = jobEntry?.job.modelProfile ?? 'balanced';
     const providerMode = jobEntry?.job.providerMode ?? 'claude-only';
     const { model: topLevelModel, variant } = resolveTopLevelModel(scope, profile, providerMode);
