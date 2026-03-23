@@ -190,6 +190,32 @@ Requirements for initial release. Each maps to roadmap phases.
 | FOLLOW-MODE | Phase 88 | Complete |
 | CROSS-DEVICE | Phase 88 | Complete |
 
+### Phase 89: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes
+
+- [x] **SEMANTIC-TYPE-MODEL**: Introduce a SemanticSessionType model (14 canonical types: Delegation, Add Phase, Planning, Execution, Judge, Continuation Delegation, Gap Planning, Gap Execution, Gap Judge, Recovery, Fast Task, Quick Task, Manual, Unattributed) with Lucide icons, pastel colors, and gap flags, used consistently by summary cards, sticky headers, and nested session headers
+- [x] **SUMMARY-FIX**: Fix Summary popup empty state — show deliberate fallback with step-count context when no verdict data exists, render semantic icons and Gap badges on summary cards
+- [x] **LABEL-FOUNDATION**: Replace vague internal labels (e.g., "gap closure") with human-facing semantic labels derived from the SemanticSessionType model; every displayed session must resolve to exactly one semantic type
+- [x] **STICKY-HIERARCHY**: Implement nested sticky header hierarchy — step header at top, first-level sub-agent below it, nested child below both — using position:sticky with computed top values per depth level
+- [x] **PASTEL-COLORS**: Add subtle pastel color system for nested regions using DEPTH_PASTELS progression plus per-type bgClass/borderClass from SEMANTIC_TYPE_CONFIG; spacing, padding, and section rhythm (not just background color)
+- [x] **HEADER-RENDERING**: Populate sticky headers with three-layer content model: (1) icon + semantic label + status, (2) compact context chips (model, duration, step index), (3) outcome line; use same semantic model across all surfaces
+- [x] **EXECUTION-PARENT**: Execution renders as one top-level step with nested child runs; executor sub-sessions appear as nested branches, not separate top-level steps
+- [x] **GAP-LABELS**: Gap loop nodes labeled distinctly as Gap Planning, Gap Execution, and Gap Judge with "Gap" badge; visually related to base type but clearly distinguishable
+- [x] **ATTRIBUTION-FIX**: Fix session attribution via contiguous time windows and tier 5.5 catch-all so no session renders as Unattributed for well-formed jobs
+- [x] **VALIDATION**: Validate implementation against real data from job 82bg to confirm known issues are actually fixed
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SEMANTIC-TYPE-MODEL | Phase 89 | Complete |
+| SUMMARY-FIX | Phase 89 | Complete |
+| LABEL-FOUNDATION | Phase 89 | Complete |
+| STICKY-HIERARCHY | Phase 89 | Complete |
+| PASTEL-COLORS | Phase 89 | Complete |
+| HEADER-RENDERING | Phase 89 | Complete |
+| EXECUTION-PARENT | Phase 89 | Complete |
+| GAP-LABELS | Phase 89 | Complete |
+| ATTRIBUTION-FIX | Phase 89 | Complete |
+| VALIDATION | Phase 89 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -262,12 +288,22 @@ Deferred to future release. Tracked but not in current roadmap.
 | COLLAPSIBLE | Phase 88 | Complete |
 | FOLLOW-MODE | Phase 88 | Complete |
 | CROSS-DEVICE | Phase 88 | Complete |
+| SEMANTIC-TYPE-MODEL | Phase 89 | Complete |
+| SUMMARY-FIX | Phase 89 | Complete |
+| LABEL-FOUNDATION | Phase 89 | Complete |
+| STICKY-HIERARCHY | Phase 89 | Complete |
+| PASTEL-COLORS | Phase 89 | Complete |
+| HEADER-RENDERING | Phase 89 | Complete |
+| EXECUTION-PARENT | Phase 89 | Complete |
+| GAP-LABELS | Phase 89 | Complete |
+| ATTRIBUTION-FIX | Phase 89 | Complete |
+| VALIDATION | Phase 89 | Complete |
 
 **Coverage:**
-- v1 requirements: 83 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88)
-- Mapped to phases: 83
+- v1 requirements: 93 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89)
+- Mapped to phases: 93
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-23 after adding Phase 88 requirement traceability*
+*Last updated: 2026-03-23 after adding Phase 89 requirement traceability*
