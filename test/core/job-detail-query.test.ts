@@ -1356,9 +1356,10 @@ describe('resolveStepIndex 6-tier attribution', () => {
     expect(lateInUnattributed).toBeUndefined();
   });
 
-  it('tier 5: non-judge last step — late activity falls through to unattributed', () => {
-    // Tier 5 must NOT fire when the last step is not a judge step.
-    // Late activity after all windows close should go to Unattributed, not the last step.
+  it('tier 3 contiguous + tier 5.5: non-judge last step — late activity attributed to last step', () => {
+    // With contiguous time windows (tier 3) and tier 5.5 catch-all, late activity
+    // after all step completedAt timestamps is attributed to the last step (not unattributed).
+    // This eliminates the Unattributed bucket for well-formed jobs.
     setupAttribution({
       steps: [
         { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(10), completedAt: iso(20) },
@@ -1375,27 +1376,24 @@ describe('resolveStepIndex 6-tier attribution', () => {
       partsMap: {
         'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0', createdAt: t(15) })],
         'sess-s1': [makePart({ id: 's1-p1', type: 'text', text: 'step 1', createdAt: t(35) })],
-        // Late activity AFTER all windows — last step is not judge, so tier 5 must not fire
+        // Late activity AFTER step 1's completedAt — attributed via contiguous last-step window
         'sess-late': [makePart({ id: 'late-p1', type: 'text', text: 'Late wrap-up', createdAt: t(50) })],
       },
     });
 
     const page = getJobTimeline('ab12')!;
 
-    // late-p1 should be in Unattributed (tier 5 skipped — last step is execute-phase, not judge)
+    // No Unattributed group should exist — everything is attributed
     const unattributed = page.groups.find(g => g.command === 'unattributed');
-    expect(unattributed).toBeDefined();
-    const lateItem = unattributed!.items.find(
-      item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
-    );
-    expect(lateItem).toBeDefined();
+    expect(unattributed).toBeUndefined();
 
-    // Must NOT be in step 1's group
+    // late-p1 should be in step 1's group (last step catches everything after it)
     const step1Group = page.groups.find(g => g.stepIndex === 1);
-    const lateInStep1 = step1Group?.items.find(
+    expect(step1Group).toBeDefined();
+    const lateInStep1 = step1Group!.items.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
     );
-    expect(lateInStep1).toBeUndefined();
+    expect(lateInStep1).toBeDefined();
   });
 
   it('genuinely unassignable content remains in unattributed bucket', () => {

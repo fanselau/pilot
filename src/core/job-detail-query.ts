@@ -487,10 +487,11 @@ function resolveStepIndex(
     if (bySessionTitle) return bySessionTitle.stepIndex;
   }
 
-  // Tier 3: Time window match
-  // For completed steps: use the actual completedAtMs as the window end.
-  // For running steps (completedAtMs === null): cap the window at the NEXT step's startedAtMs
-  // to prevent open-ended running steps from greedily attributing all subsequent activity.
+  // Tier 3: Contiguous time window match
+  // Step windows are made contiguous: each step's window extends from its startedAtMs
+  // until the NEXT step's startedAtMs (not just its own completedAtMs). This eliminates
+  // attribution gaps between steps. The last step's window extends to MAX_SAFE_INTEGER
+  // so nothing falls through after it.
   const stepsWithStart = steps
     .filter((s) => s.startedAtMs !== null)
     .sort((a, b) => a.startedAtMs! - b.startedAtMs!);
@@ -498,16 +499,13 @@ function resolveStepIndex(
   for (let i = 0; i < stepsWithStart.length; i++) {
     const step = stepsWithStart[i];
     const windowStart = step.startedAtMs!;
-    let windowEnd: number;
+    const nextStep = i + 1 < stepsWithStart.length ? stepsWithStart[i + 1] : null;
 
-    if (step.completedAtMs !== null) {
-      windowEnd = step.completedAtMs;
-    } else {
-      // Running step: use next step's start time as effective window end.
-      // Only attribute if candidate is before the next step begins.
-      const nextStep = i + 1 < stepsWithStart.length ? stepsWithStart[i + 1] : null;
-      windowEnd = nextStep?.startedAtMs ?? Number.POSITIVE_INFINITY;
-    }
+    // Contiguous: extend each step until the next step starts.
+    // Last step extends to MAX_SAFE_INTEGER so nothing falls through.
+    const windowEnd = nextStep?.startedAtMs != null
+      ? nextStep.startedAtMs
+      : Number.MAX_SAFE_INTEGER;
 
     if (candidate.createdAt >= windowStart && candidate.createdAt <= windowEnd) {
       return step.stepIndex;
@@ -551,6 +549,13 @@ function resolveStepIndex(
     return latestStep.stepIndex;
   }
 
+  // Tier 5.5: Post-last-step catch-all
+  // Catches continuation/delegation sessions created after the last step's startedAt,
+  // regardless of step type. Belt-and-suspenders behind contiguous tier 3 windows.
+  if (latestStep !== null && candidate.createdAt >= latestStep.startedAtMs!) {
+    return latestStep.stepIndex;
+  }
+
   return null;
 }
 
@@ -581,13 +586,14 @@ function computeSemanticLabel(command: string, source: string): string {
 /**
  * Build a step-grouped chronological timeline for a job.
  *
- * Timeline attribution order is deterministic (6 tiers):
+ * Timeline attribution order is deterministic (7 tiers):
  * 1) job_steps.sessionId identity
  * 2) job_steps.sessionTitle match
- * 3) step time window (startedAtMs..completedAtMs; running steps capped at next step's start)
+ * 3) contiguous step time windows (startedAtMs..nextStep.startedAtMs; last step extends to MAX_SAFE_INTEGER)
  * 3.5) delegation session containment (children of delegation synthetic steps)
  * 4) child session transitivity (candidate's session is a child of a step's session)
  * 5) last-step fallback (judge steps only — catches verdict wrap-up activity)
+ * 5.5) post-last-step catch-all (any remaining activity after the last step's start)
  * 6) unattributed bucket (genuinely unassignable content only)
  *
  * Child branches are represented as one lifecycle-aware object per child
