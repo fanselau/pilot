@@ -79,12 +79,10 @@ interface BranchLifecycleBlockProps {
 export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycleBlockProps) {
   const identity = deriveBranchIdentity(item.title)
 
-  // Look up semantic icon from identity hint
-  const semanticHint = identity.semanticHint as SemanticSessionType | null
-  const config = semanticHint && SEMANTIC_TYPE_CONFIG[semanticHint]
-    ? SEMANTIC_TYPE_CONFIG[semanticHint]
-    : null
-  const Icon = config?.icon ?? ChevronRightIcon
+  // Look up semantic config from identity hint — always non-null since semanticHint is always resolved
+  const semanticHint = identity.semanticHint as SemanticSessionType
+  const config = SEMANTIC_TYPE_CONFIG[semanticHint] ?? SEMANTIC_TYPE_CONFIG['execution']
+  const Icon = config.icon
 
   // Active branches at depth < 2 expand by default; done branches and deep branches collapse
   const defaultOpen = item.status === 'active' && depth < 2
@@ -104,33 +102,25 @@ export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycle
   const depthBg = DEPTH_PASTELS[Math.min(depth, DEPTH_PASTELS.length - 1)]
 
   return (
-    <div className={`border-l ${config?.borderClass ?? 'border-border/30'} ${depthBg}`}>
+    <div className={`border-l ${config.borderClass} ${depthBg}`}>
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         {/* Sticky header — always visible; stacks beneath parent step headers via zIndex */}
         <CollapsibleTrigger
           style={{ position: 'sticky', top: stickyTop, zIndex: 20 - depth }}
           className={[
             'w-full text-left backdrop-blur border-b px-3 py-1.5 flex items-center gap-1.5 hover:bg-accent/10 transition-colors',
-            config?.bgClass ?? 'bg-background/95',
-            config?.borderClass ? `border-b ${config.borderClass}` : 'border-b border-border/30',
+            config.bgClass,
+            `border-b ${config.borderClass}`,
           ].join(' ')}
         >
-          {config ? (
-            <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRightIcon
-              className={`h-3 w-3 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
-            />
-          )}
-          {config && (
-            <ChevronRightIcon
-              className={`h-2.5 w-2.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
-            />
-          )}
+          <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <ChevronRightIcon
+            className={`h-2.5 w-2.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+          />
           <Badge variant="outline" size="sm">
             {identity.label}
           </Badge>
-          {config?.isGap && (
+          {config.isGap && (
             <Badge variant="outline" size="sm" className="text-[9px] text-amber-500 border-amber-500/30 px-1 py-0">
               Gap
             </Badge>
@@ -161,7 +151,7 @@ export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycle
 
         {/* Expanded content — renders directly in flow at parent width, no card chrome */}
         <CollapsibleContent>
-          <div className={`border-l ${config?.borderClass ?? 'border-border/30'} ${depthBg}`}>
+          <div className={`border-l ${config.borderClass} ${depthBg}`}>
             <SessionActivity
               sessionId={item.sessionId}
               isActive={item.status === 'active'}

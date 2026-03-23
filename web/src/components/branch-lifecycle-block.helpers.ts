@@ -1,4 +1,5 @@
 import type { BranchLifecycleItem } from '@pilot/core/types.js'
+import { resolveSemanticHint } from '~/lib/step-semantics'
 
 function isPresent(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.trim().length > 0
@@ -8,8 +9,8 @@ export interface BranchIdentity {
   label: string
   role: string | null
   purpose: string | null
-  /** Hint for which semantic type this branch likely represents. Derived from title patterns. */
-  semanticHint: string | null
+  /** Hint for which semantic type this branch likely represents. Derived from title patterns. Always non-null. */
+  semanticHint: string
 }
 
 export function deriveBranchIdentity(title: string): BranchIdentity {
@@ -19,18 +20,12 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
       label: 'Sub-agent',
       role: null,
       purpose: null,
-      semanticHint: null,
+      semanticHint: resolveSemanticHint(''),
     }
   }
 
-  // Detect GSD command patterns from session titles
-  const lowerTitle = normalized.toLowerCase()
-  let semanticHint: string | null = null
-  if (lowerTitle.includes('plan-phase') || lowerTitle.includes('planning')) semanticHint = 'planning'
-  else if (lowerTitle.includes('execute-phase') || lowerTitle.includes('execution')) semanticHint = 'execution'
-  else if (lowerTitle.includes('judge') || lowerTitle.includes('verify') || lowerTitle.includes('verification')) semanticHint = 'judge'
-  else if (lowerTitle.includes('delegation') || lowerTitle.includes('delegate')) semanticHint = 'delegation'
-  else if (lowerTitle.includes('add-phase')) semanticHint = 'add-phase'
+  // Resolve semantic type from title — always non-null
+  const semanticHint = resolveSemanticHint(normalized)
 
   if (normalized.toLowerCase().startsWith('task:')) {
     const payload = normalized.slice(5).trim()

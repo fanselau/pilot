@@ -98,6 +98,28 @@ export function resolveSemanticType(group: StepTimelineGroup): SemanticSessionTy
 }
 
 /**
+ * Resolve a SemanticSessionType from a raw branch/session title string.
+ *
+ * Unlike resolveSemanticType (which requires a full StepTimelineGroup),
+ * this function operates on a plain title string — used by branch headers
+ * where only the session title is available. Always returns a non-null type;
+ * defaults to 'execution' for unrecognized titles.
+ */
+export function resolveSemanticHint(title: string): SemanticSessionType {
+  const lower = title.toLowerCase()
+  if (lower.includes('plan-phase') || lower.includes('planning')) return 'planning'
+  if (lower.includes('execute-phase') || lower.includes('execution')) return 'execution'
+  if (lower.includes('judge') || lower.includes('verify') || lower.includes('verification')) return 'judge'
+  if (lower.includes('delegation') || lower.includes('delegate')) return 'delegation'
+  if (lower.includes('add-phase')) return 'add-phase'
+  if (lower.includes('gap')) return 'gap-execution'  // generic gap fallback
+  if (lower.includes('fast')) return 'fast-task'
+  if (lower.includes('quick')) return 'quick-task'
+  if (lower.includes('recovery')) return 'recovery'
+  return 'execution'  // safe default — most branches are execution sub-agents
+}
+
+/**
  * Get the Lucide icon component for a step group based on its semantic type.
  */
 export function getSemanticIcon(group: StepTimelineGroup): LucideIcon {
