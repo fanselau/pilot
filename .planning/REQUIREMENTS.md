@@ -242,6 +242,40 @@ Requirements for initial release. Each maps to roadmap phases.
 | FM-03 | Phase 90 | Complete |
 | CLEAN-01 | Phase 90 | Complete |
 
+### Pilot Debug Lane — Caller-Side Autonomous gsd-debugger Orchestration
+
+- [x] **DBG-01**: For `scope=debug`, Pilot stops routing jobs to `gsd-debug` (interactive orchestrator) and spawns `gsd-debugger` directly from caller/runner logic
+- [x] **DBG-02**: Pilot constructs a prefilled debugger prompt with issue summary, symptoms, debug file path, and `symptoms_prefilled: true` mode
+- [x] **DBG-03**: Debug jobs use a debug-specific lifecycle (`executeDebugFlow`) and are not treated like phase jobs
+- [x] **DBG-04**: Debug jobs never enter phase-style judge logic or any logic that assumes plan-phase/execute-phase history
+- [x] **DBG-05**: Debug sessions use 'debug' scope for model selection via `resolveTopLevelModel`, not 'judge' scope
+- [x] **DBG-06**: Pilot parses `gsd-debugger` outcomes: ROOT CAUSE FOUND, INVESTIGATION INCONCLUSIVE, CHECKPOINT REACHED, DEBUG COMPLETE
+- [x] **DBG-07**: CHECKPOINT REACHED with Type: human-verify triggers autonomous continuation (Pilot provides 'confirmed fixed')
+- [x] **DBG-08**: CHECKPOINT REACHED with Type: human-action or decision blocks explicitly with reason (markReviewHold, not markFailed)
+- [x] **DBG-09**: Interactive prompt leaks (question/mcp_question) no longer hang unattended debug jobs — HungSessionError caught and handled
+- [x] **DBG-10**: Debug runs that self-verify successfully reach terminal success without manual intervention
+- [x] **DBG-11**: Debug session artifacts preserved in `.planning/debug/` and continuation stays in debug lane
+- [x] **DBG-12**: `handleHungContinuation` has safety guard preventing debug jobs from entering phase re-delegation path
+- [x] **DBG-13**: `intentToSteps` returns empty array `[]` for debug intent — debug flow bypasses step loop entirely
+- [x] **DBG-14**: Integration tests cover all debug outcome types, autonomous continuation, checkpoint blocking, hung session handling, and no-judge validation
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DBG-01 | Phase 91 | Complete |
+| DBG-02 | Phase 91 | Complete |
+| DBG-03 | Phase 91 | Complete |
+| DBG-04 | Phase 91 | Complete |
+| DBG-05 | Phase 91 | Complete |
+| DBG-06 | Phase 91 | Complete |
+| DBG-07 | Phase 91 | Complete |
+| DBG-08 | Phase 91 | Complete |
+| DBG-09 | Phase 91 | Complete |
+| DBG-10 | Phase 91 | Complete |
+| DBG-11 | Phase 91 | Complete |
+| DBG-12 | Phase 91 | Complete |
+| DBG-13 | Phase 91 | Complete |
+| DBG-14 | Phase 91 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -334,12 +368,26 @@ Deferred to future release. Tracked but not in current roadmap.
 | FM-02 | Phase 90 | Complete |
 | FM-03 | Phase 90 | Complete |
 | CLEAN-01 | Phase 90 | Complete |
+| DBG-01 | Phase 91 | Complete |
+| DBG-02 | Phase 91 | Complete |
+| DBG-03 | Phase 91 | Complete |
+| DBG-04 | Phase 91 | Complete |
+| DBG-05 | Phase 91 | Complete |
+| DBG-06 | Phase 91 | Complete |
+| DBG-07 | Phase 91 | Complete |
+| DBG-08 | Phase 91 | Complete |
+| DBG-09 | Phase 91 | Complete |
+| DBG-10 | Phase 91 | Complete |
+| DBG-11 | Phase 91 | Complete |
+| DBG-12 | Phase 91 | Complete |
+| DBG-13 | Phase 91 | Complete |
+| DBG-14 | Phase 91 | Complete |
 
 **Coverage:**
-- v1 requirements: 103 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90)
-- Mapped to phases: 103
+- v1 requirements: 117 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91)
+- Mapped to phases: 117
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-23 after adding Phase 90 requirement traceability*
+*Last updated: 2026-03-23 after adding Phase 91 requirement traceability*
