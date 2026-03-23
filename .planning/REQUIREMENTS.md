@@ -164,6 +164,32 @@ Requirements for initial release. Each maps to roadmap phases.
 | UI-PHASE-OBSERVABILITY | Phase 87 | Complete |
 | UI-PHASE-COMPAT | Phase 87 | Complete |
 
+### Job Detail Content-First Redesign
+
+- [x] **INFO-PANEL**: Unified Info panel (Sheet component) replaces fragmented actions modal + meta surface; contains status, timestamps, identity, observability, verdict, git, recovery context, and all working job actions
+- [x] **TAB-REMOVAL**: Tab bar completely removed from job detail on both desktop and mobile; activity/timeline is the only persistent reading surface
+- [x] **SUMMARY-OVERLAY**: Summary available as toggleable Sheet overlay near top layout, not a permanent tab; shows per-step verdictReason content
+- [x] **TIMEZONE-FIX**: User-facing timestamps rendered in local timezone via parseSqliteTimestamp → toLocaleString (no misleading UTC/mixed)
+- [x] **TOP-LAYOUT**: Content-first compact breadcrumb header (project + job ID + status badge) replacing old card-based header; lighter and more trustworthy
+- [x] **NESTED-CHILDREN**: Nested child sessions render as normal-flow embedded content without card chrome; at near top-level density with subtle border-l + bg treatment
+- [x] **STICKY-HEADERS**: Nested session headers are sticky with depth-based top/zIndex stacking beneath parent context; step group headers at z-30, nested children at z-20 decreasing
+- [x] **COLLAPSIBLE**: Child sessions remain collapsible/foldable with glanceable collapsed identity showing label/status/duration/model
+- [x] **FOLLOW-MODE**: Explicit toggleable Follow mode with auto-scroll, 80px deliberate-scroll auto-cancel threshold, sticky FollowModeBar for re-engagement
+- [x] **CROSS-DEVICE**: Desktop and mobile share same information architecture; responsive layout adapts presentation, not IA
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INFO-PANEL | Phase 88 | Complete |
+| TAB-REMOVAL | Phase 88 | Complete |
+| SUMMARY-OVERLAY | Phase 88 | Complete |
+| TIMEZONE-FIX | Phase 88 | Complete |
+| TOP-LAYOUT | Phase 88 | Complete |
+| NESTED-CHILDREN | Phase 88 | Complete |
+| STICKY-HEADERS | Phase 88 | Complete |
+| COLLAPSIBLE | Phase 88 | Complete |
+| FOLLOW-MODE | Phase 88 | Complete |
+| CROSS-DEVICE | Phase 88 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -226,12 +252,22 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLEN-02 | Phase 68 | Pending |
 | CLEN-03 | Phase 68 | Pending |
 | CLEN-04 | Phase 68 | Pending |
+| INFO-PANEL | Phase 88 | Complete |
+| TAB-REMOVAL | Phase 88 | Complete |
+| SUMMARY-OVERLAY | Phase 88 | Complete |
+| TIMEZONE-FIX | Phase 88 | Complete |
+| TOP-LAYOUT | Phase 88 | Complete |
+| NESTED-CHILDREN | Phase 88 | Complete |
+| STICKY-HEADERS | Phase 88 | Complete |
+| COLLAPSIBLE | Phase 88 | Complete |
+| FOLLOW-MODE | Phase 88 | Complete |
+| CROSS-DEVICE | Phase 88 | Complete |
 
 **Coverage:**
-- v1 requirements: 73 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87)
-- Mapped to phases: 73
+- v1 requirements: 83 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88)
+- Mapped to phases: 83
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-22 after adding UI-PHASE-INTENT through UI-PHASE-COMPAT traceability*
+*Last updated: 2026-03-23 after adding Phase 88 requirement traceability*
