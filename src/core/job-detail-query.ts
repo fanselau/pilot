@@ -561,17 +561,20 @@ function resolveStepIndex(
  * to capitalizing the command string.
  */
 function computeSemanticLabel(command: string, source: string): string {
-  if (command === 'delegation') return 'Delegation';
+  if (command === 'delegation') {
+    if (source.startsWith('judge:')) return 'Continuation Delegation';
+    return 'Delegation';
+  }
   if (command === 'unattributed') return 'Unattributed';
-  if (source === 'judge:gaps') return 'Gap Closure';
+  if (command === 'add-phase') return 'Add Phase';
+  const isGap = source === 'judge:gaps' || source === 'judge:failed';
   if (source === 'judge:hung') return 'Recovery';
-  if (source === 'judge:failed') return 'Retry';
   if (source === 'operator') return 'Manual';
-  if (source === 'delegation' && command.includes('plan')) return 'Planning';
-  if (source === 'delegation' && command.includes('execute')) return 'Execution';
-  if (source === 'delegation' && command.includes('judge')) return 'Judge';
-  if (source === 'delegation' && command.includes('verify')) return 'Verification';
-  if (source === 'delegation' && command === 'quick') return 'Quick Task';
+  if (command.includes('plan')) return isGap ? 'Gap Planning' : 'Planning';
+  if (command.includes('execute')) return isGap ? 'Gap Execution' : 'Execution';
+  if (command.includes('judge') || command.includes('verify')) return isGap ? 'Gap Judge' : 'Judge';
+  if (command === 'fast') return 'Fast Task';
+  if (command === 'quick') return 'Quick Task';
   return command.charAt(0).toUpperCase() + command.slice(1);
 }
 

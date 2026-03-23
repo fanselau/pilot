@@ -9,31 +9,125 @@
  */
 
 import type { StepTimelineGroup, BranchLifecycleItem } from '@pilot/core/types.js'
+import {
+  Route, FolderPlus, Map, Hammer, Scale, Forward,
+  MapPin, Wrench, ShieldCheck, Zap, User, HelpCircle,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+
+// ── Semantic Session Type Model ───────────────────────────────────────────
+
+export type SemanticSessionType =
+  | 'delegation'
+  | 'add-phase'
+  | 'planning'
+  | 'execution'
+  | 'judge'
+  | 'continuation-delegation'
+  | 'gap-planning'
+  | 'gap-execution'
+  | 'gap-judge'
+  | 'recovery'
+  | 'fast-task'
+  | 'quick-task'
+  | 'manual'
+  | 'unattributed'
+
+export interface SemanticTypeConfig {
+  label: string
+  icon: LucideIcon
+  /** CSS class for pastel background at depth 0 */
+  bgClass: string
+  /** CSS class for border accent */
+  borderClass: string
+  /** Is this a gap-loop variant? */
+  isGap: boolean
+}
+
+export const SEMANTIC_TYPE_CONFIG: Record<SemanticSessionType, SemanticTypeConfig> = {
+  'delegation':               { label: 'Delegation',               icon: Route,        bgClass: 'bg-slate-50/50 dark:bg-slate-900/20',    borderClass: 'border-slate-300/40 dark:border-slate-600/30', isGap: false },
+  'add-phase':                { label: 'Add Phase',                icon: FolderPlus,   bgClass: 'bg-violet-50/50 dark:bg-violet-900/20',  borderClass: 'border-violet-300/40 dark:border-violet-600/30', isGap: false },
+  'planning':                 { label: 'Planning',                 icon: Map,          bgClass: 'bg-blue-50/50 dark:bg-blue-900/20',      borderClass: 'border-blue-300/40 dark:border-blue-600/30', isGap: false },
+  'execution':                { label: 'Execution',                icon: Hammer,       bgClass: 'bg-emerald-50/50 dark:bg-emerald-900/20',borderClass: 'border-emerald-300/40 dark:border-emerald-600/30', isGap: false },
+  'judge':                    { label: 'Judge',                    icon: Scale,        bgClass: 'bg-amber-50/50 dark:bg-amber-900/20',    borderClass: 'border-amber-300/40 dark:border-amber-600/30', isGap: false },
+  'continuation-delegation':  { label: 'Continuation Delegation',  icon: Forward,      bgClass: 'bg-orange-50/50 dark:bg-orange-900/20',  borderClass: 'border-orange-300/40 dark:border-orange-600/30', isGap: false },
+  'gap-planning':             { label: 'Gap Planning',             icon: MapPin,       bgClass: 'bg-blue-50/30 dark:bg-blue-900/10',      borderClass: 'border-blue-300/30 dark:border-blue-600/20', isGap: true },
+  'gap-execution':            { label: 'Gap Execution',            icon: Wrench,       bgClass: 'bg-emerald-50/30 dark:bg-emerald-900/10',borderClass: 'border-emerald-300/30 dark:border-emerald-600/20', isGap: true },
+  'gap-judge':                { label: 'Gap Judge',                icon: ShieldCheck,  bgClass: 'bg-amber-50/30 dark:bg-amber-900/10',    borderClass: 'border-amber-300/30 dark:border-amber-600/20', isGap: true },
+  'recovery':                 { label: 'Recovery',                 icon: Wrench,       bgClass: 'bg-rose-50/30 dark:bg-rose-900/10',      borderClass: 'border-rose-300/30 dark:border-rose-600/20', isGap: false },
+  'fast-task':                { label: 'Fast Task',                icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
+  'quick-task':               { label: 'Quick Task',               icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
+  'manual':                   { label: 'Manual',                   icon: User,         bgClass: 'bg-gray-50/50 dark:bg-gray-900/20',      borderClass: 'border-gray-300/40 dark:border-gray-600/30', isGap: false },
+  'unattributed':             { label: 'Unattributed',             icon: HelpCircle,   bgClass: 'bg-gray-50/30 dark:bg-gray-900/10',      borderClass: 'border-gray-300/30 dark:border-gray-600/20', isGap: false },
+}
+
+/**
+ * Resolve the semantic session type for a step group.
+ * This is the primary classification function — maps source + command
+ * to one of the 14 canonical semantic types.
+ */
+export function resolveSemanticType(group: StepTimelineGroup): SemanticSessionType {
+  if (group.command === 'unattributed') return 'unattributed'
+  if (group.command === 'delegation') {
+    // Check if this is a continuation delegation (after judge)
+    if (group.source.startsWith('judge:')) return 'continuation-delegation'
+    return 'delegation'
+  }
+
+  const isGap = group.source === 'judge:gaps'
+  const isHung = group.source === 'judge:hung'
+  const isFailed = group.source === 'judge:failed'
+
+  if (isHung) return 'recovery'
+
+  if (group.command.includes('plan') || group.command === 'add-phase') {
+    if (group.command === 'add-phase') return 'add-phase'
+    return isGap ? 'gap-planning' : (isFailed ? 'gap-planning' : 'planning')
+  }
+  if (group.command.includes('execute')) {
+    return isGap ? 'gap-execution' : (isFailed ? 'gap-execution' : 'execution')
+  }
+  if (group.command.includes('judge') || group.command.includes('verify')) {
+    return isGap ? 'gap-judge' : (isFailed ? 'gap-judge' : 'judge')
+  }
+  if (group.command === 'fast') return 'fast-task'
+  if (group.command === 'quick') return 'quick-task'
+  if (group.source === 'operator') return 'manual'
+
+  return 'execution' // safe fallback
+}
+
+/**
+ * Get the Lucide icon component for a step group based on its semantic type.
+ */
+export function getSemanticIcon(group: StepTimelineGroup): LucideIcon {
+  const type = resolveSemanticType(group)
+  return SEMANTIC_TYPE_CONFIG[type].icon
+}
+
+/**
+ * Get the semantic color classes for a step group.
+ */
+export function getSemanticColors(group: StepTimelineGroup): { bgClass: string; borderClass: string } {
+  const type = resolveSemanticType(group)
+  const config = SEMANTIC_TYPE_CONFIG[type]
+  return { bgClass: config.bgClass, borderClass: config.borderClass }
+}
 
 /**
  * Format a human-readable label for a step group.
- * Uses pre-computed semanticLabel if available, falls back to derivation.
+ * Uses pre-computed semanticLabel if available, falls back to the semantic type model.
  *
- * Returns labels like: "Delegation", "Execution", "Judge", "Gap Closure",
- * "Planning", "Quick Task", "Recovery", "Retry", "Verification", "Unattributed"
+ * Returns labels like: "Delegation", "Execution", "Judge", "Gap Planning",
+ * "Gap Execution", "Gap Judge", "Recovery", "Planning", "Quick Task", "Unattributed"
  */
 export function formatStepLabel(group: StepTimelineGroup): string {
   // Use pre-computed label from core if available
   if (group.semanticLabel) return group.semanticLabel
 
-  // Fallback derivation (same logic as core, for safety)
-  if (group.command === 'delegation') return 'Delegation'
-  if (group.command === 'unattributed') return 'Unattributed'
-  if (group.source === 'judge:gaps') return 'Gap Closure'
-  if (group.source === 'judge:hung') return 'Recovery'
-  if (group.source === 'judge:failed') return 'Retry'
-  if (group.source === 'operator') return 'Manual'
-  if (group.source === 'delegation' && group.command.includes('plan')) return 'Planning'
-  if (group.source === 'delegation' && group.command.includes('execute')) return 'Execution'
-  if (group.source === 'delegation' && (group.command.includes('judge') || group.command.includes('verify'))) return 'Judge'
-  if (group.source === 'delegation' && group.command === 'fast') return 'Fast Task'
-  if (group.source === 'delegation' && group.command === 'quick') return 'Quick Task'
-  return group.command.charAt(0).toUpperCase() + group.command.slice(1)
+  // Fallback: resolve via the semantic type model
+  const type = resolveSemanticType(group)
+  return SEMANTIC_TYPE_CONFIG[type].label
 }
 
 /**
@@ -128,8 +222,10 @@ export function formatDelegationIndex(stepIndex: number, delegationCount: number
  * at each hierarchy level (step group vs branch/fork vs job).
  */
 export interface SynthesizedHeaderFields {
-  /** Human-readable label: "Execution", "Judge", "Gap Closure", etc. */
+  /** Human-readable label: "Execution", "Judge", "Gap Planning", etc. */
   label: string
+  /** Resolved semantic session type key. */
+  semanticType: SemanticSessionType
   /** Stage context: "Planning", "Execution", "Verification", "Gap Closure", etc. */
   stage: string | null
   /** Short verdict summary from verdictReason (first 40 chars), null if not a judge step. */
@@ -144,6 +240,8 @@ export interface SynthesizedHeaderFields {
   hasSummary: boolean
   /** True when step is currently running. */
   isActive: boolean
+  /** True when this step is a gap-loop variant (gap-planning, gap-execution, gap-judge). */
+  isGap: boolean
 }
 
 /**
@@ -154,6 +252,8 @@ export interface SynthesizedHeaderFields {
  */
 export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHeaderFields {
   const label = formatStepLabel(group)
+  const semanticType = resolveSemanticType(group)
+  const isGap = SEMANTIC_TYPE_CONFIG[semanticType].isGap
 
   // Stage context — more specific than the label, adds contextual nuance
   let stage: string | null = null
@@ -207,6 +307,7 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
 
   return {
     label,
+    semanticType,
     stage,
     verdict,
     model,
@@ -214,5 +315,6 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
     continuationReason,
     hasSummary: isJudgeStep(group) && !!group.verdictReason,
     isActive: group.status === 'running',
+    isGap,
   }
 }
