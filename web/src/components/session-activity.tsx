@@ -78,8 +78,8 @@ export function SessionActivity({ sessionId, isActive = false }: SessionActivity
   }
 
   return (
-    <div className="min-w-0 max-w-full overflow-hidden py-3 px-1">
-      <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
+    <div className="min-w-0 max-w-full overflow-hidden py-1 px-2 sm:px-3">
+      <div className="space-y-0.5 max-w-full overflow-hidden">
         {allParts.map((part) => (
           <div key={part.id}>
             <TimelineItemRenderer item={partToTimelineItem(part, sessionId)} jobId="" />

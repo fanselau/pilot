@@ -60,12 +60,12 @@ function sessionToBranchItem(session: SessionSummary, parentId: string): BranchL
 
 const MAX_DEPTH = 4
 
-/** Depth-based pastel backgrounds for nested regions — progressively lighter. */
+/** Depth-based pastel backgrounds for nested regions — very subtle to keep content feeling flat. */
 const DEPTH_PASTELS = [
-  'bg-background/95',                    // depth 0 (uses step-level color)
-  'bg-slate-50/30 dark:bg-slate-900/15', // depth 1
-  'bg-slate-50/20 dark:bg-slate-900/10', // depth 2
-  'bg-slate-50/10 dark:bg-slate-900/5',  // depth 3+
+  '',                                     // depth 0: no tint (same as step content)
+  'bg-slate-50/15 dark:bg-slate-900/8',   // depth 1: barely visible tint
+  'bg-slate-50/10 dark:bg-slate-900/5',   // depth 2: even subtler
+  'bg-slate-50/5 dark:bg-slate-900/3',    // depth 3+: nearly invisible
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -102,17 +102,16 @@ export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycle
   const depthBg = DEPTH_PASTELS[Math.min(depth, DEPTH_PASTELS.length - 1)]
 
   return (
-    <div className={`border-l ${config.borderClass} ${depthBg}`}>
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        {/* Sticky header — always visible; stacks beneath parent step headers via zIndex */}
-        <CollapsibleTrigger
-          style={{ position: 'sticky', top: stickyTop, zIndex: 20 - depth }}
-          className={[
-            'w-full text-left backdrop-blur border-b px-3 py-1.5 flex items-center gap-1.5 hover:bg-accent/10 transition-colors',
-            config.bgClass,
-            `border-b ${config.borderClass}`,
-          ].join(' ')}
-        >
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className={depthBg}>
+      {/* Sticky header — always visible; stacks beneath parent step headers via zIndex */}
+      <CollapsibleTrigger
+        style={{ position: 'sticky', top: stickyTop, zIndex: 20 - depth }}
+        className={[
+          'w-full text-left backdrop-blur border-b px-3 py-1.5 flex items-center gap-1.5 hover:bg-accent/10 transition-colors',
+          config.bgClass,
+          `border-b ${config.borderClass}`,
+        ].join(' ')}
+      >
           <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
           <ChevronRightIcon
             className={`h-2.5 w-2.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
@@ -149,25 +148,24 @@ export function BranchLifecycleBlock({ item, jobId, depth = 0 }: BranchLifecycle
           )}
         </CollapsibleTrigger>
 
-        {/* Expanded content — renders directly in flow at parent width, no card chrome */}
-        <CollapsibleContent>
-          <div className={`border-l ${config.borderClass} ${depthBg}`}>
-            <SessionActivity
-              sessionId={item.sessionId}
-              isActive={item.status === 'active'}
+      {/* Expanded content — renders directly in flow at parent width, no card chrome */}
+      <CollapsibleContent>
+        <div className={depthBg}>
+          <SessionActivity
+            sessionId={item.sessionId}
+            isActive={item.status === 'active'}
+          />
+          {/* Recursive child sessions — limited to MAX_DEPTH */}
+          {depth < MAX_DEPTH && children?.map((child) => (
+            <BranchLifecycleBlock
+              key={child.sessionId}
+              item={sessionToBranchItem(child, item.sessionId)}
+              jobId={jobId}
+              depth={depth + 1}
             />
-            {/* Recursive child sessions — limited to MAX_DEPTH */}
-            {depth < MAX_DEPTH && children?.map((child) => (
-              <BranchLifecycleBlock
-                key={child.sessionId}
-                item={sessionToBranchItem(child, item.sessionId)}
-                jobId={jobId}
-                depth={depth + 1}
-              />
-            ))}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
