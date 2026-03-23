@@ -341,10 +341,12 @@ async function buildDebugEnv(opts: DebugEnvOpts = {}) {
     checkProviderAvailability: vi.fn(async () => ({ available: true, warning: null })),
   }));
 
+  const mockResolveTopLevelModel = vi.fn(() => ({ model: 'anthropic/claude-sonnet-4-5' }));
+
   vi.doMock('../../src/core/models.js', () => ({
     patchAgentFrontmatter: vi.fn(),
     resolveAllAgentModels: vi.fn(() => ({})),
-    resolveTopLevelModel: vi.fn(() => ({ model: 'anthropic/claude-sonnet-4-5' })),
+    resolveTopLevelModel: mockResolveTopLevelModel,
   }));
 
   // ── opencode-db mock ───────────────────────────────────────────────────────
@@ -409,6 +411,7 @@ async function buildDebugEnv(opts: DebugEnvOpts = {}) {
     mockGetNextPendingStep,
     mockDbMarkStepCompleted,
     mockDbMarkStepFailed,
+    mockResolveTopLevelModel,
     cleanup: () => {
       try {
         rmSync(projectDir, { recursive: true, force: true });
@@ -706,6 +709,35 @@ describe('Runner Debug Lane', () => {
         return cmdIdx >= 0 && args[cmdIdx + 1] === 'gsd-judge';
       });
       expect(hasJudgeCommand).toBe(false);
+
+      env.cleanup();
+    }, 10000);
+  });
+
+  // ── Debug scope model selection (not judge) ───────────────────────────────
+
+  describe('debug scope model selection', () => {
+    it('debug sessions resolve debug scope for model selection (not judge)', async () => {
+      // Regression test for: spawnAndWait hardcoded scope='judge' for all inline-prompt
+      // sessions. Debug sessions use inline prompts and should resolve to 'debug' scope
+      // (which maps to _top:quick in resolveTopLevelModel), not 'judge' scope.
+      const env = await buildDebugEnv({
+        sessionContents: [SESSION_CONTENT.debugComplete],
+      });
+      const runner = env.createRunner({ once: true, pollInterval: 0.01 });
+      await runner.run();
+
+      // Inspect all scope arguments passed to resolveTopLevelModel
+      const scopeCalls = (env.mockResolveTopLevelModel.mock.calls as unknown[][]).map(
+        c => c[0] as string,
+      );
+
+      // Debug session spawn must use 'debug' scope (fixed behavior)
+      expect(scopeCalls).toContain('debug');
+
+      // Judge scope must NOT be used for this debug-only session
+      // (Before the fix, inlinePrompt !== undefined forced scope='judge' for ALL inline sessions)
+      expect(scopeCalls).not.toContain('judge');
 
       env.cleanup();
     }, 10000);
