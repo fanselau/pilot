@@ -1661,15 +1661,18 @@ Wave structure:
 **Goal:** Make Pilot debug jobs autonomous by directly spawning gsd-debugger with prefilled context from caller/runner logic, handling all debugger outcomes (ROOT CAUSE FOUND, DEBUG COMPLETE, INVESTIGATION INCONCLUSIVE, CHECKPOINT REACHED) autonomously, auto-continuing through human-verify checkpoints, and keeping the entire flow in a dedicated debug lifecycle that never touches phase-style judge logic.
 **Requirements**: DBG-01, DBG-02, DBG-03, DBG-04, DBG-05, DBG-06, DBG-07, DBG-08, DBG-09, DBG-10, DBG-11, DBG-12, DBG-13, DBG-14
 **Depends on:** Phase 90
-**Plans:** 2/2 plans complete
+**Plans:** 4 plans (2 original + 2 gap closure)
 
 Plans:
 - [x] 91-01-PLAN.md — Create debug-lane module + rewire runner debug flow (inline gsd-debugger spawn, outcome parsing, autonomous continuation)
 - [x] 91-02-PLAN.md — Integration tests for runner debug lane (all outcome types, checkpoint handling, no-judge validation)
+- [ ] 91-03-PLAN.md — Gap closure: Fix spawnAndWait scope resolution for debug sessions (debug scope → not judge)
+- [ ] 91-04-PLAN.md — Gap closure: Add DBG-01..DBG-14 requirement definitions to REQUIREMENTS.md
 
 Wave structure:
 - Wave 1: 91-01 (implementation: debug-lane.ts module + runner.ts rewire)
 - Wave 2: 91-02 (tests, depends on 91-01)
+- Wave 3: 91-03 + 91-04 (gap closure, parallel — code fix + docs fix)
 
 **Details:**
 Read requirements/pilot-debug-lane-caller-side-autonomous-gsd-debugger.md for full spec.
