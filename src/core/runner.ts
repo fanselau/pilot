@@ -105,6 +105,7 @@ import { errMsg, HungSessionError } from '../util/errors.js';
 import { dim } from '../util/colors.js';
 import type { Job, DelegationResult, DelegationIntent, JobStep, StepSource } from './types.js';
 import { MAX_STEPS_PER_JOB, MAX_CONTINUATION_CYCLES, MIN_CONTINUATION_BUDGET } from './types.js';
+import { buildDebugPrompt, parseDebugOutcome, buildContinuationPrompt, type DebugOutcome } from './debug-lane.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -836,6 +837,12 @@ class Runner {
         createPendingStep(job.id, i, steps[i].command, steps[i].args, 'delegation', steps[i].reason);
       }
 
+      // Debug jobs use dedicated lifecycle — skip step loop and judge entirely
+      if (intent.type === 'debug') {
+        await this.executeDebugFlow(job, projectDir, intent);
+        return; // Debug flow handles its own completion/failure — do NOT fall through to step loop or milestone loop
+      }
+
       // Step 3: Execute step loop
       this.continuationCycles.set(job.id, 0);
       await this.executeStepLoop(job, projectDir);
@@ -999,12 +1006,10 @@ class Runner {
         return [];
 
       case 'debug': {
-        // Debug jobs map to gsd-debug (diagnose-issues workflow)
-        // spawnAndWait auto-prepends gsd- so command 'debug' → '--command gsd-debug'
-        const debugArgs = intent.symptoms
-          ? `${job.description}\n\nSymptoms: ${intent.symptoms}`
-          : job.description;
-        return [{ command: 'debug', args: debugArgs }];
+        // Debug jobs use a dedicated lifecycle — NOT gsd-debug (interactive) and NOT the step loop + judge pattern.
+        // The debug flow is handled entirely by executeDebugFlow() in launch().
+        // Return empty steps array — launch() checks for intent.type === 'debug' before the step loop.
+        return [];
       }
       case 'fast': {
         // Fast jobs use native gsd-fast when the project has it installed;
@@ -1050,6 +1055,11 @@ class Runner {
       }
 
       dbMarkStepRunning(step.id);
+      const totalStepsForLog = getTotalStepCount(job.id);
+      const stepLabel = step.command === 'judge' ? 'judge' : `${step.command} ${step.args}`;
+      process.stderr.write(
+        `[runner] Step started: ${stepLabel} (step ${step.stepIndex + 1}/${totalStepsForLog}) [job=${job.id}]\n`,
+      );
 
       if (step.command === 'judge') {
         await this.executeJudgeStep(job, projectDir, step);
@@ -1060,6 +1070,10 @@ class Runner {
       // After each step, check if job is still running (handlers may have marked failed)
       const latestJob = getJob(job.id);
       if (!latestJob || latestJob.status !== 'running') return;
+
+      process.stderr.write(
+        `[runner] Step completed: ${stepLabel} (step ${step.stepIndex + 1}/${totalStepsForLog}) [job=${job.id}]\n`,
+      );
 
       // Advance currentStep counter for observability (TUI/WebUI)
       advanceStep(job.id);
@@ -1321,6 +1335,14 @@ class Runner {
     step: JobStep,
     error: HungSessionError,
   ): Promise<void> {
+    // Safety: debug jobs handle hung sessions in executeDebugFlow — never re-delegate
+    if (job.scope === 'debug') {
+      markFailed(job.id, `Debug session hung: ${error.hungReason}. Debug jobs do not re-delegate.`);
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
     try {
       const result = await reDelegateForContinuation(job, projectDir, {
         source: 'judge:hung',
@@ -1347,6 +1369,243 @@ class Runner {
       const failedJob = getJob(job.id);
       if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
     }
+  }
+
+  // ── Debug Lane ─────────────────────────────────────────────────────────
+
+  /**
+   * Execute a debug job using gsd-debugger directly with prefilled context.
+   * Handles the full debug lifecycle: spawn → parse outcome → handle checkpoint continuation.
+   *
+   * Key differences from phase execution:
+   * - Uses inline prompt (like judge) instead of --command flag
+   * - No judge step — debugger self-verifies
+   * - Autonomous continuation on human-verify checkpoints
+   * - Blocks explicitly on human-action/decision checkpoints
+   * - Never routes into phase-style judge logic
+   */
+  private async executeDebugFlow(
+    job: Job,
+    projectDir: string,
+    intent: DelegationIntent & { type: 'debug' },
+  ): Promise<void> {
+    const slug = this.generateDebugSlug(job.description);
+    const debugPrompt = buildDebugPrompt({
+      description: job.description,
+      symptoms: intent.symptoms,
+      slug,
+    });
+
+    // Create a step record for observability (step 0 = initial debug investigation)
+    createPendingStep(job.id, 0, 'debugger', job.description, 'delegation', 'direct gsd-debugger spawn');
+
+    const ts = Date.now().toString(36).slice(-4);
+    const title = truncateTitle(`${job.project}-debugger-${job.id}-${ts}`, 80);
+    this.activeJobs.set(job.id, { job, title });
+    updateSessionTitles(job.id, [title]);
+
+    const step = getNextPendingStep(job.id);
+    if (step) dbMarkStepRunning(step.id);
+
+    try {
+      // Spawn gsd-debugger with inline prompt (same pattern as judge sessions)
+      // The scope is 'debug' which resolves to gsd-debugger model via resolveTopLevelModel
+      await this.spawnAndWait(projectDir, 'debugger', '', title, undefined, debugPrompt);
+
+      const sessionId = findSessionByTitle(title);
+      if (step) dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+
+      // Parse the debug outcome from session transcript
+      const outcome = this.extractDebugOutcome(sessionId);
+
+      await this.handleDebugOutcome(job, projectDir, outcome, slug, title);
+    } catch (err) {
+      if (err instanceof HungSessionError) {
+        // Interactive prompt leak detected — this is exactly what we're fixing.
+        // Do NOT re-delegate into phase logic. Mark failed with clear reason.
+        const sessionId = findSessionByTitle(title);
+        if (step) dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
+        markFailed(job.id, `Debug session hung on interactive prompt (${err.hungReason}). This indicates gsd-debugger tried to use an interactive tool in unattended mode. Tool: ${err.lastToolCall ?? 'unknown'}`);
+        const failedJob = getJob(job.id);
+        if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      } else {
+        const sessionId = findSessionByTitle(title);
+        if (step) dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
+        throw err; // Propagate to launch() catch-all
+      }
+    }
+  }
+
+  /**
+   * Extract debug outcome from session transcript.
+   */
+  private extractDebugOutcome(sessionId: string | null): DebugOutcome {
+    if (!sessionId) {
+      return { type: 'unknown', rawContent: 'No session found' };
+    }
+
+    try {
+      const exported = exportSessionFromDb(sessionId) as { messages: Array<Record<string, unknown>> };
+      if (exported.messages.length > 0) {
+        const lastAssistant = [...exported.messages].reverse().find(m => m.role === 'assistant');
+        if (lastAssistant) {
+          return parseDebugOutcome(String(lastAssistant.content ?? ''));
+        }
+      }
+    } catch (err) {
+      process.stderr.write(`[runner] debug outcome extraction failed: ${errMsg(err)}\n`);
+    }
+
+    return { type: 'unknown', rawContent: 'Could not extract session content' };
+  }
+
+  /**
+   * Handle a parsed debug outcome — complete, continue, or fail.
+   */
+  private async handleDebugOutcome(
+    job: Job,
+    projectDir: string,
+    outcome: DebugOutcome,
+    slug: string,
+    _previousTitle: string,
+  ): Promise<void> {
+    switch (outcome.type) {
+      case 'debug_complete': {
+        // Full success — debugger found, fixed, and verified
+        process.stderr.write(`[runner] Debug complete for ${job.id}: ${outcome.rootCause}\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markCompleted(job.id);
+        const completedJob = getJob(job.id);
+        if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
+        return;
+      }
+
+      case 'root_cause_found': {
+        // Diagnosis complete but no fix applied — mark as completed pending review
+        process.stderr.write(`[runner] Debug root cause found for ${job.id}: ${outcome.rootCause}\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markCompletedPendingReview(job.id, `Root cause: ${outcome.rootCause}\nSuggested fix: ${outcome.suggestedFix}`);
+        const reviewJob = getJob(job.id);
+        if (reviewJob) notifyJobCompletion(reviewJob).catch(() => {});
+        return;
+      }
+
+      case 'investigation_inconclusive': {
+        // Could not find root cause — mark failed with diagnostic info
+        process.stderr.write(`[runner] Debug investigation inconclusive for ${job.id}\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markFailed(job.id, `Investigation inconclusive. Recommendation: ${outcome.recommendation}. Checked: ${outcome.checked.join(', ')}`);
+        const failedJob = getJob(job.id);
+        if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+        return;
+      }
+
+      case 'checkpoint': {
+        if (outcome.checkpointType === 'human-verify') {
+          // Autonomous continuation — the debugger self-verified, we confirm on its behalf
+          process.stderr.write(`[runner] Debug checkpoint human-verify for ${job.id} — spawning autonomous continuation\n`);
+          await this.continueDebugAfterVerify(job, projectDir, slug);
+          return;
+        }
+        // human-action or decision — these are truly interactive, block explicitly
+        process.stderr.write(`[runner] Debug checkpoint ${outcome.checkpointType} for ${job.id} — blocking (requires human)\n`);
+        markReviewHold(job.id, `Debug checkpoint requires human interaction: ${outcome.checkpointType}. ${outcome.details.slice(0, 200)}`);
+        const heldJob = getJob(job.id);
+        if (heldJob) notifyJobCompletion(heldJob).catch(() => {});
+        return;
+      }
+
+      case 'unknown': {
+        // No structured output — treat as success if session completed normally
+        // (gsd-debugger may have done work without structured return)
+        process.stderr.write(`[runner] Debug session completed without structured outcome for ${job.id}. Treating as complete.\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markCompleted(job.id);
+        const completedJob2 = getJob(job.id);
+        if (completedJob2) notifyJobCompletion(completedJob2).catch(() => {});
+        return;
+      }
+    }
+  }
+
+  /**
+   * Spawn a continuation gsd-debugger session after human-verify checkpoint.
+   * Provides "confirmed fixed" response so the debugger can finalize/archive/commit.
+   */
+  private async continueDebugAfterVerify(
+    job: Job,
+    projectDir: string,
+    slug: string,
+  ): Promise<void> {
+    const debugFilePath = `.planning/debug/${slug}.md`;
+    const continuationPrompt = buildContinuationPrompt({ slug, debugFilePath });
+
+    // Create continuation step for observability
+    const stepCount = getTotalStepCount(job.id);
+    createPendingStep(job.id, stepCount, 'debugger-continue', 'autonomous checkpoint continuation', 'delegation', 'auto-confirm human-verify checkpoint');
+
+    const ts = Date.now().toString(36).slice(-4);
+    const contTitle = truncateTitle(`${job.project}-dbg-cont-${job.id}-${ts}`, 80);
+    this.activeJobs.set(job.id, { job, title: contTitle });
+    updateSessionTitles(job.id, [contTitle]);
+
+    const contStep = getNextPendingStep(job.id);
+    if (contStep) dbMarkStepRunning(contStep.id);
+
+    try {
+      await this.spawnAndWait(projectDir, 'debugger', '', contTitle, undefined, continuationPrompt);
+
+      const sessionId = findSessionByTitle(contTitle);
+      if (contStep) dbMarkStepCompleted(contStep.id, sessionId ?? undefined, contTitle);
+
+      // Parse continuation outcome
+      const outcome = this.extractDebugOutcome(sessionId);
+
+      if (outcome.type === 'debug_complete') {
+        process.stderr.write(`[runner] Debug continuation complete for ${job.id}\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markCompleted(job.id);
+        const completedJob = getJob(job.id);
+        if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
+      } else {
+        // Continuation didn't produce DEBUG COMPLETE — still treat as success
+        // The debugger did its work, archived the session
+        process.stderr.write(`[runner] Debug continuation for ${job.id} returned ${outcome.type} — treating as complete\n`);
+        await this.captureRecoveryHead(job.id, projectDir);
+        this.collectActualModels(job.id);
+        markCompleted(job.id);
+        const completedJob = getJob(job.id);
+        if (completedJob) notifyJobCompletion(completedJob).catch(() => {});
+      }
+    } catch (err) {
+      const sessionId = findSessionByTitle(contTitle);
+      if (contStep) dbMarkStepFailed(contStep.id, errMsg(err), sessionId ?? undefined, contTitle);
+      // Continuation failure — the initial debug work was done, mark with diagnostic
+      if (err instanceof HungSessionError) {
+        markFailed(job.id, `Debug continuation hung on interactive prompt: ${err.hungReason}`);
+      } else {
+        throw err; // Propagate to launch() catch-all
+      }
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+    }
+  }
+
+  /**
+   * Generate a URL-safe slug from a debug job description.
+   * Lowercase, hyphens, max 30 chars.
+   */
+  private generateDebugSlug(description: string): string {
+    return description
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 30);
   }
 
   // ── Step Helpers ───────────────────────────────────────────────────────
@@ -1798,7 +2057,19 @@ class Runner {
           }
           throw new Error(`Process died without clean completion for: ${title}`);
         }
-        // Otherwise continue into the state switch below with pidAlive=false
+        // Safety net: PID is dead and state is still working/hung — treat as complete
+        // if there are assistant messages (session had activity before dying).
+        // Without this, orphaned child sessions could cause an infinite poll loop.
+        {
+          const msgCount = getAssistantMessageCount(sessionId);
+          if (msgCount > 0) {
+            process.stderr.write(
+              `[runner] Warning: process died for ${title} (state=${afterWal.state} after WAL wait) but session has ${msgCount} messages. Treating as complete.\n`,
+            );
+            return;
+          }
+          throw new Error(`Process died without clean completion for: ${title} (state=${afterWal.state})`);
+        }
       }
 
       const stateResult = getSessionState(sessionId, pidAlive);
