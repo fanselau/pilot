@@ -8,17 +8,29 @@ export interface BranchIdentity {
   label: string
   role: string | null
   purpose: string | null
+  /** Hint for which semantic type this branch likely represents. Derived from title patterns. */
+  semanticHint: string | null
 }
 
 export function deriveBranchIdentity(title: string): BranchIdentity {
   const normalized = title.trim()
   if (!normalized) {
     return {
-      label: 'Sub-agent branch',
+      label: 'Sub-agent',
       role: null,
       purpose: null,
+      semanticHint: null,
     }
   }
+
+  // Detect GSD command patterns from session titles
+  const lowerTitle = normalized.toLowerCase()
+  let semanticHint: string | null = null
+  if (lowerTitle.includes('plan-phase') || lowerTitle.includes('planning')) semanticHint = 'planning'
+  else if (lowerTitle.includes('execute-phase') || lowerTitle.includes('execution')) semanticHint = 'execution'
+  else if (lowerTitle.includes('judge') || lowerTitle.includes('verify') || lowerTitle.includes('verification')) semanticHint = 'judge'
+  else if (lowerTitle.includes('delegation') || lowerTitle.includes('delegate')) semanticHint = 'delegation'
+  else if (lowerTitle.includes('add-phase')) semanticHint = 'add-phase'
 
   if (normalized.toLowerCase().startsWith('task:')) {
     const payload = normalized.slice(5).trim()
@@ -37,6 +49,7 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
       label: normalized,
       role,
       purpose,
+      semanticHint,
     }
   }
 
@@ -49,6 +62,7 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
         label: normalized,
         role: maybeRole,
         purpose: maybePurpose,
+        semanticHint,
       }
     }
   }
@@ -57,6 +71,7 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
     label: normalized,
     role: null,
     purpose: null,
+    semanticHint,
   }
 }
 

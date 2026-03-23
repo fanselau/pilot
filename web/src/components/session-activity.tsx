@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import type { SessionPart, StepTimelineItem, TimelineActivityItem, TimelineToolSummaryItem } from '@pilot/core/types.js'
-import { Card, CardContent } from '~/components/ui/card'
 import { Skeleton } from '~/components/ui/skeleton'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 import { getSessionActivityFn } from '~/lib/server-fns'
@@ -60,13 +59,11 @@ export function SessionActivity({ sessionId, isActive = false }: SessionActivity
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="py-4 space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-6 w-full" />
-          ))}
-        </CardContent>
-      </Card>
+      <div className="py-4 px-3 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-6 w-full" />
+        ))}
+      </div>
     )
   }
 
@@ -74,25 +71,21 @@ export function SessionActivity({ sessionId, isActive = false }: SessionActivity
 
   if (allParts.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-6 text-center text-sm text-muted-foreground">
-          No activity recorded for this session.
-        </CardContent>
-      </Card>
+      <div className="py-6 px-3 text-center text-sm text-muted-foreground">
+        No activity recorded for this session.
+      </div>
     )
   }
 
   return (
-    <Card className="min-w-0 max-w-full overflow-hidden">
-      <CardContent className="py-3 min-w-0 max-w-full overflow-hidden">
-        <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
-          {allParts.map((part) => (
-            <div key={part.id}>
-              <TimelineItemRenderer item={partToTimelineItem(part, sessionId)} jobId="" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="min-w-0 max-w-full overflow-hidden py-3 px-1">
+      <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
+        {allParts.map((part) => (
+          <div key={part.id}>
+            <TimelineItemRenderer item={partToTimelineItem(part, sessionId)} jobId="" />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
