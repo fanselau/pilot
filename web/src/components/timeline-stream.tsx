@@ -33,7 +33,7 @@ import { BranchLifecycleBlock } from '~/components/branch-lifecycle-block'
 import { SyntaxHighlight, detectLanguage } from '~/components/syntax-highlight'
 import { useJobDetailStream } from '~/lib/sse'
 import { getFullJobTimelineFn, getFullMessageFn } from '~/lib/server-fns'
-import { formatStepLabel, isJudgeStep } from '~/lib/step-semantics'
+import { formatStepLabel, isJudgeStep, resolveSemanticType, getSemanticIcon, getSemanticColors, SEMANTIC_TYPE_CONFIG } from '~/lib/step-semantics'
 
 function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleTimeString([], {
@@ -223,19 +223,31 @@ function StepGroupSection({
   group: StepTimelineGroup
   jobId: string
 }) {
-  const stepLabel = formatStepLabel(group)
+  const semanticType = resolveSemanticType(group)
+  const config = SEMANTIC_TYPE_CONFIG[semanticType]
+  const Icon = config.icon
+  const { bgClass, borderClass } = getSemanticColors(group)
 
   return (
     <section className="space-y-2">
       {/* Step group header — sticky with z-30 to stack above nested session headers */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 flex flex-wrap items-center gap-2 px-2 py-1.5">
+      <div className={[
+        'sticky top-0 z-30 backdrop-blur flex flex-wrap items-center gap-2 px-2 py-1.5',
+        bgClass,
+        `border-b ${borderClass}`,
+      ].join(' ')}>
+        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <Badge variant={group.stepIndex === null ? 'outline' : 'secondary'}>
-          {stepLabel}
+          {config.label}
         </Badge>
+        {config.isGap && (
+          <Badge variant="outline" size="sm" className="text-[10px] text-amber-500 border-amber-500/30">
+            Gap
+          </Badge>
+        )}
         <Badge variant={stepStatusVariant(group.status)} size="sm">
           {group.status}
         </Badge>
-        <span className="text-sm text-muted-foreground">{group.command}</span>
       </div>
 
       {isJudgeStep(group) && group.verdictReason && (

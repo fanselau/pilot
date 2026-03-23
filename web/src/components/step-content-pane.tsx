@@ -18,7 +18,7 @@ import { Button } from '~/components/ui/button'
 import { SourceBadge } from '~/components/ui/status-badge'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
-import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields } from '~/lib/step-semantics'
+import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields, resolveSemanticType, getSemanticIcon, getSemanticColors, SEMANTIC_TYPE_CONFIG } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 import { FollowModeBar } from '~/components/follow-mode-bar'
 
@@ -67,15 +67,10 @@ function stepStatusVariant(status: string) {
   }
 }
 
-/** Returns the colored bottom border class for a step group header based on step type. */
+/** Returns the colored bottom border class for a step group header based on semantic type. */
 function stepHeaderBorderClass(group: StepTimelineGroup): string {
-  if (group.command === 'delegation') return 'border-b-2 border-muted-foreground/20'
-  if (group.source === 'judge:gaps' || group.source === 'judge:hung') return 'border-b-2 border-orange-500/30'
-  if (group.source === 'judge:failed') return 'border-b-2 border-red-500/30'
-  if (group.command.includes('judge') || group.command.includes('verify')) return 'border-b-2 border-amber-500/30'
-  if (group.command === 'quick' || group.command === 'unattributed') return 'border-b-2 border-muted-foreground/20'
-  // Delegation/Execution steps
-  return 'border-b-2 border-primary/30'
+  const { borderClass } = getSemanticColors(group)
+  return `border-b-2 ${borderClass}`
 }
 
 /**
@@ -322,21 +317,31 @@ export function StepContentPane({
                     >
                       {(() => {
                         const synth = synthesizeHeaderFields(group)
-                        const borderClass = stepHeaderBorderClass(group)
+                        const semanticType = resolveSemanticType(group)
+                        const config = SEMANTIC_TYPE_CONFIG[semanticType]
+                        const Icon = config.icon
+                        const { bgClass, borderClass } = getSemanticColors(group)
                         return (
                           <div className={[
-                            'sticky top-0 bg-background/95 backdrop-blur z-30 px-3 py-2.5 space-y-1',
-                            borderClass,
+                            'sticky top-0 backdrop-blur z-30 px-3 py-2.5 space-y-1',
+                            bgClass,
+                            `border-b-2 ${borderClass}`,
                             synth.isActive ? 'border-l-[3px] border-l-sky-500' : '',
                           ].filter(Boolean).join(' ')}>
-                            {/* Row 1: Semantic label + status + active pulse + model + duration + summary link */}
+                            {/* Row 1: Semantic icon + label + status + active pulse + model + duration + summary link */}
                             <div className="flex flex-wrap items-center gap-2">
                               {synth.isActive && (
                                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
                               )}
+                              <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <Badge variant="secondary" size="sm" className="font-semibold">
-                                {synth.label}
+                                {config.label}
                               </Badge>
+                              {config.isGap && (
+                                <Badge variant="outline" size="sm" className="text-[10px] text-amber-500 border-amber-500/30 px-1">
+                                  Gap
+                                </Badge>
+                              )}
                               {group.stepIndex !== null && group.stepIndex >= 0 && (
                                 <span className="text-[10px] font-mono text-muted-foreground/60">
                                   #{group.stepIndex}
@@ -429,7 +434,10 @@ export function StepContentPane({
                           </p>
                         </div>
                       )}
-                      <div className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden">
+                      <div className={[
+                        'space-y-0.5 border-l-2 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden',
+                        getSemanticColors(group).borderClass,
+                      ].join(' ')}>
                         {group.items.map((item, idx) => {
                           const globalIdx = groupStartIndex + idx
                           const isNew = globalIdx >= newItemStart && newItemStart < allItems.length

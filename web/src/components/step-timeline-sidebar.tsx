@@ -14,7 +14,7 @@ import { useRef, useMemo } from 'react'
 import type { JobDetailSnapshot, StepTimelineGroup } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import { formatStepLabel, formatDelegationIndex, isContinuationStep } from '~/lib/step-semantics'
+import { formatStepLabel, formatDelegationIndex, isContinuationStep, resolveSemanticType, SEMANTIC_TYPE_CONFIG } from '~/lib/step-semantics'
 import { parseSqliteTimestamp } from '~/lib/time-utils'
 import { formatCompactDuration } from '~/lib/format'
 import { DurationBar } from '~/components/ui/sparkline'
@@ -271,6 +271,9 @@ export function StepTimelineSidebar({
 
                 const commandLabel = formatStepLabel(group)
                 const isContinuation = isContinuationStep(group)
+                const sidebarSemanticType = resolveSemanticType(group)
+                const sidebarConfig = SEMANTIC_TYPE_CONFIG[sidebarSemanticType]
+                const StepIcon = sidebarConfig.icon
 
                 const isRunning = group.status === 'running'
 
@@ -304,8 +307,9 @@ export function StepTimelineSidebar({
                           : group.stepIndex}
                       </span>
                       <div className="min-w-0 flex-1 space-y-0.5">
-                        {/* Row 1: command + duration text */}
+                        {/* Row 1: icon + command + gap indicator + duration text */}
                         <div className="flex items-center gap-1.5">
+                          <StepIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
                           {stepReason ? (
                             <Tooltip>
                               <TooltipTrigger className="truncate text-xs font-mono leading-tight text-left">
@@ -320,6 +324,7 @@ export function StepTimelineSidebar({
                               {commandLabel}
                             </p>
                           )}
+                          {sidebarConfig.isGap && <span className="text-[9px] text-amber-500/70">(gap)</span>}
                           {stepDurationMs != null && (
                             <span className="shrink-0 text-[10px] font-mono text-muted-foreground">
                               {formatCompactDuration(stepDurationMs)}
