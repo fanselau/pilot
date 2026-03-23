@@ -1623,17 +1623,20 @@ Read requirements/pilot-web-ui-job-detail-content-first-info-panel-and-follow-mo
 **Goal:** Make the job detail view a clear, native, single-scroll execution tree with stacked sticky headers showing Step → sub-agent → nested sub-agent hierarchy. Create a semantic session type model with Lucide icons and pastel depth system, fix Summary popup empty state, eliminate Unattributed sessions, and replace internal jargon with human-readable semantic labels.
 **Requirements**: SEMANTIC-TYPE-MODEL, SUMMARY-FIX, LABEL-FOUNDATION, STICKY-HIERARCHY, PASTEL-COLORS, HEADER-RENDERING, EXECUTION-PARENT, GAP-LABELS, ATTRIBUTION-FIX, VALIDATION
 **Depends on:** Phase 88
-**Plans:** 3/3 plans complete
+**Plans:** 5 plans (3 complete + 2 gap closure)
 
 Plans:
-- [ ] 89-01-PLAN.md — Semantic session type model + Lucide icon mappings + Summary popup fix
-- [ ] 89-02-PLAN.md — Sticky header hierarchy + pastel color system + header rendering overhaul
-- [ ] 89-03-PLAN.md — Attribution hardening + visual verification against real job data
+- [x] 89-01-PLAN.md — Semantic session type model + Lucide icon mappings + Summary popup fix
+- [x] 89-02-PLAN.md — Sticky header hierarchy + pastel color system + header rendering overhaul
+- [x] 89-03-PLAN.md — Attribution hardening + visual verification against real job data
+- [ ] 89-04-PLAN.md — Gap closure: total branch semantic typing + backend semanticLabel wiring
+- [ ] 89-05-PLAN.md — Gap closure: Phase 89 requirement definitions in REQUIREMENTS.md
 
 Wave structure:
-- Wave 1: 89-01 (semantic foundation — types, icons, colors, summary fix)
-- Wave 2: 89-02 (visual hierarchy — sticky headers, pastels, icons in all surfaces, depends on 89-01)
-- Wave 3: 89-03 (attribution + validation checkpoint, depends on 89-01 + 89-02)
+- Wave 1: 89-01 (semantic foundation — types, icons, colors, summary fix) ✓
+- Wave 2: 89-02 (visual hierarchy — sticky headers, pastels, icons in all surfaces) ✓
+- Wave 3: 89-03 (attribution + validation checkpoint) ✓
+- Wave 4: 89-04, 89-05 (gap closure — parallel, no dependencies between them)
 
 **Details:**
 Read requirements/pilot-web-ui-nested-sticky-hierarchy-summary-and-label-fixes.md for full spec.
