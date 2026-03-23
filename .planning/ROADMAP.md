@@ -1623,7 +1623,7 @@ Read requirements/pilot-web-ui-job-detail-content-first-info-panel-and-follow-mo
 **Goal:** Make the job detail view a clear, native, single-scroll execution tree with stacked sticky headers showing Step → sub-agent → nested sub-agent hierarchy. Create a semantic session type model with Lucide icons and pastel depth system, fix Summary popup empty state, eliminate Unattributed sessions, and replace internal jargon with human-readable semantic labels.
 **Requirements**: SEMANTIC-TYPE-MODEL, SUMMARY-FIX, LABEL-FOUNDATION, STICKY-HIERARCHY, PASTEL-COLORS, HEADER-RENDERING, EXECUTION-PARENT, GAP-LABELS, ATTRIBUTION-FIX, VALIDATION
 **Depends on:** Phase 88
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 89-01-PLAN.md — Semantic session type model + Lucide icon mappings + Summary popup fix
