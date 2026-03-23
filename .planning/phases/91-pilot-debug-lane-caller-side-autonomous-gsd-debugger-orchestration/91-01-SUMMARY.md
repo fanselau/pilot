@@ -127,6 +127,15 @@ None - no external service configuration required.
 - Plan 02 (if it exists) can build on the debug-lane module
 - Phase complete when all plans have SUMMARYs
 
+## Self-Check: PASSED
+
+- ✅ FOUND: src/core/debug-lane.ts
+- ✅ FOUND: test/core/debug-lane.test.ts
+- ✅ FOUND: .planning/phases/91-.../91-01-SUMMARY.md
+- ✅ Commit c8c3de6 (test RED) exists
+- ✅ Commit c560e16 (feat GREEN) exists
+- ✅ Commit 8ddf78c (feat runner rewire) exists
+
 ---
 *Phase: 91-pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration*
 *Completed: 2026-03-23*
