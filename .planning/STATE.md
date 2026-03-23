@@ -2,21 +2,22 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 89-04-PLAN.md
-last_updated: "2026-03-23T10:54:40.379Z"
-last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
+status: verifying
+stopped_at: Completed 90-01-PLAN.md
+last_updated: "2026-03-23T15:02:52.388Z"
+last_activity: 2026-03-23
 progress:
-  total_phases: 88
+  total_phases: 90
   completed_phases: 46
-  total_plans: 174
-  completed_plans: 162
+  total_plans: 176
+  completed_plans: 163
   percent: 93
 ---
 
 # State
 
 ## Current Milestone: launch-v1
+
 ## Current Phase: 73
 
 ## Current Position
@@ -25,7 +26,7 @@ Phase: 89 of 89 (Phase 89: Pilot Web UI — Nested Sticky Hierarchy, Summary, an
 **Next Plan:** None — Phase 89 complete (4/4 plans)
 Plan: 4 of 4 in current phase
 Status: Complete
-Last activity: 2026-03-23 - Completed 89-04-PLAN.md: resolveSemanticHint total coverage + backend semanticLabel in step headers
+Last activity: 2026-03-23
 
 Progress: [█████████░] 93%
 
@@ -37,159 +38,211 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 **Current focus:** Phase 72 cleanup documentation and active-surface coupling audit are complete; follow-up concerns remain migration remediation on external projects and fork repo archive permissions.
 
 ### Phase 1: Project Scaffolding + Core Data Layer
-- **Status:** Milestone complete
+
+- **Status:** Phase complete — ready for verification
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 3: Queue Runner + Lifecycle Automation
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 4: TUI Dashboard
+
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 5: Integration fixes per requirements/integration-fixes.md
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 6: Queue storage migration per requirements/queue-storage-migration.md
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 7: Smart add per requirements/smart-add.md
+
 - **Status:** complete (2/4 plans executed [gap closure 03+04], verified ✓)
 
 ### Phase 8: Smart tail stuck detection
+
 - **Status:** planned (0/2 plans complete)
 
 ### Phase 9: Gap closure resilience
+
 - **Status:** complete (2/2 active plans complete [gap closure 09-03+09-04], verified ✓)
 
 ### Phase 10: Smart verify routing per requirements/smart-verify-routing.md
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 11: Finishing touches per requirements/finishing-touches.md
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 12: Critical fixes per requirements/overnight-fixes.md
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 13: Daemon mode runner per requirements/daemon-mode-runner.md
+
 - **Status:** complete (4/4 plans)
 
 ### Phase 14: Production hardening per requirements/production-hardening.md
+
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 15: E2E test suite per requirements/e2e-test-suite.md
+
 - **Status:** complete (force-finished — 320+ unit tests provide sufficient coverage)
 
 ### Phase 25: Pilot Learnings Consolidation + Reliability Guardrails
+
 - **Status:** complete (force-finished — Phase 26 implemented all critical guardrails)
 
 ### Phase 30: Milestone Orchestration: Child Jobs + depends_on
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 31: Automated Phase Verification (gsd-verify-phase)
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 32: Job Completion Callback (OpenClaw Session Wake)
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 33: Managed Projects
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 34: TUI & Observability Overhaul
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 36: Config File Support for Pilot CLI
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 37: Skills System for Pilot
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 38: Pilot Hardening — Pre-Release Quality Pass
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 40: Default Skills Library
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 41: OpenClaw Skill Rewrite and Bundle with Pilot
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 42: Release Hardening — Config Isolation, Install Story, and Changelog
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 43: Job Undo and Recovery Checkpoints
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 44: QoL Introspection and Queue Grace Period
+
 - **Status:** complete (6/6 plans, verified ✓)
 
 ### Phase 45: Job Observability, Cost Tracking, and Export
+
 - **Status:** complete (6/6 plans, verified ✓)
 
 ### Phase 46: Dynamic Model Configuration
+
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 47: AGENTS.md Integration — CLI Commands & Doctor Check
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 48: Fix New Project Setup Critical Bugs
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 49: Surface Judge Verdict and Status Badges in TUI / Status Views
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 50: Setup Refresh Mode and Fast Skill Installation
+
 - **Status:** in progress (1/2 plans complete)
 
 ### Phase 51: Pilot notifications via `openclaw agent --deliver`
+
 - **Status:** in progress (2/3 plans complete)
 
 ### Phase 52: Shell-Agnostic CLI and TUI Shortcuts
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 53: Stable service wrapper + real r/x handler wiring
+
 - **Status:** complete (1/1 plans, verified ✓)
 
 ### Phase 54: Pilot project-agent notifications should trigger useful replies
+
 - **Status:** complete (1/1 plans, verified ✓)
 
 ### Phase 55: Shell/Runtime Toolchain Exposure
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 56: Pilot Existing Install Shell Exposure Must Be Applyable on Real Machines
+
 - **Status:** complete (1/1 plans, verified ✓)
 
 ### Phase 57: Pilot Notify Setup Must Be Optional and Operator-Friendly
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 58: Pilot Failure Notifications Should Guide Agents to Unblock and Read Logs
+
 - **Status:** complete (1/1 plans, verified ✓)
 
 ### Phase 59: Pilot TUI Shortcuts and Project-Management Actions Must Work in Real Usage
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 60: Remove dirty-guard blocking entirely; only real failures should block projects
+
 - **Status:** complete (2/2 plans, verified ✓)
 
 ### Phase 61: Pilot Web UI Phase 1 — builder-ready feasibility scaffold, compact query backbone, and root-based job detail model
+
 - **Status:** in progress (2/3 plans complete)
 
 ### Phase 62: Pilot Web UI Phase 2 — agent frontend, merged chronological detail flow, inline sub-agent cards, and proactive action parity
+
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 63: Pilot Phase 63 — step-first detail flow, lifecycle branch blocks, and nested child detail for web + TUI
+
 - **Status:** complete (5/5 plans, verified ✓)
 
 ### Phase 66: Delegation Pipeline Redesign — Intent-Based Architecture
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Phase 67: Session Blocker Handling — DB-Based Hung Detection
+
 - **Status:** complete (4/4 plans)
 
 ### Phase 68: Judge System — Move Into Pilot
+
 - **Status:** complete (4/4 plans, verified ✓)
 
 ### Phase 69: Model System — Agent Frontmatter Patching
+
 - **Status:** complete (3/3 plans, verified ✓)
 
 ### Quick Tasks Completed
@@ -287,6 +340,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 ## Accumulated Context
 
 ### Roadmap Evolution
+
 - Phase 5 added: Integration fixes per requirements/integration-fixes.md
 - Phase 6 added: Queue storage migration per requirements/queue-storage-migration.md
 - Phase 7 added: Smart add per requirements/smart-add.md
@@ -367,6 +421,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 87 added: Pilot UI Phase — First-Class Delegation Step for Async Runner Mode
 - Phase 88 added: Pilot Web UI — Job Detail Content-First Redesign (Info Panel, Summary Overlay, Nested Sticky Sessions, Follow Mode)
 - Phase 89 added: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes
+- Phase 90 added: Pilot Web UI — Native Subsession Flow, Single-Scroll Integration, and Follow Mode
 
 ## Decisions
 
@@ -888,6 +943,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 | 72-04 | Operator docs now describe only upstream `get-shit-done-cc` installation and `pilot setup --refresh` sentinel recovery | Removes stale submodule/fork instructions and keeps onboarding aligned with actual setup/update behavior |
 | 72-04 | Pilot pipeline skill guidance now uses intent lifecycle + frontmatter patching + retry lineage mental model | Keeps operator actions aligned with current runner contracts and observability surfaces |
 | 72-04 | Active coupling audit enforces zero targeted fork strings across src/test/README/docs/skills | Provides deterministic closeout gate for fork cleanup without rewriting historical archives |
+
 - [Phase 73]: Legacy verdict transition: doubting/partial map to gaps outcome for append-forward alignment
 - [Phase 73]: StepSource as narrow 5-value union for type safety
 - [Phase 73]: Keep legacy verdictSource/verdictReason on JobStep for backward compat during transition
@@ -957,6 +1013,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 89]: DEPTH_PASTELS array provides depth-based background progression for nested branch regions
 - [Phase 89]: Contiguous time windows + tier 5.5 catch-all eliminate unattributed sessions
 - [Phase 89-pilot-web-ui-nested-sticky-hierarchy-summary-and-label-fixes]: All 10 Phase 89 requirement IDs marked as complete in REQUIREMENTS.md with traceability rows — Work was done in prior plans 89-01 through 89-04; this plan adds missing documentation traceability
+- [Phase 90]: FollowModeBar SVG changed from fill to stroke rendering for line-based path commands
 
 ## Blockers/Concerns Carried Forward
 
@@ -965,6 +1022,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T10:54:40.372Z
-Stopped at: Completed 89-04-PLAN.md
+Last session: 2026-03-23T15:02:41.481Z
+Stopped at: Completed 90-01-PLAN.md
 Resume file: None
