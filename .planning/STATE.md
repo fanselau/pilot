@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed quick-260323-o5h
-last_updated: "2026-03-23T17:35:48.590Z"
+status: verifying
+stopped_at: Completed 92-01-PLAN.md
+last_updated: "2026-03-23T17:53:09.307Z"
 progress:
-  total_phases: 91
-  completed_phases: 48
-  total_plans: 180
-  completed_plans: 168
+  total_phases: 92
+  completed_phases: 49
+  total_plans: 181
+  completed_plans: 169
 ---
 
 # State
@@ -20,19 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 91
-Plan: Not started
+Phase: 92 (pilot-web-ui-native-subsession-flow-actual-implementation-follow-up) — EXECUTING
+Plan: 1 of 1
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 91 — pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration
+**Current focus:** Phase 92 — pilot-web-ui-native-subsession-flow-actual-implementation-follow-up
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Milestone complete
+- **Status:** Phase complete — ready for verification
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -417,6 +417,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - Phase 89 added: Pilot Web UI — Nested Sticky Hierarchy, Summary, and Label Fixes
 - Phase 90 added: Pilot Web UI — Native Subsession Flow, Single-Scroll Integration, and Follow Mode
 - Phase 91 added: Pilot Debug Lane — Caller-Side Autonomous gsd-debugger Orchestration
+- Phase 92 added: Pilot Web UI — Native Subsession Flow Actual Implementation Follow-Up
 
 ## Decisions
 
@@ -1014,6 +1015,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 91]: Test via runner.run() integration: all debug lane behaviors validated through public launch() path — Private methods not accessible directly; end-to-end testing through run() ensures real wiring is validated
 - [Phase 91]: Added DBG requirements as a named section under v1 Requirements before v2 Requirements section
 - [Phase 91]: Use job.scope as primary scope source in spawnAndWait — inlinePrompt alone does not imply judge scope
+- [Phase 92]: Removed all border-l nesting from BranchLifecycleBlock — Collapsible is top-level element
 
 ## Blockers/Concerns Carried Forward
 
@@ -1022,6 +1024,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:35:48.583Z
-Stopped at: Completed quick-260323-o5h
+Last session: 2026-03-23T17:52:57.509Z
+Stopped at: Completed 92-01-PLAN.md
 Resume file: None
