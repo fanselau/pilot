@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 91-04-PLAN.md
-last_updated: "2026-03-23T17:04:56.736Z"
+stopped_at: Completed 91-03-PLAN.md
+last_updated: "2026-03-23T17:09:14.296Z"
 progress:
   total_phases: 91
-  completed_phases: 47
+  completed_phases: 48
   total_plans: 180
-  completed_plans: 167
+  completed_plans: 168
 ---
 
 # State
@@ -21,7 +21,7 @@ progress:
 ## Current Position
 
 Phase: 91 (pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Project Reference
 
@@ -1012,6 +1012,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 91]: debug-lane.ts as separate module: enables unit testing without mocking runner infrastructure
 - [Phase 91]: Test via runner.run() integration: all debug lane behaviors validated through public launch() path — Private methods not accessible directly; end-to-end testing through run() ensures real wiring is validated
 - [Phase 91]: Added DBG requirements as a named section under v1 Requirements before v2 Requirements section
+- [Phase 91]: Use job.scope as primary scope source in spawnAndWait — inlinePrompt alone does not imply judge scope
 
 ## Blockers/Concerns Carried Forward
 
@@ -1020,6 +1021,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:04:56.729Z
-Stopped at: Completed 91-04-PLAN.md
+Last session: 2026-03-23T17:09:10.104Z
+Stopped at: Completed 91-03-PLAN.md
 Resume file: None
