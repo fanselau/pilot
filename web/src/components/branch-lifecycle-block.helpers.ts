@@ -1,9 +1,4 @@
-import type { BranchLifecycleItem } from '@pilot/core/types.js'
 import { resolveSemanticHint } from '~/lib/step-semantics'
-
-function isPresent(value: string | null | undefined): value is string {
-  return typeof value === 'string' && value.trim().length > 0
-}
 
 export interface BranchIdentity {
   label: string
@@ -70,22 +65,3 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
   }
 }
 
-export function selectBranchPreview(item: BranchLifecycleItem): string | null {
-  if (item.status === 'done' && isPresent(item.finalMessagePreview)) {
-    return item.finalMessagePreview
-  }
-
-  if (isPresent(item.latestMessagePreview)) {
-    return item.latestMessagePreview
-  }
-
-  if (isPresent(item.finalMessagePreview)) {
-    return item.finalMessagePreview
-  }
-
-  return null
-}
-
-export function getBranchDrillInPath(jobId: string, sessionId: string): string {
-  return `/jobs/${encodeURIComponent(jobId)}/sessions/${encodeURIComponent(sessionId)}`
-}
