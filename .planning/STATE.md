@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 91-02-PLAN.md
-last_updated: "2026-03-23T16:45:50.972Z"
+status: executing
+stopped_at: Completed 91-04-PLAN.md
+last_updated: "2026-03-23T17:04:56.736Z"
 progress:
   total_phases: 91
-  completed_phases: 48
-  total_plans: 178
-  completed_plans: 166
+  completed_phases: 47
+  total_plans: 180
+  completed_plans: 167
 ---
 
 # State
@@ -21,7 +21,7 @@ progress:
 ## Current Position
 
 Phase: 91 (pilot-debug-lane-caller-side-autonomous-gsd-debugger-orchestration) — EXECUTING
-Plan: 2 of 2
+Plan: 2 of 4
 
 ## Project Reference
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Phase complete — ready for verification
+- **Status:** Ready to execute
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -1011,6 +1011,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 90]: All 10 Phase 90 requirements marked Complete — matching UI-SPEC contract verification
 - [Phase 91]: debug-lane.ts as separate module: enables unit testing without mocking runner infrastructure
 - [Phase 91]: Test via runner.run() integration: all debug lane behaviors validated through public launch() path — Private methods not accessible directly; end-to-end testing through run() ensures real wiring is validated
+- [Phase 91]: Added DBG requirements as a named section under v1 Requirements before v2 Requirements section
 
 ## Blockers/Concerns Carried Forward
 
@@ -1019,6 +1020,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T16:45:50.965Z
-Stopped at: Completed 91-02-PLAN.md
+Last session: 2026-03-23T17:04:56.729Z
+Stopped at: Completed 91-04-PLAN.md
 Resume file: None
