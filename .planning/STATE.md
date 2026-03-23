@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 89-01-PLAN.md
-last_updated: "2026-03-23T10:17:57.635Z"
+stopped_at: Completed 89-02-PLAN.md
+last_updated: "2026-03-23T10:25:39.797Z"
 last_activity: "2026-03-22 - Completed quick task 260322-uyd: Pilot fast scope native detection + compat fallback + UI labels"
 progress:
   total_phases: 88
   completed_phases: 45
   total_plans: 172
-  completed_plans: 158
+  completed_plans: 159
   percent: 93
 ---
 
@@ -953,6 +953,8 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 - [Phase 88]: Sticky applied to CollapsibleTrigger button element directly — valid CSS, simpler than wrapper div
 - [Phase 88]: Added 10 Phase 88 requirement IDs to REQUIREMENTS.md; corrected key_links in 88-01 and 88-02 plans to match verified wiring (split-pane-detail.tsx for Info/Summary, timeline-stream.tsx for BranchLifecycleBlock) — Gap closure plan: fix traceability gaps before phase sign-off
 - [Phase 89]: 14-type semantic model covering all session patterns including gap-loop variants, with Lucide icons per type
+- [Phase 89]: config.label from SEMANTIC_TYPE_CONFIG replaces formatStepLabel() for primary header labels
+- [Phase 89]: DEPTH_PASTELS array provides depth-based background progression for nested branch regions
 
 ## Blockers/Concerns Carried Forward
 
@@ -961,6 +963,6 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 
 ## Session Continuity
 
-Last session: 2026-03-23T10:17:52.838Z
-Stopped at: Completed 89-01-PLAN.md
+Last session: 2026-03-23T10:25:28.080Z
+Stopped at: Completed 89-02-PLAN.md
 Resume file: None
