@@ -1131,6 +1131,22 @@ class Runner {
       }
     } catch (err) {
       if (err instanceof HungSessionError) {
+        // Artifact-based recovery for ui-phase: if the session produced the UI-SPEC
+        // artifact before hitting an interactive prompt (expected — GSD ui-phase has
+        // review checkpoints), treat as completed instead of failed.
+        if (step.command === 'ui-phase') {
+          const phaseMatch = step.args.match(/^(\d+)/);
+          const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
+          if (phaseNum !== null && isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum)) {
+            const sessionId = findSessionByTitle(title);
+            process.stderr.write(
+              `[runner] ui-phase completed (hung artifact recovery: UI-SPEC exists for phase ${phaseNum}) — handing off to plan-phase [job=${job.id}]\n`,
+            );
+            dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+            return; // Step completed via artifact detection — continue to next step
+          }
+        }
+        // No artifact recovery — original HungSessionError handling
         const sessionId = findSessionByTitle(title);
         dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
         incrementHungCount(job.id, err.hungReason);
