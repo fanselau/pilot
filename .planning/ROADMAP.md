@@ -1703,7 +1703,8 @@ Plans:
 **Goal:** Fix runner lifecycle/status accounting so a successful UI-phase handoff (UI-SPEC artifact produced) is recorded as step success, not failure. The HungSessionError path in executeCommandStep currently marks ui-phase steps as failed even when the artifact was produced before the interactive prompt.
 **Requirements**: UIFIX-01, UIFIX-02, UIFIX-03, UIFIX-04, UIFIX-05
 **Depends on:** Phase 93
-**Plans:** 1/1 plans complete
+**Plans:** 2 plans
 
 Plans:
 - [x] 94-01-PLAN.md — Fix HungSessionError ui-phase artifact recovery + regression tests
+- [ ] 94-02-PLAN.md — Gap closure: extract testable HungSessionError decision function + runner-level regression tests
