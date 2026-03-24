@@ -1686,3 +1686,14 @@ Read requirements/pilot-debug-lane-caller-side-autonomous-gsd-debugger.md for fu
 
 Plans:
 - [x] 92-01-PLAN.md — Flatten subsession layout (BranchLifecycleBlock + SessionActivity rewrite) + human verify
+
+### Phase 93: AutoPilot Brand Identity Rebrand
+
+**Goal:** Rebrand the Pilot frontend to AutoPilot with a cohesive visual identity — SVG brand assets, Brand component, header + title updates, and complete favicon/app icon set that communicates automation, motion, intelligence, and confidence.
+**Requirements**: BRAND-01, BRAND-02, BRAND-03, BRAND-04, BRAND-05, BRAND-06, BRAND-07
+**Depends on:** Phase 92
+**Plans:** 2 plans
+
+Plans:
+- [ ] 93-01-PLAN.md — SVG brand assets + Brand component + header/title rebrand
+- [ ] 93-02-PLAN.md — Favicon set generation + HTML head wiring + visual verification
