@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -1144,5 +1144,57 @@ describe('isUiPhaseArtifactComplete', () => {
     mkdirSync(phaseDir, { recursive: true });
 
     expect(_isUiPhaseArtifactComplete('ui-phase', tmpDir, 90)).toBe(false);
+  });
+});
+
+// ── ui-phase hung artifact recovery ──────────────────────────────────────
+
+describe('ui-phase hung artifact recovery', () => {
+  it('treats hung ui-phase as completed when UI-SPEC artifact exists', () => {
+    // This test validates the fix for the dn02 regression:
+    // ui-phase sessions that produce a UI-SPEC but then hang on an interactive prompt
+    // (e.g., review checkpoint) should be treated as completed, not failed.
+    //
+    // The runner's executeCommandStep HungSessionError handler now checks for
+    // artifact completion BEFORE marking the step as failed.
+    const tmpDir = mkdtempSync(path.join(tmpdir(), 'uihung-'));
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '36-UI-SPEC.md'), '# UI Spec\nSome content');
+
+    // Artifact exists → should return true (recovery path will mark completed)
+    expect(_isUiPhaseArtifactComplete('ui-phase', tmpDir, 36)).toBe(true);
+
+    // Cleanup
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('preserves failure for hung ui-phase when UI-SPEC artifact is missing', () => {
+    // When ui-phase hangs but did NOT produce an artifact, it should still
+    // be marked as failed (genuine failure — the work wasn't completed).
+    const tmpDir = mkdtempSync(path.join(tmpdir(), 'uihung-'));
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    // No UI-SPEC.md written
+
+    expect(_isUiPhaseArtifactComplete('ui-phase', tmpDir, 36)).toBe(false);
+
+    // Cleanup
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('non-ui-phase commands are not affected by artifact recovery', () => {
+    // Plan-phase, execute-phase, etc. should never trigger artifact recovery
+    const tmpDir = mkdtempSync(path.join(tmpdir(), 'uihung-'));
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '36-UI-SPEC.md'), '# UI Spec\nSome content');
+
+    // Even though UI-SPEC exists, non-ui-phase commands return false
+    expect(_isUiPhaseArtifactComplete('plan-phase', tmpDir, 36)).toBe(false);
+    expect(_isUiPhaseArtifactComplete('execute-phase', tmpDir, 36)).toBe(false);
+
+    // Cleanup
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 });
