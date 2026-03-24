@@ -22,6 +22,30 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
   // Resolve semantic type from title — always non-null
   const semanticHint = resolveSemanticHint(normalized)
 
+  // Pilot-generated session titles: pilot-delegate-{jobId}-{attempt}-{ts} / pilot-redelegate-{jobId}-{attempt}-{ts}
+  const pilotMatch = normalized.match(/^pilot-(redelegate|delegate)-/)
+  if (pilotMatch) {
+    const agentRole = `pilot-${pilotMatch[1]}`
+    return {
+      label: agentRole,
+      role: agentRole,
+      purpose: normalized,
+      semanticHint,
+    }
+  }
+
+  // Runner command-step titles: {project}-{command}-{jobId}-{ts}
+  // Extract the GSD command from known patterns
+  const gsdCommandMatch = normalized.match(/-((?:add|plan|execute|verify|ui)-phase|judge|debugger|fast|quick|new-project|new-milestone|audit-milestone)-/)
+  if (gsdCommandMatch) {
+    return {
+      label: gsdCommandMatch[1],
+      role: gsdCommandMatch[1],
+      purpose: normalized,
+      semanticHint,
+    }
+  }
+
   if (normalized.toLowerCase().startsWith('task:')) {
     const payload = normalized.slice(5).trim()
     const emDashIdx = payload.indexOf(' — ')

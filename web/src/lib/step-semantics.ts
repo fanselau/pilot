@@ -110,6 +110,8 @@ export function resolveSemanticHint(title: string): SemanticSessionType {
   if (lower.includes('plan-phase') || lower.includes('planning')) return 'planning'
   if (lower.includes('execute-phase') || lower.includes('execution')) return 'execution'
   if (lower.includes('judge') || lower.includes('verify') || lower.includes('verification')) return 'judge'
+  // redelegate/continuation MUST come before generic delegate — 'redelegate' contains 'delegate'
+  if (lower.includes('redelegate') || lower.includes('continuation')) return 'continuation-delegation'
   if (lower.includes('delegation') || lower.includes('delegate')) return 'delegation'
   if (lower.includes('add-phase')) return 'add-phase'
   if (lower.includes('gap')) return 'gap-execution'  // generic gap fallback
