@@ -38,7 +38,7 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 
 ## Context
 
-- Pilot is at Phase 67 with 86 plans complete — mature codebase with established patterns
+- Pilot is at Phase 94+ — mature codebase with established patterns (Phase 94 fixed UI-phase completion pipeline)
 - Two judge prompts exist in `pilot-gsd/commands/`: `gsd-judge.md` (active, uses `succeeded`/`failed`/`doubting`) and `pilot-judge.md` (unused, has richer format with `pass`/`partial`/`fail` + `retryRecommendation`)
 - `runJudge()` in `runner.ts` (line 1049) currently calls `--command gsd-judge` via `spawnAndWait()`
 - `parseJudgeVerdict()` in `runner.ts` (line 1498) validates verdict is one of `['succeeded', 'failed', 'doubting']`
@@ -69,4 +69,4 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 | VERIFICATION.md primary + transcript secondary | VERIFICATION.md is structured machine-readable evidence; transcript is fallback | — Pending |
 
 ---
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-24 after Phase 94 completion*
