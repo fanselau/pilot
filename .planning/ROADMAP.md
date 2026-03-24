@@ -1724,7 +1724,7 @@ Plans:
 **Goal:** Make the mobile summary panel fully usable as the compact navigation surface for job detail exploration — users can see every step, navigate between steps via a bottom-sheet drawer, and jump to subsessions via inline chips.
 **Requirements**: MOBILE-STEP-NAV, MOBILE-SUBSESSION-CHIPS
 **Depends on:** Phase 95
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 96-01-PLAN.md — Mobile step navigation drawer + subsession chips
+- [x] 96-01-PLAN.md — Mobile step navigation drawer + subsession chips

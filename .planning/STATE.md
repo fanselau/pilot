@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 95-01-PLAN.md
-last_updated: "2026-03-24T12:07:48.383Z"
+status: verifying
+stopped_at: Completed 96-01-PLAN.md
+last_updated: "2026-03-24T20:30:00.812Z"
 progress:
-  total_phases: 95
-  completed_phases: 52
-  total_plans: 186
-  completed_plans: 174
+  total_phases: 96
+  completed_phases: 53
+  total_plans: 187
+  completed_plans: 175
 ---
 
 # State
@@ -20,19 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 95
-Plan: Not started
+Phase: 96 (mobile-summary-panel-must-expose-steps-and-subsession-navigation-clearly) — EXECUTING
+Plan: 1 of 1
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
-**Current focus:** Phase 95 — redelegation-attribution-should-preserve-agent-identity
+**Current focus:** Phase 96 — mobile-summary-panel-must-expose-steps-and-subsession-navigation-clearly
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Milestone complete
+- **Status:** Phase complete — ready for verification
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -421,6 +421,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - Phase 93 added: AutoPilot Brand Identity Rebrand
 - Phase 94 added: UI-phase completion should not fail the phase pipeline
 - Phase 95 added: Redelegation attribution should preserve agent identity
+- Phase 96 added: Mobile summary panel must expose steps and subsession navigation clearly
 
 ## Decisions
 
@@ -1024,6 +1025,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 93]: Used #171717 fill for standalone favicon SVG; placeholder raster PNGs for legacy (ImageMagick unavailable)
 - [Phase 94]: Artifact check in HungSessionError handler before dbMarkStepFailed — uses existing isUiPhaseArtifactComplete, early return skips handleHungContinuation
 - [Phase 95]: extractAgentIdentity uses pattern matching cascade for flexibility
+- [Phase 96]: Controlled Sheet for drawer dismiss-on-tap; SubsessionChips uses data-session-id scroll targeting
 
 ## Blockers/Concerns Carried Forward
 
@@ -1032,6 +1034,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:55:06.077Z
-Stopped at: Completed 95-01-PLAN.md
+Last session: 2026-03-24T20:29:41.936Z
+Stopped at: Completed 96-01-PLAN.md
 Resume file: None
