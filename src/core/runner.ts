@@ -238,8 +238,11 @@ function resolveHungUiPhaseOutcome(
   args: string,
   projectDir: string,
 ): 'completed' | 'failed' {
-  // RED phase stub — always returns 'failed' to make tests fail
-  return 'failed';
+  if (command !== 'ui-phase') return 'failed';
+  const phaseMatch = args.match(/^(\d+)/);
+  const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
+  if (phaseNum === null) return 'failed';
+  return isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum) ? 'completed' : 'failed';
 }
 
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
@@ -1151,17 +1154,14 @@ class Runner {
         // Artifact-based recovery for ui-phase: if the session produced the UI-SPEC
         // artifact before hitting an interactive prompt (expected — GSD ui-phase has
         // review checkpoints), treat as completed instead of failed.
-        if (step.command === 'ui-phase') {
+        if (resolveHungUiPhaseOutcome(step.command, step.args, projectDir) === 'completed') {
+          const sessionId = findSessionByTitle(title);
           const phaseMatch = step.args.match(/^(\d+)/);
-          const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
-          if (phaseNum !== null && isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum)) {
-            const sessionId = findSessionByTitle(title);
-            process.stderr.write(
-              `[runner] ui-phase completed (hung artifact recovery: UI-SPEC exists for phase ${phaseNum}) — handing off to plan-phase [job=${job.id}]\n`,
-            );
-            dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
-            return; // Step completed via artifact detection — continue to next step
-          }
+          process.stderr.write(
+            `[runner] ui-phase completed (hung artifact recovery: UI-SPEC exists for phase ${phaseMatch?.[1]}) — handing off to plan-phase [job=${job.id}]\n`,
+          );
+          dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+          return; // Step completed via artifact detection — continue to next step
         }
         // No artifact recovery — original HungSessionError handling
         const sessionId = findSessionByTitle(title);
