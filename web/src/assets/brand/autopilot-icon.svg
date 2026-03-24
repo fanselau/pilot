@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" fill="currentColor">
+  <title>AutoPilot</title>
+  <!-- Abstract forward-motion mark: layered chevrons evoking guided flow / autonomous execution -->
+  <path d="M6 16L14 6l2.4 2.4L10.2 16l6.2 7.6L14 26z" opacity="0.4"/>
+  <path d="M14 16l8-10 2.4 2.4L18.2 16l6.2 7.6L22 26z"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 32" role="img" fill="currentColor">
+  <title>AutoPilot</title>
+  <!-- Icon: layered chevrons (same as icon.svg) -->
+  <g transform="translate(0,0)">
+    <path d="M6 16L14 6l2.4 2.4L10.2 16l6.2 7.6L14 26z" opacity="0.4"/>
+    <path d="M14 16l8-10 2.4 2.4L18.2 16l6.2 7.6L22 26z"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="34" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="18" letter-spacing="-0.02em">
+    <tspan font-weight="500">Auto</tspan><tspan font-weight="700">Pilot</tspan>
+  </text>
+</svg>
