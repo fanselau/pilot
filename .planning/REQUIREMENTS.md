@@ -276,6 +276,16 @@ Requirements for initial release. Each maps to roadmap phases.
 | DBG-13 | Phase 91 | Complete |
 | DBG-14 | Phase 91 | Complete |
 
+### Phase 96: Mobile Summary Panel — Step Navigation and Subsession Chips
+
+- [x] **MOBILE-STEP-NAV**: On mobile viewport, a "Steps" button in the top bar opens a bottom-sheet drawer listing all steps with status icon, command label, status badge, and duration; tapping a step dismisses the drawer and scrolls the content pane to that step
+- [x] **MOBILE-SUBSESSION-CHIPS**: On mobile, step headers with subsessions show tappable inline chips (S1, S2, etc.) that scroll to the corresponding fork card within the step
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MOBILE-STEP-NAV | Phase 96 | Complete |
+| MOBILE-SUBSESSION-CHIPS | Phase 96 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
