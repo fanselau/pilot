@@ -69,4 +69,4 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 | VERIFICATION.md primary + transcript secondary | VERIFICATION.md is structured machine-readable evidence; transcript is fallback | — Pending |
 
 ---
-*Last updated: 2026-03-24 after Phase 95 completion*
+*Last updated: 2026-03-24 after Phase 96 completion — mobile step drawer + subsession chips*
