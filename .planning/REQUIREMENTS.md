@@ -399,11 +399,29 @@ Deferred to future release. Tracked but not in current roadmap.
 | UIFIX-04 | Phase 94 | Complete |
 | UIFIX-05 | Phase 94 | Complete |
 
+### Redelegation Attribution Identity Preservation
+
+- [x] **REATTR-01**: `extractAgentIdentity()` resolves `pilot-redelegate-*` session titles to `'pilot-redelegate'` instead of generic `'subagent'`
+- [x] **REATTR-02**: `extractAgentIdentity()` resolves `pilot-delegate-*` session titles to `'pilot-delegate'` instead of generic `'subagent'`
+- [x] **REATTR-03**: `extractAgentIdentity()` resolves `gsd-*` agent names and known GSD command-step patterns (execute-phase, plan-phase, judge, etc.) from session titles
+- [x] **REATTR-04**: `extractToolInput()` for task tool preserves `subagent_type` when available, falls back through `model` before defaulting to `'subagent'`
+- [x] **REATTR-05**: Web UI `resolveSemanticHint()` classifies redelegate session titles as `'continuation-delegation'` and `deriveBranchIdentity()` extracts meaningful labels from pilot-* and GSD command session titles
+- [x] **REATTR-06**: Regression tests cover nested attribution paths that previously lost agent identity
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| REATTR-01 | Phase 95 | Complete |
+| REATTR-02 | Phase 95 | Complete |
+| REATTR-03 | Phase 95 | Complete |
+| REATTR-04 | Phase 95 | Complete |
+| REATTR-05 | Phase 95 | Complete |
+| REATTR-06 | Phase 95 | Complete |
+
 **Coverage:**
-- v1 requirements: 122 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94)
-- Mapped to phases: 122
+- v1 requirements: 128 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95)
+- Mapped to phases: 128
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-24 after adding Phase 94 UI-phase completion fix requirements*
+*Last updated: 2026-03-24 after adding Phase 95 redelegation attribution requirements*
