@@ -652,25 +652,30 @@ function getSessionState(sessionId: string, pidAlive: boolean = true): SessionSt
       if (reason === 'stop' || reason === 'length') {
         // Check if any child sessions (Task() subagents) are still running.
         // A parent session can finish before its children complete.
-        const runningChildRow = db.prepare(
-          `SELECT s.id,
-                  (SELECT MAX(p2.time_created) FROM part p2 WHERE p2.session_id = s.id) as last_activity
-           FROM session s
-           WHERE s.parent_id = ?
-             AND NOT EXISTS (
-               SELECT 1 FROM part p
-               WHERE p.session_id = s.id
-                 AND json_extract(p.data, '$.type') = 'step-finish'
-                 AND json_extract(p.data, '$.reason') IN ('stop', 'length')
-             )
-           LIMIT 1`,
-        ).get(sessionId) as { id: string; last_activity: number | null } | undefined;
+        // ONLY check children when parent PID is alive — when the parent PID is dead,
+        // the children are orphaned and waiting for them creates an infinite poll loop
+        // in spawnAndWait's dead-PID handler (which only handles 'done' and 'crashed').
+        if (pidAlive) {
+          const runningChildRow = db.prepare(
+            `SELECT s.id,
+                    (SELECT MAX(p2.time_created) FROM part p2 WHERE p2.session_id = s.id) as last_activity
+             FROM session s
+             WHERE s.parent_id = ?
+               AND NOT EXISTS (
+                 SELECT 1 FROM part p
+                 WHERE p.session_id = s.id
+                   AND json_extract(p.data, '$.type') = 'step-finish'
+                   AND json_extract(p.data, '$.reason') IN ('stop', 'length')
+               )
+             LIMIT 1`,
+          ).get(sessionId) as { id: string; last_activity: number | null } | undefined;
 
-        if (runningChildRow) {
-          // Child session exists without terminal step-finish — still working.
-          // Don't timeout: child may be waiting on rate limits for hours. That's fine.
-          // The only way to stop this is `pilot kill --force` which checks DB status mid-poll.
-          return { state: 'working' };
+          if (runningChildRow) {
+            // Child session exists without terminal step-finish — still working.
+            // Don't timeout: child may be waiting for rate limits for hours. That's fine.
+            // The only way to stop this is `pilot kill --force` which checks DB status mid-poll.
+            return { state: 'working' };
+          }
         }
         return { state: 'done' };
       }
@@ -1116,6 +1121,7 @@ export {
   getSessionModelsRecursive,
   getSessionModels,
   getSessionMeta,
+  extractToolInput,
   _resetDbCache,
   _setTestDb,
 };

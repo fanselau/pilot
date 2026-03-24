@@ -22,6 +22,7 @@ import {
   getSessionModelsRecursive,
   getAssistantMessageCount,
   getSessionState,
+  extractToolInput,
   _resetDbCache,
   _setTestDb,
 } from '../../src/core/opencode-db.js';
@@ -1058,6 +1059,33 @@ describe('getSessionState', () => {
     expect(result.state).toBe('working');
   });
 
+  it("returns 'done' when parent is done and child has no step-finish BUT pidAlive=false (prevents infinite poll loop)", () => {
+    // Regression test for ui-phase-handoff-stale-completion bug:
+    // When the parent PID is dead, waiting for orphaned children creates an infinite
+    // poll loop in spawnAndWait's dead-PID handler. The fix gates the child session
+    // check behind pidAlive — when pidAlive=false, skip child check and return 'done'.
+    const now = Date.now();
+
+    // Parent session with step-finish reason='stop'
+    insertSession(db, 'sess-parent-dead', 'parent-dead-pid-test', 1000, now);
+    insertMessage(db, 'msg-parent-dead', 'sess-parent-dead', 1000, { role: 'assistant' });
+    insertPart(db, 'p-parent-dead-start', 'msg-parent-dead', 'sess-parent-dead', 1000, { type: 'step-start' });
+    insertPart(db, 'p-parent-dead-finish', 'msg-parent-dead', 'sess-parent-dead', 2000, { type: 'step-finish', reason: 'stop' });
+
+    // Child session (no step-finish) — orphaned since parent PID is dead
+    insertSession(db, 'sess-child-orphan', 'child-orphan-test', now, now, 'sess-parent-dead');
+    insertMessage(db, 'msg-child-orphan', 'sess-child-orphan', now, { role: 'assistant' });
+    insertPart(db, 'p-child-orphan', 'msg-child-orphan', 'sess-child-orphan', now, { type: 'text', text: 'Working...' });
+
+    // With pidAlive=false: parent is done, skip child check → 'done'
+    const deadResult = getSessionState('sess-parent-dead', false);
+    expect(deadResult.state).toBe('done');
+
+    // With pidAlive=true: parent is done but child running → 'working' (existing behavior preserved)
+    const aliveResult = getSessionState('sess-parent-dead', true);
+    expect(aliveResult.state).toBe('working');
+  });
+
   it('picks latest pending tool, not older completed tools', () => {
     insertSession(db, 'sess9', 'latest-pending-session', 1000, 3000);
     insertMessage(db, 'msg10', 'sess9', 1000, { role: 'assistant' });
@@ -1239,5 +1267,55 @@ describe('safe defaults when DB unavailable', () => {
 
   it('getAssistantMessageCount returns 0', () => {
     expect(getAssistantMessageCount('any')).toBe(0);
+  });
+});
+
+describe('extractToolInput', () => {
+  describe('task tool', () => {
+    it('preserves explicit subagent_type in display', () => {
+      const result = extractToolInput('task', { subagent_type: 'gsd-planner', description: 'Plan phase 5' });
+      expect(result).toContain('gsd-planner');
+      expect(result).toContain('Plan phase 5');
+    });
+
+    it('falls back to model when subagent_type is missing', () => {
+      const result = extractToolInput('task', { model: 'claude-sonnet', description: 'Do work' });
+      expect(result).toContain('claude-sonnet');
+      expect(result).toContain('Do work');
+    });
+
+    it('falls back to subagent only when no identity info exists', () => {
+      const result = extractToolInput('task', { description: 'Mystery task' });
+      expect(result).toContain('subagent');
+      expect(result).toContain('Mystery task');
+    });
+
+    it('handles empty subagent_type string by checking model', () => {
+      const result = extractToolInput('task', { subagent_type: '', model: 'gpt-5.4', description: 'Test' });
+      expect(result).toContain('gpt-5.4');
+      expect(result).not.toContain('subagent');
+    });
+
+    it('handles whitespace-only subagent_type by checking model', () => {
+      const result = extractToolInput('task', { subagent_type: '  ', model: 'gpt-5.4', description: 'Test' });
+      expect(result).toContain('gpt-5.4');
+    });
+  });
+
+  describe('bash tool', () => {
+    it('extracts command string', () => {
+      const result = extractToolInput('bash', { command: 'npm run build' });
+      expect(result).toBe('npm run build');
+    });
+  });
+
+  describe('null/undefined input', () => {
+    it('returns undefined for null', () => {
+      expect(extractToolInput('task', null)).toBeUndefined();
+    });
+
+    it('returns undefined for undefined', () => {
+      expect(extractToolInput('task', undefined)).toBeUndefined();
+    });
   });
 });

@@ -52,7 +52,7 @@ vi.mock('../../src/util/colors.js', () => ({
   red: (s: string) => s,
 }));
 
-import { logCommand } from '../../src/commands/log.js';
+import { logCommand, extractAgentIdentity } from '../../src/commands/log.js';
 
 function makeJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -418,5 +418,86 @@ describe('logCommand retry chain rendering', () => {
       source: 'current',
       retryHint: 'retry-full: Full rerun after stale verification evidence',
     });
+  });
+});
+
+describe('extractAgentIdentity', () => {
+  it('extracts execute-phase from runner command-step title', () => {
+    expect(extractAgentIdentity('myproject-execute-phase-ab12-xyz1')).toBe('execute-phase');
+  });
+
+  it('extracts pilot-delegate from delegation title', () => {
+    expect(extractAgentIdentity('pilot-delegate-ab12-1-xyz1')).toBe('pilot-delegate');
+  });
+
+  it('extracts pilot-redelegate from redelegation title', () => {
+    expect(extractAgentIdentity('pilot-redelegate-ab12-2-xyz1')).toBe('pilot-redelegate');
+  });
+
+  it('extracts plan-phase from runner command-step title', () => {
+    expect(extractAgentIdentity('myproject-plan-phase-ab12-xyz1')).toBe('plan-phase');
+  });
+
+  it('extracts judge from runner command-step title', () => {
+    expect(extractAgentIdentity('myproject-judge-ab12-xyz1')).toBe('judge');
+  });
+
+  it('extracts gsd-* agent names', () => {
+    expect(extractAgentIdentity('something-gsd-ui-researcher-abc')).toBe('gsd-ui-researcher');
+  });
+
+  it('preserves non-empty unknown title as-is', () => {
+    expect(extractAgentIdentity('some-unknown-title')).toBe('some-unknown-title');
+  });
+
+  it('returns subagent for empty title', () => {
+    expect(extractAgentIdentity('')).toBe('subagent');
+  });
+});
+
+describe('renderChildSessions agent identity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockJsonMode = false;
+
+    mockGetQueue.mockReturnValue([]);
+    mockGetJob.mockReturnValue(makeJob());
+    mockGetJobSteps.mockReturnValue([]);
+    mockGetRetryAttempts.mockReturnValue([]);
+    mockFindSessionByTitle.mockReturnValue('sess-main');
+    mockGetSessionParts.mockReturnValue([makeTextPart('hello', 1_000)]);
+    mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 0, output: 0, reasoning: 0 });
+    mockBuildJobObservability.mockReturnValue(makeObservability());
+  });
+
+  it('shows pilot-redelegate in child session header, not subagent', async () => {
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-main') {
+        return [{ id: 'child-1', title: 'pilot-redelegate-ab12-1-xyz1' }];
+      }
+      return [];
+    });
+
+    await logCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('pilot-redelegate');
+    expect(output).not.toMatch(/Subagent: subagent/);
+  });
+
+  it('shows execute-phase in child session header', async () => {
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-main') {
+        return [{ id: 'child-1', title: 'myproject-execute-phase-ab12-xyz1' }];
+      }
+      return [];
+    });
+
+    await logCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('execute-phase');
+    expect(output).not.toMatch(/Subagent: subagent/);
   });
 });

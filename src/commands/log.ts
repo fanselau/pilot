@@ -645,6 +645,24 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
   outputHuman('');
 }
 
+// ── Agent identity extraction ─────────────────────────────────────────────
+
+/**
+ * Extract a meaningful agent identity from a session title.
+ *
+ * Session titles follow patterns like:
+ * - `pilot-redelegate-{jobId}-{attempt}-{ts}` → 'pilot-redelegate'
+ * - `pilot-delegate-{jobId}-{attempt}-{ts}` → 'pilot-delegate'
+ * - `{project}-gsd-{name}-{suffix}` → 'gsd-{name}'
+ * - `{project}-{command}-{jobId}-{ts}` → '{command}' (for known GSD commands)
+ * - Non-empty unrecognized → full title (preserves whatever identity exists)
+ * - Empty → 'subagent' (only truly empty gets generic fallback)
+ */
+function extractAgentIdentity(title: string): string {
+  // Stub — returns generic fallback; will be implemented in GREEN phase
+  return title ? title : 'subagent';
+}
+
 // ── Child session rendering ───────────────────────────────────────────────
 
 /**
@@ -1075,4 +1093,4 @@ async function logCommand(
   }
 }
 
-export { logCommand };
+export { logCommand, extractAgentIdentity };
