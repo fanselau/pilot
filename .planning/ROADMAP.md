@@ -1718,3 +1718,13 @@ Plans:
 
 Plans:
 - [x] 95-01-PLAN.md — Fix agent identity extraction in CLI log, opencode-db tool display, and web UI semantic attribution
+
+### Phase 96: Mobile summary panel must expose steps and subsession navigation clearly
+
+**Goal:** Make the mobile summary panel fully usable as the compact navigation surface for job detail exploration — users can see every step, navigate between steps via a bottom-sheet drawer, and jump to subsessions via inline chips.
+**Requirements**: MOBILE-STEP-NAV, MOBILE-SUBSESSION-CHIPS
+**Depends on:** Phase 95
+**Plans:** 1 plan
+
+Plans:
+- [ ] 96-01-PLAN.md — Mobile step navigation drawer + subsession chips
