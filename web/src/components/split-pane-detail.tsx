@@ -20,6 +20,7 @@ import { StepTimelineSidebar } from '~/components/step-timeline-sidebar'
 import { StepContentPane } from '~/components/step-content-pane'
 import { JobInfoPanel } from '~/components/job-info-panel'
 import { SummaryOverlay } from '~/components/summary-overlay'
+import { MobileStepDrawer } from '~/components/mobile-step-drawer'
 import { useIsMobile } from '~/hooks/use-media-query'
 import { StatusBadge } from '~/components/ui/status-badge'
 import { Button } from '~/components/ui/button'
@@ -94,6 +95,23 @@ export function SplitPaneDetail({
             {isActive && (
               <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
             )}
+
+            {/* Step navigation drawer */}
+            <MobileStepDrawer
+              groups={groups}
+              steps={snapshot.steps}
+              onStepTap={(idx) => {
+                scrollToStepRef.current?.(idx)
+                setAutoFollow(false)
+              }}
+              trigger={
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]">
+                  Steps{groups.filter(g => g.stepIndex !== null).length > 0
+                    ? ` (${groups.filter(g => g.stepIndex !== null).length})`
+                    : ''}
+                </Button>
+              }
+            />
 
             {/* Summary overlay trigger */}
             <SummaryOverlay
