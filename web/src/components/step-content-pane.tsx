@@ -17,7 +17,7 @@
 
 import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState, type UIEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { StepTimelineGroup, StepTimelineItem, JobStepSummary } from '@pilot/core/types.js'
+import type { StepTimelineGroup, StepTimelineItem, JobStepSummary, BranchLifecycleItem } from '@pilot/core/types.js'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { SourceBadge } from '~/components/ui/status-badge'
@@ -26,6 +26,7 @@ import { formatCompactDuration } from '~/lib/format'
 import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields, resolveSemanticType, getSemanticIcon, getSemanticColors, SEMANTIC_TYPE_CONFIG } from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 import { FollowModeBar } from '~/components/follow-mode-bar'
+import { useIsMobile } from '~/hooks/use-media-query'
 
 /** Minimum item count before virtual scrolling is activated. */
 const VIRTUALIZE_THRESHOLD = 200
@@ -78,6 +79,54 @@ function stepHeaderBorderClass(group: StepTimelineGroup): string {
   return `border-b-2 ${borderClass}`
 }
 
+/** Subsession navigation chips — shown on mobile below step headers for steps with fork-card items. */
+function SubsessionChips({ group }: { group: StepTimelineGroup }) {
+  const forkItems = group.items.filter(
+    (item): item is BranchLifecycleItem => item.kind === 'fork-card'
+  )
+  if (forkItems.length === 0) return null
+
+  return (
+    <div className="flex gap-1.5 overflow-x-auto py-1 px-3 -mt-1">
+      {forkItems.map((fork, idx) => {
+        const modelShort = fork.models?.[0]
+          ? fork.models[0].split('/').pop()?.replace(/-\d+.*$/, '') ?? ''
+          : ''
+        const label = modelShort
+          ? `S${idx + 1} · ${modelShort}`
+          : `S${idx + 1}`
+        const isActive = fork.status === 'active'
+
+        return (
+          <button
+            key={fork.sessionId}
+            className="shrink-0"
+            onClick={() => {
+              const el = document.querySelector(
+                `[data-session-id="${fork.sessionId}"]`
+              ) as HTMLElement | null
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            }}
+          >
+            <Badge
+              variant={isActive ? 'info' : 'outline'}
+              size="sm"
+              className="text-[10px] shrink-0 cursor-pointer"
+            >
+              {isActive && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse mr-1" />
+              )}
+              {label}
+            </Badge>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * Continuous-scroll content pane with scroll-spy.
  * All groups are always rendered. Sidebar clicks trigger scrollIntoView.
@@ -95,6 +144,7 @@ export function StepContentPane({
   hideHeader = false,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   // ── Scroll-direction detection for follow-mode auto-cancel ────────────────
   const lastScrollTopRef = useRef(0)
@@ -410,6 +460,8 @@ export function StepContentPane({
                           </div>
                         )
                       })()}
+                      {/* Subsession navigation chips — mobile only */}
+                      {isMobile && <SubsessionChips group={group} />}
                       {/* Judge verdict summary card — deep-link target */}
                       {isJudgeStep(group) && group.verdictReason && (
                         <div
@@ -450,7 +502,11 @@ export function StepContentPane({
                             ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
                             : `${item.kind}-${(item as { partId: string }).partId}-${item.createdAt}-${idx}`
                           return (
-                            <div key={key} className={isNew ? 'animate-highlight-fade' : ''}>
+                            <div
+                              key={key}
+                              className={isNew ? 'animate-highlight-fade' : ''}
+                              {...(item.kind === 'fork-card' ? { 'data-session-id': item.sessionId } : {})}
+                            >
                               <TimelineItemRenderer item={item} jobId={jobId} />
                             </div>
                           )
