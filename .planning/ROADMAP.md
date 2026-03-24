@@ -1714,7 +1714,7 @@ Plans:
 **Goal:** Fix redelegation/nested agent attribution so that `pilot log`, web UI branch headers, and tool call displays preserve meaningful agent identity instead of collapsing to generic "subagent" labels. Operators can see which agent actually produced which work when debugging nested/redelegated job flows.
 **Requirements**: REATTR-01, REATTR-02, REATTR-03, REATTR-04, REATTR-05, REATTR-06
 **Depends on:** Phase 94
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 95-01-PLAN.md — Fix agent identity extraction in CLI log, opencode-db tool display, and web UI semantic attribution
+- [x] 95-01-PLAN.md — Fix agent identity extraction in CLI log, opencode-db tool display, and web UI semantic attribution
