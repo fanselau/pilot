@@ -1697,3 +1697,13 @@ Plans:
 Plans:
 - [x] 93-01-PLAN.md — SVG brand assets + Brand component + header/title rebrand
 - [x] 93-02-PLAN.md — Favicon set generation + HTML head wiring + visual verification
+
+### Phase 94: UI-phase completion should not fail the phase pipeline
+
+**Goal:** Fix runner lifecycle/status accounting so a successful UI-phase handoff (UI-SPEC artifact produced) is recorded as step success, not failure. The HungSessionError path in executeCommandStep currently marks ui-phase steps as failed even when the artifact was produced before the interactive prompt.
+**Requirements**: UIFIX-01, UIFIX-02, UIFIX-03, UIFIX-04, UIFIX-05
+**Depends on:** Phase 93
+**Plans:** 1 plan
+
+Plans:
+- [ ] 94-01-PLAN.md — Fix HungSessionError ui-phase artifact recovery + regression tests
