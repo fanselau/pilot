@@ -658,9 +658,38 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
  * - Non-empty unrecognized → full title (preserves whatever identity exists)
  * - Empty → 'subagent' (only truly empty gets generic fallback)
  */
+/** Known GSD commands that appear in runner session titles as `{project}-{command}-{jobId}-{ts}` */
+const KNOWN_GSD_COMMANDS = [
+  'add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'ui-phase',
+  'judge', 'debugger', 'fast', 'quick',
+  'new-project', 'new-milestone', 'audit-milestone',
+];
+
 function extractAgentIdentity(title: string): string {
-  // Stub — returns generic fallback; will be implemented in GREEN phase
-  return title ? title : 'subagent';
+  if (!title) return 'subagent';
+
+  // 1. Pilot redelegation: pilot-redelegate-{jobId}-{attempt}-{ts}
+  if (title.startsWith('pilot-redelegate-')) return 'pilot-redelegate';
+
+  // 2. Pilot delegation: pilot-delegate-{jobId}-{attempt}-{ts}
+  if (title.startsWith('pilot-delegate-')) return 'pilot-delegate';
+
+  // 3. GSD agent name anywhere: gsd-{name}
+  const gsdMatch = title.match(/gsd-(\w+(?:-\w+)*)/);
+  if (gsdMatch) return gsdMatch[0];
+
+  // 4. Runner command-step pattern: {project}-{command}-{jobId}-{ts}
+  //    Try to extract a known command from the title
+  for (const cmd of KNOWN_GSD_COMMANDS) {
+    const pattern = `-${cmd}-`;
+    const idx = title.indexOf(pattern);
+    if (idx >= 0) return cmd;
+    // Also check if title ends with the command (no trailing segment)
+    if (title.endsWith(`-${cmd}`)) return cmd;
+  }
+
+  // 5. Non-empty unknown — preserve as-is
+  return title;
 }
 
 // ── Child session rendering ───────────────────────────────────────────────
@@ -681,10 +710,7 @@ function renderChildSessions(
   if (children.length === 0) return;
 
   for (const child of children) {
-    // Extract agent type from title
-    let agentType = 'subagent';
-    const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
-    if (agentMatch) agentType = agentMatch[0];
+    const agentType = extractAgentIdentity(child.title);
 
     outputHuman(`${indent}${dim(`── Subagent: ${agentType} ──`)}`);
     outputHuman('');
@@ -912,10 +938,7 @@ async function logCommand(
       for (const child of children) {
         taskIndex++;
         if (taskIndex === opts.task) {
-          // Extract agent type from title
-          let agentType = 'subagent';
-          const agentMatch = child.title.match(/gsd-(\w+(?:-\w+)*)/);
-          if (agentMatch) agentType = agentMatch[0];
+          const agentType = extractAgentIdentity(child.title);
 
           outputHuman('');
           outputHuman(`  ${bold(agentType)} · ${dim(child.title)}`);

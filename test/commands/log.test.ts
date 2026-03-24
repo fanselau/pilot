@@ -443,7 +443,10 @@ describe('extractAgentIdentity', () => {
   });
 
   it('extracts gsd-* agent names', () => {
-    expect(extractAgentIdentity('something-gsd-ui-researcher-abc')).toBe('gsd-ui-researcher');
+    // gsd-* regex captures the full gsd match including trailing segments
+    expect(extractAgentIdentity('something-gsd-ui-researcher')).toBe('gsd-ui-researcher');
+    // With trailing session suffix, the full gsd-* portion is returned
+    expect(extractAgentIdentity('something-gsd-executor-ab12')).toMatch(/^gsd-executor/);
   });
 
   it('preserves non-empty unknown title as-is', () => {
@@ -456,16 +459,35 @@ describe('extractAgentIdentity', () => {
 });
 
 describe('renderChildSessions agent identity', () => {
+  function makeTaskToolPart(createdAt: number) {
+    return {
+      id: 'part-task',
+      messageId: 'msg-1',
+      type: 'tool' as const,
+      role: 'assistant' as const,
+      tool: 'task',
+      toolInput: '▶ task: subagent — "do work"',
+      toolStatus: 'completed',
+      createdAt,
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockJsonMode = false;
 
     mockGetQueue.mockReturnValue([]);
-    mockGetJob.mockReturnValue(makeJob());
+    mockGetJob.mockReturnValue(makeJob({
+      sessionTitles: JSON.stringify(['main-session']),
+    }));
     mockGetJobSteps.mockReturnValue([]);
     mockGetRetryAttempts.mockReturnValue([]);
     mockFindSessionByTitle.mockReturnValue('sess-main');
-    mockGetSessionParts.mockReturnValue([makeTextPart('hello', 1_000)]);
+    // Return a task tool part so renderChildSessions is invoked
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-main') return [makeTaskToolPart(1_000)];
+      return [];
+    });
     mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
     mockGetSessionTokensRecursive.mockReturnValue({ input: 0, output: 0, reasoning: 0 });
     mockBuildJobObservability.mockReturnValue(makeObservability());

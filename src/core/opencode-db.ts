@@ -267,7 +267,15 @@ function extractToolInput(tool: string, stateInput: unknown): string | undefined
   if (tool === 'task') {
     if (typeof stateInput === 'object' && stateInput !== null) {
       const inp = stateInput as Record<string, unknown>;
-      const subagentType = typeof inp.subagent_type === 'string' ? inp.subagent_type : 'subagent';
+      let subagentType: string;
+      if (typeof inp.subagent_type === 'string' && inp.subagent_type.trim()) {
+        subagentType = inp.subagent_type;
+      } else if (typeof inp.model === 'string' && inp.model.trim()) {
+        // Some task invocations include model hints — show model as identity
+        subagentType = inp.model;
+      } else {
+        subagentType = 'subagent';
+      }
       if (typeof inp.description === 'string') {
         return `▶ task: ${subagentType} — "${inp.description}"`;
       }
