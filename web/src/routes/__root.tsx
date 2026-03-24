@@ -15,6 +15,7 @@ import { ToastProvider } from '~/components/ui/toast'
 import { CommandPalette } from '~/components/command-palette'
 import { Kbd } from '~/components/ui/kbd'
 import { useIsMobile } from '~/hooks/use-media-query'
+import { AutoPilotLogo } from '~/components/brand'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,7 +31,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Pilot Dashboard' },
+      { title: 'AutoPilot' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
   }),
@@ -41,8 +42,8 @@ function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-12 max-w-[1800px] items-center justify-between px-4 sm:px-8">
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight hover:opacity-80">
-          <span className="text-lg">Pilot</span>
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80">
+          <AutoPilotLogo />
         </Link>
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
           <Kbd>⌘K</Kbd>
