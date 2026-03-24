@@ -385,19 +385,19 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ### UI-Phase Completion Pipeline Fix
 
-- [ ] **UIFIX-01**: HungSessionError handler in executeCommandStep checks for ui-phase artifact completion (UI-SPEC.md) BEFORE marking step as failed
-- [ ] **UIFIX-02**: When UI-SPEC artifact exists during HungSessionError for ui-phase step: step marked `completed`, handleHungContinuation NOT called
-- [ ] **UIFIX-03**: When UI-SPEC artifact does NOT exist during HungSessionError for ui-phase step: existing behavior preserved (step marked `failed`, handleHungContinuation called)
-- [ ] **UIFIX-04**: `pilot status`, `pilot info`, and `pilot log` reflect correct non-failure state for completed ui-phase steps
-- [ ] **UIFIX-05**: Regression test covers HungSessionError + ui-phase artifact recovery (both success and failure paths)
+- [x] **UIFIX-01**: HungSessionError handler in executeCommandStep checks for ui-phase artifact completion (UI-SPEC.md) BEFORE marking step as failed
+- [x] **UIFIX-02**: When UI-SPEC artifact exists during HungSessionError for ui-phase step: step marked `completed`, handleHungContinuation NOT called
+- [x] **UIFIX-03**: When UI-SPEC artifact does NOT exist during HungSessionError for ui-phase step: existing behavior preserved (step marked `failed`, handleHungContinuation called)
+- [x] **UIFIX-04**: `pilot status`, `pilot info`, and `pilot log` reflect correct non-failure state for completed ui-phase steps
+- [x] **UIFIX-05**: Regression test covers HungSessionError + ui-phase artifact recovery (both success and failure paths)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UIFIX-01 | Phase 94 | Pending |
-| UIFIX-02 | Phase 94 | Pending |
-| UIFIX-03 | Phase 94 | Pending |
-| UIFIX-04 | Phase 94 | Pending |
-| UIFIX-05 | Phase 94 | Pending |
+| UIFIX-01 | Phase 94 | Complete |
+| UIFIX-02 | Phase 94 | Complete |
+| UIFIX-03 | Phase 94 | Complete |
+| UIFIX-04 | Phase 94 | Complete |
+| UIFIX-05 | Phase 94 | Complete |
 
 **Coverage:**
 - v1 requirements: 122 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94)
