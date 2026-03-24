@@ -225,6 +225,23 @@ function isUiPhaseArtifactComplete(command: string, projectDir: string, phaseNum
   return findExistingUiSpec(projectDir, phaseNumber) !== null;
 }
 
+/**
+ * Determine whether a HungSessionError for a step should result in 'completed'
+ * (artifact recovery) or 'failed' (standard hung handling).
+ *
+ * Extracted from executeCommandStep's HungSessionError catch block for testability.
+ * Returns 'completed' only when: command is 'ui-phase' AND phase number can be parsed
+ * from args AND the UI-SPEC artifact exists on disk.
+ */
+function resolveHungUiPhaseOutcome(
+  command: string,
+  args: string,
+  projectDir: string,
+): 'completed' | 'failed' {
+  // RED phase stub — always returns 'failed' to make tests fail
+  return 'failed';
+}
+
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
   const entries = getValidVerificationEvidence(projectDir, phaseNumber);
   if (entries.length === 0) return null;
@@ -2649,3 +2666,4 @@ export { buildBudgetExhaustedMessage as _buildBudgetExhaustedMessage };
  */
 export { findExistingUiSpec as _findExistingUiSpec };
 export { isUiPhaseArtifactComplete as _isUiPhaseArtifactComplete };
+export { resolveHungUiPhaseOutcome as _resolveHungUiPhaseOutcome };

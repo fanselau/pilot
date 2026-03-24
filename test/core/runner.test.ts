@@ -27,7 +27,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete } from '../../src/core/runner.js';
+import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete, _resolveHungUiPhaseOutcome } from '../../src/core/runner.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -1196,5 +1196,61 @@ describe('ui-phase hung artifact recovery', () => {
 
     // Cleanup
     rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+// ── resolveHungUiPhaseOutcome (HungSessionError catch-path decision) ─────
+
+describe('resolveHungUiPhaseOutcome', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = path.join(tmpdir(), `pilot-hung-outcome-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns completed when ui-phase and UI-SPEC artifact exists', () => {
+    // This is the core regression fix for dn02: HungSessionError on ui-phase
+    // with produced UI-SPEC should result in step completion, not failure.
+    // The runner calls dbMarkStepCompleted (not dbMarkStepFailed) when this returns 'completed'.
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '36-UI-SPEC.md'), '# UI Spec\nGenerated content');
+
+    expect(_resolveHungUiPhaseOutcome('ui-phase', '36 --skip-research', tmpDir)).toBe('completed');
+  });
+
+  it('returns failed when ui-phase but UI-SPEC artifact is missing', () => {
+    // When ui-phase hangs but did NOT produce an artifact, the runner should
+    // call dbMarkStepFailed + handleHungContinuation (standard hung handling).
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    // No UI-SPEC.md written
+
+    expect(_resolveHungUiPhaseOutcome('ui-phase', '36 --skip-research', tmpDir)).toBe('failed');
+  });
+
+  it('returns failed for non-ui-phase commands even when UI-SPEC exists', () => {
+    // Only ui-phase commands get artifact recovery — plan-phase, execute-phase etc.
+    // always fall through to standard HungSessionError handling.
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '36-UI-SPEC.md'), '# UI Spec\nGenerated content');
+
+    expect(_resolveHungUiPhaseOutcome('plan-phase', '36', tmpDir)).toBe('failed');
+    expect(_resolveHungUiPhaseOutcome('execute-phase', '36', tmpDir)).toBe('failed');
+  });
+
+  it('returns failed when phase number cannot be parsed from args', () => {
+    // Edge case: malformed args with no leading digits
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '36-some-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '36-UI-SPEC.md'), '# UI Spec');
+
+    expect(_resolveHungUiPhaseOutcome('ui-phase', 'invalid-no-digits', tmpDir)).toBe('failed');
   });
 });
