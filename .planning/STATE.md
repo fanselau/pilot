@@ -25,10 +25,10 @@ Plan: Not started
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-16)
+See: .planning/PROJECT.md (updated 2026-03-24)
 
-**Core value:** Model routing must be deterministic and resilient to upstream agent-file changes.
-**Current focus:** Phase 94 — ui-phase-completion-should-not-fail-the-phase-pipeline
+**Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
+**Current focus:** Phase 94 complete — milestone v1.0 all phases finished
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
