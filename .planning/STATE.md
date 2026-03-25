@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 96-01-PLAN.md
-last_updated: "2026-03-24T20:40:23.036Z"
+stopped_at: Completed quick-260325-ebl-PLAN.md
+last_updated: "2026-03-25T10:27:34.976Z"
 progress:
   total_phases: 96
   completed_phases: 53
@@ -1026,6 +1026,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 94]: Artifact check in HungSessionError handler before dbMarkStepFailed — uses existing isUiPhaseArtifactComplete, early return skips handleHungContinuation
 - [Phase 95]: extractAgentIdentity uses pattern matching cascade for flexibility
 - [Phase 96]: Controlled Sheet for drawer dismiss-on-tap; SubsessionChips uses data-session-id scroll targeting
+- [Phase quick-260325-ebl]: Warning placed after job queued but before success output; JSON mode includes blockedWarning as separate field
 
 ## Blockers/Concerns Carried Forward
 
@@ -1034,6 +1035,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-24T20:29:41.936Z
-Stopped at: Completed 96-01-PLAN.md
+Last session: 2026-03-25T10:27:33.140Z
+Stopped at: Completed quick-260325-ebl-PLAN.md
 Resume file: None
