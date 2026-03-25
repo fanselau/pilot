@@ -16,6 +16,7 @@ import { CommandPalette } from '~/components/command-palette'
 import { Kbd } from '~/components/ui/kbd'
 import { useIsMobile } from '~/hooks/use-media-query'
 import { AutoPilotLogo } from '~/components/brand'
+import { Settings } from 'lucide-react'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,9 +50,25 @@ function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-12 max-w-[1800px] items-center justify-between px-4 sm:px-8">
-        <Link to="/" className="flex items-center gap-2 hover:opacity-80">
-          <AutoPilotLogo />
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80">
+            <AutoPilotLogo />
+          </Link>
+          <nav className="flex items-center gap-4">
+            <Link
+              to="/"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors data-[status=active]:text-foreground"
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/settings"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors data-[status=active]:text-foreground"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          </nav>
+        </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
           <Kbd>⌘K</Kbd>
           <span>Command palette</span>

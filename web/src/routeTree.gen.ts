@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsProjectPathRouteImport } from './routes/projects.$projectPath'
 import { Route as JobsJobIdRouteImport } from './routes/jobs.$jobId'
 import { Route as JobsJobIdIndexRouteImport } from './routes/jobs.$jobId.index'
 import { Route as JobsJobIdSessionsSessionIdRouteImport } from './routes/jobs.$jobId.sessions.$sessionId'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -44,6 +50,7 @@ const JobsJobIdSessionsSessionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/jobs/$jobId': typeof JobsJobIdRouteWithChildren
   '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId/': typeof JobsJobIdIndexRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId': typeof JobsJobIdIndexRoute
   '/jobs/$jobId/sessions/$sessionId': typeof JobsJobIdSessionsSessionIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/jobs/$jobId': typeof JobsJobIdRouteWithChildren
   '/projects/$projectPath': typeof ProjectsProjectPathRoute
   '/jobs/$jobId/': typeof JobsJobIdIndexRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/jobs/$jobId'
     | '/projects/$projectPath'
     | '/jobs/$jobId/'
@@ -74,12 +84,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/settings'
     | '/projects/$projectPath'
     | '/jobs/$jobId'
     | '/jobs/$jobId/sessions/$sessionId'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/jobs/$jobId'
     | '/projects/$projectPath'
     | '/jobs/$jobId/'
@@ -88,12 +100,20 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   JobsJobIdRoute: typeof JobsJobIdRouteWithChildren
   ProjectsProjectPathRoute: typeof ProjectsProjectPathRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -148,6 +168,7 @@ const JobsJobIdRouteWithChildren = JobsJobIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   JobsJobIdRoute: JobsJobIdRouteWithChildren,
   ProjectsProjectPathRoute: ProjectsProjectPathRoute,
 }
