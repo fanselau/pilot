@@ -48,7 +48,9 @@ import {
   getNextPendingStep,
   markStepRunning,
   markStepCompleted,
+  markStepSkipped,
   markStepFailed,
+  cancelPendingSteps,
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
@@ -1151,6 +1153,77 @@ describe('pilot.db', () => {
       expect(allSteps).toHaveLength(2);
       expect(allSteps[1].source).toBe('judge:hung');
       expect(allSteps[1].reason).toBe('Session hung on interactive-prompt');
+    });
+
+    it('markStepSkipped sets status to skipped with reason', () => {
+      const job = addJob('proj', 'phase', 'skip step');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'ui-phase', '97', 'delegation');
+      markStepRunning(stepId);
+      markStepSkipped(stepId, 'ui-phase skipped: hung before producing UI-SPEC', 'session-xyz', 'ui-phase-title');
+
+      const steps = getJobSteps(job.id);
+      expect(steps[0].status).toBe('skipped');
+      expect(steps[0].error).toBe('ui-phase skipped: hung before producing UI-SPEC');
+      expect(steps[0].completedAt).not.toBeNull();
+      expect(steps[0].sessionId).toBe('session-xyz');
+      expect(steps[0].sessionTitle).toBe('ui-phase-title');
+    });
+
+    it('cancelPendingSteps cancels all pending steps and returns count', () => {
+      const job = addJob('proj', 'phase', 'cancel pending');
+      markRunning(job.id);
+      // 3 delegation steps, then 3 hung-recovery steps
+      const step0 = createPendingStep(job.id, 0, 'ui-phase', '97', 'delegation');
+      createPendingStep(job.id, 1, 'plan-phase', '97', 'delegation');
+      createPendingStep(job.id, 2, 'execute-phase', '97 --auto', 'delegation');
+      createPendingStep(job.id, 3, 'judge', '', 'delegation');
+      // Simulate: step 0 completed, step 1 running, steps 2-3 pending
+      markStepRunning(step0);
+      markStepCompleted(step0);
+      const step1 = 2; // createPendingStep returns row id
+      markStepRunning(step1);
+
+      // Also append hung-recovery steps (pending)
+      appendSteps(
+        job.id,
+        [
+          { command: 'plan-phase', args: '97' },
+          { command: 'execute-phase', args: '97 --auto' },
+          { command: 'judge', args: '' },
+        ],
+        'judge:hung',
+        'interactive-prompt',
+      );
+
+      const cancelled = cancelPendingSteps(job.id, 'Judge passed — remaining steps skipped');
+      // Steps 2, 3 (delegation pending) + steps 4, 5, 6 (hung-recovery pending) = 5 pending
+      expect(cancelled).toBe(5);
+
+      // Verify all are now skipped
+      const allSteps = getJobSteps(job.id);
+      const skipped = allSteps.filter(s => s.status === 'skipped');
+      expect(skipped).toHaveLength(5);
+      for (const s of skipped) {
+        expect(s.error).toBe('Judge passed — remaining steps skipped');
+      }
+
+      // Running and completed steps should NOT be affected
+      const completed = allSteps.filter(s => s.status === 'completed');
+      const running = allSteps.filter(s => s.status === 'running');
+      expect(completed).toHaveLength(1);
+      expect(running).toHaveLength(1);
+    });
+
+    it('cancelPendingSteps returns 0 when no pending steps exist', () => {
+      const job = addJob('proj', 'phase', 'no pending');
+      markRunning(job.id);
+      const stepId = createPendingStep(job.id, 0, 'judge', '', 'delegation');
+      markStepRunning(stepId);
+      markStepCompleted(stepId);
+
+      const cancelled = cancelPendingSteps(job.id, 'Judge passed');
+      expect(cancelled).toBe(0);
     });
   });
 

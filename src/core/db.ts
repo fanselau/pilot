@@ -1542,6 +1542,50 @@ function markStepCompleted(
 }
 
 /**
+ * Mark a running step as skipped. Sets completed_at, computes duration_ms.
+ * Used when a step (e.g., ui-phase) is intentionally bypassed — not a failure.
+ * Optionally records session ID, session title, and a reason.
+ */
+function markStepSkipped(
+  stepId: number,
+  reason?: string,
+  sessionId?: string | null,
+  sessionTitle?: string | null,
+): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE job_steps
+    SET status = 'skipped',
+        error = ?,
+        completed_at = datetime('now'),
+        duration_ms = CASE
+          WHEN started_at IS NOT NULL THEN CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER)
+          ELSE NULL
+        END,
+        session_id = COALESCE(?, session_id),
+        session_title = COALESCE(?, session_title)
+    WHERE id = ?
+  `).run(reason ?? null, sessionId ?? null, sessionTitle ?? null, stepId);
+}
+
+/**
+ * Cancel all remaining pending steps for a job.
+ * Used as a safety net when judge passes with stale recovery steps still queued.
+ * Returns the number of steps cancelled.
+ */
+function cancelPendingSteps(jobId: string, reason: string): number {
+  const db = getDb();
+  const result = db.prepare(`
+    UPDATE job_steps
+    SET status = 'skipped',
+        error = ?,
+        completed_at = datetime('now')
+    WHERE job_id = ? AND status = 'pending'
+  `).run(reason, jobId);
+  return result.changes;
+}
+
+/**
  * Mark a running step as failed. Records error, sets completed_at, computes duration_ms.
  * Optionally records session ID and session title.
  */
@@ -2064,7 +2108,9 @@ export {
   getNextPendingStep,
   markStepRunning,
   markStepCompleted,
+  markStepSkipped,
   markStepFailed,
+  cancelPendingSteps,
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
