@@ -1734,11 +1734,11 @@ Plans:
 **Goal:** Add a comprehensive /settings route to the Pilot Web UI that exposes all configuration knobs — General, Runner, Memory, Job Defaults, Notifications, Logging, Models, Projects, Skills — with source badges, dirty-state tracking, floating save button, and inline editing for model assignments and skill management.
 **Requirements**: TBD
 **Depends on:** Phase 96
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 97-01-PLAN.md — Server functions API layer + settings route scaffold + layout/sidebar + useSettings hook
-- [ ] 97-02-PLAN.md — Config sections (General, Runner, Memory, Logging, Job Defaults, Notifications) + SourceBadge + SaveButton
+- [x] 97-02-PLAN.md — Config sections (General, Runner, Memory, Logging, Job Defaults, Notifications) + SourceBadge + SaveButton
 - [ ] 97-03-PLAN.md — Models section (tabbed table + inline edit) + Projects section + Skills section
 
 Wave structure:
