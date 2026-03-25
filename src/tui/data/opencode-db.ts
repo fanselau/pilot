@@ -27,6 +27,16 @@ import type {
 
 // ── Step-first timeline adapter types ─────────────────────────────────────
 
+/** Subsession summary for TUI rendering (replaces fork-card items). */
+export interface TuiSubsession {
+  sessionId: string;
+  parentSessionId: string | null;
+  title: string;
+  status: 'active' | 'done' | 'unknown';
+  models: string[];
+  durationMs: number | null;
+}
+
 export interface TimelineSection {
   key: string;
   stepIndex: number | null;
@@ -34,6 +44,8 @@ export interface TimelineSection {
   status: string;
   sessionId: string | null;
   items: StepTimelineItem[];
+  /** Metadata for child sessions within this step group. */
+  subsessions: TuiSubsession[];
 }
 
 export interface TimelineSnapshot {
@@ -64,8 +76,6 @@ export function getTimelineSectionKey(group: {
  */
 export function getTimelineItemKey(item: StepTimelineItem): string {
   switch (item.kind) {
-    case 'fork-card':
-      return `fork:${item.sessionId}`;
     case 'activity':
       return `activity:${item.sessionId}:${item.partId}`;
     case 'tool-summary':
@@ -76,35 +86,37 @@ export function getTimelineItemKey(item: StepTimelineItem): string {
 }
 
 function toTimelineSection(group: StepTimelineGroup): TimelineSection {
+  // Flatten all section items into a single sorted list for TUI rendering
+  const items = group.sections
+    .flatMap((s) => s.items)
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  // Extract subsession metadata from depth > 0 sections
+  const subsessions: TuiSubsession[] = group.sections
+    .filter((s) => s.depth > 0)
+    .map((s) => ({
+      sessionId: s.sessionId,
+      parentSessionId: s.parentSessionId,
+      title: s.title,
+      status: s.status,
+      models: s.models,
+      durationMs: s.durationMs,
+    }));
+
   return {
     key: getTimelineSectionKey(group),
     stepIndex: group.stepIndex,
     command: group.command,
     status: group.status,
     sessionId: group.sessionId,
-    items: [...group.items].sort((a, b) => a.createdAt - b.createdAt),
+    items,
+    subsessions,
   };
 }
 
 function normalizeGroups(page: GroupedTimelinePage): TimelineSection[] {
-  if (page.groups.length > 0) {
-    return page.groups.map(toTimelineSection);
-  }
-
-  // Transitional fallback: grouped contract should be primary, but if a caller
-  // receives only flat items we bucket into unattributed so no activity disappears.
-  if (page.items.length === 0) return [];
-
-  return [
-    {
-      key: 'step:unattributed',
-      stepIndex: null,
-      command: 'unattributed',
-      status: 'unattributed',
-      sessionId: null,
-      items: [...page.items].sort((a, b) => a.createdAt - b.createdAt),
-    },
-  ];
+  if (page.groups.length === 0) return [];
+  return page.groups.map(toTimelineSection);
 }
 
 // ── Job timeline fetching ─────────────────────────────────────────────────

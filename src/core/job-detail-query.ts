@@ -45,10 +45,10 @@ import type {
   SessionActivityOptions,
   JobDetailEvent,
   JobDetailEventsResponse,
-  BranchLifecycleItem,
   StepTimelineItem,
   StepTimelineGroup,
   GroupedTimelinePage,
+  TimelineSection,
   ProjectWithStats,
 } from './types.js';
 
@@ -417,14 +417,20 @@ function getJobDetailEvents(jobId: string, sinceCursor: string): JobDetailEvents
     }
   }
 
-  // Check for new activity parts from root sessions
+  // Check for new activity parts from root sessions AND their children
   const sessionTitles = parseSessionTitles(job.sessionTitles);
+  let activityEventCount = 0;
+  const MAX_ACTIVITY_EVENTS = 20;
+
   for (const title of sessionTitles) {
+    if (activityEventCount >= MAX_ACTIVITY_EVENTS) break;
     const sessionId = findSessionByTitle(title);
     if (!sessionId) continue;
 
+    // Check root session parts
     const newParts = getSessionParts(sessionId, sinceMs);
-    for (const part of newParts.slice(0, 20)) { // cap at 20 new parts per poll
+    for (const part of newParts) {
+      if (activityEventCount >= MAX_ACTIVITY_EVENTS) break;
       events.push({
         type: 'activity-new',
         timestamp: part.createdAt,
@@ -436,6 +442,21 @@ function getJobDetailEvents(jobId: string, sinceCursor: string): JobDetailEvents
           preview: part.text ? truncate(part.text, 300) : (part.tool ?? part.type),
         },
       });
+      activityEventCount++;
+    }
+
+    // Check child sessions for updates (one level deep — catches Task() subagents)
+    const children = getChildSessions(sessionId);
+    for (const child of children) {
+      if (activityEventCount >= MAX_ACTIVITY_EVENTS) break;
+      if (child.timeUpdated > sinceMs) {
+        events.push({
+          type: 'session-update' as const,
+          timestamp: child.timeUpdated,
+          data: { sessionId: child.id },
+        });
+        activityEventCount++;
+      }
     }
   }
 
@@ -626,13 +647,16 @@ function getJobTimeline(
   const delegationPrefix = `pilot-delegate-${jobId}-`;
   const delegationTitles = allTitles.filter(t => t.startsWith(delegationPrefix));
 
-  const delegationInfos: Array<{
+  interface SyntheticSessionInfo {
     sessionId: string;
     title: string;
     timeCreated: number;
     timeUpdated: number;
     done: boolean;
-  }> = [];
+    source: string;
+  }
+
+  const delegationInfos: SyntheticSessionInfo[] = [];
 
   for (const title of delegationTitles) {
     const sessionId = findSessionByTitle(title);
@@ -646,28 +670,69 @@ function getJobTimeline(
       timeCreated: meta.timeCreated,
       timeUpdated: meta.timeUpdated,
       done,
+      source: 'delegation',
     });
   }
 
-  // Sort delegation sessions chronologically
-  delegationInfos.sort((a, b) => a.timeCreated - b.timeCreated);
+  // ── Continuation delegation (redelegate) session discovery ──────────────
+  // Redelegate sessions are spawned after judge verdicts (gaps_found, failed, hung)
+  // to plan continuation steps. They use a different title prefix than initial delegations.
+  const redelegatePrefix = `pilot-redelegate-${jobId}-`;
+  const redelegateTitles = allTitles.filter(t => t.startsWith(redelegatePrefix));
 
-  // Create synthetic delegation step refs with negative indices
-  const delegationStepRefs: TimelineStepRef[] = delegationInfos.map((info, i) => ({
+  const redelegateInfos: SyntheticSessionInfo[] = [];
+
+  for (const title of redelegateTitles) {
+    const sessionId = findSessionByTitle(title);
+    if (!sessionId) continue;
+    const meta = getSessionMeta(sessionId);
+    if (!meta) continue;
+    const done = isSessionDone(sessionId);
+    redelegateInfos.push({
+      sessionId,
+      title,
+      timeCreated: meta.timeCreated,
+      timeUpdated: meta.timeUpdated,
+      done,
+      // Inferred below from resulting steps; default to generic judge source
+      source: 'judge:continuation',
+    });
+  }
+
+  // Infer precise source for each redelegate session from the first judge-sourced
+  // step that starts at or after the redelegate session's creation time.
+  // This correlates each redelegate session with the steps it produced (e.g.
+  // judge:gaps, judge:failed, judge:hung).
+  for (const info of redelegateInfos) {
+    const match = stepRefs
+      .filter(s => s.source.startsWith('judge:') && s.startedAtMs !== null && s.startedAtMs >= info.timeCreated)
+      .sort((a, b) => a.startedAtMs! - b.startedAtMs!)[0];
+    if (match) info.source = match.source;
+  }
+
+  // Combine initial + continuation delegations chronologically, assign sequential negative indices
+  const allSyntheticInfos = [...delegationInfos, ...redelegateInfos]
+    .sort((a, b) => a.timeCreated - b.timeCreated);
+
+  const syntheticStepRefs: TimelineStepRef[] = allSyntheticInfos.map((info, i) => ({
     stepIndex: -100 + i,
     command: 'delegation',
     status: info.done ? 'completed' : 'running',
-    source: 'delegation',
+    source: info.source,
     sessionId: info.sessionId,
     sessionTitle: info.title,
     startedAtMs: info.timeCreated,
     completedAtMs: info.done ? info.timeUpdated : null,
   }));
 
-  // Prepend delegation step refs before real step refs
-  const allStepRefs: TimelineStepRef[] = [...delegationStepRefs, ...stepRefs];
+  // Merge synthetic delegation step refs with real step refs
+  const allStepRefs: TimelineStepRef[] = [...syntheticStepRefs, ...stepRefs];
 
   // ── BFS queue from session titles ─────────────────────────────────────
+  // Children are enqueued during BFS so their parts are collected inline
+  // (no lazy loading). Max depth 15 to avoid runaway recursion.
+  const MAX_SESSION_DEPTH = 15;
+
   const queue: Array<{ sessionId: string; title: string; parentSessionId: string | null }> = [];
   const queuedSessionIds = new Set<string>();
 
@@ -678,8 +743,8 @@ function getJobTimeline(
     queuedSessionIds.add(sessionId);
   }
 
-  // Ensure delegation sessions are in the BFS queue
-  for (const info of delegationInfos) {
+  // Ensure delegation and redelegate sessions are in the BFS queue
+  for (const info of allSyntheticInfos) {
     if (!queuedSessionIds.has(info.sessionId)) {
       queue.push({ sessionId: info.sessionId, title: info.title, parentSessionId: null });
       queuedSessionIds.add(info.sessionId);
@@ -687,17 +752,25 @@ function getJobTimeline(
   }
 
   const seenSessions = new Set<string>();
-  const sessionTitleById = new Map<string, string>();
-  const branchByChildSessionId = new Map<string, BranchLifecycleItem>();
   const candidates: TimelineCandidate[] = [];
   let totalChildCount = 0;
 
-  // ── Child-to-step-index map for tier 4 attribution ─────────────────────
-  // Maps child session IDs to the step that owns their parent session.
-  // Built during BFS; used by resolveStepIndex() for transitive attribution.
-  const childToStepIndex = new Map<string, number>();
+  // Session metadata maps — built during BFS, used for section construction
+  const sessionTitleById = new Map<string, string>();
+  const sessionDepth = new Map<string, number>();
+  const sessionParent = new Map<string, string | null>();
+  const sessionStatus = new Map<string, 'active' | 'done' | 'unknown'>();
+  const sessionModels = new Map<string, string[]>();
+  const sessionDuration = new Map<string, number | null>();
 
-  // Build a sessionId → stepIndex lookup from allStepRefs for BFS ownership tracking
+  // Seed depth 0 for all initially-queued sessions
+  for (const entry of queue) {
+    sessionDepth.set(entry.sessionId, 0);
+    sessionParent.set(entry.sessionId, null);
+  }
+
+  // Child-to-step-index map for tier 4 attribution
+  const childToStepIndex = new Map<string, number>();
   const sessionIdToStepIndex = new Map<string, number>();
   for (const step of allStepRefs) {
     if (step.sessionId) {
@@ -724,6 +797,7 @@ function getJobTimeline(
             role: part.role,
             createdAt: part.createdAt,
             text: part.text,
+            isReasoning: part.type === 'reasoning' || undefined,
           },
           createdAt: part.createdAt,
           sessionId: current.sessionId,
@@ -741,6 +815,8 @@ function getJobTimeline(
             createdAt: part.createdAt,
             tool: part.tool ?? part.type,
             toolInput: part.toolInput,
+            toolInputRaw: part.toolInputRaw,
+            toolOutput: part.toolOutput,
             toolStatus: part.toolStatus,
             patchFiles: part.patchFiles,
           },
@@ -754,74 +830,52 @@ function getJobTimeline(
     const children = getChildSessions(current.sessionId);
     totalChildCount += children.length;
 
-    // Track child → step ownership for tier 4 attribution
     const owningStepIndex = sessionIdToStepIndex.get(current.sessionId)
       ?? childToStepIndex.get(current.sessionId);
+    const currentDepth = sessionDepth.get(current.sessionId) ?? 0;
 
     for (const child of children) {
-      // Record transitive ownership: if parent is owned by a step, child inherits
+      // Track transitive step ownership
       if (owningStepIndex !== undefined && !childToStepIndex.has(child.id)) {
         childToStepIndex.set(child.id, owningStepIndex);
       }
+
+      const childDepth = currentDepth + 1;
+
+      // Enqueue child so its parts are collected inline (up to MAX_SESSION_DEPTH)
+      if (childDepth <= MAX_SESSION_DEPTH && !queuedSessionIds.has(child.id)) {
+        queue.push({ sessionId: child.id, title: child.title, parentSessionId: current.sessionId });
+        queuedSessionIds.add(child.id);
+        sessionDepth.set(child.id, childDepth);
+        sessionParent.set(child.id, current.sessionId);
+      }
+
+      // Collect session metadata for section headers
       const done = isSessionDone(child.id);
       const messageCount = getAssistantMessageCount(child.id);
-      const tokens = getSessionTokensRecursive(child.id);
       const models = getSessionModelsRecursive(child.id);
-      const lastMsg = getLastMessage(child.id);
-      const childChildren = getChildSessions(child.id);
-      const tokenTotal = tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
       const durationMs = child.timeUpdated > child.timeCreated
         ? child.timeUpdated - child.timeCreated
         : null;
-      const latestPreview = lastMsg?.content ? truncate(lastMsg.content, 200) : null;
-      const existing = branchByChildSessionId.get(child.id);
-      const completedAt = done && child.timeUpdated > child.timeCreated
-        ? child.timeUpdated
-        : (existing?.completedAt ?? null);
 
-      branchByChildSessionId.set(child.id, {
-        kind: 'fork-card',
-        sessionId: child.id,
-        parentSessionId: current.sessionId,
-        title: child.title,
-        createdAt: existing?.createdAt ?? child.timeCreated,
-        updatedAt: Math.max(existing?.updatedAt ?? child.timeUpdated, child.timeUpdated),
-        completedAt,
-        status: done ? 'done' : (messageCount > 0 ? 'active' : 'unknown'),
-        messageCount,
-        tokenTotal,
-        models,
-        latestMessagePreview: latestPreview,
-        finalMessagePreview: done ? latestPreview : (existing?.finalMessagePreview ?? null),
-        childCount: childChildren.length,
-        durationMs,
-      });
+      sessionStatus.set(child.id, done ? 'done' : (messageCount > 0 ? 'active' : 'unknown'));
+      sessionModels.set(child.id, models);
+      sessionDuration.set(child.id, durationMs);
     }
   }
 
-  // After BFS: explicitly map delegation session children to their delegation step index.
-  // Delegation sessions may spawn sub-agents whose sessions are not tracked in the
-  // normal opencode parent-child graph. This ensures Tier 3.5 attribution works correctly
-  // for content originating in delegation sub-sessions.
-  for (const delegStep of delegationStepRefs) {
-    if (!delegStep.sessionId) continue;
-    const delegChildren = getChildSessions(delegStep.sessionId);
-    for (const child of delegChildren) {
+  // Post-BFS: map synthetic session children for Tier 3.5 attribution
+  for (const synthStep of syntheticStepRefs) {
+    if (!synthStep.sessionId) continue;
+    const synthChildren = getChildSessions(synthStep.sessionId);
+    for (const child of synthChildren) {
       if (!childToStepIndex.has(child.id)) {
-        childToStepIndex.set(child.id, delegStep.stepIndex);
+        childToStepIndex.set(child.id, synthStep.stepIndex);
       }
     }
   }
 
-  for (const branch of branchByChildSessionId.values()) {
-    candidates.push({
-      item: branch,
-      createdAt: branch.createdAt,
-      sessionId: branch.parentSessionId,
-      sessionTitle: sessionTitleById.get(branch.parentSessionId) ?? null,
-    });
-  }
-
+  // ── Attribution: assign each candidate to a step group ─────────────────
   candidates.sort((a, b) => a.createdAt - b.createdAt);
 
   const filtered = cursorMs > 0
@@ -829,69 +883,123 @@ function getJobTimeline(
     : candidates;
   const hasMore = filtered.length > limit;
   const page = filtered.slice(0, limit);
-  const flatItems = page.map((candidate) => candidate.item);
   const nextCursor = page.length > 0 ? String(page[page.length - 1].createdAt) : null;
 
-  const groupsByStepIndex = new Map<number, StepTimelineGroup>();
+  // Collect items per step index (keyed by step index)
+  const itemsByStep = new Map<number, StepTimelineItem[]>();
   for (const step of allStepRefs) {
-    groupsByStepIndex.set(step.stepIndex, {
+    itemsByStep.set(step.stepIndex, []);
+  }
+
+  for (const candidate of page) {
+    let attributedStepIndex = resolveStepIndex(candidate, allStepRefs, childToStepIndex);
+
+    // Nearest-step fallback — eliminates unattributed bucket entirely
+    if (attributedStepIndex === null) {
+      let nearest: TimelineStepRef | null = null;
+      let minDist = Infinity;
+      for (const step of allStepRefs) {
+        if (step.startedAtMs === null) continue;
+        const dist = Math.abs(candidate.createdAt - step.startedAtMs);
+        if (dist < minDist) { minDist = dist; nearest = step; }
+      }
+      attributedStepIndex = nearest?.stepIndex ?? null;
+    }
+
+    if (attributedStepIndex !== null) {
+      const items = itemsByStep.get(attributedStepIndex);
+      if (items) items.push(candidate.item);
+    }
+  }
+
+  // ── Build sections from attributed items ───────────────────────────────
+  // For each step group, items are grouped by sessionId into TimelineSection
+  // objects, preserving chronological interleaving of sessions.
+
+  const groups: StepTimelineGroup[] = [];
+
+  // Sort step refs chronologically for time-consistent rendering
+  const sortedStepRefs = [...allStepRefs]
+    .filter(s => s.startedAtMs !== null)
+    .sort((a, b) => a.startedAtMs! - b.startedAtMs!);
+  // Include steps without startedAtMs at the end
+  const stepsWithoutTime = allStepRefs.filter(s => s.startedAtMs === null);
+  const orderedStepRefs = [...sortedStepRefs, ...stepsWithoutTime];
+
+  for (const step of orderedStepRefs) {
+    const items = itemsByStep.get(step.stepIndex);
+    if (!items || items.length === 0) continue;
+
+    // Group ALL items by sessionId — one section per session.
+    // Parallel child sessions get a single consolidated section each,
+    // ordered by first appearance. Root session comes first.
+    const perSession = new Map<string, StepTimelineItem[]>();
+    const firstSeen = new Map<string, number>();
+
+    for (const item of items) {
+      const sid = item.sessionId;
+      if (!perSession.has(sid)) {
+        perSession.set(sid, []);
+        firstSeen.set(sid, item.createdAt);
+      }
+      perSession.get(sid)!.push(item);
+    }
+
+    // Order: step's own root session first, then children by first appearance
+    const orderedSessionIds = [...perSession.keys()].sort((a, b) => {
+      const aRoot = a === step.sessionId;
+      const bRoot = b === step.sessionId;
+      if (aRoot !== bRoot) return aRoot ? -1 : 1;
+      return (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0);
+    });
+
+    const sections: TimelineSection[] = [];
+    for (const sid of orderedSessionIds) {
+      const sectionItems = perSession.get(sid)!;
+      sectionItems.sort((a, b) => a.createdAt - b.createdAt);
+      sections.push(buildSection(sid, sectionItems));
+    }
+
+    groups.push({
       stepIndex: step.stepIndex,
       command: step.command,
       status: step.status,
       source: step.source,
       sessionId: step.sessionId,
-      items: [],
+      sections,
       semanticLabel: computeSemanticLabel(step.command, step.source),
       verdictReason: step.verdictReason ?? null,
     });
   }
 
-  const unattributed: StepTimelineGroup = {
-    stepIndex: null,
-    command: 'unattributed',
-    status: 'unattributed',
-    source: 'delegation',
-    sessionId: null,
-    items: [],
-    semanticLabel: 'Unattributed',
-  };
-
-  for (const candidate of page) {
-    const attributedStepIndex = resolveStepIndex(candidate, allStepRefs, childToStepIndex);
-    if (attributedStepIndex === null) {
-      unattributed.items.push(candidate.item);
-      continue;
-    }
-
-    const group = groupsByStepIndex.get(attributedStepIndex);
-    if (!group) {
-      unattributed.items.push(candidate.item);
-      continue;
-    }
-    group.items.push(candidate.item);
-  }
-
-  const groups: StepTimelineGroup[] = [];
-  for (const step of allStepRefs) {
-    const group = groupsByStepIndex.get(step.stepIndex);
-    if (!group || group.items.length === 0) continue;
-    group.items.sort((a, b) => a.createdAt - b.createdAt);
-    groups.push(group);
-  }
-
-  if (unattributed.items.length > 0) {
-    unattributed.items.sort((a, b) => a.createdAt - b.createdAt);
-    groups.push(unattributed);
-  }
-
   return {
     groups,
-    items: flatItems,
     hasMore,
     nextCursor,
     sessionCount: seenSessions.size,
     childCount: totalChildCount,
   };
+
+  // Helper: build a TimelineSection from collected items for a session
+  function buildSection(sessionId: string, items: StepTimelineItem[]): TimelineSection {
+    const depth = sessionDepth.get(sessionId) ?? 0;
+    const parentId = sessionParent.get(sessionId) ?? null;
+    const title = sessionTitleById.get(sessionId) ?? sessionId;
+    const status = sessionStatus.get(sessionId) ?? 'unknown';
+    const models = sessionModels.get(sessionId) ?? [];
+    const duration = sessionDuration.get(sessionId) ?? null;
+
+    return {
+      sessionId,
+      parentSessionId: parentId,
+      title,
+      status,
+      models,
+      durationMs: duration,
+      depth,
+      items,
+    };
+  }
 }
 
 // ── New Queries for Web UI Plans 03-05 ───────────────────────────────────

@@ -98,8 +98,8 @@ export function MobileStepDrawer({
                 const stepMeta = group.stepIndex != null ? stepMap.get(group.stepIndex) : null
                 const isRunning = group.status === 'running'
 
-                // Count fork-card items for subsession indicator
-                const forkCount = group.items.filter((i) => i.kind === 'fork-card').length
+                // Count subsession sections
+                const forkCount = (group.sections ?? []).filter((s: any) => s.depth > 0).length
 
                 return (
                   <button

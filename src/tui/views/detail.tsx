@@ -350,10 +350,8 @@ export function buildHeaderLines(
 function countDescendants(sections: TimelineSection[]): number {
   const unique = new Set<string>();
   for (const section of sections) {
-    for (const item of section.items) {
-      if (item.kind === 'fork-card') {
-        unique.add(item.sessionId);
-      }
+    for (const sub of section.subsessions) {
+      unique.add(sub.sessionId);
     }
   }
   return unique.size;
@@ -411,10 +409,8 @@ export function formatStepSectionHeader(section: TimelineSection): string {
 
 export function formatSectionModelLine(section: TimelineSection): string | null {
   const sectionModels = new Set<string>();
-  for (const item of section.items) {
-    if (item.kind === 'fork-card' && item.models) {
-      for (const m of item.models) sectionModels.add(m);
-    }
+  for (const sub of section.subsessions) {
+    for (const m of sub.models) sectionModels.add(m);
   }
   if (sectionModels.size === 0) return null;
   const modelStr = [...sectionModels].map(shortModelName).join(', ');
@@ -448,31 +444,7 @@ function formatTimelineItemLines(item: StepTimelineItem): FormattedLine[] {
     return lines;
   }
 
-  const preview = item.finalMessagePreview ?? item.latestMessagePreview;
-  const modelSummary = item.models.length > 0
-    ? item.models.map((model) => model.split('/')[1] ?? model).slice(0, 2).join(', ')
-    : 'unknown-model';
-  const childInfo = item.childCount > 0 ? `   children:${item.childCount}` : '';
-
-  const lines: FormattedLine[] = [
-    {
-      text: `  ${time}  [branch] ${item.title || 'subagent'} [${item.status}] (sid:${item.sessionId.slice(0, 8)})`,
-      color: branchStatusColor(item.status),
-    },
-    {
-      text: `             msgs:${item.messageCount}   tok:${formatTokens(item.tokenTotal)}   dur:${formatDurationMs(item.durationMs)}   models:${modelSummary}${childInfo}`,
-      color: theme.muted,
-    },
-  ];
-
-  if (preview) {
-    lines.push({
-      text: `             preview: ${preview.replace(/\n/g, ' ')}`,
-      color: '#22D3EE',
-    });
-  }
-
-  return lines;
+  return [];
 }
 
 function mergeSectionItems(existing: StepTimelineItem[], incoming: StepTimelineItem[]): StepTimelineItem[] {
@@ -546,24 +518,23 @@ function collectBranchOptions(groups: TimelineSection[]): DetailChildOption[] {
   const bySessionId = new Map<string, DetailChildOption>();
 
   for (const group of groups) {
-    for (const item of group.items) {
-      if (item.kind !== 'fork-card') continue;
+    for (const sub of group.subsessions) {
+      if (!sub.parentSessionId) continue;
       const current: DetailChildOption = {
-        sessionId: item.sessionId,
-        parentSessionId: item.parentSessionId,
-        title: item.title,
-        status: item.status,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt ?? item.createdAt,
+        sessionId: sub.sessionId,
+        parentSessionId: sub.parentSessionId,
+        title: sub.title,
+        status: sub.status,
+        createdAt: 0, // subsession metadata doesn't carry createdAt; use 0 for ordering
+        updatedAt: 0,
       };
-      const existing = bySessionId.get(item.sessionId);
-      if (!existing || current.updatedAt >= existing.updatedAt) {
-        bySessionId.set(item.sessionId, current);
+      if (!bySessionId.has(sub.sessionId)) {
+        bySessionId.set(sub.sessionId, current);
       }
     }
   }
 
-  return [...bySessionId.values()].sort((a, b) => a.createdAt - b.createdAt);
+  return [...bySessionId.values()];
 }
 
 function buildChildrenByParent(options: DetailChildOption[]): Map<string, DetailChildOption[]> {
@@ -641,18 +612,9 @@ function filterSectionsForPath(
   const scoped: TimelineSection[] = [];
 
   for (const section of allSections) {
-    const items = section.items.filter((item) => {
-      if (item.kind === 'fork-card') {
-        return allowedSessionIds.has(item.sessionId) || allowedSessionIds.has(item.parentSessionId);
-      }
-      return allowedSessionIds.has(item.sessionId);
-    });
-
+    const items = section.items.filter((item) => allowedSessionIds.has(item.sessionId));
     if (items.length === 0) continue;
-    scoped.push({
-      ...section,
-      items,
-    });
+    scoped.push({ ...section, items });
   }
 
   return scoped;

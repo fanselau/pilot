@@ -8,7 +8,7 @@
  * derivation for backward compatibility with older data.
  */
 
-import type { StepTimelineGroup, BranchLifecycleItem } from '@pilot/core/types.js'
+import type { StepTimelineGroup } from '@pilot/core/types.js'
 import {
   Route, FolderPlus, Map, Hammer, Scale, Forward,
   MapPin, Wrench, ShieldCheck, Zap, User, HelpCircle,
@@ -36,8 +36,10 @@ export type SemanticSessionType =
 export interface SemanticTypeConfig {
   label: string
   icon: LucideIcon
-  /** CSS class for pastel background at depth 0 */
+  /** CSS class for pastel background at depth 0 (step header) */
   bgClass: string
+  /** CSS class for darker background at depth 1+ (subsession header) */
+  subBgClass: string
   /** CSS class for border accent */
   borderClass: string
   /** Is this a gap-loop variant? */
@@ -45,20 +47,20 @@ export interface SemanticTypeConfig {
 }
 
 export const SEMANTIC_TYPE_CONFIG: Record<SemanticSessionType, SemanticTypeConfig> = {
-  'delegation':               { label: 'Delegation',               icon: Route,        bgClass: 'bg-slate-50/50 dark:bg-slate-900/20',    borderClass: 'border-slate-300/40 dark:border-slate-600/30', isGap: false },
-  'add-phase':                { label: 'Add Phase',                icon: FolderPlus,   bgClass: 'bg-violet-50/50 dark:bg-violet-900/20',  borderClass: 'border-violet-300/40 dark:border-violet-600/30', isGap: false },
-  'planning':                 { label: 'Planning',                 icon: Map,          bgClass: 'bg-blue-50/50 dark:bg-blue-900/20',      borderClass: 'border-blue-300/40 dark:border-blue-600/30', isGap: false },
-  'execution':                { label: 'Execution',                icon: Hammer,       bgClass: 'bg-emerald-50/50 dark:bg-emerald-900/20',borderClass: 'border-emerald-300/40 dark:border-emerald-600/30', isGap: false },
-  'judge':                    { label: 'Judge',                    icon: Scale,        bgClass: 'bg-amber-50/50 dark:bg-amber-900/20',    borderClass: 'border-amber-300/40 dark:border-amber-600/30', isGap: false },
-  'continuation-delegation':  { label: 'Continuation Delegation',  icon: Forward,      bgClass: 'bg-orange-50/50 dark:bg-orange-900/20',  borderClass: 'border-orange-300/40 dark:border-orange-600/30', isGap: false },
-  'gap-planning':             { label: 'Gap Planning',             icon: MapPin,       bgClass: 'bg-blue-50/30 dark:bg-blue-900/10',      borderClass: 'border-blue-300/30 dark:border-blue-600/20', isGap: true },
-  'gap-execution':            { label: 'Gap Execution',            icon: Wrench,       bgClass: 'bg-emerald-50/30 dark:bg-emerald-900/10',borderClass: 'border-emerald-300/30 dark:border-emerald-600/20', isGap: true },
-  'gap-judge':                { label: 'Gap Judge',                icon: ShieldCheck,  bgClass: 'bg-amber-50/30 dark:bg-amber-900/10',    borderClass: 'border-amber-300/30 dark:border-amber-600/20', isGap: true },
-  'recovery':                 { label: 'Recovery',                 icon: Wrench,       bgClass: 'bg-rose-50/30 dark:bg-rose-900/10',      borderClass: 'border-rose-300/30 dark:border-rose-600/20', isGap: false },
-  'fast-task':                { label: 'Fast Task',                icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
-  'quick-task':               { label: 'Quick Task',               icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
-  'manual':                   { label: 'Manual',                   icon: User,         bgClass: 'bg-gray-50/50 dark:bg-gray-900/20',      borderClass: 'border-gray-300/40 dark:border-gray-600/30', isGap: false },
-  'unattributed':             { label: 'Unattributed',             icon: HelpCircle,   bgClass: 'bg-gray-50/30 dark:bg-gray-900/10',      borderClass: 'border-gray-300/30 dark:border-gray-600/20', isGap: false },
+  'delegation':               { label: 'Delegation',               icon: Route,        bgClass: 'bg-slate-50/50 dark:bg-slate-900/20',    subBgClass: 'bg-slate-100/40 dark:bg-slate-900/40',    borderClass: 'border-slate-300/40 dark:border-slate-600/30', isGap: false },
+  'add-phase':                { label: 'Add Phase',                icon: FolderPlus,   bgClass: 'bg-violet-50/50 dark:bg-violet-900/20',  subBgClass: 'bg-violet-100/40 dark:bg-violet-900/40',  borderClass: 'border-violet-300/40 dark:border-violet-600/30', isGap: false },
+  'planning':                 { label: 'Planning',                 icon: Map,          bgClass: 'bg-blue-50/50 dark:bg-blue-900/20',      subBgClass: 'bg-blue-100/40 dark:bg-blue-900/40',      borderClass: 'border-blue-300/40 dark:border-blue-600/30', isGap: false },
+  'execution':                { label: 'Execution',                icon: Hammer,       bgClass: 'bg-emerald-50/50 dark:bg-emerald-900/20',subBgClass: 'bg-emerald-100/40 dark:bg-emerald-900/40',borderClass: 'border-emerald-300/40 dark:border-emerald-600/30', isGap: false },
+  'judge':                    { label: 'Judge',                    icon: Scale,        bgClass: 'bg-amber-50/50 dark:bg-amber-900/20',    subBgClass: 'bg-amber-100/40 dark:bg-amber-900/40',    borderClass: 'border-amber-300/40 dark:border-amber-600/30', isGap: false },
+  'continuation-delegation':  { label: 'Continuation Delegation',  icon: Forward,      bgClass: 'bg-orange-50/50 dark:bg-orange-900/20',  subBgClass: 'bg-orange-100/40 dark:bg-orange-900/40',  borderClass: 'border-orange-300/40 dark:border-orange-600/30', isGap: false },
+  'gap-planning':             { label: 'Gap Planning',             icon: MapPin,       bgClass: 'bg-blue-50/30 dark:bg-blue-900/10',      subBgClass: 'bg-blue-100/30 dark:bg-blue-900/30',      borderClass: 'border-blue-300/30 dark:border-blue-600/20', isGap: true },
+  'gap-execution':            { label: 'Gap Execution',            icon: Wrench,       bgClass: 'bg-emerald-50/30 dark:bg-emerald-900/10',subBgClass: 'bg-emerald-100/30 dark:bg-emerald-900/30',borderClass: 'border-emerald-300/30 dark:border-emerald-600/20', isGap: true },
+  'gap-judge':                { label: 'Gap Judge',                icon: ShieldCheck,  bgClass: 'bg-amber-50/30 dark:bg-amber-900/10',    subBgClass: 'bg-amber-100/30 dark:bg-amber-900/30',    borderClass: 'border-amber-300/30 dark:border-amber-600/20', isGap: true },
+  'recovery':                 { label: 'Recovery',                 icon: Wrench,       bgClass: 'bg-rose-50/30 dark:bg-rose-900/10',      subBgClass: 'bg-rose-100/30 dark:bg-rose-900/30',      borderClass: 'border-rose-300/30 dark:border-rose-600/20', isGap: false },
+  'fast-task':                { label: 'Fast Task',                icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      subBgClass: 'bg-cyan-100/40 dark:bg-cyan-900/40',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
+  'quick-task':               { label: 'Quick Task',               icon: Zap,          bgClass: 'bg-cyan-50/50 dark:bg-cyan-900/20',      subBgClass: 'bg-cyan-100/40 dark:bg-cyan-900/40',      borderClass: 'border-cyan-300/40 dark:border-cyan-600/30', isGap: false },
+  'manual':                   { label: 'Manual',                   icon: User,         bgClass: 'bg-gray-50/50 dark:bg-gray-900/20',      subBgClass: 'bg-gray-100/40 dark:bg-gray-900/40',      borderClass: 'border-gray-300/40 dark:border-gray-600/30', isGap: false },
+  'unattributed':             { label: 'Unattributed',             icon: HelpCircle,   bgClass: 'bg-gray-50/30 dark:bg-gray-900/10',      subBgClass: 'bg-gray-100/30 dark:bg-gray-900/30',      borderClass: 'border-gray-300/30 dark:border-gray-600/20', isGap: false },
 }
 
 /**
@@ -254,9 +256,9 @@ export interface SynthesizedHeaderFields {
   stage: string | null
   /** Short verdict summary from verdictReason (first 40 chars), null if not a judge step. */
   verdict: string | null
-  /** First model observed in fork-card items, null if not available. */
+  /** First model observed in subsessions, null if not available. */
   model: string | null
-  /** Fork-card session counts: active/done/total. Null if no fork sessions. */
+  /** Subsession counts: active/done/total. Null if no subsessions. */
   statusCounters: { active: number; done: number; total: number } | null
   /** Why this step exists as a continuation: "gaps found", "hung recovery", etc. */
   continuationReason: string | null
@@ -304,22 +306,22 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
     ? group.verdictReason.slice(0, 40)
     : null
 
-  // Model — extracted from the first fork-card item that has model data
+  // Model — extracted from the first subsession that has model data
   let model: string | null = null
-  for (const item of group.items) {
-    if (item.kind === 'fork-card' && (item as BranchLifecycleItem).models.length > 0) {
-      model = (item as BranchLifecycleItem).models[0]
+  const subsections = (group.sections ?? []).filter((s) => s.depth > 0)
+  for (const section of subsections) {
+    if (section.models.length > 0) {
+      model = section.models[0]
       break
     }
   }
 
-  // Status counters — fork-card (child session) items only
-  const forkCards = group.items.filter((item): item is BranchLifecycleItem => item.kind === 'fork-card')
-  const statusCounters = forkCards.length > 0
+  // Status counters — subsession sections only
+  const statusCounters = subsections.length > 0
     ? {
-        active: forkCards.filter((item) => item.status === 'active').length,
-        done: forkCards.filter((item) => item.status === 'done').length,
-        total: forkCards.length,
+        active: subsections.filter((s) => s.status === 'active').length,
+        done: subsections.filter((s) => s.status === 'done').length,
+        total: subsections.length,
       }
     : null
 
@@ -341,4 +343,59 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
     isActive: group.status === 'running',
     isGap,
   }
+}
+
+// ── Branch Identity Resolution ────────────────────────────────────────────
+
+export interface BranchIdentity {
+  label: string
+  role: string | null
+  purpose: string | null
+  semanticHint: string
+}
+
+/** Derive a human-readable identity from a session title. */
+export function deriveBranchIdentity(title: string): BranchIdentity {
+  const normalized = title.trim()
+  if (!normalized) {
+    return { label: 'Sub-agent', role: null, purpose: null, semanticHint: resolveSemanticHint('') }
+  }
+
+  const semanticHint = resolveSemanticHint(normalized)
+
+  // pilot-delegate-* / pilot-redelegate-*
+  const pilotMatch = normalized.match(/^pilot-(redelegate|delegate)-/)
+  if (pilotMatch) {
+    const agentRole = `pilot-${pilotMatch[1]}`
+    return { label: agentRole, role: agentRole, purpose: normalized, semanticHint }
+  }
+
+  // GSD runner command titles
+  const gsdMatch = normalized.match(/-((?:add|plan|execute|verify|ui)-phase|judge|debugger|fast|quick|new-project|new-milestone|audit-milestone)-/)
+  if (gsdMatch) {
+    return { label: gsdMatch[1], role: gsdMatch[1], purpose: normalized, semanticHint }
+  }
+
+  // "Task: role — purpose"
+  if (normalized.toLowerCase().startsWith('task:')) {
+    const payload = normalized.slice(5).trim()
+    const emIdx = payload.indexOf(' — ')
+    const hyIdx = payload.indexOf(' - ')
+    const splitIdx = [emIdx, hyIdx].filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? -1
+    const role = (splitIdx >= 0 ? payload.slice(0, splitIdx) : payload).trim() || null
+    const purpose = splitIdx >= 0 ? payload.slice(splitIdx + 3).trim() || null : null
+    return { label: normalized, role, purpose, semanticHint }
+  }
+
+  // "role: purpose" (colon within first 28 chars)
+  const colonIdx = normalized.indexOf(':')
+  if (colonIdx > 0 && colonIdx < 28) {
+    const maybeRole = normalized.slice(0, colonIdx).trim()
+    const maybePurpose = normalized.slice(colonIdx + 1).trim()
+    if (maybeRole && maybePurpose) {
+      return { label: normalized, role: maybeRole, purpose: maybePurpose, semanticHint }
+    }
+  }
+
+  return { label: normalized, role: null, purpose: null, semanticHint }
 }

@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
-  BranchLifecycleItem,
   GroupedTimelinePage,
   Job,
-  StepTimelineItem,
   TimelineActivityItem,
+  TimelineSection as CoreTimelineSection,
 } from '../../src/core/types.js';
 
 const mocks = vi.hoisted(() => ({
@@ -31,23 +30,16 @@ function makeActivity(overrides: Partial<TimelineActivityItem> = {}): TimelineAc
   };
 }
 
-function makeBranch(overrides: Partial<BranchLifecycleItem> = {}): BranchLifecycleItem {
+function makeSection(overrides: Partial<CoreTimelineSection> = {}): CoreTimelineSection {
   return {
-    kind: 'fork-card',
-    sessionId: 'child-session',
-    parentSessionId: 'root-session',
-    title: 'gsd-executor',
-    createdAt: 20,
-    updatedAt: 20,
-    completedAt: null,
+    sessionId: 'root-session',
+    parentSessionId: null,
+    title: 'root',
     status: 'active',
-    messageCount: 1,
-    tokenTotal: 50,
-    models: ['openai/gpt-5.4'],
-    latestMessagePreview: 'working',
-    finalMessagePreview: null,
-    childCount: 0,
-    durationMs: 1000,
+    models: [],
+    durationMs: null,
+    depth: 0,
+    items: [],
     ...overrides,
   };
 }
@@ -60,6 +52,7 @@ function makeGroup(overrides: Partial<TimelineSection> = {}): TimelineSection {
     status: 'running',
     sessionId: 'root-session',
     items: [],
+    subsessions: [],
     ...overrides,
   };
 }
@@ -76,14 +69,18 @@ describe('TUI step timeline adapter', () => {
           stepIndex: 0,
           command: 'execute-phase',
           status: 'running',
+          source: 'delegation',
           sessionId: 'root-session',
-          items: [
-            makeActivity({ partId: 'later', createdAt: 30, text: 'later message' }),
-            makeActivity({ partId: 'earlier', createdAt: 10, text: 'earlier message' }),
+          sections: [
+            makeSection({
+              items: [
+                makeActivity({ partId: 'later', createdAt: 30, text: 'later message' }),
+                makeActivity({ partId: 'earlier', createdAt: 10, text: 'earlier message' }),
+              ],
+            }),
           ],
         },
       ],
-      items: [],
       hasMore: false,
       nextCursor: null,
       sessionCount: 1,
@@ -96,73 +93,57 @@ describe('TUI step timeline adapter', () => {
     expect(snapshot.groups[0].items.map((item) => item.createdAt)).toEqual([10, 30]);
   });
 
-  it('falls back to an unattributed step section when grouped data is missing', () => {
-    const orphan = makeActivity({ partId: 'orphan', createdAt: 42, text: 'orphan activity' });
+  it('returns empty groups when no data', () => {
     mocks.getJobTimeline.mockReturnValue({
       groups: [],
-      items: [orphan],
       hasMore: false,
       nextCursor: null,
-      sessionCount: 1,
+      sessionCount: 0,
       childCount: 0,
     });
 
     const snapshot = fetchJobTimelineSnapshot({ id: 'job-2' } as Job);
-    expect(snapshot.groups).toHaveLength(1);
-    expect(snapshot.groups[0].stepIndex).toBeNull();
-    expect(snapshot.groups[0].command).toBe('unattributed');
-    expect(snapshot.groups[0].items).toEqual([orphan]);
+    expect(snapshot.groups).toHaveLength(0);
   });
 });
 
-describe('TUI lifecycle merge semantics', () => {
-  it('maintains one branch lifecycle object per child session across updates', () => {
+describe('TUI section merge semantics', () => {
+  it('merges existing section items with incoming data', () => {
     const existing = [
       makeGroup({
-        items: [makeBranch({ sessionId: 'child-1', status: 'active', latestMessagePreview: 'working' })],
+        items: [makeActivity({ partId: 'old', createdAt: 10, text: 'old' })],
       }),
     ];
 
     const incoming = [
       makeGroup({
-        items: [makeBranch({ sessionId: 'child-1', status: 'done', finalMessagePreview: 'finished' })],
+        items: [makeActivity({ partId: 'new', createdAt: 20, text: 'new' })],
       }),
     ];
 
     const merged = mergeTimelineSections(existing, incoming);
-    const branches = merged[0].items.filter((item): item is BranchLifecycleItem => item.kind === 'fork-card');
-
-    expect(branches).toHaveLength(1);
-    expect(branches[0].sessionId).toBe('child-1');
-    expect(branches[0].status).toBe('done');
-    expect(branches[0].finalMessagePreview).toBe('finished');
+    expect(merged).toHaveLength(1);
+    // Both items present after merge (keyed by partId)
+    expect(merged[0].items).toHaveLength(2);
+    expect(merged[0].items.map(i => i.kind === 'activity' ? i.text : '')).toEqual(['old', 'new']);
   });
 
-  it('uses immutable session IDs for updates even when titles collide', () => {
-    const existingBranches: StepTimelineItem[] = [
-      makeBranch({ sessionId: 'child-A', title: 'executor', status: 'active', latestMessagePreview: 'A working' }),
-      makeBranch({ sessionId: 'child-B', title: 'executor', status: 'active', latestMessagePreview: 'B working' }),
+  it('preserves subsession metadata through merges', () => {
+    const existing = [
+      makeGroup({
+        subsessions: [{ sessionId: 'child-1', parentSessionId: 'root-session', title: 'planner', status: 'active', models: ['m1'], durationMs: null }],
+      }),
     ];
 
-    const incomingBranches: StepTimelineItem[] = [
-      makeBranch({ sessionId: 'child-B', title: 'executor', status: 'done', finalMessagePreview: 'B done' }),
+    const incoming = [
+      makeGroup({
+        subsessions: [{ sessionId: 'child-1', parentSessionId: 'root-session', title: 'planner', status: 'done', models: ['m1'], durationMs: 5000 }],
+      }),
     ];
 
-    const merged = mergeTimelineSections(
-      [makeGroup({ items: existingBranches })],
-      [makeGroup({ items: incomingBranches })],
-    );
-
-    const branchA = merged[0].items.find(
-      (item): item is BranchLifecycleItem => item.kind === 'fork-card' && item.sessionId === 'child-A',
-    );
-    const branchB = merged[0].items.find(
-      (item): item is BranchLifecycleItem => item.kind === 'fork-card' && item.sessionId === 'child-B',
-    );
-
-    expect(branchA?.status).toBe('active');
-    expect(branchA?.finalMessagePreview).toBeNull();
-    expect(branchB?.status).toBe('done');
-    expect(branchB?.finalMessagePreview).toBe('B done');
+    const merged = mergeTimelineSections(existing, incoming);
+    expect(merged[0].subsessions).toHaveLength(1);
+    expect(merged[0].subsessions[0].status).toBe('done');
+    expect(merged[0].subsessions[0].durationMs).toBe(5000);
   });
 });

@@ -381,13 +381,10 @@ function extractToolOutput(tool: string, stateOutput: unknown): string | undefin
   const outputStr = typeof stateOutput === 'string' ? stateOutput : JSON.stringify(stateOutput);
 
   if (tool === 'bash') {
-    // First 2 lines of output
-    const lines = outputStr.split('\n');
-    const firstTwo = lines.slice(0, 2).join('\n');
-    return truncateStr(firstTwo, 200);
+    return truncateStr(outputStr, 4000);
   }
 
-  return truncateStr(outputStr, 100);
+  return truncateStr(outputStr, 1000);
 }
 
 /**
@@ -424,6 +421,13 @@ function parsePartRow(
     if (tool && state) {
       base.toolInput = extractToolInput(tool, state.input);
       base.toolOutput = extractToolOutput(tool, state.output);
+      // Preserve structured input for tools that benefit from rich rendering
+      if (state.input != null && (tool === 'edit' || tool === 'bash' || tool === 'grep' || tool === 'glob' || tool === 'task')) {
+        try {
+          const raw = JSON.stringify(state.input);
+          if (raw.length <= 5000) base.toolInputRaw = raw; // cap size
+        } catch { /* skip if not serializable */ }
+      }
     }
     return base;
   }

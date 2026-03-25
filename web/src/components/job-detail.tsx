@@ -8,7 +8,6 @@
 import type { JobDetailSnapshot } from '@pilot/core/types.js'
 import { parseSqliteTimestamp } from '~/lib/time-utils'
 import { Badge } from '~/components/ui/badge'
-import { TimelineStream } from '~/components/timeline-stream'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
@@ -92,14 +91,5 @@ export function JobHeader({ job }: { job: JobDetailSnapshot['job'] }) {
   )
 }
 
-// ── Main Component ───────────────────────────────────────────────────────
-
-interface JobDetailProps {
-  snapshot: JobDetailSnapshot
-}
-
-export function JobDetail({ snapshot }: JobDetailProps) {
-  const { job } = snapshot
-  const isActive = job.status === 'running' || job.status === 'pending'
-  return <TimelineStream jobId={job.id} isActive={isActive} />
-}
+// NOTE: JobDetail component removed — TimelineStream was unused.
+// The route uses SplitPaneDetail → StepContentPane directly.

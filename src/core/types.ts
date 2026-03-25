@@ -259,6 +259,7 @@ export interface SessionPart {
   // Tool-specific fields (present when type='tool')
   tool?: string;         // bash, read, write, edit, glob, grep, etc.
   toolInput?: string;    // truncated input summary
+  toolInputRaw?: string; // JSON-stringified structured input (for edit diffs, bash desc)
   toolOutput?: string;   // truncated output summary
   toolStatus?: string;   // running, completed, error
   // Text/reasoning fields
@@ -492,6 +493,8 @@ export interface TimelineActivityItem {
   role: string;
   createdAt: number;
   text: string;
+  /** True for LLM 'reasoning' / thinking tokens (vs normal text). */
+  isReasoning?: boolean;
 }
 
 export interface TimelineToolSummaryItem {
@@ -501,39 +504,32 @@ export interface TimelineToolSummaryItem {
   createdAt: number;
   tool: string;
   toolInput?: string;
+  /** Structured input JSON — for edit diffs, bash description, etc. */
+  toolInputRaw?: string;
+  toolOutput?: string;
   toolStatus?: string;
   patchFiles?: string[];
-}
-
-/**
- * One lifecycle-aware branch object keyed by child session identity.
- *
- * The item is inserted at fork time (`createdAt`) and later updated in place
- * with latest status/progress/completion metadata.
- */
-export interface BranchLifecycleItem {
-  kind: 'fork-card';
-  sessionId: string;       // child session ID
-  parentSessionId: string;
-  title: string;
-  createdAt: number;       // child session start time = fork point
-  updatedAt?: number;       // latest observed child activity/update timestamp
-  completedAt?: number | null;
-  status: 'active' | 'done' | 'unknown';
-  messageCount: number;
-  tokenTotal: number;
-  models: string[];
-  latestMessagePreview: string | null;
-  finalMessagePreview?: string | null;
-  childCount: number;
-  durationMs: number | null;
 }
 
 /** Discriminated union for step-grouped timeline items. */
 export type StepTimelineItem =
   | TimelineActivityItem
-  | TimelineToolSummaryItem
-  | BranchLifecycleItem;
+  | TimelineToolSummaryItem;
+
+/**
+ * A session's contribution within a step group.
+ * Replaces the old fork-card model — content is inlined, not lazy-loaded.
+ */
+export interface TimelineSection {
+  sessionId: string;
+  parentSessionId: string | null;  // null = step's own root session
+  title: string;
+  status: 'active' | 'done' | 'unknown';
+  models: string[];
+  durationMs: number | null;
+  depth: number;                   // 0 = root session, 1 = child, 2+ = grandchild
+  items: StepTimelineItem[];
+}
 
 export interface StepTimelineGroup {
   stepIndex: number | null;
@@ -541,44 +537,14 @@ export interface StepTimelineGroup {
   status: string;
   source: string;               // 'delegation' | 'judge:gaps' | etc.
   sessionId: string | null;
-  items: StepTimelineItem[];
-  semanticLabel?: string;       // Pre-computed human-readable label (e.g., "Execution", "Judge", "Gap Closure")
-  verdictReason?: string | null; // Populated for judge steps — the judge's verdict reason text
+  sections: TimelineSection[];
+  semanticLabel?: string;       // Pre-computed human-readable label
+  verdictReason?: string | null; // Populated for judge steps
 }
 
 /** Grouped timeline payload for step-first rendering. */
 export interface GroupedTimelinePage {
   groups: StepTimelineGroup[];
-  /** @deprecated Transitional flat list; consumers should use groups. */
-  items: StepTimelineItem[];
-  hasMore: boolean;
-  nextCursor: string | null;
-  sessionCount: number;
-  childCount: number;
-}
-
-// Legacy flat timeline exports kept temporarily for transitional callers.
-// New consumers should use StepTimelineGroup + GroupedTimelinePage.
-
-export type TimelineForkCardItem = BranchLifecycleItem;
-
-export interface TimelineCompletionCardItem {
-  kind: 'completion-card';
-  sessionId: string;
-  title: string;
-  createdAt: number;       // completion time
-  status: 'done';
-  durationMs: number | null;
-  tokenTotal: number;
-  latestMessagePreview: string | null;
-}
-
-/** @deprecated Use StepTimelineItem for grouped timeline consumers. */
-export type TimelineItem = StepTimelineItem | TimelineCompletionCardItem;
-
-/** @deprecated Use GroupedTimelinePage for grouped timeline consumers. */
-export interface TimelinePage {
-  items: TimelineItem[];
   hasMore: boolean;
   nextCursor: string | null;
   sessionCount: number;

@@ -598,29 +598,44 @@ describe('getJobTimeline', () => {
     const page = getJobTimeline('ab12')!;
 
     expect(page).not.toBeNull();
-    expect(page.items).toHaveLength(4);
-    // Verify chronological ordering across sessions
-    const timestamps = page.items.map((i) => i.createdAt);
-    expect(timestamps).toEqual([1000, 2000, 3000, 4000]);
-    // Verify items from both sessions interleaved
-    expect(page.items[0].kind).toBe('activity');
-    expect((page.items[0] as { sessionId: string }).sessionId).toBe('sess-A');
-    expect((page.items[1] as { sessionId: string }).sessionId).toBe('sess-B');
+    // Items are grouped by session (one section per session), not interleaved.
+    // Sessions are ordered by first appearance.
+    const allItems = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    expect(allItems).toHaveLength(4);
+    // Session A appears first (first item at t=1000), then Session B (first at t=2000)
+    const timestamps = allItems.map((i) => i.createdAt);
+    expect(timestamps).toEqual([1000, 3000, 2000, 4000]);
+    // Items grouped by session, not interleaved
+    expect((allItems[0] as { sessionId: string }).sessionId).toBe('sess-A');
+    expect((allItems[1] as { sessionId: string }).sessionId).toBe('sess-A');
+    expect((allItems[2] as { sessionId: string }).sessionId).toBe('sess-B');
+    expect((allItems[3] as { sessionId: string }).sessionId).toBe('sess-B');
     expect(page.sessionCount).toBe(2);
   });
 
-  it('places fork-card items at child timeCreated relative to parts', () => {
+  it('places child sessions as sections with depth>0 alongside parent items', () => {
     mockGetJob.mockReturnValue(
       makeJob({ sessionTitles: JSON.stringify(['root-session']) }),
     );
     mockFindSessionByTitle.mockReturnValue('sess-root');
-    mockGetSessionParts.mockReturnValue([
-      makePart({ id: 'p1', type: 'text', text: 'before fork 1', createdAt: 500 }),
-      makePart({ id: 'p2', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 800 }),
-      makePart({ id: 'p3', type: 'text', text: 'between forks', createdAt: 1500 }),
-      makePart({ id: 'p4', type: 'text', text: 'after fork 2', createdAt: 2500 }),
-      makePart({ id: 'p5', type: 'text', text: 'final part', createdAt: 3000 }),
-    ]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [
+          makePart({ id: 'p1', type: 'text', text: 'before fork 1', createdAt: 500 }),
+          makePart({ id: 'p2', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 800 }),
+          makePart({ id: 'p3', type: 'text', text: 'between forks', createdAt: 1500 }),
+          makePart({ id: 'p4', type: 'text', text: 'after fork 2', createdAt: 2500 }),
+          makePart({ id: 'p5', type: 'text', text: 'final part', createdAt: 3000 }),
+        ];
+      }
+      if (sessionId === 'child-1') {
+        return [makePart({ id: 'c1-p1', type: 'text', text: 'child-1 work', createdAt: 1100 })];
+      }
+      if (sessionId === 'child-2') {
+        return [makePart({ id: 'c2-p1', type: 'text', text: 'child-2 work', createdAt: 2100 })];
+      }
+      return [];
+    });
     mockGetChildSessions.mockImplementation((parentId: string) => {
       if (parentId === 'sess-root') {
         return [
@@ -642,31 +657,23 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
-    // Find fork cards
-    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
-    expect(forkCards).toHaveLength(2);
+    // Children now appear as sections with depth > 0 — no fork-card items exist
+    const allSections = page.groups.flatMap((g) => g.sections);
+    const childSections = allSections.filter((s) => s.depth > 0);
+    expect(childSections).toHaveLength(2);
 
-    // fork-card for child-1 at time=1000 should be AFTER part at 800 and BEFORE part at 1500
-    const forkCard1Index = page.items.findIndex(
-      (i) => i.kind === 'fork-card' && i.createdAt === 1000,
-    );
-    expect(forkCard1Index).toBeGreaterThan(-1);
-    // The part at 800 should come before the fork card at 1000
-    const partBefore = page.items.findIndex((i) => i.createdAt === 800);
-    expect(partBefore).toBeLessThan(forkCard1Index);
-    // The part at 1500 should come after the fork card at 1000
-    const partAfter = page.items.findIndex((i) => i.createdAt === 1500);
-    expect(partAfter).toBeGreaterThan(forkCard1Index);
+    // child-1 and child-2 should appear as sections
+    const child1Section = childSections.find((s) => s.sessionId === 'child-1');
+    const child2Section = childSections.find((s) => s.sessionId === 'child-2');
+    expect(child1Section).toBeDefined();
+    expect(child2Section).toBeDefined();
+    expect(child1Section!.status).toBe('done');
+    expect(child2Section!.status).toBe('done');
 
-    // fork-card for child-2 at time=2000 should be AFTER part at 1500 and BEFORE part at 2500
-    const forkCard2Index = page.items.findIndex(
-      (i) => i.kind === 'fork-card' && i.createdAt === 2000,
-    );
-    expect(forkCard2Index).toBeGreaterThan(-1);
-    const part1500 = page.items.findIndex((i) => i.createdAt === 1500);
-    expect(part1500).toBeLessThan(forkCard2Index);
-    const part2500 = page.items.findIndex((i) => i.createdAt === 2500);
-    expect(part2500).toBeGreaterThan(forkCard2Index);
+    // Verify all root session items are present
+    const allItems = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    const rootItems = allItems.filter((i) => i.sessionId === 'sess-root');
+    expect(rootItems).toHaveLength(5);
 
     expect(page.childCount).toBe(2);
   });
@@ -682,12 +689,17 @@ describe('getJobTimeline', () => {
       }
       return [];
     });
-    mockGetSessionParts.mockReturnValue([
-      makePart({ id: 'txt', type: 'text', text: 'Hello', createdAt: 100 }),
-      makePart({ id: 'rsn', type: 'reasoning', text: 'Thinking...', createdAt: 200 }),
-      makePart({ id: 'tool1', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 400 }),
-      makePart({ id: 'patch1', type: 'patch', patchFiles: ['file.ts'], createdAt: 500 }),
-    ]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [
+          makePart({ id: 'txt', type: 'text', text: 'Hello', createdAt: 100 }),
+          makePart({ id: 'rsn', type: 'reasoning', text: 'Thinking...', createdAt: 200 }),
+          makePart({ id: 'tool1', type: 'tool', tool: 'bash', toolInput: 'ls', createdAt: 400 }),
+          makePart({ id: 'patch1', type: 'patch', patchFiles: ['file.ts'], createdAt: 500 }),
+        ];
+      }
+      return [];
+    });
     mockIsSessionDone.mockReturnValue(false);
     mockGetAssistantMessageCount.mockReturnValue(1);
     mockGetSessionTokensRecursive.mockReturnValue({
@@ -698,35 +710,37 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
+    // Flatten all items from sections
+    const allItems = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+
     // text → activity
-    const textItem = page.items.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'txt');
+    const textItem = allItems.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'txt');
     expect(textItem).toBeDefined();
     expect(textItem!.kind).toBe('activity');
 
     // reasoning → activity
-    const reasonItem = page.items.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'rsn');
+    const reasonItem = allItems.find((i) => i.kind === 'activity' && 'partId' in i && i.partId === 'rsn');
     expect(reasonItem).toBeDefined();
     expect(reasonItem!.kind).toBe('activity');
 
     // tool → tool-summary
-    const toolItem = page.items.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'tool1');
+    const toolItem = allItems.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'tool1');
     expect(toolItem).toBeDefined();
     expect(toolItem?.kind).toBe('tool-summary');
     expect(toolItem?.kind === 'tool-summary' ? toolItem.tool : undefined).toBe('bash');
     expect(toolItem?.kind === 'tool-summary' ? toolItem.toolInput : undefined).toBe('ls');
 
     // patch → tool-summary
-    const patchItem = page.items.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'patch1');
+    const patchItem = allItems.find((i) => i.kind === 'tool-summary' && 'partId' in i && i.partId === 'patch1');
     expect(patchItem).toBeDefined();
     expect(patchItem?.kind).toBe('tool-summary');
     expect(patchItem?.kind === 'tool-summary' ? patchItem.patchFiles : undefined).toEqual(['file.ts']);
 
-    // child → fork-card
-    const forkCard = page.items.find((i) => i.kind === 'fork-card');
-    expect(forkCard).toBeDefined();
-    expect(forkCard?.kind).toBe('fork-card');
-    expect(forkCard?.kind === 'fork-card' ? forkCard.sessionId : undefined).toBe('child-x');
-    expect(forkCard?.kind === 'fork-card' ? forkCard.title : undefined).toBe('Sub X');
+    // child → session metadata tracked with depth > 0 (no fork-card items)
+    // child-x has no parts so no section is emitted; its metadata is still tracked
+    // via BFS (depth, parentSessionId). We verify no fork-card exists in any items.
+    const allItems2 = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    expect(allItems2.some((i) => (i as { kind: string }).kind === 'fork-card')).toBe(false);
   });
 
   it('supports cursor-based pagination with correct slices', () => {
@@ -744,21 +758,23 @@ describe('getJobTimeline', () => {
     // First page: limit=5
     const page1 = getJobTimeline('ab12', { limit: 5 })!;
 
-    expect(page1.items).toHaveLength(5);
+    const items1 = page1.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    expect(items1).toHaveLength(5);
     expect(page1.hasMore).toBe(true);
     expect(page1.nextCursor).not.toBeNull();
     // First page items should be timestamps 100-500
-    expect(page1.items[0].createdAt).toBe(100);
-    expect(page1.items[4].createdAt).toBe(500);
+    expect(items1[0].createdAt).toBe(100);
+    expect(items1[4].createdAt).toBe(500);
 
     // Second page: use cursor from first page
     const page2 = getJobTimeline('ab12', { cursor: page1.nextCursor!, limit: 5 })!;
 
-    expect(page2.items).toHaveLength(5);
+    const items2 = page2.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    expect(items2).toHaveLength(5);
     expect(page2.hasMore).toBe(false);
     // Second page items should be timestamps 600-1000
-    expect(page2.items[0].createdAt).toBe(600);
-    expect(page2.items[4].createdAt).toBe(1000);
+    expect(items2[0].createdAt).toBe(600);
+    expect(items2[4].createdAt).toBe(1000);
   });
 
   it('returns empty items for job with no sessions', () => {
@@ -769,7 +785,7 @@ describe('getJobTimeline', () => {
     const page = getJobTimeline('ab12')!;
 
     expect(page).not.toBeNull();
-    expect(page.items).toHaveLength(0);
+    expect(page.groups).toHaveLength(0);
     expect(page.hasMore).toBe(false);
     expect(page.sessionCount).toBe(0);
     expect(page.childCount).toBe(0);
@@ -780,12 +796,17 @@ describe('getJobTimeline', () => {
     expect(getJobTimeline('zzzz')).toBeNull();
   });
 
-  it('folds done children into a single lifecycle fork-card without completion-card row', () => {
+  it('folds done children into sections with depth>0, no completion-card rows', () => {
     mockGetJob.mockReturnValue(
       makeJob({ sessionTitles: JSON.stringify(['root']) }),
     );
     mockFindSessionByTitle.mockReturnValue('sess-root');
-    mockGetSessionParts.mockReturnValue([]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'done-child') {
+        return [makePart({ id: 'dc-p1', type: 'text', text: 'child work', createdAt: 2000 })];
+      }
+      return [];
+    });
     mockGetChildSessions.mockImplementation((parentId: string) => {
       if (parentId === 'sess-root') {
         return [
@@ -806,13 +827,17 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
-    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
-    expect(forkCards).toHaveLength(1);
-    expect(forkCards[0].createdAt).toBe(1000);
-    expect(forkCards[0].kind === 'fork-card' && forkCards[0].completedAt).toBe(5000);
-    expect(forkCards[0].kind === 'fork-card' && forkCards[0].durationMs).toBe(4000);
+    // Children appear as sections with depth > 0 — no fork-card items
+    const allSections = page.groups.flatMap((g) => g.sections);
+    const childSections = allSections.filter((s) => s.depth > 0);
+    expect(childSections).toHaveLength(1);
+    expect(childSections[0].sessionId).toBe('done-child');
+    expect(childSections[0].status).toBe('done');
+    expect(childSections[0].durationMs).toBe(4000); // timeUpdated - timeCreated = 5000 - 1000
 
-    const completionCards = page.items.filter((i) => (i as { kind: string }).kind === 'completion-card');
+    // No completion-card items in any section
+    const allItems = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    const completionCards = allItems.filter((i) => (i as { kind: string }).kind === 'completion-card');
     expect(completionCards).toHaveLength(0);
   });
 
@@ -832,16 +857,23 @@ describe('getJobTimeline', () => {
     const page = getJobTimeline('ab12')!;
 
     // All three items are present — sort is stable (preserves insertion order for equal timestamps)
-    expect(page.items).toHaveLength(3);
-    expect(page.items.every((i) => i.createdAt === 1000)).toBe(true);
+    const allItems = page.groups.flatMap((g) => g.sections.flatMap((s) => s.items));
+    expect(allItems).toHaveLength(3);
+    expect(allItems.every((i) => i.createdAt === 1000)).toBe(true);
   });
 
-  it('produces unique fork-card sessionIds for multiple children', () => {
+  it('produces unique child sections for multiple children', () => {
     mockGetJob.mockReturnValue(
       makeJob({ sessionTitles: JSON.stringify(['root']) }),
     );
     mockFindSessionByTitle.mockReturnValue('sess-root');
-    mockGetSessionParts.mockReturnValue([]); // no root activity needed
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      // Give each child session a part so it appears in sections
+      if (sessionId === 'child-aaa') return [makePart({ id: 'ca-p1', type: 'text', text: 'worker A', createdAt: 1050 })];
+      if (sessionId === 'child-bbb') return [makePart({ id: 'cb-p1', type: 'text', text: 'worker B', createdAt: 1150 })];
+      if (sessionId === 'child-ccc') return [makePart({ id: 'cc-p1', type: 'text', text: 'worker C', createdAt: 1250 })];
+      return [];
+    });
     mockGetChildSessions.mockImplementation((parentId: string) => {
       if (parentId === 'sess-root') {
         return [
@@ -864,29 +896,24 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
-    // Extract fork-card items
-    const forkCards = page.items.filter((i) => i.kind === 'fork-card');
-    expect(forkCards).toHaveLength(3);
+    // Children appear as sections with depth > 0 — no fork-card items
+    const allSections = page.groups.flatMap((g) => g.sections);
+    const childSections = allSections.filter((s) => s.depth > 0);
+    expect(childSections).toHaveLength(3);
 
     // Verify sessionIds match child IDs
-    const forkSessionIds = forkCards.map((fc) =>
-      fc.kind === 'fork-card' ? fc.sessionId : '',
-    );
-    expect(forkSessionIds).toEqual(['child-aaa', 'child-bbb', 'child-ccc']);
+    const childSessionIds = childSections.map((s) => s.sessionId);
+    expect(childSessionIds).toContain('child-aaa');
+    expect(childSessionIds).toContain('child-bbb');
+    expect(childSessionIds).toContain('child-ccc');
 
     // All sessionIds are unique (no duplicates)
-    expect(new Set(forkSessionIds).size).toBe(forkSessionIds.length);
+    expect(new Set(childSessionIds).size).toBe(childSessionIds.length);
 
-    // Each fork card has the correct parentSessionId
-    for (const fc of forkCards) {
-      if (fc.kind === 'fork-card') {
-        expect(fc.parentSessionId).toBe('sess-root');
-      }
+    // Each child section has the correct parentSessionId
+    for (const section of childSections) {
+      expect(section.parentSessionId).toBe('sess-root');
     }
-
-    // Fork cards are sorted chronologically by createdAt
-    const forkTimestamps = forkCards.map((fc) => fc.createdAt);
-    expect(forkTimestamps).toEqual([1000, 1100, 1200]);
   });
 
   it('returns explicit step-grouped output with step metadata', () => {
@@ -942,13 +969,13 @@ describe('getJobTimeline', () => {
     expect(page.groups[0].command).toBe('add-phase');
     expect(page.groups[0].status).toBe('completed');
     expect(page.groups[0].sessionId).toBe('sess-step-0');
-    expect(page.groups[0].items.map((i) => i.createdAt)).toEqual([100, 200]);
+    expect(page.groups[0].sections.flatMap((s) => s.items).map((i) => i.createdAt)).toEqual([100, 200]);
 
     expect(page.groups[1].stepIndex).toBe(1);
     expect(page.groups[1].command).toBe('execute-phase');
     expect(page.groups[1].status).toBe('running');
     expect(page.groups[1].sessionId).toBe('sess-step-1');
-    expect(page.groups[1].items.map((i) => i.createdAt)).toEqual([300]);
+    expect(page.groups[1].sections.flatMap((s) => s.items).map((i) => i.createdAt)).toEqual([300]);
   });
 
   it('keeps one lifecycle object per child session without completion-card rows', () => {
@@ -964,7 +991,13 @@ describe('getJobTimeline', () => {
       makeJob({ sessionTitles: JSON.stringify(['root']) }),
     );
     mockFindSessionByTitle.mockReturnValue('sess-root');
-    mockGetSessionParts.mockReturnValue([]);
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      // Give child-1 a part so it appears as a section with depth > 0
+      if (sessionId === 'child-1') {
+        return [makePart({ id: 'c1-p1', type: 'text', text: 'child work', createdAt: 2000 })];
+      }
+      return [];
+    });
     mockGetChildSessions.mockImplementation((parentId: string) => {
       if (parentId === 'sess-root') {
         return [{ id: 'child-1', title: 'Worker 1', timeCreated: 1000, timeUpdated: 5000 }];
@@ -989,25 +1022,24 @@ describe('getJobTimeline', () => {
     });
 
     const page = getJobTimeline('ab12')!;
-    const allItems = page.groups.flatMap((group) => group.items);
-    const lifecycleItems = allItems.filter((item) => item.kind === 'fork-card');
 
-    expect(lifecycleItems).toHaveLength(1);
-    const lifecycle = lifecycleItems[0];
-    expect(lifecycle.kind).toBe('fork-card');
-    if (lifecycle.kind === 'fork-card') {
-      expect(lifecycle.sessionId).toBe('child-1');
-      expect(lifecycle.createdAt).toBe(1000);
-      expect(lifecycle.completedAt).toBe(5000);
-      expect(lifecycle.status).toBe('done');
-      expect(lifecycle.latestMessagePreview).toContain('final answer');
-      expect(lifecycle.finalMessagePreview).toContain('final answer');
-    }
+    // Children appear as sections with depth > 0 — no fork-card items
+    const allSections = page.groups.flatMap((group) => group.sections);
+    const childSections = allSections.filter((s) => s.depth > 0);
+    expect(childSections).toHaveLength(1);
+    const childSection = childSections[0];
+    expect(childSection.sessionId).toBe('child-1');
+    expect(childSection.status).toBe('done');
+    expect(childSection.durationMs).toBe(4000); // 5000 - 1000
 
+    // No completion-card items anywhere
+    const allItems = page.groups.flatMap((group) => group.sections.flatMap((s) => s.items));
     expect(allItems.map((item) => item.kind)).not.toContain('completion-card');
   });
 
-  it('uses unattributed fallback when identity/title/window attribution fails', () => {
+  it('attributes items to nearest step when identity/title/window attribution fails', () => {
+    // The nearest-step fallback eliminates the unattributed bucket:
+    // items that don't match via tiers 1-5.5 are attributed to the closest step by time.
     mockGetJobSteps.mockReturnValue([
       makeStep({
         stepIndex: 0,
@@ -1029,11 +1061,13 @@ describe('getJobTimeline', () => {
 
     const page = getJobTimeline('ab12')!;
 
+    // Item is attributed to step 0 via nearest-step fallback — no unattributed bucket
     expect(page.groups).toHaveLength(1);
-    expect(page.groups[0].stepIndex).toBeNull();
-    expect(page.groups[0].command).toBe('unattributed');
-    expect(page.groups[0].items).toHaveLength(1);
-    expect(page.groups[0].items[0].createdAt).toBe(1000);
+    expect(page.groups[0].stepIndex).toBe(0);
+    expect(page.groups[0].command).toBe('execute-phase');
+    const allItems = page.groups[0].sections.flatMap((s) => s.items);
+    expect(allItems).toHaveLength(1);
+    expect(allItems[0].createdAt).toBe(1000);
   });
 
   it('keeps step grouping intact across cursor pagination', () => {
@@ -1072,9 +1106,9 @@ describe('getJobTimeline', () => {
     expect(page1.nextCursor).toBe('300');
     expect(page1.groups).toHaveLength(2);
     expect(page1.groups[0].stepIndex).toBe(0);
-    expect(page1.groups[0].items.map((i) => i.createdAt)).toEqual([100, 200]);
+    expect(page1.groups[0].sections.flatMap((s) => s.items).map((i) => i.createdAt)).toEqual([100, 200]);
     expect(page1.groups[1].stepIndex).toBe(1);
-    expect(page1.groups[1].items.map((i) => i.createdAt)).toEqual([300]);
+    expect(page1.groups[1].sections.flatMap((s) => s.items).map((i) => i.createdAt)).toEqual([300]);
 
     const page2 = getJobTimeline('ab12', { cursor: page1.nextCursor ?? undefined, limit: 3 })!;
 
@@ -1082,7 +1116,7 @@ describe('getJobTimeline', () => {
     expect(page2.nextCursor).toBe('400');
     expect(page2.groups).toHaveLength(1);
     expect(page2.groups[0].stepIndex).toBe(1);
-    expect(page2.groups[0].items.map((i) => i.createdAt)).toEqual([400]);
+    expect(page2.groups[0].sections.flatMap((s) => s.items).map((i) => i.createdAt)).toEqual([400]);
   });
 });
 
@@ -1192,7 +1226,7 @@ describe('resolveStepIndex 6-tier attribution', () => {
 
     expect(page.groups).toHaveLength(1);
     expect(page.groups[0].stepIndex).toBe(0);
-    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups[0].sections.flatMap((s) => s.items)).toHaveLength(1);
     expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
   });
 
@@ -1216,7 +1250,7 @@ describe('resolveStepIndex 6-tier attribution', () => {
     // candidate sessionTitle='shared-title' = step.sessionTitle → tier 2 match
     expect(page.groups).toHaveLength(1);
     expect(page.groups[0].stepIndex).toBe(0);
-    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups[0].sections.flatMap((s) => s.items)).toHaveLength(1);
     expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
   });
 
@@ -1242,7 +1276,7 @@ describe('resolveStepIndex 6-tier attribution', () => {
     // tier 3: t(15) within [t(10), t(20)] → match
     expect(page.groups).toHaveLength(1);
     expect(page.groups[0].stepIndex).toBe(0);
-    expect(page.groups[0].items).toHaveLength(1);
+    expect(page.groups[0].sections.flatMap((s) => s.items)).toHaveLength(1);
     expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
   });
 
@@ -1266,7 +1300,7 @@ describe('resolveStepIndex 6-tier attribution', () => {
     expect(page.groups.find(g => g.command === 'unattributed')).toBeUndefined();
     const step0Group = page.groups.find(g => g.stepIndex === 0);
     expect(step0Group).toBeDefined();
-    expect(step0Group!.items).toHaveLength(1);
+    expect(step0Group!.sections.flatMap((s) => s.items)).toHaveLength(1);
   });
 
   it('tier 4: attributes candidate via child session transitivity', () => {
@@ -1300,14 +1334,16 @@ describe('resolveStepIndex 6-tier attribution', () => {
     const step1Group = page.groups.find(g => g.stepIndex === 1);
     expect(step1Group).toBeDefined();
 
-    const judgeItem = step1Group!.items.find(
+    const step1Items = step1Group!.sections.flatMap((s) => s.items);
+    const judgeItem = step1Items.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'judge-p1',
     );
     expect(judgeItem).toBeDefined();
 
     // Should NOT be in unattributed
     const unattributed = page.groups.find(g => g.command === 'unattributed');
-    const judgeInUnattributed = unattributed?.items.find(
+    const unattributedItems = unattributed?.sections.flatMap((s) => s.items) ?? [];
+    const judgeInUnattributed = unattributedItems.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'judge-p1',
     );
     expect(judgeInUnattributed).toBeUndefined();
@@ -1343,14 +1379,16 @@ describe('resolveStepIndex 6-tier attribution', () => {
     const step1Group = page.groups.find(g => g.stepIndex === 1);
     expect(step1Group).toBeDefined();
 
-    const lateItem = step1Group!.items.find(
+    const step1Items = step1Group!.sections.flatMap((s) => s.items);
+    const lateItem = step1Items.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
     );
     expect(lateItem).toBeDefined();
 
     // Should NOT be in unattributed
     const unattributed = page.groups.find(g => g.command === 'unattributed');
-    const lateInUnattributed = unattributed?.items.find(
+    const unattributedItems = unattributed?.sections.flatMap((s) => s.items) ?? [];
+    const lateInUnattributed = unattributedItems.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
     );
     expect(lateInUnattributed).toBeUndefined();
@@ -1390,13 +1428,16 @@ describe('resolveStepIndex 6-tier attribution', () => {
     // late-p1 should be in step 1's group (last step catches everything after it)
     const step1Group = page.groups.find(g => g.stepIndex === 1);
     expect(step1Group).toBeDefined();
-    const lateInStep1 = step1Group!.items.find(
+    const step1Items = step1Group!.sections.flatMap((s) => s.items);
+    const lateInStep1 = step1Items.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'late-p1',
     );
     expect(lateInStep1).toBeDefined();
   });
 
-  it('genuinely unassignable content remains in unattributed bucket', () => {
+  it('pre-step content is attributed to nearest step via fallback (no unattributed bucket)', () => {
+    // The nearest-step fallback eliminates the unattributed bucket:
+    // even content before any step started is attributed to the closest step by time distance.
     setupAttribution({
       steps: [
         { stepIndex: 0, sessionId: 'sess-s0', sessionTitle: 'title-s0', startedAt: iso(100), completedAt: iso(200) },
@@ -1409,19 +1450,168 @@ describe('resolveStepIndex 6-tier attribution', () => {
       childSessionMap: {},
       partsMap: {
         'sess-s0': [makePart({ id: 's0-p1', type: 'text', text: 'step 0', createdAt: t(150) })],
-        // Activity BEFORE any step started — genuinely unassignable
-        // No session match, no child relationship, createdAt < all startedAtMs
+        // Activity BEFORE any step started — nearest-step fallback attributes to step 0
         'sess-early': [makePart({ id: 'early-p1', type: 'text', text: 'Pre-step', createdAt: t(5) })],
       },
     });
 
     const page = getJobTimeline('ab12')!;
 
+    // No unattributed bucket — nearest-step fallback assigns early-p1 to step 0
     const unattributed = page.groups.find(g => g.command === 'unattributed');
-    expect(unattributed).toBeDefined();
-    const earlyItem = unattributed!.items.find(
+    expect(unattributed).toBeUndefined();
+
+    // early-p1 should be in step 0's group
+    const step0Group = page.groups.find(g => g.stepIndex === 0);
+    expect(step0Group).toBeDefined();
+    const step0Items = step0Group!.sections.flatMap((s) => s.items);
+    const earlyItem = step0Items.find(
       item => item.kind === 'activity' && 'partId' in item && item.partId === 'early-p1',
     );
     expect(earlyItem).toBeDefined();
+  });
+
+  it('pilot-redelegate sessions get their own Continuation Delegation group', () => {
+    // Scenario: initial delegation → plan → execute → judge → redelegate → gap plan → gap execute
+    // The redelegate session should appear as its own "Continuation Delegation" group,
+    // NOT mixed into the judge step or unattributed.
+    const redelegateSessionId = 'sess-redelegate-1';
+    const redelegateTitle = 'pilot-redelegate-ab12-1-zzzz';
+
+    setupAttribution({
+      steps: [
+        // Real steps: plan, execute, judge, then gap-closure steps from redelegate
+        { stepIndex: 0, sessionId: 'sess-plan', sessionTitle: 'title-plan', startedAt: iso(10), completedAt: iso(50), command: 'plan-phase' },
+        { stepIndex: 1, sessionId: 'sess-exec', sessionTitle: 'title-exec', startedAt: iso(50), completedAt: iso(200), command: 'execute-phase' },
+        { stepIndex: 2, sessionId: 'sess-judge', sessionTitle: 'title-judge', startedAt: iso(200), completedAt: iso(250), command: 'judge' },
+        // Gap-closure steps created by the redelegate session (source: judge:gaps)
+        { stepIndex: 3, sessionId: 'sess-gap-plan', sessionTitle: 'title-gap-plan', startedAt: iso(310), completedAt: iso(350), command: 'plan-phase', source: 'judge:gaps' },
+        { stepIndex: 4, sessionId: 'sess-gap-exec', sessionTitle: 'title-gap-exec', startedAt: iso(350), completedAt: iso(500), command: 'execute-phase', source: 'judge:gaps' },
+      ],
+      // Session titles include the redelegate session
+      sessionTitles: ['title-plan', 'title-exec', 'title-judge', redelegateTitle, 'title-gap-plan', 'title-gap-exec'],
+      sessionIdMap: {
+        'title-plan': 'sess-plan',
+        'title-exec': 'sess-exec',
+        'title-judge': 'sess-judge',
+        [redelegateTitle]: redelegateSessionId,
+        'title-gap-plan': 'sess-gap-plan',
+        'title-gap-exec': 'sess-gap-exec',
+      },
+      childSessionMap: {},
+      partsMap: {
+        'sess-plan': [makePart({ id: 'plan-p1', type: 'text', text: 'planning...', createdAt: t(20) })],
+        'sess-exec': [makePart({ id: 'exec-p1', type: 'text', text: 'executing...', createdAt: t(100) })],
+        'sess-judge': [makePart({ id: 'judge-p1', type: 'text', text: 'judging...', createdAt: t(220) })],
+        // Redelegate session activity — between judge completion and gap steps start
+        [redelegateSessionId]: [
+          makePart({ id: 'redeleg-p1', type: 'text', text: 'Analyzing gaps and planning continuation...', createdAt: t(270) }),
+          makePart({ id: 'redeleg-p2', type: 'text', text: 'Continuation steps: plan-phase --gaps, execute-phase --gaps', createdAt: t(290) }),
+        ],
+        'sess-gap-plan': [makePart({ id: 'gap-plan-p1', type: 'text', text: 'gap planning...', createdAt: t(320) })],
+        'sess-gap-exec': [makePart({ id: 'gap-exec-p1', type: 'text', text: 'gap executing...', createdAt: t(370) })],
+      },
+    });
+
+    // Mock getSessionMeta to return info for the redelegate session
+    mockGetSessionMeta.mockImplementation((sessionId: string) => {
+      if (sessionId === redelegateSessionId) {
+        return {
+          id: redelegateSessionId,
+          title: redelegateTitle,
+          timeCreated: t(260),
+          timeUpdated: t(300),
+        };
+      }
+      return null;
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    // Find the Continuation Delegation group
+    const contDelegGroup = page.groups.find(g => g.semanticLabel === 'Continuation Delegation');
+    expect(contDelegGroup).toBeDefined();
+    expect(contDelegGroup!.command).toBe('delegation');
+    expect(contDelegGroup!.source).toMatch(/^judge:/);
+    expect(contDelegGroup!.sessionId).toBe(redelegateSessionId);
+
+    // Redelegate session content should be IN the Continuation Delegation group
+    const contDelegItems = contDelegGroup!.sections.flatMap((s) => s.items);
+    const redelegItem = contDelegItems.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'redeleg-p1',
+    );
+    expect(redelegItem).toBeDefined();
+
+    // Gap-closure steps should still have their own groups
+    const gapPlanGroup = page.groups.find(g => g.stepIndex === 3);
+    expect(gapPlanGroup).toBeDefined();
+    expect(gapPlanGroup!.semanticLabel).toBe('Gap Planning');
+
+    // Redelegate content should NOT be in unattributed
+    const unattributed = page.groups.find(g => g.command === 'unattributed');
+    const unattributedItems = unattributed?.sections.flatMap((s) => s.items) ?? [];
+    const redelegInUnattributed = unattributedItems.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'redeleg-p1',
+    );
+    expect(redelegInUnattributed).toBeUndefined();
+
+    // Redelegate content should NOT be in the judge group
+    const judgeGroup = page.groups.find(g => g.stepIndex === 2);
+    const judgeGroupItems = judgeGroup?.sections.flatMap((s) => s.items) ?? [];
+    const redelegInJudge = judgeGroupItems.find(
+      item => item.kind === 'activity' && 'partId' in item && item.partId === 'redeleg-p1',
+    );
+    expect(redelegInJudge).toBeUndefined();
+  });
+
+  it('pilot-redelegate source is inferred from resulting judge-sourced steps', () => {
+    // When a redelegate session produces steps with source 'judge:failed',
+    // the synthetic step ref should inherit that source.
+    const redelegateSessionId = 'sess-redelegate-failed';
+    const redelegateTitle = 'pilot-redelegate-ab12-1-yyyy';
+
+    setupAttribution({
+      steps: [
+        { stepIndex: 0, sessionId: 'sess-exec', sessionTitle: 'title-exec', startedAt: iso(10), completedAt: iso(100), command: 'execute-phase' },
+        { stepIndex: 1, sessionId: 'sess-judge', sessionTitle: 'title-judge', startedAt: iso(100), completedAt: iso(150), command: 'judge' },
+        // Recovery steps from redelegate with source: judge:failed
+        { stepIndex: 2, sessionId: 'sess-recovery', sessionTitle: 'title-recovery', startedAt: iso(210), completedAt: iso(300), command: 'execute-phase', source: 'judge:failed' },
+      ],
+      sessionTitles: ['title-exec', 'title-judge', redelegateTitle, 'title-recovery'],
+      sessionIdMap: {
+        'title-exec': 'sess-exec',
+        'title-judge': 'sess-judge',
+        [redelegateTitle]: redelegateSessionId,
+        'title-recovery': 'sess-recovery',
+      },
+      childSessionMap: {},
+      partsMap: {
+        'sess-exec': [makePart({ id: 'e-p1', type: 'text', text: 'exec', createdAt: t(50) })],
+        'sess-judge': [makePart({ id: 'j-p1', type: 'text', text: 'judge', createdAt: t(120) })],
+        [redelegateSessionId]: [
+          makePart({ id: 'rd-p1', type: 'text', text: 'Recovery planning...', createdAt: t(170) }),
+        ],
+        'sess-recovery': [makePart({ id: 'r-p1', type: 'text', text: 'recovery', createdAt: t(250) })],
+      },
+    });
+
+    mockGetSessionMeta.mockImplementation((sessionId: string) => {
+      if (sessionId === redelegateSessionId) {
+        return {
+          id: redelegateSessionId,
+          title: redelegateTitle,
+          timeCreated: t(160),
+          timeUpdated: t(200),
+        };
+      }
+      return null;
+    });
+
+    const page = getJobTimeline('ab12')!;
+
+    const contDelegGroup = page.groups.find(g => g.semanticLabel === 'Continuation Delegation');
+    expect(contDelegGroup).toBeDefined();
+    // Source should be inferred from the resulting steps (judge:failed)
+    expect(contDelegGroup!.source).toBe('judge:failed');
   });
 });

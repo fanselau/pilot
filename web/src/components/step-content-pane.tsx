@@ -1,139 +1,333 @@
 /**
- * Content pane for the split-pane job detail view.
+ * Content pane — flat section-based renderer with nested sticky headers.
  *
- * Always renders ALL step groups in a continuous scroll. The sidebar drives
- * navigation via scrollIntoView, and an IntersectionObserver reports which
- * step section is currently visible (scroll-spy).
+ * Renders ALL step groups in a single continuous scroll. Each step has a
+ * sticky header; subsessions are visual dividers (not sticky) that can be
+ * collapsed. Child session content is server-inlined — no lazy loading.
  *
- * Uses @tanstack/react-virtual for virtualization when total item count
- * exceeds VIRTUALIZE_THRESHOLD (200).
- * Auto-scrolls to bottom for running jobs when autoFollow=true.
- *
- * Phase 90 UI-SPEC audit: all 18 interaction contracts verified 2026-03-23.
- * - Native Subsession Flow: 6/6 contracts pass
- * - Single-Scroll Integration: 6/6 contracts pass
- * - Follow Mode: 6/6 contracts pass
+ * Follow mode uses MutationObserver to track any DOM changes in the scroll
+ * container, ensuring it works for child session streaming too.
  */
 
-import { useRef, useEffect, useCallback, useMemo, type MutableRefObject, useState, type UIEvent } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import type { StepTimelineGroup, StepTimelineItem, JobStepSummary, BranchLifecycleItem } from '@pilot/core/types.js'
+import { Fragment, useRef, useEffect, useCallback, useMemo, useState, type MutableRefObject } from 'react'
+import type { StepTimelineGroup, StepTimelineItem, JobStepSummary, TimelineSection } from '@pilot/core/types.js'
+import { ChevronRight } from 'lucide-react'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import { SourceBadge } from '~/components/ui/status-badge'
 import { ToolSummaryChips } from '~/components/tool-summary-chips'
 import { formatCompactDuration } from '~/lib/format'
-import { formatStepLabel, formatStepDescription, stepSemanticClass, isContinuationStep, isJudgeStep, synthesizeHeaderFields, resolveSemanticType, getSemanticIcon, getSemanticColors, SEMANTIC_TYPE_CONFIG } from '~/lib/step-semantics'
+import {
+  isJudgeStep,
+  synthesizeHeaderFields,
+  resolveSemanticType,
+  getSemanticColors,
+  SEMANTIC_TYPE_CONFIG,
+  deriveBranchIdentity,
+  type SemanticSessionType,
+} from '~/lib/step-semantics'
 import { TimelineItemRenderer } from '~/components/timeline-stream'
 import { FollowModeBar } from '~/components/follow-mode-bar'
-import { useIsMobile } from '~/hooks/use-media-query'
 
-/** Minimum item count before virtual scrolling is activated. */
-const VIRTUALIZE_THRESHOLD = 200
+/** Cumulative upward-scroll px before follow mode auto-cancels. */
+const CANCEL_THRESHOLD = 80
 
 /**
- * Cumulative upward-scroll pixels before Follow mode auto-cancels.
- * 80px ≈ 5-8mm — distinguishes intentional upward scroll from
- * incidental touch drift on mobile.
+ * Normalize a group to always have `sections`.
+ * Handles stale React Query cache that may still have old-format `items` field.
  */
-const CANCEL_THRESHOLD = 80
+function ensureSections(group: StepTimelineGroup): TimelineSection[] {
+  if (group.sections && group.sections.length > 0) return group.sections
+
+  // Migration shim: wrap old-format items in a single root section
+  const legacyItems = (group as any).items as StepTimelineItem[] | undefined
+  if (legacyItems && legacyItems.length > 0) {
+    return [{
+      sessionId: group.sessionId ?? 'unknown',
+      parentSessionId: null,
+      title: group.sessionId ?? 'root',
+      status: group.status === 'running' ? 'active' : group.status === 'completed' || group.status === 'done' ? 'done' : 'unknown',
+      models: [],
+      durationMs: null,
+      depth: 0,
+      items: legacyItems.filter((i: any) => i.kind === 'activity' || i.kind === 'tool-summary'),
+    }]
+  }
+
+  return []
+}
 
 export interface StepContentPaneProps {
   groups: StepTimelineGroup[]
   jobId: string
   autoFollow: boolean
   onFollowToggle: () => void
-  /** Called when user deliberately scrolls upward (cancels follow mode). */
   onFollowCancel?: () => void
-  /** Whether the job is currently active/running — controls FollowModeBar visibility. */
   isActive?: boolean
-  /** Ref that the parent sets; content pane registers its scrollTo function here. */
   scrollToStepRef: MutableRefObject<((idx: number) => void) | null>
-  /** Callback when the visible step changes (scroll-spy). */
   onVisibleStepChange: (idx: number | null) => void
-  /** Optional step summaries for enriched headers (source, reason, error, duration). */
   steps?: JobStepSummary[]
-  /** When true, hide the "All steps" header bar (used on mobile to save vertical space). */
   hideHeader?: boolean
 }
 
 function stepStatusVariant(status: string) {
   switch (status) {
-    case 'running':
-      return 'info' as const
-    case 'completed':
-    case 'done':
-      return 'success' as const
-    case 'failed':
-      return 'destructive' as const
-    case 'pending':
-      return 'warning' as const
-    default:
-      return 'secondary' as const
+    case 'running': return 'info' as const
+    case 'completed': case 'done': return 'success' as const
+    case 'failed': return 'destructive' as const
+    case 'pending': return 'warning' as const
+    default: return 'secondary' as const
   }
 }
 
-/** Returns the colored bottom border class for a step group header based on semantic type. */
-function stepHeaderBorderClass(group: StepTimelineGroup): string {
-  const { borderClass } = getSemanticColors(group)
-  return `border-b-2 ${borderClass}`
-}
+// ── Section header for subsessions ──────────────────────────────────────
 
-/** Subsession navigation chips — shown on mobile below step headers for steps with fork-card items. */
-function SubsessionChips({ group }: { group: StepTimelineGroup }) {
-  const forkItems = group.items.filter(
-    (item): item is BranchLifecycleItem => item.kind === 'fork-card'
-  )
-  if (forkItems.length === 0) return null
+function SubsessionHeader({
+  section,
+  collapsed,
+  onToggle,
+  subBgClass,
+  borderClass,
+}: {
+  section: TimelineSection
+  collapsed: boolean
+  onToggle: () => void
+  /** Darker bg class from the parent step's semantic config. */
+  subBgClass: string
+  /** Border class from the parent step — keeps palette consistent. */
+  borderClass: string
+}) {
+  const identity = deriveBranchIdentity(section.title)
+  const isActive = section.status === 'active'
 
   return (
-    <div className="flex gap-1.5 overflow-x-auto py-1 px-3 -mt-1">
-      {forkItems.map((fork, idx) => {
-        const modelShort = fork.models?.[0]
-          ? fork.models[0].split('/').pop()?.replace(/-\d+.*$/, '') ?? ''
-          : ''
-        const label = modelShort
-          ? `S${idx + 1} · ${modelShort}`
-          : `S${idx + 1}`
-        const isActive = fork.status === 'active'
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{ top: 'var(--step-h, 2.5rem)' }}
+      className={[
+        'sticky z-20',
+        'w-full text-left backdrop-blur-sm px-3 py-1 flex items-center gap-1.5',
+        'hover:bg-accent/10 transition-colors',
+        `border-b ${borderClass}`,
+        subBgClass,
+        isActive ? 'border-l-[3px] border-l-sky-500' : `border-l-2 ${borderClass}`,
+      ].filter(Boolean).join(' ')}
+    >
+      <ChevronRight className={`h-2.5 w-2.5 shrink-0 text-muted-foreground/60 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+      {isActive && (
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
+      )}
+      <span className="text-[10px] text-muted-foreground/80 truncate max-w-[200px]">
+        {identity.role ?? identity.label}
+      </span>
+      <Badge variant={section.status === 'active' ? 'info' : section.status === 'done' ? 'success' : 'secondary'} size="sm">
+        {section.status}
+      </Badge>
+      {section.models[0] && (
+        <span className="text-[10px] font-mono text-muted-foreground/50 truncate max-w-[120px]">
+          {section.models[0].split('/').pop()}
+        </span>
+      )}
+      {section.durationMs != null && (
+        <span className="ml-auto text-[10px] font-mono text-muted-foreground/50 tabular-nums">
+          {formatCompactDuration(section.durationMs)}
+        </span>
+      )}
+    </button>
+  )
+}
 
-        return (
-          <button
-            key={fork.sessionId}
-            className="shrink-0"
-            onClick={() => {
-              const el = document.querySelector(
-                `[data-session-id="${fork.sessionId}"]`
-              ) as HTMLElement | null
-              if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-            }}
-          >
-            <Badge
-              variant={isActive ? 'info' : 'outline'}
-              size="sm"
-              className="text-[10px] shrink-0 cursor-pointer"
-            >
-              {isActive && (
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse mr-1" />
-              )}
-              {label}
+// ── Step group section ──────────────────────────────────────────────────
+
+function StepGroupSection({
+  group,
+  stepMeta,
+  sectionRef,
+}: {
+  group: StepTimelineGroup
+  stepMeta?: JobStepSummary
+  sectionRef: (el: HTMLDivElement | null) => void
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const stepHeaderRef = useRef<HTMLDivElement>(null)
+  const groupRef = useRef<HTMLDivElement>(null)
+  const synth = synthesizeHeaderFields(group)
+  const semanticType = resolveSemanticType(group)
+  const config = SEMANTIC_TYPE_CONFIG[semanticType]
+  const Icon = config.icon
+  const { bgClass, borderClass } = getSemanticColors(group)
+
+  const sections = ensureSections(group)
+  const allItems = useMemo(
+    () => sections.flatMap((s) => s.items),
+    [sections],
+  )
+
+  // Measure step header height → CSS variable for subsession sticky offset
+  useEffect(() => {
+    const header = stepHeaderRef.current
+    const container = groupRef.current
+    if (!header || !container) return
+    const update = () => container.style.setProperty('--step-h', `${header.offsetHeight}px`)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(header)
+    return () => ro.disconnect()
+  }, [])
+
+  const toggle = useCallback((sessionId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      return next
+    })
+  }, [])
+
+  return (
+    <div
+      ref={(el) => {
+        groupRef.current = el
+        sectionRef(el)
+      }}
+      data-step-index={group.stepIndex}
+    >
+      {/* Sticky step header */}
+      <div ref={stepHeaderRef} className={[
+        'sticky top-0 z-30 backdrop-blur px-3 py-2.5 space-y-1',
+        bgClass,
+        `border-b-2 ${borderClass}`,
+        synth.isActive ? 'border-l-[3px] border-l-sky-500' : '',
+      ].filter(Boolean).join(' ')}>
+        {/* Row 1: icon + label + status + model + duration */}
+        <div className="flex flex-wrap items-center gap-2">
+          {synth.isActive && (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
+          )}
+          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Badge variant="secondary" size="sm" className="font-semibold">
+            {group.semanticLabel || config.label}
+          </Badge>
+          {config.isGap && (
+            <Badge variant="outline" size="sm" className="text-[10px] text-amber-500 border-amber-500/30 px-1">
+              Gap
             </Badge>
-          </button>
-        )
-      })}
+          )}
+          {group.stepIndex !== null && group.stepIndex >= 0 && (
+            <span className="text-[10px] font-mono text-muted-foreground/60">
+              #{group.stepIndex}
+            </span>
+          )}
+          <Badge variant={stepStatusVariant(group.status)} size="sm">
+            {group.status}
+          </Badge>
+          {synth.model && (
+            <Badge variant="outline" size="sm" className="font-mono text-[10px] max-w-[160px] truncate">
+              {synth.model}
+            </Badge>
+          )}
+          {stepMeta?.durationMs != null && (
+            <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
+              {formatCompactDuration(stepMeta.durationMs)}
+            </span>
+          )}
+        </div>
+        {/* Row 2: stage + continuation reason + counters + tools */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          {synth.stage && (
+            <span className="text-[10px] text-muted-foreground/70">{synth.stage}</span>
+          )}
+          {synth.continuationReason && (
+            <span className="text-[10px] text-amber-400/70 italic">{synth.continuationReason}</span>
+          )}
+          {synth.statusCounters && (
+            <span className="text-[10px] font-mono text-muted-foreground/60">
+              {synth.statusCounters.done}/{synth.statusCounters.total} sessions
+            </span>
+          )}
+          {stepMeta?.reason && (
+            <span className="text-[10px] text-muted-foreground/60 italic truncate max-w-[260px]">
+              {stepMeta.reason}
+            </span>
+          )}
+          <ToolSummaryChips items={allItems} />
+        </div>
+        {/* Error alert */}
+        {stepMeta?.error && (
+          <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
+            {stepMeta.error}
+          </div>
+        )}
+      </div>
+
+      {/* Judge verdict card */}
+      {isJudgeStep(group) && group.verdictReason && (
+        <div className={[
+          'mx-4 my-2 rounded-md border px-3 py-2 space-y-1',
+          group.status === 'completed' || group.status === 'done'
+            ? 'border-green-500/30 bg-green-500/5 border-l-2 border-l-green-500'
+            : group.status === 'failed'
+              ? 'border-red-500/30 bg-red-500/5 border-l-2 border-l-red-500'
+              : 'border-amber-500/30 bg-amber-500/5 border-l-2 border-l-amber-500',
+        ].join(' ')}>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Verdict</span>
+            <Badge variant={
+              group.status === 'completed' || group.status === 'done' ? 'success' :
+              group.status === 'failed' ? 'destructive' : 'warning'
+            } size="sm">{group.status}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground leading-snug">{group.verdictReason}</p>
+        </div>
+      )}
+
+      {/* Sections — Fragments so sticky headers are direct children of the step group */}
+      {sections.map((section, sectionIdx) => (
+        <Fragment key={`${section.sessionId}-${sectionIdx}`}>
+          {section.depth > 0 && (
+            <SubsessionHeader
+              section={section}
+              collapsed={collapsed.has(section.sessionId)}
+              onToggle={() => toggle(section.sessionId)}
+              subBgClass={config.subBgClass}
+              borderClass={borderClass}
+            />
+          )}
+          {!collapsed.has(section.sessionId) && (() => {
+            // Find the last assistant text message — typically the summary
+            let lastAssistantIdx = -1
+            for (let i = section.items.length - 1; i >= 0; i--) {
+              const it = section.items[i]
+              if (it.kind === 'activity' && it.role === 'assistant' && !it.isReasoning) {
+                lastAssistantIdx = i
+                break
+              }
+            }
+
+            return (
+              <div className={[
+                'space-y-1 max-w-full overflow-hidden',
+                section.depth > 0 ? `border-l-2 pl-2 ml-2 sm:pl-3 sm:ml-3 ${borderClass}` : 'px-3',
+              ].join(' ')}>
+                {section.items.map((item, idx) => (
+                  <div key={`${item.kind}-${item.partId}-${item.createdAt}`}>
+                    <TimelineItemRenderer item={item} isLastMessage={idx === lastAssistantIdx} accentClass={config.subBgClass} accentBorder={borderClass} />
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </Fragment>
+      ))}
     </div>
   )
 }
 
-/**
- * Continuous-scroll content pane with scroll-spy.
- * All groups are always rendered. Sidebar clicks trigger scrollIntoView.
- */
+// ── Main component ──────────────────────────────────────────────────────
+
 export function StepContentPane({
   groups,
-  jobId,
+  jobId: _jobId,
   autoFollow,
   onFollowToggle,
   onFollowCancel,
@@ -144,92 +338,68 @@ export function StepContentPane({
   hideHeader = false,
 }: StepContentPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null)
-  const isMobile = useIsMobile()
+  const sectionRefs = useRef(new Map<number, HTMLElement>())
 
-  // ── Scroll-direction detection for follow-mode auto-cancel ────────────────
+  // ── Scroll-direction detection for follow-mode cancel ────────────────
   const lastScrollTopRef = useRef(0)
-  const consecutiveUpScrollRef = useRef(0)
-
-  // All items flattened (for virtualization threshold check)
-  const allItems: StepTimelineItem[] = groups.flatMap((g) => g.items)
-  const useVirtual = allItems.length >= VIRTUALIZE_THRESHOLD
-
-  // ── New-activity highlight tracking ──────────────────────────────────
-  const prevItemCountRef = useRef(0)
-  const [newItemStart, setNewItemStart] = useState<number>(allItems.length)
-
-  useEffect(() => {
-    if (allItems.length > prevItemCountRef.current && prevItemCountRef.current > 0) {
-      setNewItemStart(prevItemCountRef.current)
-      // Clear the highlight class after animation completes (1.5s)
-      const timer = setTimeout(() => setNewItemStart(allItems.length), 1500)
-      prevItemCountRef.current = allItems.length
-      return () => clearTimeout(timer)
-    }
-    prevItemCountRef.current = allItems.length
-  }, [allItems.length])
+  const consecutiveUpRef = useRef(0)
 
   // Reset consecutive-scroll counter when follow mode is re-enabled
   useEffect(() => {
-    if (autoFollow) {
-      consecutiveUpScrollRef.current = 0
-    }
+    if (autoFollow) consecutiveUpRef.current = 0
   }, [autoFollow])
 
-  // Scroll handler — detects deliberate upward scroll to auto-cancel follow mode
-  const handleScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
+  const handleScroll = useCallback(() => {
+    const el = parentRef.current
+    if (!el) return
     const scrollTop = el.scrollTop
     const delta = scrollTop - lastScrollTopRef.current
     lastScrollTopRef.current = scrollTop
 
     if (delta < 0) {
-      // Scrolling up — accumulate upward movement
-      consecutiveUpScrollRef.current += Math.abs(delta)
-      if (consecutiveUpScrollRef.current > CANCEL_THRESHOLD && autoFollow) {
+      consecutiveUpRef.current += Math.abs(delta)
+      if (consecutiveUpRef.current > CANCEL_THRESHOLD && autoFollow) {
         onFollowCancel?.()
-        consecutiveUpScrollRef.current = 0
+        consecutiveUpRef.current = 0
       }
     } else {
-      // Scrolling down or no movement — reset accumulator
-      consecutiveUpScrollRef.current = 0
+      consecutiveUpRef.current = 0
     }
   }, [autoFollow, onFollowCancel])
 
-  const virtualizer = useVirtualizer({
-    count: allItems.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 40,
-    overscan: 20,
-  })
+  // ── Total item count ────────────────────────────────────────────────
+  const totalItems = useMemo(
+    () => groups.reduce((sum, g) => sum + ensureSections(g).reduce((s, sec) => s + sec.items.length, 0), 0),
+    [groups],
+  )
 
-  // ── ScrollTo registration ───────────────────────────────────────────────
+  // ── Error navigation ────────────────────────────────────────────────
+  const firstErrorGroup = useMemo(
+    () => groups.find((g) => g.status === 'failed'),
+    [groups],
+  )
 
+  // ── ScrollTo via ref registry ───────────────────────────────────────
   const scrollToStep = useCallback((stepIndex: number) => {
-    const el = document.getElementById(`step-section-${stepIndex}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    sectionRefs.current.get(stepIndex)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
+
+  const handleJumpToError = useCallback(() => {
+    if (firstErrorGroup?.stepIndex != null) scrollToStep(firstErrorGroup.stepIndex)
+  }, [firstErrorGroup, scrollToStep])
 
   useEffect(() => {
     scrollToStepRef.current = scrollToStep
-    return () => {
-      scrollToStepRef.current = null
-    }
+    return () => { scrollToStepRef.current = null }
   }, [scrollToStep, scrollToStepRef])
 
-  // ── Scroll-spy via IntersectionObserver ──────────────────────────────────
-
+  // ── Scroll-spy via IntersectionObserver ──────────────────────────────
   useEffect(() => {
-    if (useVirtual) return // Skip scroll-spy in virtualized mode
-
     const container = parentRef.current
     if (!container) return
 
     const observer = new IntersectionObserver(
       (entries) => {
-        // Find the topmost intersecting section
         let topEntry: IntersectionObserverEntry | null = null
         for (const entry of entries) {
           if (!entry.isIntersecting) continue
@@ -238,290 +408,76 @@ export function StepContentPane({
           }
         }
         if (topEntry) {
-          const stepAttr = (topEntry.target as HTMLElement).dataset.stepIndex
-          if (stepAttr != null) {
-            onVisibleStepChange(Number(stepAttr))
-          }
+          const attr = (topEntry.target as HTMLElement).dataset.stepIndex
+          if (attr != null) onVisibleStepChange(Number(attr))
         }
       },
-      {
-        root: container,
-        rootMargin: '-10% 0px -70% 0px',
-        threshold: 0,
-      },
+      { root: container, rootMargin: '-10% 0px -70% 0px', threshold: 0 },
     )
 
     const sections = container.querySelectorAll<HTMLElement>('[data-step-index]')
-    sections.forEach((section) => observer.observe(section))
+    sections.forEach((s) => observer.observe(s))
+    return () => observer.disconnect()
+  }, [groups, onVisibleStepChange])
+
+  // ── Follow mode via MutationObserver ────────────────────────────────
+  useEffect(() => {
+    if (!autoFollow) return
+    const el = parentRef.current
+    if (!el) return
+
+    const scroll = () => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    const observer = new MutationObserver(scroll)
+    observer.observe(el, { childList: true, subtree: true, characterData: true })
+    scroll()
 
     return () => observer.disconnect()
-  }, [groups, useVirtual, onVisibleStepChange])
+  }, [autoFollow])
 
-  // ── Auto-follow for running jobs ────────────────────────────────────────
-
-  useEffect(() => {
-    if (!autoFollow || allItems.length === 0) return
-    if (useVirtual) {
-      virtualizer.scrollToIndex(allItems.length - 1, { align: 'end' })
-    } else if (parentRef.current) {
-      parentRef.current.scrollTo({ top: parentRef.current.scrollHeight, behavior: 'smooth' })
-    }
-  }, [autoFollow, allItems.length, useVirtual, virtualizer])
-
-  // ── Empty state ──────────────────────────────────────────────────────────
-
+  // ── Empty state ──────────────────────────────────────────────────────
   if (groups.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No timeline data available. This may indicate the job&apos;s sessions could not be resolved.
+        No timeline data available.
       </div>
     )
   }
 
-  // ── Jump to first error ──────────────────────────────────────────────────
-
-  const firstErrorGroup = useMemo(
-    () => groups.find((g) => g.status === 'failed'),
-    [groups],
-  )
-
-  const handleJumpToError = useCallback(() => {
-    if (firstErrorGroup?.stepIndex != null) {
-      scrollToStep(firstErrorGroup.stepIndex)
-    }
-  }, [firstErrorGroup, scrollToStep])
-
-  // ── Header ──────────────────────────────────────────────────────────────
-
-  const header = hideHeader ? null : (
-    <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
-      <span className="text-sm font-medium">All steps</span>
-      {firstErrorGroup && (
-        <Button
-          variant="destructive"
-          size="sm"
-          className="text-xs"
-          onClick={handleJumpToError}
-        >
-          Jump to error
-        </Button>
-      )}
-      <span className="ml-auto text-xs text-muted-foreground">
-        {allItems.length} item{allItems.length !== 1 ? 's' : ''}
-        {useVirtual ? ' (virtualized)' : ''}
-      </span>
-    </div>
-  )
-
-  // ── Content ──────────────────────────────────────────────────────────────
-
+  // ── Render ───────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {header}
+      {!hideHeader && (
+        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
+          <span className="text-sm font-medium">All steps</span>
+          {firstErrorGroup && (
+            <Button variant="destructive" size="sm" className="text-xs" onClick={handleJumpToError}>
+              Jump to error
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">
+            {totalItems} item{totalItems !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
 
       <div className="relative min-h-0 flex-1">
-          <div ref={parentRef} className="h-full overflow-auto" onScroll={handleScroll}>
-          {useVirtual ? (
-            /* Virtualized rendering for large item counts */
-            <>
-              <div
-                style={{
-                  height: `${virtualizer.getTotalSize()}px`,
-                  width: '100%',
-                  position: 'relative',
+        <div ref={parentRef} className="h-full overflow-auto" onScroll={handleScroll}>
+          {groups.map((group) => {
+            const stepMeta = steps?.find((s) => s.stepIndex === group.stepIndex)
+            return (
+              <StepGroupSection
+                key={group.stepIndex ?? 'tail'}
+                group={group}
+                stepMeta={stepMeta}
+                sectionRef={(el) => {
+                  if (el && group.stepIndex != null) sectionRefs.current.set(group.stepIndex, el)
                 }}
-              >
-                {virtualizer.getVirtualItems().map((virtualRow) => {
-                  const item = allItems[virtualRow.index]
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      data-index={virtualRow.index}
-                      ref={virtualizer.measureElement}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      className="border-b border-border/30 px-4"
-                    >
-                      <TimelineItemRenderer item={item} jobId={jobId} />
-                    </div>
-                  )
-                })}
-              </div>
-              <FollowModeBar visible={!autoFollow && !!isActive} onFollow={onFollowToggle} />
-            </>
-          ) : (
-            /* Continuous scroll: all groups rendered as sections */
-            <div className="space-y-0">
-              {(() => {
-                let runningIndex = 0
-                return groups.map((group) => {
-                  // Look up step metadata for enriched header
-                  const stepMeta = steps?.find((s) => s.stepIndex === group.stepIndex)
-                  const groupStartIndex = runningIndex
-                  runningIndex += group.items.length
-                  return (
-                    <section
-                      key={group.stepIndex ?? 'unattributed'}
-                      id={`step-section-${group.stepIndex}`}
-                      data-step-index={group.stepIndex}
-                    >
-                      {(() => {
-                        const synth = synthesizeHeaderFields(group)
-                        const semanticType = resolveSemanticType(group)
-                        const config = SEMANTIC_TYPE_CONFIG[semanticType]
-                        const Icon = config.icon
-                        const { bgClass, borderClass } = getSemanticColors(group)
-                        return (
-                          <div className={[
-                            'sticky top-0 backdrop-blur z-30 px-3 py-2.5 space-y-1',
-                            bgClass,
-                            `border-b-2 ${borderClass}`,
-                            synth.isActive ? 'border-l-[3px] border-l-sky-500' : '',
-                          ].filter(Boolean).join(' ')}>
-                            {/* Row 1: Semantic icon + label + status + active pulse + model + duration + summary link */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {synth.isActive && (
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
-                              )}
-                              <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              <Badge variant="secondary" size="sm" className="font-semibold">
-                                {group.semanticLabel || config.label}
-                              </Badge>
-                              {config.isGap && (
-                                <Badge variant="outline" size="sm" className="text-[10px] text-amber-500 border-amber-500/30 px-1">
-                                  Gap
-                                </Badge>
-                              )}
-                              {group.stepIndex !== null && group.stepIndex >= 0 && (
-                                <span className="text-[10px] font-mono text-muted-foreground/60">
-                                  #{group.stepIndex}
-                                </span>
-                              )}
-                              <Badge variant={stepStatusVariant(group.status)} size="sm">
-                                {group.status}
-                              </Badge>
-                              {synth.model && (
-                                <Badge variant="outline" size="sm" className="font-mono text-[10px] max-w-[160px] truncate">
-                                  {synth.model}
-                                </Badge>
-                              )}
-                              {stepMeta?.durationMs != null && (
-                                <span className="ml-auto text-[10px] font-mono text-muted-foreground tabular-nums">
-                                  {formatCompactDuration(stepMeta.durationMs)}
-                                </span>
-                              )}
-                              {synth.hasSummary && (
-                                <button
-                                  className="ml-auto text-[10px] text-amber-400/80 hover:text-amber-400 underline-offset-2 hover:underline transition-colors"
-                                  onClick={() => {
-                                    const el = document.getElementById(`step-${group.stepIndex}-summary`)
-                                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                                  }}
-                                >
-                                  View Summary ↓
-                                </button>
-                              )}
-                            </div>
-                            {/* Row 2: Stage context + continuation reason + status counters + tool chips */}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                              {synth.stage && (
-                                <span className="text-[10px] text-muted-foreground/70">
-                                  {synth.stage}
-                                </span>
-                              )}
-                              {synth.continuationReason && (
-                                <span className="text-[10px] text-amber-400/70 italic">
-                                  {synth.continuationReason}
-                                </span>
-                              )}
-                              {synth.statusCounters && (
-                                <span className="text-[10px] font-mono text-muted-foreground/60">
-                                  {synth.statusCounters.done}/{synth.statusCounters.total} sessions
-                                </span>
-                              )}
-                              {stepMeta?.reason && (
-                                <span className="text-[10px] text-muted-foreground/60 italic truncate max-w-[260px]">
-                                  {stepMeta.reason}
-                                </span>
-                              )}
-                              <ToolSummaryChips items={group.items} />
-                            </div>
-                            {/* Error alert (if present) */}
-                            {stepMeta?.error && (
-                              <div className="text-rose-400 bg-rose-500/10 px-2 py-1 rounded text-xs leading-tight line-clamp-3">
-                                {stepMeta.error}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-                      {/* Subsession navigation chips — mobile only */}
-                      {isMobile && <SubsessionChips group={group} />}
-                      {/* Judge verdict summary card — deep-link target */}
-                      {isJudgeStep(group) && group.verdictReason && (
-                        <div
-                          id={`step-${group.stepIndex}-summary`}
-                          className={[
-                            'mx-4 my-2 rounded-md border px-3 py-2 space-y-1',
-                            group.status === 'completed' || group.status === 'done'
-                              ? 'border-green-500/30 bg-green-500/5 border-l-2 border-l-green-500'
-                              : group.status === 'failed'
-                                ? 'border-red-500/30 bg-red-500/5 border-l-2 border-l-red-500'
-                                : 'border-amber-500/30 bg-amber-500/5 border-l-2 border-l-amber-500',
-                          ].join(' ')}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
-                              Verdict
-                            </span>
-                            <Badge variant={
-                              group.status === 'completed' || group.status === 'done' ? 'success' :
-                              group.status === 'failed' ? 'destructive' : 'warning'
-                            } size="sm">
-                              {group.status}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-snug">
-                            {group.verdictReason}
-                          </p>
-                        </div>
-                      )}
-                      <div className={[
-                        'space-y-0.5 border-l-2 pl-2 ml-2 sm:pl-3 sm:ml-4 max-w-full overflow-hidden',
-                        getSemanticColors(group).borderClass,
-                      ].join(' ')}>
-                        {group.items.map((item, idx) => {
-                          const globalIdx = groupStartIndex + idx
-                          const isNew = globalIdx >= newItemStart && newItemStart < allItems.length
-                          const key = item.kind === 'fork-card'
-                            ? `fork-${item.sessionId}-${item.createdAt}-${idx}`
-                            : `${item.kind}-${(item as { partId: string }).partId}-${item.createdAt}-${idx}`
-                          return (
-                            <div
-                              key={key}
-                              className={isNew ? 'animate-highlight-fade' : ''}
-                              {...(item.kind === 'fork-card' ? { 'data-session-id': item.sessionId } : {})}
-                            >
-                              <TimelineItemRenderer item={item} jobId={jobId} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )
-                })
-              })()}
-              <FollowModeBar visible={!autoFollow && !!isActive} onFollow={onFollowToggle} />
-            </div>
-          )}
+              />
+            )
+          })}
+          <FollowModeBar visible={!autoFollow && !!isActive} onFollow={onFollowToggle} />
         </div>
 
-        {/* Floating buttons — jump to error (when header hidden) */}
         {hideHeader && firstErrorGroup && (
           <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col gap-2 items-end">
             <Button
