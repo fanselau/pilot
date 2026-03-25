@@ -11,7 +11,7 @@
 
 import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { addJob, bump, findDuplicateJob, getProject, updateJobCategories } from '../core/db.js';
+import { addJob, bump, findDuplicateJob, getProject, updateJobCategories, getLatestFailedJob } from '../core/db.js';
 import { formatCategoryHelp } from '../core/skills.js';
 import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
 import { resolveNotifyRoute } from '../core/notify-route.js';
@@ -418,8 +418,30 @@ async function addCommand(
     updateJobCategories(job.id, categories);
   }
 
+  // Warn if project is currently blocked — job is queued but won't run until unblocked
+  const isBlocked = projectRecord?.status === 'blocked';
+  let blockedWarningMsg: string | undefined;
+  let failedJobId: string | undefined;
+
+  if (isBlocked) {
+    failedJobId = getLatestFailedJob(resolvedProject)?.id;
+    const reason = projectRecord!.blockedReason ?? 'unknown';
+    const lines = [
+      `${yellow('⚠')}  Project is currently ${yellow('blocked')}`,
+      `   Reason: ${reason}`,
+    ];
+    if (failedJobId) {
+      lines.push(`   Failed job: ${dim(failedJobId)}`);
+    }
+    lines.push(`   ${dim('Unblock:')} pilot project ${project} --unblock`);
+    blockedWarningMsg = lines.join('\n  ');
+  }
+
   if (isJsonMode()) {
-    outputJson({ job });
+    outputJson({
+      job,
+      ...(isBlocked ? { blockedWarning: { reason: projectRecord!.blockedReason, failedJobId } } : {}),
+    });
     return;
   }
 
@@ -429,6 +451,12 @@ async function addCommand(
   if (modelProfile && modelProfile !== 'balanced') tags.push(modelProfile);
   if (providerMode && providerMode !== 'claude-only') tags.push(providerMode);
   const tagStr = tags.length > 0 ? `  ${dim(`[${tags.join('/')}]`)}` : '';
+
+  if (blockedWarningMsg) {
+    outputHuman('');  // blank line for visual separation
+    outputHuman(blockedWarningMsg);
+    outputHuman('');
+  }
 
   outputHuman(`  ${green('✓')} Queued: ${project} · ${scope} · "${shortDesc}"${tagStr}  ${dim(`(id: ${job.id})`)}`);
   if (opts.next) {
