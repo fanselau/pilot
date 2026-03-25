@@ -1829,6 +1829,19 @@ function deregisterProject(path: string): void {
   db.prepare('DELETE FROM projects WHERE path = ?').run(path);
 }
 
+/**
+ * Get the most recently failed job for a project.
+ * Returns null if no failed jobs exist for the project.
+ * Used by `pilot add` to show the failed job ID in blocked project warnings.
+ */
+function getLatestFailedJob(project: string): Job | null {
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT * FROM jobs WHERE project = ? AND status = 'failed' ORDER BY completed_at DESC LIMIT 1",
+  ).get(project) as JobRow | undefined;
+  return row ? rowToJob(row) : null;
+}
+
 // ── Project Job Counts ────────────────────────────────────────────────────
 
 interface ProjectJobCounts {
@@ -2063,4 +2076,6 @@ export {
   // Phase 83: resumed review_hold pickup
   getResumedReviewHoldJobs,
   clearResumedFlag,
+  // Quick 260325-ebl: blocked project warning helper
+  getLatestFailedJob,
 };

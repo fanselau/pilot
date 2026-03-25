@@ -57,6 +57,7 @@ vi.mock('../../src/core/db.js', () => ({
   findDuplicateJob: vi.fn(() => null),
   getProject: vi.fn(() => null),
   updateJobCategories: vi.fn(),
+  getLatestFailedJob: vi.fn(() => null),
 }));
 
 // Mock output utilities
@@ -137,7 +138,7 @@ vi.mock('../../src/core/config.js', () => {
 });
 
 import { addCommand, detectScope } from '../../src/commands/add.js';
-import { addJob, bump, findDuplicateJob, getProject, updateJobCategories } from '../../src/core/db.js';
+import { addJob, bump, findDuplicateJob, getProject, updateJobCategories, getLatestFailedJob } from '../../src/core/db.js';
 import { getConfigFileDefaults } from '../../src/core/config.js';
 import type { JobScope } from '../../src/core/types.js';
 
@@ -1277,5 +1278,192 @@ describe('--next flag', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('front of queue');
+  });
+});
+
+// ── blocked project warning ───────────────────────────────────────────────
+
+describe('blocked project warning', () => {
+  let blockedTestsDir: string;
+
+  const blockedProject = {
+    path: '',  // set in beforeAll
+    owner: null,
+    notifyOpenClawRoute: null,
+    status: 'blocked' as const,
+    blockedReason: 'Job xyz failed: some error',
+    blockedAt: '2026-03-25T00:00:00Z',
+    createdAt: '2026-03-20T00:00:00Z',
+    defaultCategories: null,
+  };
+
+  const activeProject = {
+    path: '',  // set in beforeAll
+    owner: null,
+    notifyOpenClawRoute: null,
+    status: 'active' as const,
+    blockedReason: null,
+    blockedAt: null,
+    createdAt: '2026-03-20T00:00:00Z',
+    defaultCategories: null,
+  };
+
+  beforeAll(() => {
+    blockedTestsDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-blocked-'));
+    mockedProjectDir = blockedTestsDir;
+    syncProjectDirEnv();
+
+    const projectDir = path.join(blockedTestsDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+
+    blockedProject.path = projectDir;
+    activeProject.path = projectDir;
+  });
+
+  afterAll(() => {
+    rmSync(blockedTestsDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = blockedTestsDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    vi.mocked(getLatestFailedJob).mockReturnValue(null);
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+    vi.mocked(getProject).mockReturnValue(null);
+    vi.mocked(getLatestFailedJob).mockReturnValue(null);
+  });
+
+  it('prints warning when project is blocked', async () => {
+    vi.mocked(getProject).mockReturnValue(blockedProject);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    // Job should still be queued
+    expect(addJob).toHaveBeenCalled();
+
+    // Check for blocked warning in human output
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('blocked');
+    expect(output).toContain('Job xyz failed: some error');
+    expect(output).toContain('--unblock');
+    // "Queued" should still appear
+    expect(output).toContain('Queued');
+  });
+
+  it('includes failed job ID in warning when available', async () => {
+    vi.mocked(getProject).mockReturnValue(blockedProject);
+    vi.mocked(getLatestFailedJob).mockReturnValue({
+      id: 'fail1',
+      project: blockedProject.path,
+      scope: 'quick',
+      description: 'failed task',
+      requirementPath: null,
+      status: 'failed',
+      priority: 0,
+      dependsOn: null,
+      parentJobId: null,
+      createdAt: '2026-03-25T00:00:00',
+      startedAt: '2026-03-25T00:00:00',
+      completedAt: '2026-03-25T00:01:00',
+      error: 'some error',
+      resumeHint: null,
+      attempts: 1,
+      timeout: 0,
+      delegationPlan: null,
+      currentStep: 0,
+      sessionTitles: null,
+      modelProfile: 'balanced',
+      providerMode: 'claude-only',
+      judgeVerdict: null,
+      actualModels: null,
+      callbackUrl: null,
+      callbackSessionKey: null,
+      notifyRoute: null,
+      categories: null,
+      gitBaseCommit: null,
+      gitHeadCommit: null,
+      startedDirty: false,
+      skipGracePeriod: false,
+      retryBudget: 0,
+      retryCount: 0,
+      retryHint: null,
+      lastFailureFingerprint: null,
+      hungCount: 0,
+      lastHungReason: null,
+    });
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('fail1');
+  });
+
+  it('no warning when project is active', async () => {
+    vi.mocked(getProject).mockReturnValue(activeProject);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    // Should NOT contain blocked warning
+    expect(output).not.toMatch(/Project is currently.*blocked/);
+  });
+
+  it('no warning when project is unregistered', async () => {
+    vi.mocked(getProject).mockReturnValue(null);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).not.toMatch(/Project is currently.*blocked/);
+  });
+
+  it('JSON mode includes blockedWarning', async () => {
+    mockJsonMode = true;
+    vi.mocked(getProject).mockReturnValue(blockedProject);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    expect(mockOutputJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job: expect.objectContaining({ id: 'ab12' }),
+        blockedWarning: expect.objectContaining({
+          reason: 'Job xyz failed: some error',
+        }),
+      }),
+    );
+  });
+
+  it('warning appears before Queued output', async () => {
+    vi.mocked(getProject).mockReturnValue(blockedProject);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    const calls = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0] as string);
+    const blockedIdx = calls.findIndex((s: string) => s.includes('blocked'));
+    const queuedIdx = calls.findIndex((s: string) => s.includes('Queued'));
+    expect(blockedIdx).toBeGreaterThanOrEqual(0);
+    expect(queuedIdx).toBeGreaterThan(blockedIdx);
+  });
+
+  it('warning works without failed job ID (getLatestFailedJob returns null)', async () => {
+    vi.mocked(getProject).mockReturnValue(blockedProject);
+    vi.mocked(getLatestFailedJob).mockReturnValue(null);
+
+    await addCommand('my-project', 'fix stuff', { noNotify: true, noCategories: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('blocked');
+    expect(output).toContain('--unblock');
+    // Should NOT contain any "Failed job:" line since there's no failed job
+    expect(output).not.toContain('Failed job:');
   });
 });
