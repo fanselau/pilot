@@ -58,7 +58,9 @@ import {
   getNextPendingStep,
   markStepRunning as dbMarkStepRunning,
   markStepCompleted as dbMarkStepCompleted,
+  markStepSkipped as dbMarkStepSkipped,
   markStepFailed as dbMarkStepFailed,
+  cancelPendingSteps,
   getTotalStepCount,
   getPendingStepCount,
   appendSteps,
@@ -459,7 +461,12 @@ class Runner {
   // Low-memory logging: only log once per state change (transition to 0)
   private loggedLowMemory = false;
   /** Per-job continuation cycle counter — tracks judge:gaps/judge:failed append rounds. */
+  /** Per-source continuation cycle counters. Each source (gaps, failed, hung) gets its own budget. */
   private continuationCycles = new Map<string, number>();
+
+  private getCycleKey(jobId: string, source: 'gaps' | 'failed' | 'hung'): string {
+    return `${jobId}:${source}`;
+  }
 
   constructor(options: Partial<RunnerOptions> = {}) {
     const config = getConfig();
@@ -860,7 +867,15 @@ class Runner {
         return;
       }
 
-      // Step 2: Convert delegation intent to pending step records
+      // Step 2: Convert delegation intent to pending step records.
+      // Clear any stale pending steps from a prior run (e.g., review_hold resume
+      // re-enters launch() with leftover pending steps from the original execution).
+      const staleCleared = cancelPendingSteps(job.id, 'Cleared before fresh delegation');
+      if (staleCleared > 0) {
+        process.stderr.write(
+          `[runner] Cleared ${staleCleared} stale pending step(s) before delegation [job=${job.id}]\n`,
+        );
+      }
       const steps = this.intentToSteps(intent, job, projectDir);
       for (let i = 0; i < steps.length; i++) {
         createPendingStep(job.id, i, steps[i].command, steps[i].args, 'delegation', steps[i].reason);
@@ -873,7 +888,10 @@ class Runner {
       }
 
       // Step 3: Execute step loop
-      this.continuationCycles.set(job.id, 0);
+      // Initialize per-source cycle counters (each source gets its own budget)
+      this.continuationCycles.set(this.getCycleKey(job.id, 'gaps'), 0);
+      this.continuationCycles.set(this.getCycleKey(job.id, 'failed'), 0);
+      this.continuationCycles.set(this.getCycleKey(job.id, 'hung'), 0);
       await this.executeStepLoop(job, projectDir);
 
       // Check if job was already handled (failed by continuation handlers, etc.)
@@ -903,6 +921,8 @@ class Runner {
     } catch (err) {
       // ── Generic error catch-all ──────────────────────────────────────
       const error = errMsg(err);
+      // Cancel any remaining pending steps so they don't linger in the DB
+      cancelPendingSteps(job.id, `Job failed: ${error.slice(0, 200)}`);
       await this.captureRecoveryHead(job.id, projectDir);
       this.collectActualModels(job.id);
       try {
@@ -929,7 +949,9 @@ class Runner {
         }
       }
     } finally {
-      this.continuationCycles.delete(job.id);
+      this.continuationCycles.delete(this.getCycleKey(job.id, 'gaps'));
+      this.continuationCycles.delete(this.getCycleKey(job.id, 'failed'));
+      this.continuationCycles.delete(this.getCycleKey(job.id, 'hung'));
       this.activeJobs.delete(job.id);
       try {
         unlinkSync(path.join(getConfig().pilotDir, 'pids', `${job.id}.pid`));
@@ -1163,8 +1185,24 @@ class Runner {
           dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
           return; // Step completed via artifact detection — continue to next step
         }
-        // No artifact recovery — original HungSessionError handling
+        // No artifact recovery — ui-phase didn't produce a UI-SPEC.
+        // If remaining delegation steps already cover the continuation (plan-phase →
+        // execute-phase → judge), skip re-delegation to avoid appending duplicate steps.
+        // ui-phase is an optional quality step; the plan-phase works without it.
         const sessionId = findSessionByTitle(title);
+        if (step.command === 'ui-phase' && getPendingStepCount(job.id) > 0) {
+          dbMarkStepSkipped(
+            step.id,
+            `ui-phase skipped: hung on ${err.hungReason} before producing UI-SPEC; delegation steps continue`,
+            sessionId ?? undefined,
+            title,
+          );
+          process.stderr.write(
+            `[runner] ui-phase skipped (no UI-SPEC, ${getPendingStepCount(job.id)} delegation steps remain) — continuing [job=${job.id}]\n`,
+          );
+          return; // Let the loop pick up the next pending delegation step (plan-phase)
+        }
+        // Generic hung handling for non-ui-phase commands
         dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
         incrementHungCount(job.id, err.hungReason);
         // Re-delegate for continuation
@@ -1214,17 +1252,36 @@ class Runner {
     if (this.shuttingDown) {
       dbMarkStepFailed(step.id, 'Interrupted before judge');
       markFailed(job.id, 'Interrupted before verification');
-      process.stderr.write(`[runner] Shutdown during phase — resetting ${job.id} to pending\n`);
+      process.stderr.write(`[runner] Shutdown during judge — marking ${job.id} as failed\n`);
       return;
     }
 
     const rawVerdict = await this.runJudge(job, projectDir, phaseNumber);
-    const verdict = this.normalizeVerdict(rawVerdict);
+
+    // Judge crash/timeout: rawVerdict is null — this is a transient failure, not a
+    // meaningful "fail" verdict. Fail the job directly without wasting an API call
+    // on re-delegation (which would just re-run the judge and likely fail again).
+    if (!rawVerdict) {
+      dbMarkStepFailed(step.id, 'Judge session failed or timed out');
+      markFailed(job.id, 'Judge session failed or timed out — no verdict produced');
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
+    const verdict = rawVerdict;
     updateJudgeVerdict(job.id, JSON.stringify(verdict));
 
     if (verdict.verdict === 'passed' || verdict.verdict === 'succeeded' || verdict.verdict === 'pass') {
       dbMarkStepCompleted(step.id);
-      // Job will be completed by the loop exit (no more pending steps)
+      // Cancel any stale pending steps (e.g., duplicate recovery steps appended before this judge ran).
+      // The loop exits when getNextPendingStep returns null — this ensures a clean exit.
+      const cancelled = cancelPendingSteps(job.id, 'Judge passed — remaining steps skipped');
+      if (cancelled > 0) {
+        process.stderr.write(
+          `[runner] Judge passed, cancelled ${cancelled} stale pending step(s) [job=${job.id}]\n`,
+        );
+      }
       return;
     }
 
@@ -1267,7 +1324,8 @@ class Runner {
     projectDir: string,
     verdict: JudgeVerdict,
   ): Promise<void> {
-    const cycles = this.continuationCycles.get(job.id) ?? 0;
+    const cycleKey = this.getCycleKey(job.id, 'gaps');
+    const cycles = this.continuationCycles.get(cycleKey) ?? 0;
 
     // Budget gate — check BEFORE cycle count (proactive, not reactive)
     const remaining = getRemainingBudget(job.id);
@@ -1300,6 +1358,12 @@ class Runner {
       return;
     }
 
+    // Clear-and-redelegate: cancel stale pending steps before appending fresh pipeline
+    const cleared = cancelPendingSteps(job.id, 'Cleared for gap closure re-delegation');
+    if (cleared > 0) {
+      this.log(`Cleared ${cleared} stale pending step(s) before gap closure for ${job.id}`);
+    }
+
     try {
       const result = await reDelegateForContinuation(job, projectDir, {
         source: 'judge:gaps',
@@ -1311,7 +1375,7 @@ class Runner {
 
       if (result.steps.length > 0) {
         appendSteps(job.id, result.steps, 'judge:gaps', verdict.reason);
-        this.continuationCycles.set(job.id, cycles + 1);
+        this.continuationCycles.set(cycleKey, cycles + 1);
         this.log(`Appended ${result.steps.length} gap-closure step(s) for ${job.id} (cycle ${cycles + 1}/${MAX_CONTINUATION_CYCLES})`);
       } else {
         markFailed(job.id, 'No continuation steps available for gaps');
@@ -1326,8 +1390,7 @@ class Runner {
   }
 
   /**
-   * Handle failed verdict: re-delegate for recovery steps.
-   * May append new steps or mark job as failed if no recovery path.
+   * Handle failed verdict: clear stale pending steps, re-delegate for a fresh recovery pipeline.
    * Guards against unbounded continuation loops via MAX_CONTINUATION_CYCLES.
    */
   private async handleFailedContinuation(
@@ -1335,7 +1398,8 @@ class Runner {
     projectDir: string,
     verdict: JudgeVerdict,
   ): Promise<void> {
-    const cycles = this.continuationCycles.get(job.id) ?? 0;
+    const cycleKey = this.getCycleKey(job.id, 'failed');
+    const cycles = this.continuationCycles.get(cycleKey) ?? 0;
 
     // Budget gate — check BEFORE cycle count (proactive, not reactive)
     const remaining = getRemainingBudget(job.id);
@@ -1361,6 +1425,12 @@ class Runner {
       return;
     }
 
+    // Clear-and-redelegate: cancel stale pending steps before appending fresh pipeline
+    const cleared = cancelPendingSteps(job.id, 'Cleared for failure recovery re-delegation');
+    if (cleared > 0) {
+      this.log(`Cleared ${cleared} stale pending step(s) before failure recovery for ${job.id}`);
+    }
+
     try {
       const result = await reDelegateForContinuation(job, projectDir, {
         source: 'judge:failed',
@@ -1371,7 +1441,7 @@ class Runner {
 
       if (result.steps.length > 0) {
         appendSteps(job.id, result.steps, 'judge:failed', verdict.reason);
-        this.continuationCycles.set(job.id, cycles + 1);
+        this.continuationCycles.set(cycleKey, cycles + 1);
         this.log(`Appended ${result.steps.length} recovery step(s) for ${job.id} (cycle ${cycles + 1}/${MAX_CONTINUATION_CYCLES})`);
       } else {
         markFailed(job.id, verdict.reason);
@@ -1386,8 +1456,8 @@ class Runner {
   }
 
   /**
-   * Handle hung session: re-delegate for continuation steps.
-   * Appends new steps to resume from hung point, or marks job failed.
+   * Handle hung session: clear stale pending steps, re-delegate for a fresh pipeline.
+   * Guards against unbounded hung retry loops via MAX_CONTINUATION_CYCLES.
    */
   private async handleHungContinuation(
     job: Job,
@@ -1401,6 +1471,30 @@ class Runner {
       const failedJob = getJob(job.id);
       if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
       return;
+    }
+
+    // Cycle guard — prevent unbounded hung retries (same budget as gaps/failed)
+    const cycleKey = this.getCycleKey(job.id, 'hung');
+    const cycles = this.continuationCycles.get(cycleKey) ?? 0;
+    if (cycles >= MAX_CONTINUATION_CYCLES) {
+      const totalSteps = getTotalStepCount(job.id);
+      const stepList = getJobSteps(job.id);
+      const continuationSteps = stepList.filter(s => s.source.startsWith('judge:')).length;
+      markFailed(
+        job.id,
+        buildContinuationLimitMessage(MAX_CONTINUATION_CYCLES, continuationSteps, totalSteps, `Hung: ${error.hungReason}`),
+      );
+      const failedJob = getJob(job.id);
+      if (failedJob) notifyJobCompletion(failedJob).catch(() => {});
+      return;
+    }
+
+    // Clear-and-redelegate: cancel stale pending steps BEFORE appending fresh ones.
+    // Without this, stale steps (e.g., an original judge step) would execute before
+    // the recovery steps, causing wasted compute and confusing verdict cascades.
+    const cleared = cancelPendingSteps(job.id, `Cleared for hung recovery: ${step.command} hung on ${error.hungReason}`);
+    if (cleared > 0) {
+      this.log(`Cleared ${cleared} stale pending step(s) before hung recovery for ${job.id}`);
     }
 
     try {
@@ -1418,7 +1512,8 @@ class Runner {
 
       if (result.steps.length > 0) {
         appendSteps(job.id, result.steps, 'judge:hung', error.hungReason);
-        this.log(`Appended ${result.steps.length} hung-recovery step(s) for ${job.id}`);
+        this.continuationCycles.set(cycleKey, cycles + 1);
+        this.log(`Appended ${result.steps.length} hung-recovery step(s) for ${job.id} (cycle ${cycles + 1}/${MAX_CONTINUATION_CYCLES})`);
       } else {
         markFailed(job.id, 'Hung session with no recovery path');
         const failedJob = getJob(job.id);
@@ -1688,18 +1783,6 @@ class Runner {
     return null;
   }
 
-  /**
-   * Normalize a raw judge verdict, providing defaults for null/missing.
-   */
-  private normalizeVerdict(rawVerdict: JudgeVerdict | null): JudgeVerdict {
-    if (rawVerdict) return rawVerdict;
-    return {
-      verdict: 'fail',
-      confidence: 0,
-      reason: 'Judge produced no verdict',
-    };
-  }
-
   // ── Milestone Loop ────────────────────────────────────────────────────
 
   /**
@@ -1949,15 +2032,10 @@ class Runner {
     try {
       await checkMemory(config.sessionMemoryMaxMb + 1024);
     } catch (memErr) {
-      const jobEntry = [...this.activeJobs.values()].find(a => a.title === title);
-      if (jobEntry) {
-        markFailed(jobEntry.job.id, 'Insufficient memory');
-        process.stderr.write(
-          `[runner] Insufficient memory after 5m wait, returning job ${jobEntry.job.id} to pending\n`,
-        );
-        return;
-      }
-      throw memErr;
+      // Always throw — let callers (executeCommandStep / runJudge) handle the error
+      // via their own catch blocks. Returning silently here caused callers to proceed
+      // into their success path (marking steps completed when nothing ran).
+      throw new Error(`Insufficient memory after 5m wait: ${errMsg(memErr)}`);
     }
     await enforceSpawnRateLimit();
     await validateProjectConfig(cwd);
