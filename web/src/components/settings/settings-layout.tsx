@@ -1,5 +1,7 @@
 'use client'
 
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useIsMobile } from '~/hooks/use-media-query'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Card } from '~/components/ui/card'
@@ -13,9 +15,13 @@ import { SectionMemory } from './section-memory'
 import { SectionLogging } from './section-logging'
 import { SectionJobDefaults } from './section-job-defaults'
 import { SectionNotifications } from './section-notifications'
+import { SectionModels } from './section-models'
+import { SectionProjects } from './section-projects'
+import { SectionSkills } from './section-skills'
 
 export function SettingsLayout() {
   const isMobile = useIsMobile()
+  const queryClient = useQueryClient()
 
   const {
     config,
@@ -30,6 +36,10 @@ export function SettingsLayout() {
     save,
     isLoading,
   } = useSettings()
+
+  const refetchModels = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['settings-models'] })
+  }, [queryClient])
 
   // Shared props for all section components
   const sectionProps = {
@@ -111,34 +121,19 @@ export function SettingsLayout() {
                 <SectionLogging {...sectionProps} />
               </section>
 
-              {/* Section: Models — placeholder (Plan 03) */}
+              {/* Section: Models */}
               <section id="section-models" className="scroll-mt-20">
-                <Card className="p-6">
-                  <h2 className="mb-2 text-lg font-semibold">Models</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Model configuration coming in the next plan...
-                  </p>
-                </Card>
+                <SectionModels modelTable={modelTable} refetchModels={refetchModels} />
               </section>
 
-              {/* Section: Projects — placeholder (Plan 03) */}
+              {/* Section: Projects */}
               <section id="section-projects" className="scroll-mt-20">
-                <Card className="p-6">
-                  <h2 className="mb-2 text-lg font-semibold">Projects</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Project management coming in the next plan...
-                  </p>
-                </Card>
+                <SectionProjects />
               </section>
 
-              {/* Section: Skills — placeholder (Plan 03) */}
+              {/* Section: Skills */}
               <section id="section-skills" className="scroll-mt-20">
-                <Card className="p-6">
-                  <h2 className="mb-2 text-lg font-semibold">Skills</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Skills management coming in the next plan...
-                  </p>
-                </Card>
+                <SectionSkills />
               </section>
             </>
           )}
