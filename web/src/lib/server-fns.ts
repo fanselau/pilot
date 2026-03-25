@@ -30,7 +30,7 @@ import { getConfig, getConfigSource, getConfigFileDefaults, _resetConfigCache } 
 import { buildJobObservability } from '@pilot/core/job-observability.js'
 import type { ConfigFileSchema, ConfigSource, ModelEntry, ModelProfile, SkillEntry } from '@pilot/core/types.js'
 import { AGENT_MODELS } from '@pilot/core/models.js'
-import { getProviderModes, setModelEntry, getAllEntriesForMode } from '@pilot/core/model-store.js'
+import { getProviderModes, setModelEntry, getAllEntriesForMode, addProviderMode, cloneProviderMode, removeProviderMode } from '@pilot/core/model-store.js'
 import { listSkills, registerSkill, unregisterSkill, tagSkill, PREDEFINED_CATEGORIES, CATEGORY_INFO } from '@pilot/core/skills.js'
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
 import os from 'node:os'
@@ -544,6 +544,35 @@ export const updateSkillTagsFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const skill = tagSkill(data.name, data.categories)
     return { ok: true, skill }
+  })
+
+// ── Settings: Add Provider Mode ───────────────────────────────────────────
+
+export const addProviderModeFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { name: string; copyFrom?: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      addProviderMode(data.name, '', false)
+      if (data.copyFrom) {
+        cloneProviderMode(data.copyFrom, data.name)
+      }
+      return { ok: true, error: undefined }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+
+// ── Settings: Remove Provider Mode ────────────────────────────────────────
+
+export const removeProviderModeFn = createServerFn({ method: 'POST' })
+  .inputValidator((d: { name: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      removeProviderMode(data.name)
+      return { ok: true, error: undefined }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
   })
 
 // ── Settings: System Info ─────────────────────────────────────────────────
