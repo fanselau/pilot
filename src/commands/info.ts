@@ -584,6 +584,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   const failureContext = buildFailureContext(job, steps, triage);
   const uiReview = resolveUiReviewInfo(job, steps);
   const runtimeSkills = buildRuntimeSkillsSummary(job.runtimeSkillSnapshot);
+  const judgeSignal = buildJudgeSignal(job);
   const tokenTotals = observability.tokens.totals ?? {
     input: 0,
     output: 0,
@@ -611,6 +612,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
         failureContext,
         uiReview,
         runtimeSkills: job.runtimeSkillSnapshot,
+        judgeSignal,
         actualModels: job.actualModels,
         tokenUsage: {
         totalInput: tokenTotals.input,
@@ -668,7 +670,6 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   }
 
   if (job.scope === 'phase' && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
-    const judgeSignal = buildJudgeSignal(job);
     const reason = formatJudgeReason(judgeSignal.reason, 'benefit of doubt');
     const verdictStr =
       judgeSignal.outcome === 'pass'
@@ -678,6 +679,19 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
           : yellow(`⚠ ${judgeSignal.badge} — ${reason}`);
 
     outputHuman(`  ${dim(pad('Verdict:'))}  ${verdictStr}`);
+  }
+
+  if (job.scope === 'phase' && judgeSignal.verification) {
+    outputHuman(`  ${dim('Structured verification status:')} ${judgeSignal.verification.status ?? '—'}`);
+    outputHuman(`  ${dim('Actionable gaps remaining:')} ${judgeSignal.verification.actionableGapCount ?? 0}`);
+    outputHuman(`  ${dim('Human verification checks remaining:')} ${judgeSignal.verification.humanVerificationCount ?? 0}`);
+    outputHuman(`  ${dim('Routing decision:')} ${judgeSignal.verification.routingDecision ?? '—'}`);
+    if (judgeSignal.verification.routingReason) {
+      outputHuman(`  ${dim('Routing reason:')} ${judgeSignal.verification.routingReason}`);
+    }
+    if (judgeSignal.verification.artifactPath) {
+      outputHuman(`  ${dim('Verification artifact:')} ${judgeSignal.verification.artifactPath}`);
+    }
   }
 
   outputHuman('');

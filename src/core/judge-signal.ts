@@ -9,6 +9,14 @@ interface ParsedJudgeVerdictPayload {
   confidence: number | null;
   reason: string | null;
   gaps: string[] | null;
+  verification: {
+    status: string | null;
+    actionableGapCount: number | null;
+    humanVerificationCount: number | null;
+    routingDecision: string | null;
+    routingReason: string | null;
+    artifactPath: string | null;
+  } | null;
   // Keep retry fields for backward compat parsing (old verdicts in DB)
   retryRecommendation: string | null;
   retryHint: string | null;
@@ -22,6 +30,7 @@ export interface JudgeSignal {
   reason: string | null;
   verdict: string | null;
   gaps: string[] | null;
+  verification: ParsedJudgeVerdictPayload['verification'];
   // Keep retry fields for backward compat (old verdicts in DB)
   retryRecommendation: string | null;
   retryHint: string | null;
@@ -54,6 +63,11 @@ function normalizeConfidence(value: unknown): number | null {
   return normalized;
 }
 
+function normalizeCount(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return Math.round(value);
+}
+
 function mapVerdictToOutcome(verdict: string | null): Exclude<JudgeSignalOutcome, 'none' | 'inconclusive'> | null {
   if (!verdict) return null;
   return VERDICT_TO_OUTCOME[verdict as JudgeVerdictValue] ?? null;
@@ -73,6 +87,22 @@ export function parseJudgeVerdictPayload(judgeVerdict: string | null): ParsedJud
       gaps: Array.isArray(parsed.gaps)
         ? (parsed.gaps as unknown[]).filter((s): s is string => typeof s === 'string')
         : null,
+      verification:
+        asText(parsed.verificationStatus)
+        || normalizeCount(parsed.actionableGapCount) !== null
+        || normalizeCount(parsed.humanVerificationCount) !== null
+        || asText(parsed.routingDecision)
+        || asText(parsed.routingReason)
+        || asText(parsed.artifactPath)
+          ? {
+            status: asText(parsed.verificationStatus),
+            actionableGapCount: normalizeCount(parsed.actionableGapCount),
+            humanVerificationCount: normalizeCount(parsed.humanVerificationCount),
+            routingDecision: asText(parsed.routingDecision),
+            routingReason: asText(parsed.routingReason),
+            artifactPath: asText(parsed.artifactPath),
+          }
+          : null,
       // Legacy fields (backward compat for old verdicts in DB)
       retryRecommendation: asText(parsed.retryRecommendation),
       retryHint: asText(parsed.retryHint),
@@ -102,12 +132,13 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       outcome: 'none',
       badge: '',
       confidence: null,
-      reason: null,
-      verdict: null,
-      gaps: null,
-      retryRecommendation: null,
-      retryHint: null,
-      failureFingerprint: null,
+        reason: null,
+        verdict: null,
+        gaps: null,
+        verification: null,
+        retryRecommendation: null,
+        retryHint: null,
+        failureFingerprint: null,
     };
   }
 
@@ -122,6 +153,7 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
       reason: parsed?.reason ?? null,
       verdict: parsed?.verdict ?? null,
       gaps: parsed?.gaps ?? null,
+      verification: parsed?.verification ?? null,
       retryRecommendation: parsed?.retryRecommendation ?? null,
       retryHint: parsed?.retryHint ?? null,
       failureFingerprint: parsed?.failureFingerprint ?? null,
@@ -135,6 +167,7 @@ export function buildJudgeSignal(job: Pick<Job, 'scope' | 'judgeVerdict'>): Judg
     reason: parsed.reason,
     verdict: parsed.verdict,
     gaps: parsed.gaps,
+    verification: parsed.verification,
     retryRecommendation: parsed.retryRecommendation,
     retryHint: parsed.retryHint,
     failureFingerprint: parsed.failureFingerprint,

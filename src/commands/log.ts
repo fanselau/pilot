@@ -14,6 +14,7 @@
 import { getJob, getQueue, getJobSteps, getRetryAttempts } from '../core/db.js';
 import { buildJobWhy, buildRetryWhy } from '../core/job-introspection.js';
 import { buildJobObservability } from '../core/job-observability.js';
+import { buildJudgeSignal } from '../core/judge-signal.js';
 import {
   findSessionByTitle,
   getSessionParts,
@@ -432,6 +433,7 @@ interface LogSummaryData {
     headCommit: string | null;
   };
   failureReason: string | null;
+  verification: ReturnType<typeof buildJudgeSignal>['verification'];
 }
 
 function mergeOutcome(current: OutcomeSignal, incoming: OutcomeSignal): OutcomeSignal {
@@ -550,6 +552,7 @@ function buildSummaryData(job: Job, steps: JobStep[]): LogSummaryData {
     },
     commitDelta: resolveCommitDelta(job),
     failureReason,
+    verification: buildJudgeSignal(job).verification,
   };
 }
 
@@ -609,6 +612,15 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
 
   if (summary.failureReason) {
     outputHuman(`  ${red(`failure: ${summary.failureReason}`)}`);
+  }
+
+  if (summary.verification) {
+    outputHuman(
+      `  ${dim(`structured verification: status=${summary.verification.status ?? '—'} actionable=${summary.verification.actionableGapCount ?? 0} human=${summary.verification.humanVerificationCount ?? 0} routing=${summary.verification.routingDecision ?? '—'}`)}`,
+    );
+    if (summary.verification.routingReason) {
+      outputHuman(`  ${dim(`routing reason: ${summary.verification.routingReason}`)}`);
+    }
   }
 
   if (summary.failureContext.failed) {
