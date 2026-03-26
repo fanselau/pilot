@@ -52,6 +52,7 @@ import {
   getProject,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  updateJobRuntimeSkillSnapshot,
   incrementHungCount,
   getJobSteps,
   createPendingStep,
@@ -85,8 +86,14 @@ import {
   detectGitConflictState,
 } from './git-recovery.js';
 import {
+  cleanupInstalledSkills,
   installSkillsForJob,
 } from './skills.js';
+import {
+  applyRuntimeAgentSkillsPatch,
+  restoreRuntimeAgentSkillsPatch,
+  type RuntimeAgentSkillsPatchHandle,
+} from './runtime-agent-skills.js';
 import {
   extractPhaseNumberFromStepArgs,
   findExistingUiSpec,
@@ -768,6 +775,7 @@ class Runner {
    */
   private async launch(job: Job): Promise<void> {
     const projectDir = resolveProjectDir(job.project);
+    let runtimeSkillHandle: RuntimeAgentSkillsPatchHandle | null = null;
 
     // Warn when picking up a job for an unregistered project (non-blocking)
     const projectRecord = getProject(job.project);
@@ -810,6 +818,19 @@ class Runner {
           `[runner] Warning: skill installation failed for job ${job.id}: ${errMsg(err)}\n`,
         );
       }
+
+      runtimeSkillHandle = await applyRuntimeAgentSkillsPatch(projectDir, job.categories ?? null);
+      updateJobRuntimeSkillSnapshot(job.id, runtimeSkillHandle.snapshot);
+      process.stderr.write(
+        `[runner] Runtime skills categories: ${runtimeSkillHandle.snapshot.categories.join(', ') || 'none'}\n`,
+      );
+      process.stderr.write(
+        `[runner] Runtime skills selected: ${runtimeSkillHandle.snapshot.selectedSkills.join(', ') || 'none'}\n`,
+      );
+      const mappedAgents = Object.keys(runtimeSkillHandle.snapshot.agentSkills).sort();
+      process.stderr.write(
+        `[runner] Runtime agent_skills patched: ${runtimeSkillHandle.snapshot.applied ? `${mappedAgents.length} mapped (${mappedAgents.join(', ') || 'none'})` : 'no runtime patch applied'}\n`,
+      );
 
       this.patchModelsForJob(job, projectDir);
 
@@ -940,10 +961,33 @@ class Runner {
         } catch { /* ignore */ }
       }
       try {
-        const skillDir = path.join(projectDir, '.opencode', 'skill');
-        if (existsSync(skillDir)) {
-          rmSync(skillDir, { recursive: true, force: true });
+        if (runtimeSkillHandle) {
+          try {
+            const restoredSnapshot = await restoreRuntimeAgentSkillsPatch(projectDir, runtimeSkillHandle);
+            updateJobRuntimeSkillSnapshot(job.id, restoredSnapshot);
+            process.stderr.write(
+              `[runner] Runtime agent_skills restore: ${restoredSnapshot.restoreStatus}\n`,
+            );
+          } catch (restoreErr) {
+            const restoreMessage = errMsg(restoreErr);
+            process.stderr.write(
+              `[runner] Runtime agent_skills restore: failed - ${restoreMessage}\n`,
+            );
+            updateJobRuntimeSkillSnapshot(job.id, {
+              ...runtimeSkillHandle.snapshot,
+              categories: [...runtimeSkillHandle.snapshot.categories],
+              selectedSkills: [...runtimeSkillHandle.snapshot.selectedSkills],
+              invalidSkills: [...runtimeSkillHandle.snapshot.invalidSkills],
+              agentSkills: Object.fromEntries(
+                Object.entries(runtimeSkillHandle.snapshot.agentSkills).map(([agent, skillPaths]) => [agent, [...skillPaths]]),
+              ),
+              restoreStatus: 'failed',
+              restoreError: restoreMessage,
+            });
+          }
         }
+
+        cleanupInstalledSkills(projectDir);
       } catch {
         // Best-effort cleanup — don't fail the job
       }

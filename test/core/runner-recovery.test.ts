@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   })),
   updateJobRecoveryStart: vi.fn(),
   updateJobRecoveryHead: vi.fn(),
+  updateJobRuntimeSkillSnapshot: vi.fn(),
   incrementHungCount: vi.fn(),
   isSameHungReason: vi.fn(() => false),
   createPendingStep: vi.fn(() => 1),
@@ -56,6 +57,41 @@ const mocks = vi.hoisted(() => ({
   getAssistantMessageCount: vi.fn<(sessionId: string) => number>(() => 0),
   isSessionDone: vi.fn<(sessionId: string) => boolean>(() => true),
   ensureAutonomousGsdConfig: vi.fn(() => Promise.resolve()),
+  cleanupInstalledSkills: vi.fn(),
+  applyRuntimeAgentSkillsPatch: vi.fn<(projectDir: string, categories: string[] | null) => Promise<{
+    snapshot: {
+      categories: string[];
+      selectedSkills: string[];
+      invalidSkills: string[];
+      agentSkills: Record<string, string[]>;
+      mergePolicy: 'append-user-then-pilot';
+      applied: boolean;
+      restoreStatus: 'pending' | 'restored' | 'skipped' | 'failed';
+      restoreError: string | null;
+    };
+    applied: boolean;
+    previousAgentSkills: Record<string, string[]> | null;
+    hadAgentSkillsKey: boolean;
+  }>>(async () => ({
+    snapshot: {
+      categories: [],
+      selectedSkills: [],
+      invalidSkills: [],
+      agentSkills: {},
+      mergePolicy: 'append-user-then-pilot',
+      applied: false,
+      restoreStatus: 'skipped',
+      restoreError: null,
+    },
+    applied: false,
+    previousAgentSkills: null,
+    hadAgentSkillsKey: false,
+  })),
+  restoreRuntimeAgentSkillsPatch: vi.fn<(projectDir: string, handle: { snapshot: Record<string, unknown> }) => Promise<Record<string, unknown>>>(async (_projectDir: string, handle: { snapshot: Record<string, unknown> }) => ({
+    ...(handle.snapshot as object),
+    restoreStatus: 'skipped',
+    restoreError: null,
+  })),
 }));
 
 vi.mock('../../src/core/db.js', () => ({
@@ -80,6 +116,7 @@ vi.mock('../../src/core/db.js', () => ({
   getProject: mocks.getProject,
   updateJobRecoveryStart: mocks.updateJobRecoveryStart,
   updateJobRecoveryHead: mocks.updateJobRecoveryHead,
+  updateJobRuntimeSkillSnapshot: mocks.updateJobRuntimeSkillSnapshot,
   incrementHungCount: mocks.incrementHungCount,
   isSameHungReason: mocks.isSameHungReason,
   createPendingStep: mocks.createPendingStep,
@@ -106,6 +143,12 @@ vi.mock('../../src/core/delegate.js', () => ({
 
 vi.mock('../../src/core/skills.js', () => ({
   installSkillsForJob: vi.fn(async () => []),
+  cleanupInstalledSkills: mocks.cleanupInstalledSkills,
+}));
+
+vi.mock('../../src/core/runtime-agent-skills.js', () => ({
+  applyRuntimeAgentSkillsPatch: mocks.applyRuntimeAgentSkillsPatch,
+  restoreRuntimeAgentSkillsPatch: mocks.restoreRuntimeAgentSkillsPatch,
 }));
 
 vi.mock('../../src/core/callback.js', () => ({
@@ -312,6 +355,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackSessionKey: null,
     notifyRoute: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
     startedDirty: false,
@@ -556,6 +600,163 @@ describe('runner recovery preflight and checkpoint capture', () => {
 
     expect(mockPatchAgentFrontmatter).toHaveBeenCalledTimes(1);
     expect(mockPatchAgentFrontmatter).toHaveBeenCalledWith(projectDir, {});
+  });
+
+  it('applies runtime agent_skills before delegation and persists the snapshot', async () => {
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-runtime-apply',
+      headCommit: 'head-runtime-apply',
+    });
+    const runtimeHandle = {
+      snapshot: {
+        categories: ['frontend'],
+        selectedSkills: ['typescript'],
+        invalidSkills: [],
+        agentSkills: { 'gsd-planner': ['/repo/.opencode/skill/typescript'] },
+        mergePolicy: 'append-user-then-pilot' as const,
+        applied: true,
+        restoreStatus: 'pending' as const,
+        restoreError: null,
+      },
+      applied: true,
+      previousAgentSkills: null,
+      hadAgentSkillsKey: false,
+    };
+    mocks.applyRuntimeAgentSkillsPatch.mockResolvedValue(runtimeHandle);
+    mocks.delegate.mockResolvedValue({ intent: { type: 'noop', reason: 'done' }, reasoning: 'done' });
+
+    await launchJob(makeJob({ categories: ['frontend'] }));
+
+    expect(mocks.applyRuntimeAgentSkillsPatch).toHaveBeenCalledWith('/repo', ['frontend']);
+    expect(mocks.updateJobRuntimeSkillSnapshot).toHaveBeenCalledWith('ab12', runtimeHandle.snapshot);
+    expect(mocks.applyRuntimeAgentSkillsPatch.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.delegate.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps delegating when the runtime agent_skills patch is a no-op', async () => {
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-runtime-noop',
+      headCommit: 'head-runtime-noop',
+    });
+    mocks.applyRuntimeAgentSkillsPatch.mockResolvedValue({
+      snapshot: {
+        categories: [],
+        selectedSkills: [],
+        invalidSkills: [],
+        agentSkills: {},
+        mergePolicy: 'append-user-then-pilot',
+        applied: false,
+        restoreStatus: 'skipped',
+        restoreError: null,
+      },
+      applied: false,
+      previousAgentSkills: null,
+      hadAgentSkillsKey: false,
+    });
+    mocks.delegate.mockResolvedValue({ intent: { type: 'noop', reason: 'done' }, reasoning: 'done' });
+
+    await launchJob(makeJob());
+
+    expect(mocks.applyRuntimeAgentSkillsPatch).toHaveBeenCalledTimes(1);
+    expect(mocks.delegate).toHaveBeenCalledTimes(1);
+    expect(mocks.markCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('restores runtime agent_skills before cleanup on success and on failure', async () => {
+    const runtimeHandle = {
+      snapshot: {
+        categories: ['frontend'],
+        selectedSkills: ['typescript'],
+        invalidSkills: [],
+        agentSkills: { 'gsd-planner': ['/repo/.opencode/skill/typescript'] },
+        mergePolicy: 'append-user-then-pilot' as const,
+        applied: true,
+        restoreStatus: 'pending' as const,
+        restoreError: null,
+      },
+      applied: true,
+      previousAgentSkills: null,
+      hadAgentSkillsKey: false,
+    };
+    const restoredSnapshot = {
+      ...runtimeHandle.snapshot,
+      restoreStatus: 'restored' as const,
+      restoreError: null,
+    };
+    mocks.applyRuntimeAgentSkillsPatch.mockResolvedValue(runtimeHandle);
+    mocks.restoreRuntimeAgentSkillsPatch.mockResolvedValue(restoredSnapshot);
+
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-runtime-success',
+      headCommit: 'head-runtime-success',
+    });
+    mocks.delegate.mockResolvedValue({ intent: { type: 'noop', reason: 'done' }, reasoning: 'done' });
+
+    await launchJob(makeJob());
+
+    expect(mocks.restoreRuntimeAgentSkillsPatch).toHaveBeenCalledWith('/repo', runtimeHandle);
+    expect(mocks.cleanupInstalledSkills).toHaveBeenCalledWith('/repo');
+    expect(mocks.restoreRuntimeAgentSkillsPatch.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.cleanupInstalledSkills.mock.invocationCallOrder[0],
+    );
+    expect(mocks.updateJobRuntimeSkillSnapshot).toHaveBeenLastCalledWith('ab12', restoredSnapshot);
+
+    vi.clearAllMocks();
+    _resetSpawnRateLimit();
+    mocks.getJob.mockImplementation((id: string) => (id === 'ab12' ? makeJob() : null));
+    mocks.applyRuntimeAgentSkillsPatch.mockResolvedValue(runtimeHandle);
+    mocks.restoreRuntimeAgentSkillsPatch.mockResolvedValue(restoredSnapshot);
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-runtime-failure',
+      headCommit: 'head-runtime-failure',
+    });
+    mocks.delegate.mockRejectedValue(new Error('delegation blew up'));
+
+    await launchJob(makeJob());
+
+    expect(mocks.restoreRuntimeAgentSkillsPatch).toHaveBeenCalledWith('/repo', runtimeHandle);
+    expect(mocks.cleanupInstalledSkills).toHaveBeenCalledWith('/repo');
+    expect(mocks.restoreRuntimeAgentSkillsPatch.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.cleanupInstalledSkills.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('applies the runtime patch only once for a launch that continues into milestone execution', async () => {
+    const projectDir = process.cwd();
+    mockRecoveryGit({
+      worktree: true,
+      statusPorcelain: '',
+      branch: 'main',
+      baseCommit: 'base-runtime-once',
+      headCommit: 'head-runtime-once',
+    });
+    mocks.delegate
+      .mockResolvedValueOnce({
+        intent: { type: 'init-project', prdPath: 'requirements/my-project.md' },
+        reasoning: 'new project',
+      })
+      .mockResolvedValueOnce({
+        intent: { type: 'noop', reason: 'all done' },
+        reasoning: 'nothing more to do',
+      });
+
+    await launchJobWithPollInterval(makeJob({ project: projectDir }), 0);
+
+    expect(mocks.applyRuntimeAgentSkillsPatch).toHaveBeenCalledTimes(1);
   });
 
   it('marks job failed when config assertion throws before spawn', async () => {
