@@ -93,19 +93,22 @@ beforeEach(() => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('updateCommand — happy path', () => {
-  it('calls bun update for get-shit-done-cc package', async () => {
+  it('calls ensureApprovedGsdPackage for the approved version', async () => {
     await updateCommand();
 
-    const updateCall = mockExeca.mock.calls.find(([cmd, args]) => cmd === 'bun' && Array.isArray(args) && args.includes('update'));
-    expect(updateCall).toBeDefined();
-    expect(updateCall![1]).toContain('get-shit-done-cc');
+    expect(mockEnsureApprovedGsdPackage).toHaveBeenCalledWith('1.24.0', expect.any(String));
   });
 
-  it('runs get-shit-done-cc --opencode --local for each registered project', async () => {
+  it('runs get-shit-done-cc --opencode --local for each rollout project behind approved version', async () => {
     mockProjects = [
       { path: '/project/a', status: 'active', owner: null },
       { path: '/project/b', status: 'active', owner: null },
     ];
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:01.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: null, driftStatus: 'unknown', checkedAt: '2026-03-26T00:00:00.000Z', error: 'VERSION missing' })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:01.000Z', error: null });
 
     await updateCommand();
 
@@ -117,10 +120,13 @@ describe('updateCommand — happy path', () => {
     expect(installerCalls[1][1]).toEqual(['--opencode', '--local']);
   });
 
-  it('passes correct cwd for each project installer call', async () => {
+  it('passes correct cwd for each installer call', async () => {
     mockProjects = [
       { path: '/project/myapp', status: 'active', owner: null },
     ];
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:01.000Z', error: null });
 
     await updateCommand();
 
@@ -143,16 +149,14 @@ describe('updateCommand — happy path', () => {
 });
 
 describe('updateCommand — no registered projects', () => {
-  it('only calls bun update when no projects registered', async () => {
+  it('only prepares the approved runtime when no projects registered', async () => {
     mockProjects = [];
 
     await updateCommand();
 
     const installerCalls = mockExeca.mock.calls.filter(([, args]) => Array.isArray(args) && args.includes('--opencode'));
     expect(installerCalls).toHaveLength(0);
-
-    const updateCall = mockExeca.mock.calls.find(([cmd, args]) => cmd === 'bun' && Array.isArray(args) && args.includes('update'));
-    expect(updateCall).toBeDefined();
+    expect(mockEnsureApprovedGsdPackage).toHaveBeenCalledWith('1.24.0', expect.any(String));
   });
 
   it('reports "No registered projects" in output', async () => {
@@ -171,6 +175,9 @@ describe('updateCommand — individual project failure', () => {
       { path: '/project/a', status: 'active', owner: null },
       { path: '/project/b', status: 'active', owner: null },
     ];
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null });
 
     // First project fails, second succeeds
     let callCount = 0;
@@ -207,6 +214,13 @@ describe('updateCommand — individual project failure', () => {
     mockProjects = [
       { path: '/project/fail', status: 'active', owner: null },
     ];
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: '1.23.0',
+      driftStatus: 'behind',
+      checkedAt: '2026-03-26T00:00:00.000Z',
+      error: null,
+    });
 
     mockExeca.mockImplementation(async (_cmd: string, args: string[]) => {
       if (Array.isArray(args) && args.includes('update')) {
@@ -223,11 +237,11 @@ describe('updateCommand — individual project failure', () => {
     expect(mockOutputJson).toHaveBeenCalled();
     const jsonResult = mockOutputJson.mock.calls[0][0] as {
       updated: boolean;
-      packageUpdated: boolean;
+      approvedVersion: string;
       projects: Array<{ path: string; success: boolean; error?: string }>;
     };
     expect(jsonResult.updated).toBe(true);
-    expect(jsonResult.packageUpdated).toBe(true);
+    expect(jsonResult.approvedVersion).toBe('1.24.0');
     expect(jsonResult.projects).toHaveLength(1);
     expect(jsonResult.projects[0].path).toBe('/project/fail');
     expect(jsonResult.projects[0].success).toBe(false);
@@ -269,7 +283,7 @@ describe('updateCommand — blocked projects skipped', () => {
 });
 
 describe('updateCommand — JSON output', () => {
-  it('outputs valid JSON result with packageUpdated: true on success', async () => {
+  it('outputs valid JSON result with approvedVersion on success', async () => {
     mockJsonMode = true;
     mockProjects = [
       { path: '/project/a', status: 'active', owner: null },
@@ -278,9 +292,9 @@ describe('updateCommand — JSON output', () => {
     await updateCommand();
 
     expect(mockOutputJson).toHaveBeenCalled();
-    const result = mockOutputJson.mock.calls[0][0] as { updated: boolean; packageUpdated: boolean; projects: unknown[] };
+    const result = mockOutputJson.mock.calls[0][0] as { updated: boolean; approvedVersion: string; projects: unknown[] };
     expect(result.updated).toBe(true);
-    expect(result.packageUpdated).toBe(true);
+    expect(result.approvedVersion).toBe('1.24.0');
     expect(result.projects).toHaveLength(1);
   });
 });
