@@ -568,6 +568,37 @@ describe('getJobDetailEvents', () => {
 // ── getJobTimeline Tests ──────────────────────────────────────────────────
 
 describe('getJobTimeline', () => {
+  it('labels ui-review groups as UI Review instead of Execution', () => {
+    mockGetJobSteps.mockReturnValue([
+      makeStep({
+        stepIndex: 0,
+        command: 'ui-review',
+        args: '98',
+        source: 'delegation',
+        sessionId: 'sess-ui-review',
+        sessionTitle: 'project-ui-review-ab12-xy12',
+      }),
+    ]);
+    mockGetJob.mockReturnValue(
+      makeJob({ sessionTitles: JSON.stringify(['project-ui-review-ab12-xy12']) }),
+    );
+    mockFindSessionByTitle.mockImplementation((title: string) => {
+      if (title === 'project-ui-review-ab12-xy12') return 'sess-ui-review';
+      return null;
+    });
+    mockGetChildSessions.mockReturnValue([]);
+    mockGetSessionParts.mockReturnValue([
+      makePart({ id: 'ui-review-1', type: 'text', text: 'Checked the final UI.', createdAt: 1000 }),
+    ]);
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page.groups).toHaveLength(1);
+    expect(page.groups[0].command).toBe('ui-review');
+    expect(page.groups[0].semanticLabel).toBe('UI Review');
+    expect(page.groups[0].semanticLabel).not.toBe('Execution');
+  });
+
   it('returns items sorted chronologically across multiple root sessions', () => {
     // Job with 2 root sessions
     mockGetJob.mockReturnValue(
