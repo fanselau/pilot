@@ -104,13 +104,16 @@ function makeStep(overrides: Partial<JobStep> = {}): JobStep {
     stepIndex: 0,
     command: 'execute-phase',
     args: '44 --auto',
+    source: 'delegation',
     sessionTitle: null,
     sessionId: null,
     status: 'completed',
+    reason: null,
     verdictSource: null,
     verdictReason: null,
     startedAt: '2026-03-07T00:01:00Z',
     completedAt: '2026-03-07T00:02:00Z',
+    error: null,
     durationMs: 60_000,
     ...overrides,
   };
@@ -440,6 +443,10 @@ describe('extractAgentIdentity', () => {
 
   it('extracts judge from runner command-step title', () => {
     expect(extractAgentIdentity('myproject-judge-ab12-xyz1')).toBe('judge');
+  });
+
+  it('extracts ui-review from runner command-step title', () => {
+    expect(extractAgentIdentity('myproject-ui-review-ab12-xyz1')).toBe('ui-review');
   });
 
   it('extracts gsd-* agent names', () => {

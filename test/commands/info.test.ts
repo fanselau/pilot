@@ -455,4 +455,87 @@ describe('infoCommand recovery visibility', () => {
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(output).toContain('judge:gaps 55%');
   });
+
+  it('shows UI Review completed path when the advisory artifact exists', async () => {
+    mockGetJob.mockReturnValue(makeJob({ scope: 'phase' }));
+    mockGetJobSteps.mockReturnValue([
+      {
+        id: 1,
+        jobId: 'ab12',
+        stepIndex: 0,
+        command: 'execute-phase',
+        args: '98 --auto',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'completed',
+        verdictSource: null,
+        verdictReason: null,
+        startedAt: '2026-03-07T00:01:00Z',
+        completedAt: '2026-03-07T00:02:00Z',
+        durationMs: 60_000,
+      },
+      {
+        id: 2,
+        jobId: 'ab12',
+        stepIndex: 1,
+        command: 'ui-review',
+        args: '98',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'completed',
+        verdictSource: null,
+        verdictReason: null,
+        startedAt: '2026-03-07T00:02:00Z',
+        completedAt: '2026-03-07T00:03:00Z',
+        durationMs: 60_000,
+      },
+    ]);
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('UI Review: completed - /resolved/my-project/.planning/phases/98-ui-phase/98-UI-REVIEW.md');
+  });
+
+  it('shows skipped UI Review without turning the job into a failure', async () => {
+    mockGetJob.mockReturnValue(makeJob({ scope: 'phase', status: 'completed' }));
+    mockGetJobSteps.mockReturnValue([
+      {
+        id: 1,
+        jobId: 'ab12',
+        stepIndex: 0,
+        command: 'execute-phase',
+        args: '98 --auto',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'completed',
+        verdictSource: null,
+        verdictReason: null,
+        startedAt: '2026-03-07T00:01:00Z',
+        completedAt: '2026-03-07T00:02:00Z',
+        durationMs: 60_000,
+      },
+      {
+        id: 2,
+        jobId: 'ab12',
+        stepIndex: 1,
+        command: 'ui-review',
+        args: '98',
+        sessionTitle: null,
+        sessionId: null,
+        status: 'skipped',
+        verdictSource: null,
+        verdictReason: null,
+        startedAt: '2026-03-07T00:02:00Z',
+        completedAt: '2026-03-07T00:03:00Z',
+        durationMs: 60_000,
+      },
+    ]);
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('UI Review: skipped - advisory audit did not produce UI-REVIEW.md');
+    expect(output).toContain('Outcome: job is not failed/cancelled');
+  });
 });

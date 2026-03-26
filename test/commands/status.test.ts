@@ -408,6 +408,56 @@ describe('statusCommand', () => {
     expect(quickLine).not.toContain('judge:');
   });
 
+  it('shows separate ui-review badges without replacing judge badges', async () => {
+    mockRecent = [
+      makeJob({
+        id: 'ur11',
+        scope: 'phase',
+        status: 'completed',
+        project: 'ui-review-pass',
+        description: 'phase with completed ui review',
+        completedAt: '2026-03-02T09:55:00',
+        judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 91, reason: 'looks good' }),
+        gitBaseCommit: '1111111111111111111111111111111111111111',
+        gitHeadCommit: '2222222222222222222222222222222222222222',
+      }),
+      makeJob({
+        id: 'ur12',
+        scope: 'phase',
+        status: 'completed',
+        project: 'ui-review-skipped',
+        description: 'phase with skipped ui review',
+        completedAt: '2026-03-02T09:56:00',
+        judgeVerdict: JSON.stringify({ verdict: 'pass', confidence: 83, reason: 'good enough' }),
+        gitBaseCommit: '3333333333333333333333333333333333333333',
+        gitHeadCommit: '4444444444444444444444444444444444444444',
+      }),
+    ];
+    mockJobSteps = {
+      ur11: [
+        { command: 'execute-phase', args: '98 --auto', stepIndex: 0, status: 'completed' },
+        { command: 'judge', args: '98', stepIndex: 1, status: 'completed' },
+        { command: 'ui-review', args: '98', stepIndex: 2, status: 'completed' },
+      ],
+      ur12: [
+        { command: 'execute-phase', args: '98 --auto', stepIndex: 0, status: 'completed' },
+        { command: 'judge', args: '98', stepIndex: 1, status: 'completed' },
+        { command: 'ui-review', args: '98', stepIndex: 2, status: 'skipped' },
+      ],
+    };
+
+    await statusCommand({});
+
+    const lines = mockOutputHuman.mock.calls.map((c: unknown[]) => String(c[0]));
+    const completedLine = lines.find((line) => line.includes('ur11'));
+    const skippedLine = lines.find((line) => line.includes('ur12'));
+
+    expect(completedLine).toContain('[judge:pass 91%]');
+    expect(completedLine).toContain('[ui-review]');
+    expect(skippedLine).toContain('[judge:pass 83%]');
+    expect(skippedLine).toContain('[ui-review:skipped]');
+  });
+
   it('shows review pending label for completed_pending_review jobs in recent section', async () => {
     mockRecent = [
       makeJob({
