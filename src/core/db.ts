@@ -24,6 +24,7 @@ import type {
   ModelProfileRow,
   ProviderModeRow,
   OpenClawDeliverRoute,
+  RuntimeAgentSkillsSnapshot,
   StepSource,
 } from './types.js';
 import { AGENT_MODELS } from './models.js';
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   last_failure_fingerprint TEXT,
   hung_count INTEGER NOT NULL DEFAULT 0,
   last_hung_reason TEXT,
+  runtime_skill_snapshot TEXT DEFAULT NULL,
   resumed_from_hold INTEGER NOT NULL DEFAULT 0
 );
 `;
@@ -223,6 +225,7 @@ interface JobRow {
   last_failure_fingerprint: string | null;
   hung_count: number;
   last_hung_reason: string | null;
+  runtime_skill_snapshot: string | null;
   resumed_from_hold: number;
 }
 
@@ -291,6 +294,65 @@ function parseFailureFingerprint(value: string | null | undefined): string[] | n
   }
 
   return [value];
+}
+
+function parseRuntimeSkillSnapshot(value: string | null | undefined): RuntimeAgentSkillsSnapshot | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const snapshot = parsed as Record<string, unknown>;
+    const categories = snapshot.categories;
+    const selectedSkills = snapshot.selectedSkills;
+    const invalidSkills = snapshot.invalidSkills;
+    const agentSkills = snapshot.agentSkills;
+
+    if (
+      !Array.isArray(categories)
+      || !categories.every((entry) => typeof entry === 'string')
+      || !Array.isArray(selectedSkills)
+      || !selectedSkills.every((entry) => typeof entry === 'string')
+      || !Array.isArray(invalidSkills)
+      || !invalidSkills.every((entry) => typeof entry === 'string')
+      || snapshot.mergePolicy !== 'append-user-then-pilot'
+      || typeof snapshot.applied !== 'boolean'
+      || (snapshot.restoreStatus !== 'pending'
+        && snapshot.restoreStatus !== 'restored'
+        && snapshot.restoreStatus !== 'skipped'
+        && snapshot.restoreStatus !== 'failed')
+      || (snapshot.restoreError !== null && typeof snapshot.restoreError !== 'string')
+      || !agentSkills
+      || typeof agentSkills !== 'object'
+      || Array.isArray(agentSkills)
+    ) {
+      return null;
+    }
+
+    const normalizedAgentSkills: Record<string, string[]> = {};
+    for (const [agent, paths] of Object.entries(agentSkills)) {
+      if (!Array.isArray(paths) || !paths.every((entry) => typeof entry === 'string')) {
+        return null;
+      }
+      normalizedAgentSkills[agent] = [...paths];
+    }
+
+    return {
+      categories: [...categories],
+      selectedSkills: [...selectedSkills],
+      invalidSkills: [...invalidSkills],
+      agentSkills: normalizedAgentSkills,
+      mergePolicy: 'append-user-then-pilot',
+      applied: snapshot.applied,
+      restoreStatus: snapshot.restoreStatus,
+      restoreError: snapshot.restoreError,
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface DelegationPayloadGuardResult {
@@ -378,6 +440,7 @@ function rowToJob(row: JobRow): Job {
       if (!row.categories) return null;
       try { return JSON.parse(row.categories) as string[]; } catch { return null; }
     })(),
+    runtimeSkillSnapshot: parseRuntimeSkillSnapshot(row.runtime_skill_snapshot),
     gitBaseCommit: row.git_base_commit ?? null,
     gitHeadCommit: row.git_head_commit ?? null,
     startedDirty: row.started_dirty === 1,
@@ -457,7 +520,8 @@ function migrateReviewStates(db: DatabaseType): void {
         retry_hint TEXT,
         last_failure_fingerprint TEXT,
         hung_count INTEGER NOT NULL DEFAULT 0,
-        last_hung_reason TEXT
+        last_hung_reason TEXT,
+        runtime_skill_snapshot TEXT DEFAULT NULL
       );
 
       INSERT INTO jobs_review_migration (
@@ -467,7 +531,7 @@ function migrateReviewStates(db: DatabaseType): void {
         model_profile, provider_mode, judge_verdict, actual_models, callback_url,
         callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
         started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
-        last_failure_fingerprint, hung_count, last_hung_reason
+        last_failure_fingerprint, hung_count, last_hung_reason, runtime_skill_snapshot
       )
       SELECT
         id, project, scope, description, requirement_path, status, priority,
@@ -476,7 +540,7 @@ function migrateReviewStates(db: DatabaseType): void {
         model_profile, provider_mode, judge_verdict, actual_models, callback_url,
         callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
         started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
-        last_failure_fingerprint, hung_count, last_hung_reason
+        last_failure_fingerprint, hung_count, last_hung_reason, NULL
       FROM jobs;
 
       DROP TABLE jobs;
@@ -548,6 +612,7 @@ function migrateScopeConstraint(db: DatabaseType): void {
         last_failure_fingerprint TEXT,
         hung_count INTEGER NOT NULL DEFAULT 0,
         last_hung_reason TEXT,
+        runtime_skill_snapshot TEXT DEFAULT NULL,
         resumed_from_hold INTEGER NOT NULL DEFAULT 0
       );
 
@@ -558,7 +623,7 @@ function migrateScopeConstraint(db: DatabaseType): void {
         model_profile, provider_mode, judge_verdict, actual_models, callback_url,
         callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
         started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
-        last_failure_fingerprint, hung_count, last_hung_reason, resumed_from_hold
+        last_failure_fingerprint, hung_count, last_hung_reason, runtime_skill_snapshot, resumed_from_hold
       )
       SELECT
         id, project, scope, description, requirement_path, status, priority,
@@ -567,7 +632,7 @@ function migrateScopeConstraint(db: DatabaseType): void {
         model_profile, provider_mode, judge_verdict, actual_models, callback_url,
         callback_session_key, notify_route, categories, git_base_commit, git_head_commit,
         started_dirty, skip_grace_period, retry_budget, retry_count, retry_hint,
-        last_failure_fingerprint, hung_count, last_hung_reason, resumed_from_hold
+        last_failure_fingerprint, hung_count, last_hung_reason, NULL, resumed_from_hold
       FROM jobs;
 
       DROP TABLE jobs;
@@ -604,10 +669,11 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE jobs ADD COLUMN retry_budget INTEGER NOT NULL DEFAULT 2',
     'ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jobs ADD COLUMN retry_hint TEXT DEFAULT NULL',
-    'ALTER TABLE jobs ADD COLUMN last_failure_fingerprint TEXT DEFAULT NULL',
-    'ALTER TABLE jobs ADD COLUMN hung_count INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE jobs ADD COLUMN last_hung_reason TEXT DEFAULT NULL',
-    // Phase 73: job_steps append-forward model columns
+     'ALTER TABLE jobs ADD COLUMN last_failure_fingerprint TEXT DEFAULT NULL',
+     'ALTER TABLE jobs ADD COLUMN hung_count INTEGER NOT NULL DEFAULT 0',
+     'ALTER TABLE jobs ADD COLUMN last_hung_reason TEXT DEFAULT NULL',
+     'ALTER TABLE jobs ADD COLUMN runtime_skill_snapshot TEXT DEFAULT NULL',
+     // Phase 73: job_steps append-forward model columns
     "ALTER TABLE job_steps ADD COLUMN source TEXT NOT NULL DEFAULT 'delegation'",
     'ALTER TABLE job_steps ADD COLUMN reason TEXT',
     'ALTER TABLE job_steps ADD COLUMN error TEXT',
@@ -1222,6 +1288,17 @@ function updateJobRecoveryStart(
 function updateJobRecoveryHead(id: string, gitHeadCommit: string | null): void {
   const db = getDb();
   db.prepare('UPDATE jobs SET git_head_commit = ? WHERE id = ?').run(gitHeadCommit, id);
+}
+
+function updateJobRuntimeSkillSnapshot(
+  id: string,
+  snapshot: RuntimeAgentSkillsSnapshot | null,
+): void {
+  const db = getDb();
+  db.prepare('UPDATE jobs SET runtime_skill_snapshot = ? WHERE id = ?').run(
+    snapshot ? JSON.stringify(snapshot) : null,
+    id,
+  );
 }
 
 // ── Force Quit ────────────────────────────────────────────────────────
@@ -2081,6 +2158,7 @@ export {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  updateJobRuntimeSkillSnapshot,
   claimNextLaunchable,
   forceQuitJob,
   recordStep,

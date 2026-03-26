@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { DelegationResult, OpenClawDeliverRoute } from '../../src/core/types.js';
+import type {
+  DelegationResult,
+  OpenClawDeliverRoute,
+  RuntimeAgentSkillsSnapshot,
+} from '../../src/core/types.js';
 import { _resetConfigCache } from '../../src/core/config.js';
 
 // Import the module under test — will fail until db.ts is implemented
@@ -25,6 +29,7 @@ import {
   updateSessionTitles,
   updateJobRecoveryStart,
   updateJobRecoveryHead,
+  updateJobRuntimeSkillSnapshot,
   _getTestDb,
   claimNextLaunchable,
   forceQuitJob,
@@ -253,6 +258,60 @@ describe('pilot.db', () => {
       expect(updated!.gitBaseCommit).toBe('base-two');
       expect(updated!.gitHeadCommit).toBe('head-two');
       expect(updated!.startedDirty).toBe(false);
+    });
+  });
+
+  describe('runtime skill snapshot', () => {
+    function makeSnapshot(): RuntimeAgentSkillsSnapshot {
+      return {
+        categories: ['frontend', 'testing'],
+        selectedSkills: ['frontend-design', 'typescript'],
+        invalidSkills: ['missing-skill'],
+        agentSkills: {
+          'gsd-planner': ['/tmp/skills/frontend-design'],
+          'gsd-executor': ['/tmp/skills/frontend-design', '/tmp/skills/typescript'],
+        },
+        mergePolicy: 'append-user-then-pilot',
+        applied: true,
+        restoreStatus: 'pending',
+        restoreError: null,
+      };
+    }
+
+    it('round-trips runtime skill snapshot JSON into Job.runtimeSkillSnapshot', () => {
+      const job = addJob('proj', 'phase', 'runtime snapshot job');
+      const snapshot = makeSnapshot();
+
+      updateJobRuntimeSkillSnapshot(job.id, snapshot);
+
+      expect(getJob(job.id)!.runtimeSkillSnapshot).toEqual(snapshot);
+    });
+
+    it('stores exact JSON and clears to null via updateJobRuntimeSkillSnapshot', () => {
+      const db = _getTestDb();
+      const job = addJob('proj', 'phase', 'runtime snapshot clear');
+      const snapshot = makeSnapshot();
+
+      updateJobRuntimeSkillSnapshot(job.id, snapshot);
+
+      const stored = db.prepare('SELECT runtime_skill_snapshot FROM jobs WHERE id = ?').get(job.id) as {
+        runtime_skill_snapshot: string | null;
+      };
+      expect(stored.runtime_skill_snapshot).toBe(JSON.stringify(snapshot));
+
+      updateJobRuntimeSkillSnapshot(job.id, null);
+      expect(getJob(job.id)!.runtimeSkillSnapshot).toBeNull();
+
+      const cleared = db.prepare('SELECT runtime_skill_snapshot FROM jobs WHERE id = ?').get(job.id) as {
+        runtime_skill_snapshot: string | null;
+      };
+      expect(cleared.runtime_skill_snapshot).toBeNull();
+    });
+
+    it('maps rows with no runtime skill snapshot to runtimeSkillSnapshot: null', () => {
+      const job = addJob('proj', 'phase', 'no runtime snapshot');
+
+      expect(getJob(job.id)!.runtimeSkillSnapshot).toBeNull();
     });
   });
 

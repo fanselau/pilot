@@ -93,6 +93,17 @@ export interface OpenClawDeliverRoute {
   accountId?: string;
 }
 
+export interface RuntimeAgentSkillsSnapshot {
+  categories: string[];
+  selectedSkills: string[];
+  invalidSkills: string[];
+  agentSkills: Record<string, string[]>;
+  mergePolicy: 'append-user-then-pilot';
+  applied: boolean;
+  restoreStatus: 'pending' | 'restored' | 'skipped' | 'failed';
+  restoreError: string | null;
+}
+
 export interface Job {
   id: string;                // 4 alphanumeric chars
   project: string;
@@ -121,6 +132,7 @@ export interface Job {
   callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
   notifyRoute: OpenClawDeliverRoute | null; // queue-time snapshot of structured OpenClaw delivery route
   categories: string[] | null;    // user-assigned skill categories for the job
+  runtimeSkillSnapshot: RuntimeAgentSkillsSnapshot | null;
   gitBaseCommit: string | null;
   gitHeadCommit: string | null;
   startedDirty: boolean;
