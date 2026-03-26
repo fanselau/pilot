@@ -100,6 +100,10 @@ import {
   isUiReviewEligible,
   resolveUiArtifactOutcome,
 } from './ui-review.js';
+import {
+  deriveVerificationRouting,
+  readLatestVerificationArtifact,
+} from './verification-artifact.js';
 import { notifyJobCompletion } from './callback.js';
 import {
   openDb,
@@ -145,6 +149,14 @@ interface JudgeVerdict {
   retryRecommendation?: string;
   retryHint?: string;
   failureFingerprint?: string[];
+  verificationStatus?: string;
+  actionableGapCount?: number;
+  humanVerificationCount?: number;
+  routingDecision?: string;
+  routingReason?: string;
+  artifactPath?: string | null;
+  artifactAvailable?: boolean;
+  unavailableReason?: string | null;
 }
 
 interface VerificationEvidenceEntry {
@@ -349,39 +361,34 @@ function setOomScore(score: number): void {
   }
 }
 
-// ── Review state helpers ──────────────────────────────────────────────────
+function formatHumanVerificationChecklist(snapshot: ReturnType<typeof readLatestVerificationArtifact>, routingReason: string): string {
+  const lines = [
+    `Structured verification status: ${snapshot.verificationStatus}`,
+    `Actionable gaps remaining: ${snapshot.gaps.filter((gap) => gap.actionable).length}`,
+    `Human verification checks remaining: ${snapshot.humanVerification.length}`,
+    `Routing basis: ${routingReason}`,
+  ];
 
-/**
- * Detect if a judge verdict's remaining gaps are all human-review items.
- * Heuristic: gaps containing keywords like "human", "manual", "visual", "UX",
- * "mobile sweep", "review", "verify" with no code/test/implementation gaps.
- * Also checks if the verdict reason mentions human verification.
- *
- * Exported for direct unit testing.
- */
-function isHumanOnlyRemaining(verdict: JudgeVerdict): boolean {
-  const humanKeywords = /\b(human|manual|visual|ux|mobile\s*sweep|review|verify\s*by\s*hand|user\s*test|accessibility\s*check|design\s*review|approve|sign[\s-]?off|QA|stakeholder|product\s*owner|deploy|release|publish|ship|polish|tweak|copy\s*edit|wording|screenshot|check\s*in|demo|walk[\s-]?through|walkthrough)\b/i;
-  const codeKeywords = /\b(bug|error|crash|test\s*fail|missing\s*implementation|broken|type\s*error|compile|build\s*fail)\b/i;
-  const softGapKeywords = /\b(polish|tweak|copy\s*edit|wording|spacing|alignment|color\s*adjust|font|padding|margin|screenshot|demo|approve|sign[\s-]?off|stakeholder|QA\s*pass|product\s*owner|ship|deploy|release|publish)\b/i;
-
-  // If there are explicit gaps, check if they're all human-type
-  if (verdict.gaps && verdict.gaps.length > 0) {
-    const allHuman = verdict.gaps.every(gap => humanKeywords.test(gap) && !codeKeywords.test(gap));
-    if (allHuman) return true;
+  if (snapshot.humanVerification.length > 0) {
+    lines.push('', 'Human verification items:');
+    for (const item of snapshot.humanVerification) {
+      const parts = [item.test, item.expected, item.whyHuman].filter((part): part is string => Boolean(part));
+      if (parts.length > 0) {
+        lines.push(`- ${parts.join(' — ')}`);
+      }
+    }
   }
 
-  // Check reason for human-review indicators (only when no code problems found)
-  if (verdict.reason && humanKeywords.test(verdict.reason) && !codeKeywords.test(verdict.reason)) {
-    return true;
-  }
+  return lines.join('\n');
+}
 
-  // High-confidence verdict with soft-only gaps → likely human-review
-  if (verdict.confidence >= 85 && verdict.gaps && verdict.gaps.length > 0) {
-    const allSoft = verdict.gaps.every(gap => softGapKeywords.test(gap) && !codeKeywords.test(gap));
-    if (allSoft) return true;
-  }
-
-  return false;
+function formatVerificationHoldReason(routingReason: string, unavailableReason: string | null, artifactPath: string | null): string {
+  const parts = [
+    `Structured verification fallback: ${routingReason}`,
+    unavailableReason,
+    artifactPath,
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(' | ');
 }
 
 /**
@@ -1326,45 +1333,41 @@ class Runner {
     }
 
     const verdict = rawVerdict;
-    updateJudgeVerdict(job.id, JSON.stringify(verdict));
 
     if (verdict.verdict === 'passed' || verdict.verdict === 'succeeded' || verdict.verdict === 'pass') {
+      updateJudgeVerdict(job.id, JSON.stringify(verdict));
       dbMarkStepCompleted(step.id);
-      // Cancel any stale pending steps (e.g., duplicate recovery steps appended before this judge ran).
-      // The loop exits when getNextPendingStep returns null — this ensures a clean exit.
-        const cancelled = cancelPendingSteps(job.id, 'Judge passed - remaining steps skipped');
-        if (cancelled > 0) {
-          process.stderr.write(
-            `[runner] Judge passed, cancelled ${cancelled} stale pending step(s) [job=${job.id}]\n`,
-          );
-        }
+      this.finishSuccessfulJudgeStep(job, projectDir, phaseNumber);
+      return;
+    }
 
-        const jobSteps = getJobSteps(job.id);
-        const uiReview = isUiReviewEligible(job, jobSteps, projectDir, phaseNumber);
-        const hasUiReviewStep = jobSteps.some((jobStep) => jobStep.command === 'ui-review');
+    if (verdict.verdict === 'gaps_found' || verdict.verdict === 'doubting' || verdict.verdict === 'partial') {
+      const verificationSnapshot = readLatestVerificationArtifact(projectDir, phaseNumber);
+      const verificationRouting = deriveVerificationRouting(verificationSnapshot);
+      const routedVerdict: JudgeVerdict = {
+        ...verdict,
+        verificationStatus: verificationRouting.verificationStatus,
+        actionableGapCount: verificationRouting.actionableGapCount,
+        humanVerificationCount: verificationRouting.humanVerificationCount,
+        routingDecision: verificationRouting.routingDecision,
+        routingReason: verificationRouting.routingReason,
+        artifactPath: verificationRouting.artifactPath,
+        artifactAvailable: verificationRouting.artifactAvailable,
+        unavailableReason: verificationRouting.unavailableReason,
+      };
 
-        if (uiReview.eligible && !uiReview.uiReviewPath && !hasUiReviewStep) {
-          appendSteps(
-            job.id,
-            [{ command: 'ui-review', args: String(phaseNumber) }],
-            'delegation',
-            'Advisory UI audit after successful judge pass',
-          );
-          process.stderr.write(`[runner] ui-review queued as advisory audit [job=${job.id}]\n`);
-        }
+      updateJudgeVerdict(job.id, JSON.stringify(routedVerdict));
+      dbMarkStepCompleted(step.id);
 
+      if (verificationRouting.routingDecision === 'complete') {
+        this.log(`Judge completion routed from structured verification: ${verificationRouting.routingReason}`);
+        this.finishSuccessfulJudgeStep(job, projectDir, phaseNumber);
         return;
       }
 
-    if (verdict.verdict === 'gaps_found' || verdict.verdict === 'doubting' || verdict.verdict === 'partial') {
-      dbMarkStepCompleted(step.id);
-
-      // Check if all remaining gaps are human-only review items
-      if (isHumanOnlyRemaining(verdict)) {
-        const checklist = verdict.gaps && verdict.gaps.length > 0
-          ? verdict.gaps.join('\n- ')
-          : verdict.reason;
-        markCompletedPendingReview(job.id, checklist ? `Review items:\n- ${checklist}` : undefined);
+      if (verificationRouting.routingDecision === 'human-review') {
+        const checklist = formatHumanVerificationChecklist(verificationSnapshot, verificationRouting.routingReason);
+        markCompletedPendingReview(job.id, checklist);
         this.collectActualModels(job.id);
         await this.captureRecoveryHead(job.id, projectDir);
         const reviewJob = getJob(job.id);
@@ -1372,15 +1375,54 @@ class Runner {
         return;
       }
 
-      // Re-delegate for gap closure
-      await this.handleGapsContinuation(job, projectDir, verdict);
+      if (verificationRouting.routingDecision === 'review-hold') {
+        const holdReason = formatVerificationHoldReason(
+          verificationRouting.routingReason,
+          verificationRouting.unavailableReason,
+          verificationRouting.artifactPath,
+        );
+        markReviewHold(job.id, holdReason);
+        this.log(`Judge placed job on review hold from structured verification: ${holdReason}`);
+        this.collectActualModels(job.id);
+        await this.captureRecoveryHead(job.id, projectDir);
+        const heldJob = getJob(job.id);
+        if (heldJob) notifyJobCompletion(heldJob).catch(() => {});
+        return;
+      }
+
+      this.log(`Judge routed to gap continuation from structured verification: ${verificationRouting.routingReason}`);
+      await this.handleGapsContinuation(job, projectDir, routedVerdict);
       return;
     }
 
     // verdict === 'failed' or 'fail'
+    updateJudgeVerdict(job.id, JSON.stringify(verdict));
     dbMarkStepCompleted(step.id);
     // Re-delegate for failure recovery
     await this.handleFailedContinuation(job, projectDir, verdict);
+  }
+
+  private finishSuccessfulJudgeStep(job: Job, projectDir: string, phaseNumber: number): void {
+    const cancelled = cancelPendingSteps(job.id, 'Judge passed - remaining steps skipped');
+    if (cancelled > 0) {
+      process.stderr.write(
+        `[runner] Judge passed, cancelled ${cancelled} stale pending step(s) [job=${job.id}]\n`,
+      );
+    }
+
+    const jobSteps = getJobSteps(job.id);
+    const uiReview = isUiReviewEligible(job, jobSteps, projectDir, phaseNumber);
+    const hasUiReviewStep = jobSteps.some((jobStep) => jobStep.command === 'ui-review');
+
+    if (uiReview.eligible && !uiReview.uiReviewPath && !hasUiReviewStep) {
+      appendSteps(
+        job.id,
+        [{ command: 'ui-review', args: String(phaseNumber) }],
+        'delegation',
+        'Advisory UI audit after successful judge pass',
+      );
+      process.stderr.write(`[runner] ui-review queued as advisory audit [job=${job.id}]\n`);
+    }
   }
 
   // ── Continuation Handlers ──────────────────────────────────────────────
@@ -2789,7 +2831,6 @@ export { _resetSpawnRateLimit };
 export { isWellFormedVerificationEvidence as _isWellFormedVerificationEvidence };
 
 export { hasSystemdRunUser, getDynamicMaxParallel, _resetSystemdRunCache };
-export { isHumanOnlyRemaining };
 
 /**
  * Build the step-cap failure message with per-source breakdown.
