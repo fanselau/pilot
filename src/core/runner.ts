@@ -87,6 +87,12 @@ import {
 import {
   installSkillsForJob,
 } from './skills.js';
+import {
+  extractPhaseNumberFromStepArgs,
+  findExistingUiSpec,
+  isUiReviewEligible,
+  resolveUiArtifactOutcome,
+} from './ui-review.js';
 import { notifyJobCompletion } from './callback.js';
 import {
   openDb,
@@ -190,41 +196,11 @@ function hasNativeFast(projectDir: string): boolean {
 }
 
 /**
- * Check if a UI-SPEC.md already exists for the given phase in a project's .planning/ directory.
- * Returns the path to the UI-SPEC if found, null otherwise.
- *
- * The UI-SPEC file follows the pattern: {phase_dir}/{padded_phase}-UI-SPEC.md
- * in the phase directory under .planning/phases/.
- */
-function findExistingUiSpec(projectDir: string, phaseNumber: number): string | null {
-  try {
-    const phasesDir = path.join(projectDir, '.planning', 'phases');
-    if (!existsSync(phasesDir)) return null;
-    const entries = readdirSync(phasesDir);
-    // Find the phase directory matching this phase number (format: NN-slug or N-slug)
-    const phasePrefix = String(phaseNumber);
-    const phaseDir = entries.find(e => {
-      const match = e.match(/^(\d+)-/);
-      return match && match[1] === phasePrefix;
-    });
-    if (!phaseDir) return null;
-    const phasePath = path.join(phasesDir, phaseDir);
-    const phaseFiles = readdirSync(phasePath);
-    const uiSpec = phaseFiles.find(f => f.endsWith('-UI-SPEC.md'));
-    if (uiSpec) return path.join(phasePath, uiSpec);
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Check if a ui-phase command has completed its work by producing the UI-SPEC artifact.
  * Returns true when `command` is 'ui-phase' AND a matching UI-SPEC.md exists on disk.
  */
 function isUiPhaseArtifactComplete(command: string, projectDir: string, phaseNumber: number): boolean {
-  if (command !== 'ui-phase') return false;
-  return findExistingUiSpec(projectDir, phaseNumber) !== null;
+  return command === 'ui-phase' && resolveUiArtifactOutcome(command, String(phaseNumber), projectDir) === 'completed';
 }
 
 /**
@@ -239,12 +215,8 @@ function resolveHungUiPhaseOutcome(
   command: string,
   args: string,
   projectDir: string,
-): 'completed' | 'failed' {
-  if (command !== 'ui-phase') return 'failed';
-  const phaseMatch = args.match(/^(\d+)/);
-  const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
-  if (phaseNum === null) return 'failed';
-  return isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum) ? 'completed' : 'failed';
+): 'completed' | 'skipped' | 'failed' {
+  return resolveUiArtifactOutcome(command, args, projectDir);
 }
 
 function readVerificationEvidence(projectDir: string, phaseNumber: number): string | null {
@@ -1173,11 +1145,32 @@ class Runner {
       }
     } catch (err) {
       if (err instanceof HungSessionError) {
+        const sessionId = findSessionByTitle(title);
+        const artifactOutcome = resolveUiArtifactOutcome(step.command, step.args, projectDir);
+        if (artifactOutcome === 'completed') {
+          if (step.command === 'ui-phase') {
+            const phaseMatch = step.args.match(/^(\d+)/);
+            process.stderr.write(
+              `[runner] ui-phase completed (hung artifact recovery: UI-SPEC exists for phase ${phaseMatch?.[1]}) — handing off to plan-phase [job=${job.id}]\n`,
+            );
+          }
+          dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+          return;
+        }
+        if (artifactOutcome === 'skipped') {
+          dbMarkStepSkipped(
+            step.id,
+            `ui-review skipped: hung on ${err.hungReason} before producing UI-REVIEW artifact`,
+            sessionId ?? undefined,
+            title,
+          );
+          return;
+        }
+
         // Artifact-based recovery for ui-phase: if the session produced the UI-SPEC
         // artifact before hitting an interactive prompt (expected — GSD ui-phase has
         // review checkpoints), treat as completed instead of failed.
         if (resolveHungUiPhaseOutcome(step.command, step.args, projectDir) === 'completed') {
-          const sessionId = findSessionByTitle(title);
           const phaseMatch = step.args.match(/^(\d+)/);
           process.stderr.write(
             `[runner] ui-phase completed (hung artifact recovery: UI-SPEC exists for phase ${phaseMatch?.[1]}) — handing off to plan-phase [job=${job.id}]\n`,
@@ -1189,7 +1182,6 @@ class Runner {
         // If remaining delegation steps already cover the continuation (plan-phase →
         // execute-phase → judge), skip re-delegation to avoid appending duplicate steps.
         // ui-phase is an optional quality step; the plan-phase works without it.
-        const sessionId = findSessionByTitle(title);
         if (step.command === 'ui-phase' && getPendingStepCount(job.id) > 0) {
           dbMarkStepSkipped(
             step.id,
@@ -1208,6 +1200,28 @@ class Runner {
         // Re-delegate for continuation
         await this.handleHungContinuation(job, projectDir, step, err);
       } else {
+        const sessionId = findSessionByTitle(title);
+        const artifactOutcome = resolveUiArtifactOutcome(step.command, step.args, projectDir);
+        if (artifactOutcome === 'completed') {
+          if (step.command === 'ui-phase') {
+            const phaseNumber = extractPhaseNumberFromStepArgs(step.args);
+            process.stderr.write(
+              `[runner] ui-phase completed (artifact recovery: UI-SPEC exists for phase ${phaseNumber ?? 'unknown'}) — handing off to plan-phase [job=${job.id}]\n`,
+            );
+          }
+          dbMarkStepCompleted(step.id, sessionId ?? undefined, title);
+          return;
+        }
+        if (artifactOutcome === 'skipped') {
+          dbMarkStepSkipped(
+            step.id,
+            'ui-review skipped: command exited before producing UI-REVIEW artifact',
+            sessionId ?? undefined,
+            title,
+          );
+          return;
+        }
+
         // Artifact-based recovery: if this was a ui-phase step and the UI-SPEC was
         // successfully created (but the process died non-cleanly, e.g., WAL flush race),
         // treat it as completed rather than failing the entire job.
@@ -1215,7 +1229,6 @@ class Runner {
           const phaseMatch = step.args.match(/^(\d+)/);
           const phaseNum = phaseMatch ? parseInt(phaseMatch[1], 10) : null;
           if (phaseNum !== null && isUiPhaseArtifactComplete('ui-phase', projectDir, phaseNum)) {
-            const sessionId = findSessionByTitle(title);
             process.stderr.write(
               `[runner] ui-phase completed (artifact recovery: UI-SPEC exists for phase ${phaseNum}) — handing off to plan-phase [job=${job.id}]\n`,
             );
@@ -1223,7 +1236,6 @@ class Runner {
             return; // Step completed via artifact detection — continue to next step (plan-phase)
           }
         }
-        const sessionId = findSessionByTitle(title);
         dbMarkStepFailed(step.id, errMsg(err), sessionId ?? undefined, title);
         throw err; // Propagate non-hung errors to launch() catch
       }
@@ -1276,14 +1288,29 @@ class Runner {
       dbMarkStepCompleted(step.id);
       // Cancel any stale pending steps (e.g., duplicate recovery steps appended before this judge ran).
       // The loop exits when getNextPendingStep returns null — this ensures a clean exit.
-      const cancelled = cancelPendingSteps(job.id, 'Judge passed — remaining steps skipped');
-      if (cancelled > 0) {
-        process.stderr.write(
-          `[runner] Judge passed, cancelled ${cancelled} stale pending step(s) [job=${job.id}]\n`,
-        );
+        const cancelled = cancelPendingSteps(job.id, 'Judge passed - remaining steps skipped');
+        if (cancelled > 0) {
+          process.stderr.write(
+            `[runner] Judge passed, cancelled ${cancelled} stale pending step(s) [job=${job.id}]\n`,
+          );
+        }
+
+        const jobSteps = getJobSteps(job.id);
+        const uiReview = isUiReviewEligible(job, jobSteps, projectDir, phaseNumber);
+        const hasUiReviewStep = jobSteps.some((jobStep) => jobStep.command === 'ui-review');
+
+        if (uiReview.eligible && !uiReview.uiReviewPath && !hasUiReviewStep) {
+          appendSteps(
+            job.id,
+            [{ command: 'ui-review', args: String(phaseNumber) }],
+            'delegation',
+            'Advisory UI audit after successful judge pass',
+          );
+          process.stderr.write(`[runner] ui-review queued as advisory audit [job=${job.id}]\n`);
+        }
+
+        return;
       }
-      return;
-    }
 
     if (verdict.verdict === 'gaps_found' || verdict.verdict === 'doubting' || verdict.verdict === 'partial') {
       dbMarkStepCompleted(step.id);
@@ -1774,12 +1801,12 @@ class Runner {
     const steps = getJobSteps(jobId);
     // Look through steps in reverse (most recent first)
     for (let i = steps.length - 1; i >= 0; i--) {
-      const step = steps[i];
-      if (step.command === 'plan-phase' || step.command === 'execute-phase') {
-        const match = step.args.match(/^(\d+)/);
-        if (match) return parseInt(match[1], 10);
+        const step = steps[i];
+        if (step.command === 'plan-phase' || step.command === 'execute-phase') {
+          const phaseNumber = extractPhaseNumberFromStepArgs(step.args);
+          if (phaseNumber !== null) return phaseNumber;
+        }
       }
-    }
     return null;
   }
 

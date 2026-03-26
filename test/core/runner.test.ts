@@ -957,6 +957,7 @@ import {
   getJobSteps,
   markRunning,
   markStepRunning,
+  updateDelegationPayload,
 } from '../../src/core/db.js';
 
 describe('ui-review runner behavior', () => {
@@ -980,6 +981,10 @@ describe('ui-review runner behavior', () => {
       'balanced',
       'claude-only',
     );
+    updateDelegationPayload(job.id, {
+      intent: { type: 'plan-and-execute', phaseNumber: 98, uiPhase: true },
+      reasoning: 'ui-heavy phase',
+    });
 
     createPendingStep(job.id, 0, 'execute-phase', '98 --auto', 'delegation');
     const judgeStepId = createPendingStep(job.id, 1, 'judge', '', 'delegation');
