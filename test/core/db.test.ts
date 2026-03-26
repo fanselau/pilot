@@ -43,6 +43,7 @@ import {
   getAllProjects,
   updateProjectOwner,
   updateProjectNotifyOpenClawRoute,
+  updateProjectGsdState,
   blockProject,
   unblockProject,
   // Phase 67 hung helpers
@@ -1360,6 +1361,78 @@ describe('managed projects', () => {
       const project = getProject('/path/to/proj');
       expect(project).not.toBeNull();
       expect(project!.notifyOpenClawRoute).toBeNull();
+    });
+  });
+
+  describe('project gsd state', () => {
+    it('round-trips project gsd state through the Project type', () => {
+      registerProject('/path/to/proj', 'owner');
+
+      updateProjectGsdState('/path/to/proj', {
+        approvedVersion: '1.24.0',
+        installedVersion: '1.23.0',
+        driftStatus: 'behind',
+        checkedAt: '2026-03-26T12:00:00Z',
+        error: 'version drift',
+      });
+
+      expect(getProject('/path/to/proj')).toMatchObject({
+        approvedGsdVersion: '1.24.0',
+        installedGsdVersion: '1.23.0',
+        gsdDriftStatus: 'behind',
+        gsdVersionCheckedAt: '2026-03-26T12:00:00Z',
+        gsdVersionError: 'version drift',
+      });
+    });
+
+    it('stores exact values and clears them when state is null', () => {
+      const db = _getTestDb();
+      registerProject('/path/to/proj', 'owner');
+
+      updateProjectGsdState('/path/to/proj', {
+        approvedVersion: '1.24.0',
+        installedVersion: '1.24.0',
+        driftStatus: 'matches',
+        checkedAt: '2026-03-26T12:00:00Z',
+        error: null,
+      });
+
+      expect(db.prepare(`
+        SELECT approved_gsd_version, installed_gsd_version, gsd_drift_status, gsd_version_checked_at, gsd_version_error
+        FROM projects WHERE path = ?
+      `).get('/path/to/proj')).toEqual({
+        approved_gsd_version: '1.24.0',
+        installed_gsd_version: '1.24.0',
+        gsd_drift_status: 'matches',
+        gsd_version_checked_at: '2026-03-26T12:00:00Z',
+        gsd_version_error: null,
+      });
+
+      updateProjectGsdState('/path/to/proj', null);
+
+      expect(getProject('/path/to/proj')).toMatchObject({
+        approvedGsdVersion: null,
+        installedGsdVersion: null,
+        gsdDriftStatus: null,
+        gsdVersionCheckedAt: null,
+        gsdVersionError: null,
+      });
+    });
+
+    it('parses legacy project rows safely when managed-version fields are null', () => {
+      const db = _getTestDb();
+      db.prepare(`
+        INSERT INTO projects (path, owner, status, blocked_reason, blocked_at, created_at)
+        VALUES (?, ?, 'active', NULL, NULL, datetime('now'))
+      `).run('/legacy-project', 'legacy-owner');
+
+      expect(getProject('/legacy-project')).toMatchObject({
+        approvedGsdVersion: null,
+        installedGsdVersion: null,
+        gsdDriftStatus: null,
+        gsdVersionCheckedAt: null,
+        gsdVersionError: null,
+      });
     });
   });
 
