@@ -332,6 +332,11 @@ export interface Project {
   blockedAt: string | null;  // ISO 8601
   createdAt: string;
   defaultCategories: string[] | null;  // project-level default skill categories
+  approvedGsdVersion: string | null;
+  installedGsdVersion: string | null;
+  gsdDriftStatus: ManagedGsdDriftStatus | null;
+  gsdVersionCheckedAt: string | null;
+  gsdVersionError: string | null;
 }
 
 export interface ProjectWithStats {

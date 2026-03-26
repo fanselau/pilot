@@ -28,6 +28,7 @@ import type {
   StepSource,
 } from './types.js';
 import { AGENT_MODELS } from './models.js';
+import type { ProjectGsdState } from './managed-gsd.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -129,10 +130,17 @@ const CREATE_PROJECTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS projects (
   path TEXT PRIMARY KEY,
   owner TEXT,
+  notify_openclaw_route TEXT DEFAULT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'blocked')),
   blocked_reason TEXT,
   blocked_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  default_categories TEXT DEFAULT NULL,
+  approved_gsd_version TEXT DEFAULT NULL,
+  installed_gsd_version TEXT DEFAULT NULL,
+  gsd_drift_status TEXT DEFAULT NULL,
+  gsd_version_checked_at TEXT DEFAULT NULL,
+  gsd_version_error TEXT DEFAULT NULL
 );
 `;
 
@@ -238,6 +246,11 @@ interface ProjectRow {
   blocked_at: string | null;
   created_at: string;
   default_categories: string | null;
+  approved_gsd_version: string | null;
+  installed_gsd_version: string | null;
+  gsd_drift_status: string | null;
+  gsd_version_checked_at: string | null;
+  gsd_version_error: string | null;
 }
 
 function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDeliverRoute | null {
@@ -278,6 +291,11 @@ function rowToProject(row: ProjectRow): Project {
     blockedAt: row.blocked_at,
     createdAt: row.created_at,
     defaultCategories: row.default_categories ? JSON.parse(row.default_categories) as string[] : null,
+    approvedGsdVersion: row.approved_gsd_version ?? null,
+    installedGsdVersion: row.installed_gsd_version ?? null,
+    gsdDriftStatus: (row.gsd_drift_status as Project['gsdDriftStatus']) ?? null,
+    gsdVersionCheckedAt: row.gsd_version_checked_at ?? null,
+    gsdVersionError: row.gsd_version_error ?? null,
   };
 }
 
@@ -678,7 +696,12 @@ function migrateSchema(db: DatabaseType): void {
     'ALTER TABLE job_steps ADD COLUMN reason TEXT',
     'ALTER TABLE job_steps ADD COLUMN error TEXT',
     // Phase 83: resumed review_hold pickup marker
-    'ALTER TABLE jobs ADD COLUMN resumed_from_hold INTEGER NOT NULL DEFAULT 0',
+     'ALTER TABLE jobs ADD COLUMN resumed_from_hold INTEGER NOT NULL DEFAULT 0',
+     'ALTER TABLE projects ADD COLUMN approved_gsd_version TEXT DEFAULT NULL',
+     'ALTER TABLE projects ADD COLUMN installed_gsd_version TEXT DEFAULT NULL',
+     'ALTER TABLE projects ADD COLUMN gsd_drift_status TEXT DEFAULT NULL',
+     'ALTER TABLE projects ADD COLUMN gsd_version_checked_at TEXT DEFAULT NULL',
+     'ALTER TABLE projects ADD COLUMN gsd_version_error TEXT DEFAULT NULL',
   ];
   for (const sql of migrations) {
     try {
@@ -1917,6 +1940,26 @@ function updateProjectDefaultCategories(path: string, categories: string[] | nul
   );
 }
 
+function updateProjectGsdState(path: string, state: ProjectGsdState | null): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE projects
+    SET approved_gsd_version = ?,
+        installed_gsd_version = ?,
+        gsd_drift_status = ?,
+        gsd_version_checked_at = ?,
+        gsd_version_error = ?
+    WHERE path = ?
+  `).run(
+    state?.approvedVersion ?? null,
+    state?.installedVersion ?? null,
+    state?.driftStatus ?? null,
+    state?.checkedAt ?? null,
+    state?.error ?? null,
+    path,
+  );
+}
+
 /**
  * Block a project: set status='blocked', record reason and timestamp.
  */
@@ -2134,6 +2177,7 @@ export {
   updateProjectOwner,
   updateProjectNotifyOpenClawRoute,
   updateProjectDefaultCategories,
+  updateProjectGsdState,
   blockProject,
   unblockProject,
   deregisterProject,
