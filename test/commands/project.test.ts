@@ -23,6 +23,12 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     blockedReason: null,
     blockedAt: null,
     createdAt: '2026-03-05T10:00:00',
+    defaultCategories: null,
+    approvedGsdVersion: null,
+    installedGsdVersion: null,
+    gsdDriftStatus: null,
+    gsdVersionCheckedAt: null,
+    gsdVersionError: null,
     ...overrides,
   };
 }
@@ -43,6 +49,7 @@ function makeCounts(overrides: Partial<ProjectJobCounts> = {}): ProjectJobCounts
 let mockProject: Project | null = null;
 let mockAllProjects: Project[] = [];
 let mockCounts: ProjectJobCounts = makeCounts();
+const mockInspectProjectGsdState = vi.fn();
 
 const mockGetProject = vi.fn();
 const mockBlockProject = vi.fn();
@@ -60,6 +67,10 @@ vi.mock('../../src/core/db.js', () => ({
   updateProjectNotifyOpenClawRoute: (path: string, route: unknown) => mockUpdateProjectNotifyOpenClawRoute(path, route),
   getProjectJobCounts: (path: string) => mockGetProjectJobCounts(path),
   getAllProjects: () => mockGetAllProjects(),
+}));
+
+vi.mock('../../src/core/managed-gsd.js', () => ({
+  inspectProjectGsdState: (...args: unknown[]) => mockInspectProjectGsdState(...args),
 }));
 
 let mockJsonMode = false;
@@ -106,6 +117,13 @@ beforeEach(() => {
   mockGetProject.mockImplementation(() => mockProject);
   mockGetProjectJobCounts.mockImplementation(() => mockCounts);
   mockGetAllProjects.mockImplementation(() => mockAllProjects);
+  mockInspectProjectGsdState.mockResolvedValue({
+    approvedVersion: '1.24.0',
+    installedVersion: '1.24.0',
+    driftStatus: 'matches',
+    checkedAt: '2026-03-26T12:00:00Z',
+    error: null,
+  });
 
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
@@ -165,6 +183,11 @@ describe('projectCommand', () => {
     expect(proj.owner).toBe('agent:main:main');
     expect(proj.status).toBe('active');
     expect(proj.jobs).toEqual(mockCounts);
+    expect(proj.approvedGsdVersion).toBe('1.24.0');
+    expect(proj.installedGsdVersion).toBe('1.24.0');
+    expect(proj.gsdDriftStatus).toBe('matches');
+    expect(proj.gsdVersionCheckedAt).toBe('2026-03-26T12:00:00Z');
+    expect(proj.gsdVersionError).toBeNull();
   });
 
   // Test 4: --block blocks project (human)
@@ -359,6 +382,56 @@ describe('projectCommand', () => {
     expect(output).toContain('tests failing');
     expect(output).toContain('--unblock');
   });
+
+  it('shows GSD version details and drift in human mode', async () => {
+    mockProject = makeProject({ status: 'active' });
+    mockInspectProjectGsdState.mockResolvedValue({
+      approvedVersion: '1.24.0',
+      installedVersion: '1.23.0',
+      driftStatus: 'behind',
+      checkedAt: '2026-03-26T12:00:00Z',
+      error: null,
+    });
+
+    await projectCommand('/test/project', {});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('approved gsd:');
+    expect(output).toContain('installed gsd:');
+    expect(output).toContain('drift:');
+    expect(output).toContain('behind');
+  });
+
+  it('surfaces ahead and unknown GSD version notes without crashing', async () => {
+    mockProject = makeProject({ status: 'active' });
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: '1.25.0',
+      driftStatus: 'ahead',
+      checkedAt: '2026-03-26T12:00:00Z',
+      error: null,
+    });
+
+    await projectCommand('/test/project', {});
+
+    let output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('ahead');
+
+    mockOutputHuman.mockClear();
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: null,
+      driftStatus: 'unknown',
+      checkedAt: '2026-03-26T12:00:00Z',
+      error: 'unknown / unreadable version',
+    });
+
+    await projectCommand('/test/project', {});
+
+    output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('version note:');
+    expect(output).toContain('unknown / unreadable version');
+  });
 });
 
 // ── projectsCommand (enhanced) ─────────────────────────────────────────────
@@ -405,6 +478,7 @@ describe('projectsCommand', () => {
     expect(output).toContain('3 pending');
     expect(output).toContain('2 running');
     expect(output).toContain('1 failed');
+    expect(output).toContain('gsd:');
   });
 
   // Test: Job counts in JSON output
@@ -417,9 +491,22 @@ describe('projectsCommand', () => {
 
     expect(mockOutputJson).toHaveBeenCalledOnce();
     const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    const projects = payload.projects as Array<{ path: string; jobs: ProjectJobCounts }>;
+    const projects = payload.projects as Array<{
+      path: string;
+      jobs: ProjectJobCounts;
+      approvedGsdVersion: string | null;
+      installedGsdVersion: string | null;
+      gsdDriftStatus: string | null;
+      gsdVersionCheckedAt: string | null;
+      gsdVersionError: string | null;
+    }>;
     expect(projects).toHaveLength(1);
     expect(projects[0].jobs).toEqual(mockCounts);
+    expect(projects[0].approvedGsdVersion).toBe('1.24.0');
+    expect(projects[0].installedGsdVersion).toBe('1.24.0');
+    expect(projects[0].gsdDriftStatus).toBe('matches');
+    expect(projects[0].gsdVersionCheckedAt).toBe('2026-03-26T12:00:00Z');
+    expect(projects[0].gsdVersionError).toBeNull();
   });
 
   // Test: empty state without --blocked
