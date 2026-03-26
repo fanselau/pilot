@@ -1761,3 +1761,14 @@ Plans:
 Wave structure:
 - Wave 1: 98-01 (core helper contract + runner pass-path/advisory recovery)
 - Wave 2: 98-02 + 98-03 (CLI observability and web semantics, both depend on 98-01 and do not overlap)
+
+### Phase 99: "Pilot — Runtime `agent_skills` Patching for Per-Job Skill Delivery" @/home/luca/dev/punchlab/pilot/requirements/pilot-runtime-agent-skills-patching.md
+
+**Goal:** Keep Pilot's category-based skill system as the source of truth while adding a reversible runtime `agent_skills` transport layer that writes explicit per-agent skill paths into `.planning/config.json` for the current job, restores the original config afterward, and leaves operators with concise, inspectable evidence of what was injected.
+**Requirements**: ASKILL-01, ASKILL-02, ASKILL-03, ASKILL-04, ASKILL-05
+**Depends on:** Phase 98
+**Plans:** 1/2 plans executed
+
+Plans:
+- [x] 99-01-PLAN.md - Runtime agent_skills foundation: snapshot schema, config mutation helper, and apply/restore core
+- [ ] 99-02-PLAN.md - Runner lifecycle integration and `pilot info` observability for runtime skill patching

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 98-02-PLAN.md
-last_updated: "2026-03-26T14:53:23.173Z"
+status: executing
+stopped_at: Completed 99-01-PLAN.md
+last_updated: "2026-03-26T15:27:54.677Z"
 progress:
-  total_phases: 98
+  total_phases: 99
   completed_phases: 55
-  total_plans: 193
-  completed_plans: 181
+  total_plans: 195
+  completed_plans: 182
 ---
 
 # State
@@ -20,19 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 98
-Plan: Not started
+Phase: 99 (pilot-runtime-agent-skills-patching-for-per-job-skill-delivery-home-luca-dev-punchlab-pilot-requirements-pilot-runtime-agent-skills-patching-md) — EXECUTING
+Plan: 2 of 2
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
-**Current focus:** Phase 98 — pilot-add-ui-review-step-to-phase-lifecycle-home-luca-dev-punchlab-pilot-requirements-pilot-add-ui-review-step-md
+**Current focus:** Phase 99 — pilot-runtime-agent-skills-patching-for-per-job-skill-delivery-home-luca-dev-punchlab-pilot-requirements-pilot-runtime-agent-skills-patching-md
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Milestone complete
+- **Status:** Ready to execute
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -425,6 +425,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - Phase 96 added: Mobile summary panel must expose steps and subsession navigation clearly
 - Phase 97 added: Settings Page — Full Configuration Management in Web UI
 - Phase 98 added: Pilot — Add UI Review Step to Phase Lifecycle @/home/luca/dev/punchlab/pilot/requirements/pilot-add-ui-review-step.md
+- Phase 99 added: "Pilot — Runtime `agent_skills` Patching for Per-Job Skill Delivery" @/home/luca/dev/punchlab/pilot/requirements/pilot-runtime-agent-skills-patching.md
 
 ## Decisions
 
@@ -1040,6 +1041,9 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 98]: Runner-style ui-review titles are parsed directly in web helpers so branch headers match core timeline labels
 - [Phase 98]: Keep ui-review additive in status rows
 - [Phase 98]: Resolve ui-review detail text from step status plus UI-REVIEW.md artifact presence
+- [Phase 99]: Persist runtime skill injection as structured job snapshot metadata
+- [Phase 99]: Reuse mutatePlanningConfig() as the shared lock-safe atomic config writer
+- [Phase 99]: Merge user agent skill paths first, append normalized Pilot paths second, then restore exact prior state
 
 ## Blockers/Concerns Carried Forward
 
@@ -1048,6 +1052,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-26T14:46:44.890Z
-Stopped at: Completed 98-02-PLAN.md
+Last session: 2026-03-26T15:27:54.669Z
+Stopped at: Completed 99-01-PLAN.md
 Resume file: None
