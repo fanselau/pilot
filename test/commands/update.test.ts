@@ -240,6 +240,10 @@ describe('updateCommand — blocked projects skipped', () => {
       { path: '/project/blocked', status: 'blocked', owner: null },
       { path: '/project/active', status: 'active', owner: null },
     ];
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:01.000Z', error: null });
 
     await updateCommand();
 
