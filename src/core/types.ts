@@ -150,6 +150,45 @@ export interface Job {
   lastHungReason: string | null; // Last hung reason for same-error detection
 }
 
+export type VerificationStatus = 'passed' | 'gaps_found' | 'human_needed' | 'unavailable' | 'unrecognized';
+
+export type VerificationRoutingDecision = 'complete' | 'continue-gaps' | 'human-review' | 'review-hold';
+
+export interface VerificationGap {
+  truth: string | null;
+  status: string | null;
+  reason: string | null;
+  artifacts: string[];
+  missing: string[];
+  actionable: boolean;
+}
+
+export interface HumanVerificationItem {
+  test: string | null;
+  expected: string | null;
+  whyHuman: string | null;
+}
+
+export interface VerificationArtifactSnapshot {
+  available: boolean;
+  verificationStatus: VerificationStatus;
+  artifactPath: string | null;
+  unavailableReason: string | null;
+  gaps: VerificationGap[];
+  humanVerification: HumanVerificationItem[];
+}
+
+export interface VerificationRoutingSnapshot {
+  verificationStatus: VerificationStatus;
+  actionableGapCount: number;
+  humanVerificationCount: number;
+  routingDecision: VerificationRoutingDecision;
+  routingReason: string;
+  artifactPath: string | null;
+  artifactAvailable: boolean;
+  unavailableReason: string | null;
+}
+
 // ── Job Observability + Cost Estimation ───────────────────────────────────
 
 export type ObservabilityDataStatus = 'available' | 'partial' | 'unavailable';
