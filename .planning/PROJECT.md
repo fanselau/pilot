@@ -60,8 +60,10 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 ## Current State
 
 - Phase 98 is complete.
+- Phase 100 is complete.
 - The phase lifecycle now supports an advisory post-judge `ui-review` step for UI-eligible phases.
 - Runner, CLI, and web timeline semantics all expose `ui-review` explicitly while judge remains the sole completion gate.
+- Pilot now manages GSD as an approved-version surface with explicit version authority, controlled setup/update behavior, and visible per-project drift reporting.
 
 ## Key Decisions
 
@@ -75,4 +77,4 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 | VERIFICATION.md primary + transcript secondary | VERIFICATION.md is structured machine-readable evidence; transcript is fallback | — Pending |
 
 ---
-*Last updated: 2026-03-26 after Phase 98 completion — advisory ui-review added to the phase lifecycle*
+*Last updated: 2026-03-26 after Phase 100 completion — managed GSD approved-version controls and drift visibility added*
