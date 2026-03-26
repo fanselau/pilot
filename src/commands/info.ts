@@ -757,7 +757,9 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       }
     }
     outputHuman('');
+  }
 
+  if (job.scope === 'phase' || uiReview.display !== 'not applicable') {
     outputHuman(`  ${dim(pad('UI Review:'))} ${uiReview.display}`);
     outputHuman('');
   }

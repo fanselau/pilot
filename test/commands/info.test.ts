@@ -15,6 +15,17 @@ vi.mock('../../src/core/config.js', () => ({
   resolveProjectDir: (project: string) => mockResolveProjectDir(project),
 }));
 
+const mockExtractPhaseNumberFromStepArgs = vi.fn((args: string) => {
+  const match = args.match(/^(\d+)/);
+  return match ? Number.parseInt(match[1], 10) : null;
+});
+const mockFindExistingUiReview = vi.fn();
+
+vi.mock('../../src/core/ui-review.js', () => ({
+  extractPhaseNumberFromStepArgs: (args: string) => mockExtractPhaseNumberFromStepArgs(args),
+  findExistingUiReview: (projectDir: string, phaseNumber: number) => mockFindExistingUiReview(projectDir, phaseNumber),
+}));
+
 const mockIsGitWorktree = vi.fn();
 const mockIsWorktreeDirty = vi.fn();
 const mockResolveCommitOrNull = vi.fn();
@@ -177,6 +188,7 @@ describe('infoCommand recovery visibility', () => {
 
     mockFindSessionByTitle.mockReturnValue(null);
     mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
+    mockFindExistingUiReview.mockReturnValue(null);
 
     mockResolveAllAgentModels.mockReturnValue(resolvedModels);
     mockBuildJobObservability.mockReturnValue(makeObservability());
@@ -458,6 +470,7 @@ describe('infoCommand recovery visibility', () => {
 
   it('shows UI Review completed path when the advisory artifact exists', async () => {
     mockGetJob.mockReturnValue(makeJob({ scope: 'phase' }));
+    mockFindExistingUiReview.mockReturnValue('/resolved/my-project/.planning/phases/98-ui-review-lifecycle/98-UI-REVIEW.md');
     mockGetJobSteps.mockReturnValue([
       {
         id: 1,
@@ -494,7 +507,8 @@ describe('infoCommand recovery visibility', () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('UI Review: completed - /resolved/my-project/.planning/phases/98-ui-phase/98-UI-REVIEW.md');
+    expect(output).toContain('UI Review:');
+    expect(output).toContain('completed - /resolved/my-project/.planning/phases/98-ui-review-lifecycle/98-UI-REVIEW.md');
   });
 
   it('shows skipped UI Review without turning the job into a failure', async () => {
@@ -535,7 +549,8 @@ describe('infoCommand recovery visibility', () => {
     await infoCommand('ab12', {});
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('UI Review: skipped - advisory audit did not produce UI-REVIEW.md');
+    expect(output).toContain('UI Review:');
+    expect(output).toContain('skipped - advisory audit did not produce UI-REVIEW.md');
     expect(output).toContain('Outcome: job is not failed/cancelled');
   });
 });
