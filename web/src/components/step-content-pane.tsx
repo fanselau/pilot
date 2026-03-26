@@ -222,7 +222,7 @@ function StepGroupSection({
             {group.status}
           </Badge>
           {synth.model && (
-            <Badge variant="outline" size="sm" className="font-mono text-[10px] max-w-[160px] truncate">
+            <Badge variant="outline" size="sm" className="font-mono text-[10px] truncate">
               {synth.model}
             </Badge>
           )}
@@ -281,44 +281,56 @@ function StepGroupSection({
         </div>
       )}
 
-      {/* Sections — Fragments so sticky headers are direct children of the step group */}
-      {sections.map((section, sectionIdx) => (
-        <Fragment key={`${section.sessionId}-${sectionIdx}`}>
-          {section.depth > 0 && (
-            <SubsessionHeader
-              section={section}
-              collapsed={collapsed.has(section.sessionId)}
-              onToggle={() => toggle(section.sessionId)}
-              subBgClass={config.subBgClass}
-              borderClass={borderClass}
-            />
-          )}
-          {!collapsed.has(section.sessionId) && (() => {
-            // Find the last assistant text message — typically the summary
-            let lastAssistantIdx = -1
-            for (let i = section.items.length - 1; i >= 0; i--) {
-              const it = section.items[i]
-              if (it.kind === 'activity' && it.role === 'assistant' && !it.isReasoning) {
-                lastAssistantIdx = i
-                break
-              }
+      {/* Find the last assistant message across ALL sections — the summary */}
+      {(() => {
+        // Build a set of (sectionIdx, itemIdx) for each section's last assistant msg
+        // But only the very LAST one across all sections gets the summary treatment
+        let lastSectionIdx = -1
+        let lastItemIdx = -1
+        for (let si = sections.length - 1; si >= 0; si--) {
+          const sec = sections[si]
+          for (let ii = sec.items.length - 1; ii >= 0; ii--) {
+            const it = sec.items[ii]
+            if (it.kind === 'activity' && it.role === 'assistant' && !it.isReasoning) {
+              lastSectionIdx = si
+              lastItemIdx = ii
+              break
             }
+          }
+          if (lastSectionIdx >= 0) break
+        }
 
-            return (
+        return sections.map((section, sectionIdx) => (
+          <Fragment key={`${section.sessionId}-${sectionIdx}`}>
+            {section.depth > 0 && (
+              <SubsessionHeader
+                section={section}
+                collapsed={collapsed.has(section.sessionId)}
+                onToggle={() => toggle(section.sessionId)}
+                subBgClass={config.subBgClass}
+                borderClass={borderClass}
+              />
+            )}
+            {!collapsed.has(section.sessionId) && (
               <div className={[
                 'space-y-1 max-w-full overflow-hidden',
                 section.depth > 0 ? `border-l-2 pl-2 ml-2 sm:pl-3 sm:ml-3 ${borderClass}` : 'px-3',
               ].join(' ')}>
                 {section.items.map((item, idx) => (
                   <div key={`${item.kind}-${item.partId}-${item.createdAt}`}>
-                    <TimelineItemRenderer item={item} isLastMessage={idx === lastAssistantIdx} accentClass={config.subBgClass} accentBorder={borderClass} />
+                    <TimelineItemRenderer
+                      item={item}
+                      isLastMessage={sectionIdx === lastSectionIdx && idx === lastItemIdx}
+                      accentClass={config.subBgClass}
+                      accentBorder={borderClass}
+                    />
                   </div>
                 ))}
               </div>
-            )
-          })()}
-        </Fragment>
-      ))}
+            )}
+          </Fragment>
+        ))
+      })()}
     </div>
   )
 }

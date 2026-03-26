@@ -118,9 +118,9 @@ function BashRow({ item }: { item: TimelineToolSummaryItem }) {
   return (
     <ToolChrome icon={Terminal} label="bash" detail={desc ?? undefined} status={item.toolStatus} time={item.createdAt}>
       {/* Command block */}
-      <div className="bg-zinc-950 rounded px-2.5 py-1.5 font-mono text-[11px] leading-snug whitespace-pre-wrap break-all">
-        <span className="text-emerald-500/60 select-none">$ </span>
-        <span className="text-zinc-300">{cmd}</span>
+      <div className="bg-muted/30 rounded px-2.5 py-1.5 font-mono text-[11px] leading-snug whitespace-pre-wrap break-all">
+        <span className="text-muted-foreground/40 select-none">$ </span>
+        <span className="text-foreground/80">{cmd}</span>
       </div>
 
       {/* Output section */}
@@ -137,7 +137,7 @@ function BashRow({ item }: { item: TimelineToolSummaryItem }) {
           </button>
 
           {showOutput && (
-            <div className={`rounded px-2.5 py-1.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all ${isErr ? 'bg-red-950/40 text-red-300/80' : 'bg-zinc-950/60 text-zinc-400'}`}>
+            <div className={`rounded px-2.5 py-1.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all ${isErr ? 'bg-red-500/[0.06] text-red-300' : 'bg-muted/20 text-muted-foreground/70'}`}>
               {more > 0 && !fullOutput ? outPreview : out}
               {more > 0 && !fullOutput && (
                 <div className="mt-1 pt-1 border-t border-zinc-800/50">
@@ -184,23 +184,23 @@ function EditRow({ item }: { item: TimelineToolSummaryItem }) {
           {showDiff && (
             <div className="grid grid-cols-2 gap-px rounded overflow-hidden border border-border/30 bg-border/20">
               {/* Old (removed) */}
-              <div className="bg-red-500/[0.06] min-w-0 overflow-hidden">
-                <div className="px-2 py-0.5 text-[9px] font-mono text-red-400/50 bg-red-500/10 border-b border-border/20 select-none">removed</div>
-                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-red-300/60 whitespace-pre-wrap break-all">
+              <div className="bg-red-500/[0.08] min-w-0 overflow-hidden">
+                <div className="px-2 py-0.5 text-[9px] font-mono text-red-400/70 bg-red-500/10 border-b border-border/20 select-none">removed</div>
+                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-red-300/90 whitespace-pre-wrap break-all">
                   {oldLines.slice(0, maxPreview).join('\n')}
                 </pre>
                 {oldLines.length > maxPreview && (
-                  <div className="px-2 pb-1 text-[9px] text-red-400/30">…{oldLines.length - maxPreview} more lines</div>
+                  <div className="px-2 pb-1 text-[9px] text-red-400/50">…{oldLines.length - maxPreview} more lines</div>
                 )}
               </div>
               {/* New (added) */}
-              <div className="bg-emerald-500/[0.06] min-w-0 overflow-hidden">
-                <div className="px-2 py-0.5 text-[9px] font-mono text-emerald-400/50 bg-emerald-500/10 border-b border-border/20 select-none">added</div>
-                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-emerald-300/60 whitespace-pre-wrap break-all">
+              <div className="bg-emerald-500/[0.08] min-w-0 overflow-hidden">
+                <div className="px-2 py-0.5 text-[9px] font-mono text-emerald-400/70 bg-emerald-500/10 border-b border-border/20 select-none">added</div>
+                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-emerald-300/90 whitespace-pre-wrap break-all">
                   {newLines.slice(0, maxPreview).join('\n')}
                 </pre>
                 {newLines.length > maxPreview && (
-                  <div className="px-2 pb-1 text-[9px] text-emerald-400/30">…{newLines.length - maxPreview} more lines</div>
+                  <div className="px-2 pb-1 text-[9px] text-emerald-400/50">…{newLines.length - maxPreview} more lines</div>
                 )}
               </div>
             </div>
@@ -208,7 +208,7 @@ function EditRow({ item }: { item: TimelineToolSummaryItem }) {
         </>
       )}
       {item.toolStatus === 'error' && item.toolOutput && (
-        <pre className="mt-1 font-mono text-[10px] text-red-300/70 whitespace-pre-wrap break-all bg-red-950/30 rounded px-2 py-1">{item.toolOutput}</pre>
+        <pre className="mt-1 font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all bg-red-500/[0.06] rounded px-2 py-1">{item.toolOutput}</pre>
       )}
     </ToolChrome>
   )
@@ -221,7 +221,7 @@ function WriteRow({ item }: { item: TimelineToolSummaryItem }) {
   return (
     <ToolChrome icon={FileText} label="write" detail={shortPath(item.toolInput ?? '')} status={item.toolStatus} time={item.createdAt}>
       {item.toolStatus === 'error' && out && (
-        <pre className="font-mono text-[10px] text-red-300/70 whitespace-pre-wrap break-all bg-red-950/30 rounded px-2 py-1">{out}</pre>
+        <pre className="font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all bg-red-500/[0.06] rounded px-2 py-1">{out}</pre>
       )}
       {item.toolStatus !== 'error' && out && (
         <>
@@ -231,7 +231,7 @@ function WriteRow({ item }: { item: TimelineToolSummaryItem }) {
             <span>preview</span>
           </button>
           {showOutput && (
-            <pre className="mt-0.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all text-muted-foreground/60 bg-zinc-950/60 rounded px-2.5 py-1.5">
+            <pre className="mt-0.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all text-muted-foreground/70 bg-muted/20 rounded px-2.5 py-1.5">
               {out}
             </pre>
           )}
@@ -245,7 +245,7 @@ function ReadRow({ item }: { item: TimelineToolSummaryItem }) {
   return (
     <ToolChrome icon={FolderOpen} label="read" detail={shortPath(item.toolInput ?? '')} status={item.toolStatus} time={item.createdAt}>
       {item.toolStatus === 'error' && item.toolOutput && (
-        <pre className="font-mono text-[10px] text-red-300/70 whitespace-pre-wrap break-all">{item.toolOutput}</pre>
+        <pre className="font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all">{item.toolOutput}</pre>
       )}
     </ToolChrome>
   )
@@ -260,7 +260,7 @@ function SearchRow({ item }: { item: TimelineToolSummaryItem }) {
   return (
     <ToolChrome icon={Search} label={item.tool} detail={detail} status={item.toolStatus} time={item.createdAt}>
       {item.toolStatus === 'error' && item.toolOutput && (
-        <pre className="font-mono text-[10px] text-red-300/70 whitespace-pre-wrap break-all">{item.toolOutput}</pre>
+        <pre className="font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all">{item.toolOutput}</pre>
       )}
     </ToolChrome>
   )
@@ -309,7 +309,7 @@ function GenericToolRow({ item }: { item: TimelineToolSummaryItem }) {
       )}
       {out && (
         expanded ? (
-          <pre className={`mt-1 font-mono text-[10px] whitespace-pre-wrap break-all leading-snug ${item.toolStatus === 'error' ? 'text-red-300/70' : 'text-muted-foreground/50'}`}>
+          <pre className={`mt-1 font-mono text-[10px] whitespace-pre-wrap break-all leading-snug ${item.toolStatus === 'error' ? 'text-red-300' : 'text-muted-foreground/50'}`}>
             {out}
           </pre>
         ) : (
@@ -342,17 +342,17 @@ export function ToolSummaryRow({ item }: { item: TimelineToolSummaryItem }) {
 
 const mdClass = [
   'max-w-none text-xs leading-snug',
-  '[&_p]:text-muted-foreground/85 [&_p]:my-0.5',
-  '[&_h1]:text-xs [&_h1]:font-bold [&_h1]:text-foreground/85 [&_h1]:mt-2 [&_h1]:mb-0.5',
-  '[&_h2]:text-xs [&_h2]:font-semibold [&_h2]:text-foreground/80 [&_h2]:mt-1.5 [&_h2]:mb-0.5',
-  '[&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground/75 [&_h3]:mt-1 [&_h3]:mb-0.5',
-  '[&_code]:text-[10px] [&_code]:font-mono [&_code]:bg-muted/70 [&_code]:px-1 [&_code]:py-px [&_code]:rounded [&_code]:text-foreground/80',
-  '[&_pre]:bg-zinc-950 [&_pre]:rounded [&_pre]:px-3 [&_pre]:py-2 [&_pre]:my-1 [&_pre]:text-[11px] [&_pre]:font-mono [&_pre]:leading-snug [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_pre]:text-zinc-300',
+  '[&_p]:text-muted-foreground [&_p]:my-0.5',
+  '[&_h1]:text-xs [&_h1]:font-bold [&_h1]:text-foreground/90 [&_h1]:mt-2 [&_h1]:mb-0.5',
+  '[&_h2]:text-xs [&_h2]:font-semibold [&_h2]:text-foreground/85 [&_h2]:mt-1.5 [&_h2]:mb-0.5',
+  '[&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground/80 [&_h3]:mt-1 [&_h3]:mb-0.5',
+  '[&_code]:text-[10px] [&_code]:font-mono [&_code]:bg-muted/40 [&_code]:px-1 [&_code]:py-px [&_code]:rounded [&_code]:text-foreground/70',
+  '[&_pre]:bg-muted/30 [&_pre]:rounded [&_pre]:px-3 [&_pre]:py-2 [&_pre]:my-1 [&_pre]:text-[11px] [&_pre]:font-mono [&_pre]:leading-snug [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_pre]:text-muted-foreground',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-inherit',
   '[&_ul]:my-0.5 [&_ul]:pl-4 [&_ol]:my-0.5 [&_ol]:pl-4',
-  '[&_li]:text-muted-foreground/85 [&_li]:my-0',
+  '[&_li]:text-muted-foreground [&_li]:my-0',
   '[&_li::marker]:text-muted-foreground/40',
-  '[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/20 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground/60 [&_blockquote]:italic [&_blockquote]:my-1',
+  '[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/20 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground/70 [&_blockquote]:italic [&_blockquote]:my-1',
   '[&_a]:text-sky-400/80 [&_a]:underline [&_a]:decoration-sky-400/30',
   '[&_strong]:font-semibold [&_strong]:text-foreground/90',
   '[&_em]:italic',
@@ -414,24 +414,52 @@ export function ActivityRow({ item, isLastMessage, accentClass, accentBorder }: 
 
   // Regular text (assistant / user)
   const isUser = item.role === 'user'
+  const [userExpanded, setUserExpanded] = useState(false)
 
   // Last assistant message in section = summary — show fully, highlighted
   const isSummary = isLastMessage && !isUser
   const shownText = isSummary
-    ? (fullText ?? displayText)  // show all available text for summary
+    ? (fullText ?? displayText)
     : (fullText ? displayText : preview)
   const showMoreBtn = isSummary ? (!fullText && more > 0) : (more > 0 && !fullText)
 
+  // User messages: collapsed by default, show first line as preview
+  if (isUser) {
+    const firstLine = displayText.split('\n')[0]?.slice(0, 120) ?? ''
+    return (
+      <div className="group">
+        <button type="button" onClick={() => setUserExpanded(!userExpanded)}
+          className="flex items-center gap-1.5 w-full text-left py-px">
+          <span className="text-[10px] font-mono text-muted-foreground/25 tabular-nums">{formatTime(item.createdAt)}</span>
+          <span className="text-[10px] font-mono text-muted-foreground/30">user</span>
+          {userExpanded
+            ? <ChevronDown className="h-2.5 w-2.5 text-muted-foreground/25" />
+            : <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/25" />
+          }
+          {!userExpanded && (
+            <span className="text-[10px] text-muted-foreground/30 truncate min-w-0">{firstLine}</span>
+          )}
+        </button>
+        {userExpanded && (
+          <div className={`mt-0.5 pl-3 border-l border-muted-foreground/10 ${mdClass} opacity-60`}>
+            <Markdown remarkPlugins={[remarkBreaks]}>{fullText ?? displayText}</Markdown>
+            {!fullText && more > 0 && (
+              <button type="button" onClick={() => void handleShowFull()}
+                className="text-[10px] font-mono text-muted-foreground/25 hover:text-muted-foreground/50 mt-0.5">
+                …{more} more lines
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className={[
-      isUser ? 'opacity-50' : '',
-      isSummary ? `rounded-md border ${accentBorder ?? 'border-border/30'} ${accentClass ?? 'bg-muted/20'} px-3 py-2 -mx-1` : '',
-    ].filter(Boolean).join(' ')}>
+    <div className={isSummary ? `rounded-md border ${accentBorder ?? 'border-border/30'} ${accentClass ?? 'bg-muted/20'} px-3 py-2 -mx-1` : ''}>
       <div className="flex items-center gap-1.5 mb-0.5">
         <span className="text-[10px] font-mono text-muted-foreground/30 tabular-nums">{formatTime(item.createdAt)}</span>
-        <span className={`text-[10px] font-mono ${isUser ? 'text-muted-foreground/40' : 'text-sky-400/60'}`}>
-          {item.role}
-        </span>
+        <span className="text-[10px] font-mono text-sky-400/50">assistant</span>
         {isSummary && (
           <span className="text-[9px] font-mono text-muted-foreground/40 ml-auto">summary</span>
         )}

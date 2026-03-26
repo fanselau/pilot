@@ -930,34 +930,65 @@ function getJobTimeline(
     const items = itemsByStep.get(step.stepIndex);
     if (!items || items.length === 0) continue;
 
-    // Group ALL items by sessionId — one section per session.
-    // Parallel child sessions get a single consolidated section each,
-    // ordered by first appearance. Root session comes first.
+    // Group items by sessionId, then interleave child sections at their
+    // fork point within the root session timeline. Each child gets one
+    // consolidated section, inserted where it was spawned.
     const perSession = new Map<string, StepTimelineItem[]>();
-    const firstSeen = new Map<string, number>();
+    const childFirstSeen = new Map<string, number>();
 
     for (const item of items) {
       const sid = item.sessionId;
       if (!perSession.has(sid)) {
         perSession.set(sid, []);
-        firstSeen.set(sid, item.createdAt);
+        if (sid !== step.sessionId) childFirstSeen.set(sid, item.createdAt);
       }
       perSession.get(sid)!.push(item);
     }
 
-    // Order: step's own root session first, then children by first appearance
-    const orderedSessionIds = [...perSession.keys()].sort((a, b) => {
-      const aRoot = a === step.sessionId;
-      const bRoot = b === step.sessionId;
-      if (aRoot !== bRoot) return aRoot ? -1 : 1;
-      return (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0);
-    });
+    // Sort each session's items chronologically
+    for (const arr of perSession.values()) arr.sort((a, b) => a.createdAt - b.createdAt);
 
+    // Sort children by their fork time
+    const sortedChildren = [...childFirstSeen.entries()]
+      .sort((a, b) => a[1] - b[1]);
+
+    // Walk root items and interleave children at their fork points
+    const rootItems = perSession.get(step.sessionId ?? '') ?? [];
     const sections: TimelineSection[] = [];
-    for (const sid of orderedSessionIds) {
-      const sectionItems = perSession.get(sid)!;
-      sectionItems.sort((a, b) => a.createdAt - b.createdAt);
-      sections.push(buildSection(sid, sectionItems));
+    let rootBatch: StepTimelineItem[] = [];
+    let childIdx = 0;
+
+    for (const item of rootItems) {
+      // Insert any children whose fork time is at or before this root item
+      while (childIdx < sortedChildren.length && sortedChildren[childIdx][1] <= item.createdAt) {
+        // Flush accumulated root items as a section
+        if (rootBatch.length > 0) {
+          sections.push(buildSection(step.sessionId ?? '', rootBatch));
+          rootBatch = [];
+        }
+        const childSid = sortedChildren[childIdx][0];
+        const childItems = perSession.get(childSid);
+        if (childItems && childItems.length > 0) {
+          sections.push(buildSection(childSid, childItems));
+        }
+        childIdx++;
+      }
+      rootBatch.push(item);
+    }
+
+    // Flush remaining root items
+    if (rootBatch.length > 0) {
+      sections.push(buildSection(step.sessionId ?? '', rootBatch));
+    }
+
+    // Append any children that started after all root items
+    while (childIdx < sortedChildren.length) {
+      const childSid = sortedChildren[childIdx][0];
+      const childItems = perSession.get(childSid);
+      if (childItems && childItems.length > 0) {
+        sections.push(buildSection(childSid, childItems));
+      }
+      childIdx++;
     }
 
     groups.push({
