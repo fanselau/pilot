@@ -13,6 +13,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ── Mock state ──────────────────────────────────────────────────────────────
 
 let mockProjects: Array<{ path: string; status: string; owner?: string | null; notifyOpenClawRoute?: unknown }> = [];
+const mockEnsureApprovedGsdPackage = vi.fn();
+const mockInspectProjectGsdState = vi.fn();
+const mockUpdateProjectGsdState = vi.fn();
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -22,6 +25,12 @@ vi.mock('execa', () => ({
 
 vi.mock('../../src/core/db.js', () => ({
   getAllProjects: () => mockProjects,
+  updateProjectGsdState: (...args: unknown[]) => mockUpdateProjectGsdState(...args),
+}));
+
+vi.mock('../../src/core/managed-gsd.js', () => ({
+  ensureApprovedGsdPackage: (...args: unknown[]) => mockEnsureApprovedGsdPackage(...args),
+  inspectProjectGsdState: (...args: unknown[]) => mockInspectProjectGsdState(...args),
 }));
 
 vi.mock('../../src/core/openclaw-skill.js', () => ({
@@ -60,6 +69,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockProjects = [];
   mockJsonMode = false;
+  mockEnsureApprovedGsdPackage.mockResolvedValue({ changed: false, runtimeVersion: '1.24.0' });
+  mockInspectProjectGsdState.mockResolvedValue({
+    approvedVersion: '1.24.0',
+    installedVersion: '1.24.0',
+    driftStatus: 'matches',
+    checkedAt: '2026-03-26T00:00:00.000Z',
+    error: null,
+  });
 
   // Default: bun update succeeds, installer succeeds for any project
   mockExeca.mockImplementation(async (_cmd: string, args: string[]) => {
@@ -261,5 +278,113 @@ describe('updateCommand — JSON output', () => {
     expect(result.updated).toBe(true);
     expect(result.packageUpdated).toBe(true);
     expect(result.projects).toHaveLength(1);
+  });
+});
+
+describe('updateCommand — approved version rollout', () => {
+  it('converges the runtime installer to the approved version before rollout', async () => {
+    mockProjects = [
+      { path: '/project/a', status: 'active', owner: null },
+    ];
+    mockJsonMode = true;
+
+    await updateCommand();
+
+    expect(mockEnsureApprovedGsdPackage).toHaveBeenCalledWith('1.24.0', expect.any(String));
+  });
+
+  it('reports blocked rollout projects as blocked-skipped', async () => {
+    mockJsonMode = true;
+    mockProjects = [
+      { path: '/project/blocked', status: 'blocked', owner: null },
+    ];
+
+    await updateCommand();
+
+    const payload = mockOutputJson.mock.calls[0][0] as {
+      projects: Array<{ path: string; action: string; success: boolean }>;
+    };
+    expect(payload.projects).toEqual([
+      expect.objectContaining({ path: '/project/blocked', action: 'blocked-skipped', success: true }),
+    ]);
+  });
+
+  it('records rollout actions for behind, unknown, ahead, and already-current projects', async () => {
+    mockJsonMode = true;
+    mockProjects = [
+      { path: '/project/current', status: 'active', owner: null },
+      { path: '/project/behind', status: 'active', owner: null },
+      { path: '/project/unknown', status: 'active', owner: null },
+      { path: '/project/ahead', status: 'active', owner: null },
+    ];
+
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:01.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: null, driftStatus: 'unknown', checkedAt: '2026-03-26T00:00:00.000Z', error: 'VERSION missing' })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: null, driftStatus: 'unknown', checkedAt: '2026-03-26T00:00:01.000Z', error: 'VERSION still missing' })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.25.0', driftStatus: 'ahead', checkedAt: '2026-03-26T00:00:00.000Z', error: null });
+
+    await updateCommand();
+
+    const payload = mockOutputJson.mock.calls[0][0] as {
+      projects: Array<{ path: string; action: string; driftStatus: string; success: boolean }>;
+    };
+    expect(payload.projects).toEqual([
+      expect.objectContaining({ path: '/project/current', action: 'already-current', driftStatus: 'matches', success: true }),
+      expect.objectContaining({ path: '/project/behind', action: 'update-to-approved', driftStatus: 'matches', success: true }),
+      expect.objectContaining({ path: '/project/unknown', action: 'repair-to-approved', driftStatus: 'unknown', success: true }),
+      expect.objectContaining({ path: '/project/ahead', action: 'ahead-skipped', driftStatus: 'ahead', success: true }),
+    ]);
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      '/project/behind',
+      expect.objectContaining({ driftStatus: 'matches', installedVersion: '1.24.0' }),
+    );
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      '/project/unknown',
+      expect.objectContaining({ driftStatus: 'unknown' }),
+    );
+  });
+
+  it('keeps per-project rollout failures in the result without aborting the rollout', async () => {
+    mockJsonMode = true;
+    mockProjects = [
+      { path: '/project/behind', status: 'active', owner: null },
+      { path: '/project/current', status: 'active', owner: null },
+    ];
+
+    mockInspectProjectGsdState
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.23.0', driftStatus: 'behind', checkedAt: '2026-03-26T00:00:00.000Z', error: null })
+      .mockResolvedValueOnce({ approvedVersion: '1.24.0', installedVersion: '1.24.0', driftStatus: 'matches', checkedAt: '2026-03-26T00:00:00.000Z', error: null });
+
+    mockExeca.mockImplementation(async (_cmd: string, args: string[]) => {
+      if (Array.isArray(args) && args.includes('--opencode')) {
+        return { exitCode: 1, stdout: '', stderr: 'installer exploded' };
+      }
+      return { exitCode: 0, stdout: '', stderr: '' };
+    });
+
+    await updateCommand();
+
+    const payload = mockOutputJson.mock.calls[0][0] as {
+      projects: Array<{ path: string; action: string; success: boolean; error?: string }>;
+    };
+    expect(payload.projects).toEqual([
+      expect.objectContaining({ path: '/project/behind', action: 'update-to-approved', success: false, error: 'installer exploded' }),
+      expect.objectContaining({ path: '/project/current', action: 'already-current', success: true }),
+    ]);
+  });
+
+  it('includes approved version in JSON rollout output', async () => {
+    mockJsonMode = true;
+
+    await updateCommand();
+
+    expect(mockOutputJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedVersion: '1.24.0',
+      }),
+    );
   });
 });
