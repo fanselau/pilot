@@ -6,6 +6,7 @@
  */
 
 import { getAllProjects, getProjectJobCounts } from '../core/db.js';
+import { inspectProjectGsdState } from '../core/managed-gsd.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, dim, bold, yellow } from '../util/colors.js';
 
@@ -16,12 +17,25 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
     projects = projects.filter(p => p.status === 'blocked');
   }
 
+  const projectStates = await Promise.all(projects.map(async (project) => {
+    const gsdState = await inspectProjectGsdState(project.path);
+    return {
+      ...project,
+      approvedGsdVersion: gsdState.approvedVersion,
+      installedGsdVersion: gsdState.installedVersion,
+      gsdDriftStatus: gsdState.driftStatus,
+      gsdVersionCheckedAt: gsdState.checkedAt,
+      gsdVersionError: gsdState.error,
+      jobs: getProjectJobCounts(project.path),
+    };
+  }));
+
   if (isJsonMode()) {
-    outputJson({ projects: projects.map(p => ({ ...p, jobs: getProjectJobCounts(p.path) })) });
+    outputJson({ projects: projectStates });
     return;
   }
 
-  if (projects.length === 0) {
+  if (projectStates.length === 0) {
     if (opts.blocked) {
       outputHuman(`  ${dim('No blocked projects.')}`);
     } else {
@@ -34,11 +48,10 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
   outputHuman(`  ${bold(opts.blocked ? 'Blocked Projects' : 'Managed Projects')}`);
   outputHuman('');
 
-  for (const p of projects) {
+  for (const p of projectStates) {
     const statusIcon = p.status === 'active' ? green('●') : red('●');
     const statusLabel = p.status === 'active' ? green('active') : red('BLOCKED');
     const shortPath = p.path.replace(process.env['HOME'] ?? '', '~');
-    const counts = getProjectJobCounts(p.path);
     outputHuman(`  ${statusIcon} ${shortPath}`);
     outputHuman(`    ${dim('owner:')}  ${p.owner ?? dim('(none)')}`);
     outputHuman(`    ${dim('status:')} ${statusLabel}`);
@@ -46,7 +59,11 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
       outputHuman(`    ${dim('reason:')} ${yellow(p.blockedReason.slice(0, 120))}`);
       outputHuman(`    ${dim('actions:')} pilot unblock "${shortPath}"  ·  queue a new job with pilot add`);
     }
-    outputHuman(`    ${dim('jobs:')}    ${counts.pending} pending · ${counts.running} running · ${counts.failed} failed`);
+    outputHuman(`    ${dim('jobs:')}    ${p.jobs.pending} pending · ${p.jobs.running} running · ${p.jobs.failed} failed`);
+    outputHuman(`    ${dim('gsd:')}     installed ${p.installedGsdVersion ?? 'unknown'} · drift ${p.gsdDriftStatus} · approved ${p.approvedGsdVersion}`);
+    if (p.gsdVersionError) {
+      outputHuman(`    ${dim('version note:')} ${p.gsdVersionError || 'unknown / unreadable version'}`);
+    }
     outputHuman('');
   }
 }

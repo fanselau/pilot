@@ -18,6 +18,7 @@ import {
   getProjectJobCounts,
 } from '../core/db.js';
 import { resolveProjectDir } from '../core/config.js';
+import { inspectProjectGsdState } from '../core/managed-gsd.js';
 import { validateOpenClawDeliverRoute } from '../core/notify-route.js';
 import type { OpenClawDeliverRoute } from '../core/types.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
@@ -174,6 +175,7 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
 
   // Default: show project info
   const counts = getProjectJobCounts(resolvedPath);
+  const gsdState = await inspectProjectGsdState(resolvedPath);
   const shortPath = resolvedPath.replace(process.env['HOME'] ?? '', '~');
 
   if (isJsonMode()) {
@@ -186,6 +188,11 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
         blockedReason: existing.blockedReason,
         blockedAt: existing.blockedAt,
         createdAt: existing.createdAt,
+        approvedGsdVersion: gsdState.approvedVersion,
+        installedGsdVersion: gsdState.installedVersion,
+        gsdDriftStatus: gsdState.driftStatus,
+        gsdVersionCheckedAt: gsdState.checkedAt,
+        gsdVersionError: gsdState.error,
         jobs: counts,
       },
     });
@@ -208,6 +215,12 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
     outputHuman(`    ${dim('reason:')}  ${yellow(existing.blockedReason.slice(0, 120))}`);
   }
   outputHuman(`    ${dim('jobs:')}    ${counts.pending} pending · ${counts.running} running · ${counts.failed} failed · ${counts.completed} done`);
+  outputHuman(`    ${dim('approved gsd:')} ${gsdState.approvedVersion}`);
+  outputHuman(`    ${dim('installed gsd:')} ${gsdState.installedVersion ?? 'unknown'}`);
+  outputHuman(`    ${dim('drift:')} ${gsdState.driftStatus}`);
+  if (gsdState.error) {
+    outputHuman(`    ${dim('version note:')} ${gsdState.error || 'unknown / unreadable version'}`);
+  }
   if (existing.defaultCategories && existing.defaultCategories.length > 0) {
     outputHuman(`    ${dim('categories:')} ${existing.defaultCategories.join(', ')}`);
   }
