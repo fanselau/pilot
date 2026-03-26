@@ -107,6 +107,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '2222222222222222222222222222222222222222',
     notifyRoute: null,
@@ -313,6 +314,98 @@ describe('infoCommand recovery visibility', () => {
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(output).toContain('undo:unavailable');
     expect(output).toContain('no recorded base/head checkpoints');
+  });
+
+  it('renders runtime skills block in human output when a runtime patch was applied', async () => {
+    mockGetJob.mockReturnValue(makeJob({
+      runtimeSkillSnapshot: {
+        categories: ['frontend'],
+        selectedSkills: ['typescript', 'frontend-design'],
+        invalidSkills: [],
+        agentSkills: {
+          'gsd-planner': ['/repo/.opencode/skill/typescript'],
+          'gsd-executor': ['/repo/.opencode/skill/frontend-design'],
+        },
+        mergePolicy: 'append-user-then-pilot',
+        applied: true,
+        restoreStatus: 'restored',
+        restoreError: null,
+      },
+    }));
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Runtime skills');
+    expect(output).toContain('Categories: frontend');
+    expect(output).toContain('Selected: typescript, frontend-design');
+    expect(output).toContain('Agents: 2 mapped');
+    expect(output).toContain('Restore: restored');
+  });
+
+  it('shows invalid runtime skills without dumping config blobs', async () => {
+    mockGetJob.mockReturnValue(makeJob({
+      runtimeSkillSnapshot: {
+        categories: ['frontend'],
+        selectedSkills: ['typescript'],
+        invalidSkills: ['missing-skill'],
+        agentSkills: {
+          'gsd-planner': ['/repo/.opencode/skill/typescript'],
+        },
+        mergePolicy: 'append-user-then-pilot',
+        applied: true,
+        restoreStatus: 'pending',
+        restoreError: null,
+      },
+    }));
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Skipped invalid: missing-skill');
+    expect(output).not.toContain('/repo/.opencode/skill/typescript');
+  });
+
+  it('emits runtimeSkills in JSON mode', async () => {
+    mockJsonMode = true;
+    const runtimeSnapshot = {
+      categories: ['frontend'],
+      selectedSkills: ['typescript'],
+      invalidSkills: [],
+      agentSkills: {
+        'gsd-planner': ['/repo/.opencode/skill/typescript'],
+      },
+      mergePolicy: 'append-user-then-pilot' as const,
+      applied: true,
+      restoreStatus: 'restored' as const,
+      restoreError: null,
+    };
+    mockGetJob.mockReturnValue(makeJob({ runtimeSkillSnapshot: runtimeSnapshot }));
+
+    await infoCommand('ab12', { json: true });
+
+    const payload = mockOutputJson.mock.calls[0][0];
+    expect(payload.runtimeSkills).toEqual(runtimeSnapshot);
+  });
+
+  it('keeps runtime skills output concise when no runtime patch was active', async () => {
+    mockGetJob.mockReturnValue(makeJob({
+      runtimeSkillSnapshot: {
+        categories: [],
+        selectedSkills: [],
+        invalidSkills: [],
+        agentSkills: {},
+        mergePolicy: 'append-user-then-pilot',
+        applied: false,
+        restoreStatus: 'skipped',
+        restoreError: null,
+      },
+    }));
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Runtime skills: none (no runtime agent_skills patch)');
   });
 
   it('shows actionable retry guidance for failed jobs in triage block', async () => {

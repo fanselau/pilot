@@ -24,7 +24,13 @@ import { resolveAllAgentModels } from '../core/models.js';
 import { extractPhaseNumberFromStepArgs, findExistingUiReview } from '../core/ui-review.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
-import type { DelegationResult, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
+import type {
+  DelegationResult,
+  Job,
+  JobStep,
+  JobObservabilitySnapshot,
+  RuntimeAgentSkillsSnapshot,
+} from '../core/types.js';
 import type { HeadRelation } from '../core/git-recovery.js';
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
@@ -154,6 +160,35 @@ interface RecoveryInfo {
   producedCommitDelta: boolean | null;
   worktreeDirtyNow: boolean | null;
   projectIsGit: boolean;
+}
+
+function buildRuntimeSkillsSummary(snapshot: RuntimeAgentSkillsSnapshot | null): {
+  active: boolean;
+  agentCount: number;
+  categories: string;
+  selected: string;
+  skippedInvalid: string | null;
+  restore: RuntimeAgentSkillsSnapshot['restoreStatus'] | null;
+} {
+  if (!snapshot || !snapshot.applied) {
+    return {
+      active: false,
+      agentCount: 0,
+      categories: 'none',
+      selected: 'none',
+      skippedInvalid: null,
+      restore: snapshot?.restoreStatus ?? null,
+    };
+  }
+
+  return {
+    active: true,
+    agentCount: Object.keys(snapshot.agentSkills).length,
+    categories: snapshot.categories.join(', ') || 'none',
+    selected: snapshot.selectedSkills.join(', ') || 'none',
+    skippedInvalid: snapshot.invalidSkills.length > 0 ? snapshot.invalidSkills.join(', ') : null,
+    restore: snapshot.restoreStatus,
+  };
 }
 
 interface InfoTriage {
@@ -548,6 +583,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   const observability = buildJobObservability(job);
   const failureContext = buildFailureContext(job, steps, triage);
   const uiReview = resolveUiReviewInfo(job, steps);
+  const runtimeSkills = buildRuntimeSkillsSummary(job.runtimeSkillSnapshot);
   const tokenTotals = observability.tokens.totals ?? {
     input: 0,
     output: 0,
@@ -574,6 +610,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       observability,
         failureContext,
         uiReview,
+        runtimeSkills: job.runtimeSkillSnapshot,
         actualModels: job.actualModels,
         tokenUsage: {
         totalInput: tokenTotals.input,
@@ -799,6 +836,21 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   }
   for (const note of observability.cost.notes) {
     outputHuman(`  ${dim(`Cost note: ${note}`)}`);
+  }
+  outputHuman('');
+
+  outputHuman(`  ${bold('Runtime skills')}`);
+  outputHuman(`  ${hr()}`);
+  if (!runtimeSkills.active) {
+    outputHuman('  Runtime skills: none (no runtime agent_skills patch)');
+  } else {
+    outputHuman(`  ${dim('Categories:')} ${runtimeSkills.categories}`);
+    outputHuman(`  ${dim('Selected:')} ${runtimeSkills.selected}`);
+    outputHuman(`  ${dim('Agents:')} ${runtimeSkills.agentCount} mapped`);
+    outputHuman(`  ${dim('Restore:')} ${runtimeSkills.restore}`);
+    if (runtimeSkills.skippedInvalid) {
+      outputHuman(`  ${dim('Skipped invalid:')} ${runtimeSkills.skippedInvalid}`);
+    }
   }
   outputHuman('');
 
