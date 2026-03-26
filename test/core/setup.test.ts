@@ -19,9 +19,34 @@ const { mockExeca } = vi.hoisted(() => ({
   mockExeca: vi.fn(),
 }));
 
+const {
+  mockEnsureApprovedGsdPackage,
+  mockInspectProjectGsdState,
+} = vi.hoisted(() => ({
+  mockEnsureApprovedGsdPackage: vi.fn(),
+  mockInspectProjectGsdState: vi.fn(),
+}));
+
+const { mockUpdateProjectGsdState } = vi.hoisted(() => ({
+  mockUpdateProjectGsdState: vi.fn(),
+}));
+
 vi.mock('execa', () => ({
   execa: mockExeca,
 }));
+
+vi.mock('../../src/core/managed-gsd.js', () => ({
+  ensureApprovedGsdPackage: (...args: unknown[]) => mockEnsureApprovedGsdPackage(...args),
+  inspectProjectGsdState: (...args: unknown[]) => mockInspectProjectGsdState(...args),
+}));
+
+vi.mock('../../src/core/db.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/core/db.js')>('../../src/core/db.js');
+  return {
+    ...actual,
+    updateProjectGsdState: (...args: unknown[]) => mockUpdateProjectGsdState(...args),
+  };
+});
 
 // ── Mock shell-exposure (best-effort in setup — don't pollute test env) ──
 
@@ -76,9 +101,18 @@ function makeSuccessfulExecaMock(extraSentinels?: (cwd: string) => Promise<void>
 describe('setupProject — fresh setup (happy path)', () => {
   let tmpDir: string;
 
-  beforeEach(async () => {
+beforeEach(async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-setup-fresh-'));
-    mockExeca.mockImplementation(makeSuccessfulExecaMock());
+  mockExeca.mockImplementation(makeSuccessfulExecaMock());
+  mockEnsureApprovedGsdPackage.mockResolvedValue({ changed: false, runtimeVersion: '1.24.0' });
+  mockInspectProjectGsdState.mockResolvedValue({
+    approvedVersion: '1.24.0',
+    installedVersion: '1.24.0',
+    driftStatus: 'matches',
+    checkedAt: '2026-03-26T00:00:00.000Z',
+    error: null,
+  });
+  mockUpdateProjectGsdState.mockReset();
     // Create package.json so installer runs
     await writeFile(path.join(tmpDir, 'package.json'), '{"name":"test"}', 'utf8');
   });
@@ -213,6 +247,97 @@ describe('setupProject — refresh mode', () => {
     expect(content).not.toHaveProperty('custom');
     expect(content).toHaveProperty('permission');
     expect(refreshResult.created.some(c => c.includes('force-overwritten'))).toBe(true);
+  });
+});
+
+describe('setupProject — approved GSD contract', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'pilot-setup-approved-gsd-'));
+    mockExeca.mockImplementation(makeSuccessfulExecaMock(async (cwd) => {
+      await writeFile(path.join(cwd, '.opencode', 'get-shit-done', 'VERSION'), '1.24.0\n', 'utf8');
+    }));
+    await writeFile(path.join(tmpDir, 'package.json'), '{"name":"test"}', 'utf8');
+  });
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('approved GSD fresh setup converges installer before installation and persists matches state', async () => {
+    await setupProject(tmpDir);
+
+    expect(mockEnsureApprovedGsdPackage).toHaveBeenCalledWith('1.24.0');
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      tmpDir,
+      expect.objectContaining({
+        approvedVersion: '1.24.0',
+        installedVersion: '1.24.0',
+        driftStatus: 'matches',
+        error: null,
+      }),
+    );
+  });
+
+  it('approved GSD refresh reinstalls when project is behind approved version', async () => {
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: '1.23.0',
+      driftStatus: 'behind',
+      checkedAt: '2026-03-26T00:00:00.000Z',
+      error: null,
+    });
+
+    await setupProject(tmpDir, { refresh: true });
+
+    expect(mockInspectProjectGsdState).toHaveBeenCalledWith(tmpDir, '1.24.0');
+    const installerCalls = mockExeca.mock.calls.filter(([, args]) => Array.isArray(args) && args.includes('--opencode'));
+    expect(installerCalls).toHaveLength(1);
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      tmpDir,
+      expect.objectContaining({ driftStatus: 'matches', installedVersion: '1.24.0' }),
+    );
+  });
+
+  it('ahead refresh skips installer and reports project is ahead of approved version', async () => {
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: '1.25.0',
+      driftStatus: 'ahead',
+      checkedAt: '2026-03-26T00:00:00.000Z',
+      error: null,
+    });
+
+    const result = await setupProject(tmpDir, { refresh: true });
+
+    const installerCalls = mockExeca.mock.calls.filter(([, args]) => Array.isArray(args) && args.includes('--opencode'));
+    expect(installerCalls).toHaveLength(0);
+    expect(result.skipped.some((item) => item.includes('project is ahead of approved version'))).toBe(true);
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      tmpDir,
+      expect.objectContaining({ driftStatus: 'ahead', installedVersion: '1.25.0' }),
+    );
+  });
+
+  it('unknown VERSION refresh is surfaced safely without crashing project state persistence', async () => {
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: null,
+      driftStatus: 'unknown',
+      checkedAt: '2026-03-26T00:00:00.000Z',
+      error: 'VERSION unreadable',
+    });
+    mockExeca.mockImplementation(makeSuccessfulExecaMock());
+
+    await setupProject(tmpDir, { refresh: true });
+
+    expect(mockInspectProjectGsdState).toHaveBeenCalledWith(tmpDir, '1.24.0');
+    expect(mockUpdateProjectGsdState).toHaveBeenCalledWith(
+      tmpDir,
+      expect.objectContaining({ driftStatus: 'unknown', error: expect.stringContaining('VERSION') }),
+    );
   });
 });
 

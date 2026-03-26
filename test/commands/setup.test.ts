@@ -31,10 +31,11 @@ vi.mock('../../src/core/default-skills.js', () => ({
 
 const outputLines: string[] = [];
 let jsonMode = false;
+const mockOutputJson = vi.fn();
 
 vi.mock('../../src/util/output.js', () => ({
   outputHuman: (text: string) => { outputLines.push(text); },
-  outputJson: vi.fn(),
+  outputJson: (...args: unknown[]) => mockOutputJson(...args),
   isJsonMode: () => jsonMode,
   setJsonMode: vi.fn(),
 }));
@@ -131,6 +132,12 @@ beforeEach(() => {
     created: ['opencode.json', '.opencode/'],
     skipped: [],
     errors: [],
+    gsd: {
+      approvedVersion: '1.24.0',
+      installedVersion: '1.24.0',
+      driftStatus: 'matches',
+      error: null,
+    },
   });
 
   // Default: some recommendations available
@@ -299,5 +306,59 @@ describe('setup AGENTS.md prompt', () => {
     );
     const sessionArg = mockSpawnAgentsMdSession.mock.calls[0]?.[0] as { command?: string };
     expect(sessionArg.command).toBeUndefined();
+  });
+});
+
+describe('setupCommand — approved GSD reporting', () => {
+  it('prints approved GSD, installed GSD, and drift lines in human output', async () => {
+    (process.stdin as StdinWithTTY).isTTY = false;
+
+    await setupCommand('/tmp/my-project', {});
+
+    const joined = outputLines.join('\n');
+    expect(joined).toContain('Approved GSD: 1.24.0');
+    expect(joined).toContain('Installed GSD: 1.24.0');
+    expect(joined).toContain('Drift: matches');
+  });
+
+  it('prints unknown installed GSD when VERSION is unreadable', async () => {
+    (process.stdin as StdinWithTTY).isTTY = false;
+    mockSetupProject.mockResolvedValue({
+      created: ['opencode.json'],
+      skipped: [],
+      errors: [],
+      gsd: {
+        approvedVersion: '1.24.0',
+        installedVersion: null,
+        driftStatus: 'unknown',
+        error: 'VERSION unreadable',
+      },
+    });
+
+    await setupCommand('/tmp/my-project', { refresh: true });
+
+    const joined = outputLines.join('\n');
+    expect(joined).toContain('Approved GSD: 1.24.0');
+    expect(joined).toContain('Installed GSD: unknown');
+    expect(joined).toContain('Drift: unknown');
+  });
+
+  it('emits installedVersion in JSON mode under setup.gsd', async () => {
+    jsonMode = true;
+
+    await setupCommand('/tmp/my-project', {});
+
+    expect(mockOutputJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          gsd: expect.objectContaining({
+            approvedVersion: '1.24.0',
+            installedVersion: '1.24.0',
+            driftStatus: 'matches',
+            error: null,
+          }),
+        }),
+      }),
+    );
   });
 });
