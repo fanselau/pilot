@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 97-03-PLAN.md
-last_updated: "2026-03-25T11:31:11.987Z"
+status: executing
+stopped_at: Completed 98-01-PLAN.md
+last_updated: "2026-03-26T14:36:39.339Z"
 progress:
-  total_phases: 97
+  total_phases: 98
   completed_phases: 54
-  total_plans: 190
-  completed_plans: 178
+  total_plans: 193
+  completed_plans: 179
 ---
 
 # State
@@ -20,19 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 97
-Plan: Not started
+Phase: 98 (pilot-add-ui-review-step-to-phase-lifecycle-home-luca-dev-punchlab-pilot-requirements-pilot-add-ui-review-step-md) — EXECUTING
+Plan: 2 of 3
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
-**Current focus:** Phase 97 — settings-page-full-configuration-management-in-web-ui
+**Current focus:** Phase 98 — pilot-add-ui-review-step-to-phase-lifecycle-home-luca-dev-punchlab-pilot-requirements-pilot-add-ui-review-step-md
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Milestone complete
+- **Status:** Ready to execute
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -424,6 +424,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - Phase 95 added: Redelegation attribution should preserve agent identity
 - Phase 96 added: Mobile summary panel must expose steps and subsession navigation clearly
 - Phase 97 added: Settings Page — Full Configuration Management in Web UI
+- Phase 98 added: Pilot — Add UI Review Step to Phase Lifecycle @/home/luca/dev/punchlab/pilot/requirements/pilot-add-ui-review-step.md
 
 ## Decisions
 
@@ -1033,6 +1034,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 97-settings-page]: useSettings uses staleTime:Infinity — fetch once on mount, manual refetch on save
 - [Phase 97]: SectionProps shared type exported from source-badge.tsx — avoids duplication across 6 section files
 - [Phase 97-settings-page]: Select onValueChange passes string|null - all handlers use val ?? fallback — Base-ui Select.Root.onValueChange types value as string|null, requiring null-safe patterns
+- [Phase 98]: Centralized UI-review eligibility and artifact rules in src/core/ui-review.ts
+- [Phase 98]: Queued advisory ui-review only after judge pass and skipped missing-artifact exits to preserve judge as the sole completion gate
 
 ## Blockers/Concerns Carried Forward
 
@@ -1041,6 +1044,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-25T11:18:24.998Z
-Stopped at: Completed 97-03-PLAN.md
+Last session: 2026-03-26T14:36:39.330Z
+Stopped at: Completed 98-01-PLAN.md
 Resume file: None

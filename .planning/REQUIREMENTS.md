@@ -288,23 +288,23 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Pilot UI Review Step in Phase Lifecycle
 
-- [ ] **UIREV-01**: Pilot appends an explicit `ui-review` step for UI-eligible phase jobs only after judge pass; it is not part of the initial pre-judge step list
-- [ ] **UIREV-02**: UI-review eligibility is derived deterministically from existing UI signals (`intent.uiPhase`, prior `ui-phase` step, or existing `UI-SPEC.md`) and non-UI phases omit the step
-- [ ] **UIREV-03**: Existing `UI-REVIEW.md` causes duplicate-safe skip/no-op behavior rather than re-running interactive audit branches
-- [ ] **UIREV-04**: `ui-review` never runs after judge fail, judge gaps, shutdown/interruption, or retry/redelegation failure paths
-- [ ] **UIREV-05**: `ui-review` uses advisory artifact-aware recovery: existing `UI-REVIEW.md` => completed, no artifact on hung/non-clean exit => skipped, and neither path re-delegates the job
-- [ ] **UIREV-06**: Judge remains the only pass/fail/gaps gate; `ui-review` does not change judge verdict storage, retry routing, or gap-closure semantics in the first rollout
+- [x] **UIREV-01**: Pilot appends an explicit `ui-review` step for UI-eligible phase jobs only after judge pass; it is not part of the initial pre-judge step list
+- [x] **UIREV-02**: UI-review eligibility is derived deterministically from existing UI signals (`intent.uiPhase`, prior `ui-phase` step, or existing `UI-SPEC.md`) and non-UI phases omit the step
+- [x] **UIREV-03**: Existing `UI-REVIEW.md` causes duplicate-safe skip/no-op behavior rather than re-running interactive audit branches
+- [x] **UIREV-04**: `ui-review` never runs after judge fail, judge gaps, shutdown/interruption, or retry/redelegation failure paths
+- [x] **UIREV-05**: `ui-review` uses advisory artifact-aware recovery: existing `UI-REVIEW.md` => completed, no artifact on hung/non-clean exit => skipped, and neither path re-delegates the job
+- [x] **UIREV-06**: Judge remains the only pass/fail/gaps gate; `ui-review` does not change judge verdict storage, retry routing, or gap-closure semantics in the first rollout
 - [ ] **UIREV-08**: `pilot status`, `pilot info`, and `pilot log` surface `ui-review` ran/skipped/path state separately from judge verdicts
 - [ ] **UIREV-09**: Core/web timeline semantics classify `ui-review` as `UI Review`, and session-title identity parsing recognizes runner titles containing `ui-review`
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UIREV-01 | Phase 98 | Pending |
-| UIREV-02 | Phase 98 | Pending |
-| UIREV-03 | Phase 98 | Pending |
-| UIREV-04 | Phase 98 | Pending |
-| UIREV-05 | Phase 98 | Pending |
-| UIREV-06 | Phase 98 | Pending |
+| UIREV-01 | Phase 98 | Complete |
+| UIREV-02 | Phase 98 | Complete |
+| UIREV-03 | Phase 98 | Complete |
+| UIREV-04 | Phase 98 | Complete |
+| UIREV-05 | Phase 98 | Complete |
+| UIREV-06 | Phase 98 | Complete |
 | UIREV-08 | Phase 98 | Pending |
 | UIREV-09 | Phase 98 | Pending |
 
