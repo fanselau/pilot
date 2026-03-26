@@ -14,6 +14,10 @@ import { mkdir, symlink, readFile, readdir, writeFile, access, stat, lstat, real
 import path from 'node:path';
 import { execa } from 'execa';
 import { ensureAutonomousGsdConfig } from './gsd-config.js';
+import { getConfig } from './config.js';
+import { updateProjectGsdState } from './db.js';
+import { ensureApprovedGsdPackage, inspectProjectGsdState } from './managed-gsd.js';
+import type { ProjectGsdState } from './managed-gsd.js';
 import { errMsg } from '../util/errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -27,6 +31,12 @@ interface SetupResult {
   created: string[];
   skipped: string[];
   errors: string[];
+  gsd: {
+    approvedVersion: string;
+    installedVersion: string | null;
+    driftStatus: 'matches' | 'behind' | 'ahead' | 'unknown';
+    error: string | null;
+  };
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -107,11 +117,28 @@ async function isDirectory(filePath: string): Promise<boolean> {
  */
 async function setupProject(dir: string, options?: SetupOptions): Promise<SetupResult> {
   const absDir = path.resolve(dir);
+  const approvedVersion = getConfig().approvedGsdVersion;
   const result: SetupResult = {
     created: [],
     skipped: [],
     errors: [],
+    gsd: {
+      approvedVersion,
+      installedVersion: null,
+      driftStatus: 'unknown',
+      error: null,
+    },
   };
+  let currentGsdState: ProjectGsdState = {
+    approvedVersion,
+    installedVersion: null,
+    driftStatus: 'unknown' as const,
+    checkedAt: new Date().toISOString(),
+    error: null,
+  };
+  let shouldRunInstaller = true;
+  let installerBlockedByRuntime = false;
+  let installerFailureMessage: string | null = null;
 
   // 1. Create directory if needed
   try {
@@ -120,6 +147,14 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     const msg = errMsg(err);
     result.errors.push(`Failed to create directory: ${msg}`);
     return result;
+  }
+
+  try {
+    await ensureApprovedGsdPackage(approvedVersion);
+  } catch (err: unknown) {
+    installerBlockedByRuntime = true;
+    installerFailureMessage = `Failed to prepare approved GSD ${approvedVersion}: ${errMsg(err)}`;
+    result.errors.push(installerFailureMessage);
   }
 
   // 2. Create .opencode/ directory
@@ -177,12 +212,24 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
   // 3c. Check for package.json — GSD installer requires a Node.js project
   const packageJsonPath = path.join(absDir, 'package.json');
   const hasPackageJson = await exists(packageJsonPath);
+  if (options?.refresh) {
+    currentGsdState = await inspectProjectGsdState(absDir, approvedVersion);
+    if (currentGsdState.driftStatus === 'ahead') {
+      shouldRunInstaller = false;
+      result.skipped.push(`GSD reinstall skipped: project is ahead of approved version (${currentGsdState.installedVersion ?? 'unknown'} > ${approvedVersion})`);
+      updateProjectGsdState(absDir, currentGsdState);
+    }
+  }
+
   if (!hasPackageJson) {
+    shouldRunInstaller = false;
     result.errors.push(
       'Skipping GSD installation: no package.json found in project (GSD installer requires a Node.js project)',
     );
     // Do NOT return early — continue with opencode.json, .gitignore, git init, shell exposure
-  } else {
+  } else if (installerBlockedByRuntime) {
+    shouldRunInstaller = false;
+  } else if (shouldRunInstaller) {
     // 3d. Run upstream installer
     const installerBin = path.join(
       path.resolve(import.meta.dirname, '..', '..'),
@@ -195,7 +242,8 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
     });
 
     if (exitCode !== 0) {
-      result.errors.push(`GSD installer failed: ${installerStderr.trim()}`);
+      installerFailureMessage = `GSD installer failed: ${installerStderr.trim()}`;
+      result.errors.push(installerFailureMessage);
     } else {
       result.created.push('GSD commands installed via get-shit-done-cc');
     }
@@ -219,6 +267,27 @@ async function setupProject(dir: string, options?: SetupOptions): Promise<SetupR
       result.errors.push(`Failed to enforce autonomous .planning/config.json: ${msg}`);
     }
   }
+
+  if (shouldRunInstaller && installerFailureMessage === null) {
+    currentGsdState = await inspectProjectGsdState(absDir, approvedVersion);
+    updateProjectGsdState(absDir, currentGsdState);
+  } else if (installerFailureMessage !== null) {
+    currentGsdState = {
+      approvedVersion,
+      installedVersion: currentGsdState.installedVersion,
+      driftStatus: currentGsdState.installedVersion ? currentGsdState.driftStatus : 'unknown',
+      checkedAt: new Date().toISOString(),
+      error: installerFailureMessage,
+    };
+    updateProjectGsdState(absDir, currentGsdState);
+  }
+
+  result.gsd = {
+    approvedVersion: currentGsdState.approvedVersion,
+    installedVersion: currentGsdState.installedVersion,
+    driftStatus: currentGsdState.driftStatus,
+    error: currentGsdState.error,
+  };
 
   // 4. Link project commands into .opencode/command/ (only for real dirs, not symlinks)
   const commandDir = path.join(opencodeDir, 'command');

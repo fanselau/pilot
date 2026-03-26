@@ -56,9 +56,15 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   // Pass refresh/force options to setupProject when --refresh is active
   const setupOpts = opts.refresh ? { refresh: true, force: opts.force } : undefined;
   const result = await setupProject(dir, setupOpts);
+  const gsd = result.gsd ?? {
+    approvedVersion: 'unknown',
+    installedVersion: null,
+    driftStatus: 'unknown',
+    error: null,
+  };
 
   if (isJsonMode()) {
-    outputJson({ setup: result });
+    outputJson({ setup: { ...result, gsd } });
     return;
   }
 
@@ -91,6 +97,10 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
   for (const item of result.errors) {
     outputHuman(`  ${red('✗')} ${item}`);
   }
+
+  outputHuman(`  Approved GSD: ${gsd.approvedVersion}`);
+  outputHuman(`  Installed GSD: ${gsd.installedVersion ?? 'unknown'}`);
+  outputHuman(`  Drift: ${gsd.driftStatus}`);
 
   if (result.errors.length > 0) {
     process.exit(1);

@@ -96,6 +96,18 @@ function makeSuccessfulExecaMock(extraSentinels?: (cwd: string) => Promise<void>
   });
 }
 
+beforeEach(() => {
+  mockEnsureApprovedGsdPackage.mockResolvedValue({ changed: false, runtimeVersion: '1.24.0' });
+  mockInspectProjectGsdState.mockResolvedValue({
+    approvedVersion: '1.24.0',
+    installedVersion: '1.24.0',
+    driftStatus: 'matches',
+    checkedAt: '2026-03-26T00:00:00.000Z',
+    error: null,
+  });
+  mockUpdateProjectGsdState.mockReset();
+});
+
 // ── Tests: Fresh setup (happy path) ────────────────────────────────────────
 
 describe('setupProject — fresh setup (happy path)', () => {
@@ -328,6 +340,13 @@ describe('setupProject — approved GSD contract', () => {
       driftStatus: 'unknown',
       checkedAt: '2026-03-26T00:00:00.000Z',
       error: 'VERSION unreadable',
+    });
+    mockInspectProjectGsdState.mockResolvedValueOnce({
+      approvedVersion: '1.24.0',
+      installedVersion: null,
+      driftStatus: 'unknown',
+      checkedAt: '2026-03-26T00:00:01.000Z',
+      error: 'VERSION unreadable after refresh',
     });
     mockExeca.mockImplementation(makeSuccessfulExecaMock());
 
