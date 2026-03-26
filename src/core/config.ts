@@ -57,6 +57,14 @@ function resolveConfigFilePath(): string {
  * Throws on invalid values with clear messages including the file path.
  */
 function validateConfigFile(config: Record<string, unknown>, filePath: string): void {
+  function assertExactVersion(keyPath: string, value: unknown): void {
+    if (typeof value !== 'string' || !/^\d+\.\d+\.\d+$/.test(value)) {
+      throw new Error(
+        `Invalid config value in ${filePath}: ${keyPath} must use exact x.y.z format, got ${JSON.stringify(value)}`,
+      );
+    }
+  }
+
   /** Validate that a value is one of the allowed enum values. */
   function assertEnum(keyPath: string, value: unknown, allowed: string[]): void {
     if (!allowed.includes(value as string)) {
@@ -111,6 +119,13 @@ function validateConfigFile(config: Record<string, unknown>, filePath: string): 
       assertEnum('defaults.scope', defaults.scope, ['quick', 'phase', 'debug', 'fast']);
     }
 
+  }
+
+  if (config.gsd && typeof config.gsd === 'object') {
+    const gsd = config.gsd as Record<string, unknown>;
+    if (gsd.approvedVersion !== undefined) {
+      assertExactVersion('gsd.approvedVersion', gsd.approvedVersion);
+    }
   }
 
   // ── runner numeric fields ──
@@ -187,6 +202,7 @@ function getConfig(): PilotConfig {
     ?? fileConfig?.projectDir
     ?? `${home}/dev`,
   );
+  const approvedGsdVersion = fileConfig?.gsd?.approvedVersion ?? '1.24.0';
 
   // ── maxParallel: env > config > auto-detect from RAM
   const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
@@ -262,6 +278,7 @@ function getConfig(): PilotConfig {
     pilotDir,
     pilotDbPath,
     projectDir,
+    approvedGsdVersion,
     maxParallel,
     queueGraceSeconds,
     sessionMemoryMaxMb,
@@ -315,6 +332,7 @@ const ENV_VAR_MAP: Record<string, string> = {
 /** Config file key paths for each PilotConfig key. */
 const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
   projectDir: (fc) => fc.projectDir,
+  approvedGsdVersion: (fc) => fc.gsd?.approvedVersion,
   maxParallel: (fc) => fc.runner?.maxParallel,
   queueGraceSeconds: (fc) => fc.runner?.queueGraceSeconds,
   sessionMemoryMaxMb: (fc) => fc.memory?.sessionMaxMb,

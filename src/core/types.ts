@@ -14,6 +14,9 @@
  */
 export interface ConfigFileSchema {
   projectDir?: string;
+  gsd?: {
+    approvedVersion?: string;
+  };
   runner?: {
     maxParallel?: number | null;  // null = auto-detect from RAM
     queueGraceSeconds?: number;
@@ -56,6 +59,7 @@ export interface PilotConfig {
   pilotDir: string;          // ~/.pilot/
   pilotDbPath: string;       // ~/.pilot/pilot.db
   projectDir: string;        // ~/dev (PILOT_PROJECT_DIR)
+  approvedGsdVersion: string;
   maxParallel: number;       // auto from RAM, default 1
   queueGraceSeconds: number; // minimum queue age before launch eligibility, default 120
   sessionMemoryMaxMb: number;      // per-session systemd MemoryMax, default 8192 (8GB)
@@ -317,6 +321,7 @@ export interface JobStep {
 // ── Project (matches projects table in pilot.db) ─────────────────────────
 
 export type ProjectStatus = 'active' | 'blocked';
+export type ManagedGsdDriftStatus = 'matches' | 'behind' | 'ahead' | 'unknown';
 
 export interface Project {
   path: string;              // absolute project path (primary key)
