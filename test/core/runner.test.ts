@@ -27,7 +27,8 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete, _resolveHungUiPhaseOutcome } from '../../src/core/runner.js';
+import { createRunner, parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete, _resolveHungUiPhaseOutcome } from '../../src/core/runner.js';
+import { HungSessionError } from '../../src/util/errors.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
 
@@ -950,7 +951,203 @@ describe('spawnAndWait state-based poll loop', () => {
 
 import {
   _getTestDb as _dbTestHelper,
+  addJob,
+  createPendingStep,
+  getJob,
+  getJobSteps,
+  markRunning,
+  markStepRunning,
 } from '../../src/core/db.js';
+
+describe('ui-review runner behavior', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    _dbTestHelper();
+    projectDir = mkdtempSync(path.join(tmpdir(), 'pilot-ui-review-runner-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('appends exactly one advisory ui-review step after judge pass for UI-eligible phases', async () => {
+    const job = addJob(
+      projectDir,
+      'phase',
+      'ui phase',
+      undefined,
+      'balanced',
+      'claude-only',
+    );
+
+    createPendingStep(job.id, 0, 'execute-phase', '98 --auto', 'delegation');
+    const judgeStepId = createPendingStep(job.id, 1, 'judge', '', 'delegation');
+    markStepRunning(judgeStepId);
+
+    const runner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: typeof job, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+    };
+    runner.runJudge = vi.fn().mockResolvedValue({ verdict: 'pass', confidence: 95, reason: 'ok' });
+
+    const judgeStep = getJobSteps(job.id).find((step) => step.id === judgeStepId)!;
+    await runner.executeJudgeStep(getJob(job.id)!, projectDir, judgeStep);
+
+    const uiReviewSteps = getJobSteps(job.id).filter((step) => step.command === 'ui-review');
+    expect(uiReviewSteps).toHaveLength(1);
+    expect(uiReviewSteps[0]?.args).toBe('98');
+    expect(uiReviewSteps[0]?.status).toBe('pending');
+  });
+
+  it('does not append ui-review for non-UI phase jobs', async () => {
+    const job = addJob(
+      projectDir,
+      'phase',
+      'non ui phase',
+      undefined,
+      'balanced',
+      'claude-only',
+    );
+
+    createPendingStep(job.id, 0, 'execute-phase', '98 --auto', 'delegation');
+    const judgeStepId = createPendingStep(job.id, 1, 'judge', '', 'delegation');
+    markStepRunning(judgeStepId);
+
+    const runner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: typeof job, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+    };
+    runner.runJudge = vi.fn().mockResolvedValue({ verdict: 'pass', confidence: 95, reason: 'ok' });
+
+    const judgeStep = getJobSteps(job.id).find((step) => step.id === judgeStepId)!;
+    await runner.executeJudgeStep(getJob(job.id)!, projectDir, judgeStep);
+
+    expect(getJobSteps(job.id).some((step) => step.command === 'ui-review')).toBe(false);
+  });
+
+  it('does not append duplicate ui-review when a UI-REVIEW artifact already exists', async () => {
+    const phaseDir = path.join(projectDir, '.planning', 'phases', '98-sample-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '98-UI-REVIEW.md'), '# UI review');
+
+    const job = addJob(
+      projectDir,
+      'phase',
+      'ui phase',
+      undefined,
+      'balanced',
+      'claude-only',
+    );
+
+    createPendingStep(job.id, 0, 'execute-phase', '98 --auto', 'delegation');
+    const judgeStepId = createPendingStep(job.id, 1, 'judge', '', 'delegation');
+    markStepRunning(judgeStepId);
+
+    const runner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: typeof job, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+    };
+    runner.runJudge = vi.fn().mockResolvedValue({ verdict: 'pass', confidence: 95, reason: 'ok' });
+
+    const judgeStep = getJobSteps(job.id).find((step) => step.id === judgeStepId)!;
+    await runner.executeJudgeStep(getJob(job.id)!, projectDir, judgeStep);
+
+    expect(getJobSteps(job.id).some((step) => step.command === 'ui-review')).toBe(false);
+  });
+
+  it('marks hung ui-review as completed when UI-REVIEW artifact exists', async () => {
+    const phaseDir = path.join(projectDir, '.planning', 'phases', '98-sample-phase');
+    mkdirSync(phaseDir, { recursive: true });
+    writeFileSync(path.join(phaseDir, '98-UI-REVIEW.md'), '# UI review');
+
+    const job = addJob(projectDir, 'phase', 'ui review artifact recovery');
+    markRunning(job.id);
+    const stepId = createPendingStep(job.id, 0, 'ui-review', '98', 'delegation');
+    markStepRunning(stepId);
+
+    const runner = createRunner({ once: true }) as unknown as {
+      executeCommandStep: (jobArg: typeof job, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      spawnAndWait: ReturnType<typeof vi.fn>;
+      handleHungContinuation: ReturnType<typeof vi.fn>;
+    };
+    runner.spawnAndWait = vi.fn().mockRejectedValue(new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'ui-review-session' }));
+    runner.handleHungContinuation = vi.fn().mockResolvedValue(undefined);
+
+    const step = getJobSteps(job.id).find((entry) => entry.id === stepId)!;
+    await runner.executeCommandStep(getJob(job.id)!, projectDir, step);
+
+    const updated = getJobSteps(job.id).find((entry) => entry.id === stepId)!;
+    expect(updated.status).toBe('completed');
+    expect(runner.handleHungContinuation).not.toHaveBeenCalled();
+  });
+
+  it('marks hung ui-review without artifact as skipped and avoids re-delegation', async () => {
+    const phaseDir = path.join(projectDir, '.planning', 'phases', '98-sample-phase');
+    mkdirSync(phaseDir, { recursive: true });
+
+    const job = addJob(projectDir, 'phase', 'ui review skip path');
+    markRunning(job.id);
+    const stepId = createPendingStep(job.id, 0, 'ui-review', '98', 'delegation');
+    markStepRunning(stepId);
+
+    const runner = createRunner({ once: true }) as unknown as {
+      executeCommandStep: (jobArg: typeof job, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      spawnAndWait: ReturnType<typeof vi.fn>;
+      handleHungContinuation: ReturnType<typeof vi.fn>;
+    };
+    runner.spawnAndWait = vi.fn().mockRejectedValue(new HungSessionError({ hungReason: 'interactive-prompt', sessionTitle: 'ui-review-session' }));
+    runner.handleHungContinuation = vi.fn().mockResolvedValue(undefined);
+
+    const step = getJobSteps(job.id).find((entry) => entry.id === stepId)!;
+    await runner.executeCommandStep(getJob(job.id)!, projectDir, step);
+
+    const updated = getJobSteps(job.id).find((entry) => entry.id === stepId)!;
+    expect(updated.status).toBe('skipped');
+    expect(updated.error).toMatch(/^ui-review skipped:/);
+    expect(runner.handleHungContinuation).not.toHaveBeenCalled();
+  });
+
+  it('keeps judge gaps and failures from appending ui-review', async () => {
+    const gapJob = addJob(projectDir, 'phase', 'gap closure');
+    createPendingStep(gapJob.id, 0, 'execute-phase', '98 --auto', 'delegation');
+    const gapJudgeStepId = createPendingStep(gapJob.id, 1, 'judge', '', 'delegation');
+    markStepRunning(gapJudgeStepId);
+
+    const gapRunner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: typeof gapJob, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleGapsContinuation: ReturnType<typeof vi.fn>;
+    };
+    gapRunner.runJudge = vi.fn().mockResolvedValue({ verdict: 'gaps_found', confidence: 55, reason: 'needs more work', gaps: ['missing tests'] });
+    gapRunner.handleGapsContinuation = vi.fn().mockResolvedValue(undefined);
+    await gapRunner.executeJudgeStep(
+      getJob(gapJob.id)!,
+      projectDir,
+      getJobSteps(gapJob.id).find((step) => step.id === gapJudgeStepId)!,
+    );
+    expect(getJobSteps(gapJob.id).some((step) => step.command === 'ui-review')).toBe(false);
+
+    const failJob = addJob(projectDir, 'phase', 'failure recovery');
+    createPendingStep(failJob.id, 0, 'execute-phase', '98 --auto', 'delegation');
+    const failJudgeStepId = createPendingStep(failJob.id, 1, 'judge', '', 'delegation');
+    markStepRunning(failJudgeStepId);
+
+    const failRunner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: typeof failJob, projectDirArg: string, stepArg: (typeof getJobSteps extends (...args: never[]) => infer R ? R extends Array<infer T> ? T : never : never)) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleFailedContinuation: ReturnType<typeof vi.fn>;
+    };
+    failRunner.runJudge = vi.fn().mockResolvedValue({ verdict: 'fail', confidence: 90, reason: 'broken build' });
+    failRunner.handleFailedContinuation = vi.fn().mockResolvedValue(undefined);
+    await failRunner.executeJudgeStep(
+      getJob(failJob.id)!,
+      projectDir,
+      getJobSteps(failJob.id).find((step) => step.id === failJudgeStepId)!,
+    );
+    expect(getJobSteps(failJob.id).some((step) => step.command === 'ui-review')).toBe(false);
+  });
+});
 
 // hung session retry logic tests removed — retry budget concept eliminated (quick task 260320-nc6).
 // The step-continuation model (Phase 73) handles hung sessions via re-delegation,
