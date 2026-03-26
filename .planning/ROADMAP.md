@@ -1751,11 +1751,11 @@ Wave structure:
 **Goal:** Extend the phase runner so UI-eligible phases automatically run an advisory post-judge `ui-review` audit, recover safely from interactive/hung branches, and surface the audit outcome across operator views without changing judge pass/fail semantics.
 **Requirements**: UIREV-01, UIREV-02, UIREV-03, UIREV-04, UIREV-05, UIREV-06, UIREV-08, UIREV-09
 **Depends on:** Phase 97
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 98-01-PLAN.md — Shared ui-review helper module + runner advisory lifecycle wiring
-- [ ] 98-02-PLAN.md — CLI observability for ui-review state, badges, and artifact paths
+- [x] 98-02-PLAN.md — CLI observability for ui-review state, badges, and artifact paths
 - [x] 98-03-PLAN.md — Web timeline semantics and semantic-helper regressions for ui-review
 
 Wave structure:

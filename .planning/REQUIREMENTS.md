@@ -294,7 +294,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **UIREV-04**: `ui-review` never runs after judge fail, judge gaps, shutdown/interruption, or retry/redelegation failure paths
 - [x] **UIREV-05**: `ui-review` uses advisory artifact-aware recovery: existing `UI-REVIEW.md` => completed, no artifact on hung/non-clean exit => skipped, and neither path re-delegates the job
 - [x] **UIREV-06**: Judge remains the only pass/fail/gaps gate; `ui-review` does not change judge verdict storage, retry routing, or gap-closure semantics in the first rollout
-- [ ] **UIREV-08**: `pilot status`, `pilot info`, and `pilot log` surface `ui-review` ran/skipped/path state separately from judge verdicts
+- [x] **UIREV-08**: `pilot status`, `pilot info`, and `pilot log` surface `ui-review` ran/skipped/path state separately from judge verdicts
 - [x] **UIREV-09**: Core/web timeline semantics classify `ui-review` as `UI Review`, and session-title identity parsing recognizes runner titles containing `ui-review`
 
 | Requirement | Phase | Status |
@@ -305,7 +305,7 @@ Requirements for initial release. Each maps to roadmap phases.
 | UIREV-04 | Phase 98 | Complete |
 | UIREV-05 | Phase 98 | Complete |
 | UIREV-06 | Phase 98 | Complete |
-| UIREV-08 | Phase 98 | Pending |
+| UIREV-08 | Phase 98 | Complete |
 | UIREV-09 | Phase 98 | Complete |
 
 ## v2 Requirements
