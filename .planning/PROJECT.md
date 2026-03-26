@@ -12,7 +12,7 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] UI-eligible phase jobs queue a post-judge advisory `ui-review` audit and surface outcomes across runner, CLI, and web semantics without changing judge pass/fail gating. Validated in Phase 98: Pilot - Add UI Review Step to Phase Lifecycle.
 
 ### Active
 
@@ -57,6 +57,12 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 - **Provider mode**: Judge must use check-role model (GPT-5.4 in hybrid), configurable via `_top:judge` scope
 - **Evidence strategy**: VERIFICATION.md from disk (primary) + session transcript via DB (secondary); if VERIFICATION.md absent, use transcript only with confidence ≤ 40
 
+## Current State
+
+- Phase 98 is complete.
+- The phase lifecycle now supports an advisory post-judge `ui-review` step for UI-eligible phases.
+- Runner, CLI, and web timeline semantics all expose `ui-review` explicitly while judge remains the sole completion gate.
+
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
@@ -69,4 +75,4 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 | VERIFICATION.md primary + transcript secondary | VERIFICATION.md is structured machine-readable evidence; transcript is fallback | — Pending |
 
 ---
-*Last updated: 2026-03-25 after Phase 97 completion — settings page with full configuration management in web UI*
+*Last updated: 2026-03-26 after Phase 98 completion — advisory ui-review added to the phase lifecycle*
