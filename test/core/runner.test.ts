@@ -27,7 +27,7 @@ vi.mock('node:fs', async () => {
 // Updated per-test before the module reads it.
 let _mockMeminfoContent = 'MemAvailable:   62914560 kB\n'; // 60 GB default
 
-import { createRunner, parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, isHumanOnlyRemaining, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete, _resolveHungUiPhaseOutcome } from '../../src/core/runner.js';
+import { createRunner, parseJudgeVerdict, getDynamicMaxParallel, hasSystemdRunUser, _resetSystemdRunCache, detectCheckpointPause, _findExistingUiSpec, _isUiPhaseArtifactComplete, _resolveHungUiPhaseOutcome } from '../../src/core/runner.js';
 import { HungSessionError } from '../../src/util/errors.js';
 
 // ── parseJudgeVerdict ──────────────────────────────────────────────────────
@@ -1158,87 +1158,177 @@ describe('ui-review runner behavior', () => {
 // The step-continuation model (Phase 73) handles hung sessions via re-delegation,
 // not via resetToPending/canRetry.
 
-// ── review state detection ─────────────────────────────────────────────────
+function writeStructuredVerificationArtifact(
+  projectDir: string,
+  phaseNumber: number,
+  frontmatter: string,
+): void {
+  const phaseDir = path.join(projectDir, '.planning', 'phases', `${phaseNumber}-structured-routing`);
+  mkdirSync(phaseDir, { recursive: true });
+  writeFileSync(
+    path.join(phaseDir, `${phaseNumber}-VERIFICATION.md`),
+    `---\n${frontmatter.trim()}\n---\n\n## Findings\n\n- Structured verification artifact\n`,
+  );
+}
 
-describe('review state detection', () => {
-  it('returns true when all gaps are human review items', () => {
-    const result = isHumanOnlyRemaining({
+describe('structured verification routing', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    _dbTestHelper();
+    projectDir = mkdtempSync(path.join(tmpdir(), 'pilot-structured-routing-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function createPhaseJob() {
+    const job = addJob(projectDir, 'phase', 'structured verification routing');
+    markRunning(job.id);
+    createPendingStep(job.id, 0, 'execute-phase', '87 --auto', 'delegation');
+    const judgeStepId = createPendingStep(job.id, 1, 'judge', '', 'delegation');
+    markStepRunning(judgeStepId);
+    return {
+      jobId: job.id,
+      step: getJobSteps(job.id).find((entry) => entry.id === judgeStepId)!,
+    };
+  }
+
+  it('re-delegates mixed actionable and manual artifacts even when judge prose sounds human-only', async () => {
+    writeStructuredVerificationArtifact(
+      projectDir,
+      87,
+      `
+status: gaps_found
+gaps:
+  - truth: Add missing runner regression
+    status: failed
+    reason: Missing coverage for mixed artifacts
+human_verification:
+  - test: Confirm summary wording is readable
+    expected: Operator can understand the next step
+    why_human: Manual copy check
+`,
+    );
+
+    const { jobId, step } = createPhaseJob();
+    const runner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: NonNullable<ReturnType<typeof getJob>>, projectDirArg: string, stepArg: typeof step) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleGapsContinuation: ReturnType<typeof vi.fn>;
+    };
+    runner.runJudge = vi.fn().mockResolvedValue({
       verdict: 'gaps_found',
-      confidence: 70,
-      reason: 'Some gaps found',
-      gaps: ['Manual visual review of dashboard layout', 'Human verification of accessibility'],
+      confidence: 61,
+      reason: 'Manual review only from here',
+      gaps: ['judge prose should not matter'],
     });
-    expect(result).toBe(true);
+    runner.handleGapsContinuation = vi.fn().mockResolvedValue(undefined);
+
+    await runner.executeJudgeStep(getJob(jobId)!, projectDir, step);
+
+    const storedJob = getJob(jobId)!;
+    expect(runner.handleGapsContinuation).toHaveBeenCalledTimes(1);
+    expect(storedJob.status).toBe('running');
+    expect(JSON.parse(storedJob.judgeVerdict!)).toMatchObject({
+      verificationStatus: 'gaps_found',
+      actionableGapCount: 1,
+      humanVerificationCount: 1,
+      routingDecision: 'continue-gaps',
+    });
   });
 
-  it('returns false when gaps include code implementation items', () => {
-    const result = isHumanOnlyRemaining({
+  it('sends explicit human_needed artifacts to pending review instead of gap continuation', async () => {
+    writeStructuredVerificationArtifact(
+      projectDir,
+      87,
+      `
+status: human_needed
+gaps: []
+human_verification:
+  - test: Validate dashboard layout on mobile Safari
+    expected: No overflow remains
+    why_human: Device-specific visual QA
+`,
+    );
+
+    const { jobId, step } = createPhaseJob();
+    const runner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: NonNullable<ReturnType<typeof getJob>>, projectDirArg: string, stepArg: typeof step) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleGapsContinuation: ReturnType<typeof vi.fn>;
+    };
+    runner.runJudge = vi.fn().mockResolvedValue({
       verdict: 'gaps_found',
-      confidence: 60,
-      reason: 'Tests fail',
-      gaps: ['Missing implementation in auth.ts', 'Bug in component'],
+      confidence: 55,
+      reason: 'Needs a person to look at this',
+      gaps: ['judge prose should not force continuation'],
     });
-    expect(result).toBe(false);
+    runner.handleGapsContinuation = vi.fn().mockResolvedValue(undefined);
+
+    await runner.executeJudgeStep(getJob(jobId)!, projectDir, step);
+
+    const storedJob = getJob(jobId)!;
+    expect(runner.handleGapsContinuation).not.toHaveBeenCalled();
+    expect(storedJob.status).toBe('completed_pending_review');
+    expect(JSON.parse(storedJob.judgeVerdict!)).toMatchObject({
+      verificationStatus: 'human_needed',
+      actionableGapCount: 0,
+      humanVerificationCount: 1,
+      routingDecision: 'human-review',
+    });
   });
 
-  it('returns true when reason contains only human review keywords and no code keywords', () => {
-    const result = isHumanOnlyRemaining({
-      verdict: 'doubting',
-      confidence: 65,
-      reason: 'Manual UX review needed for the mobile sweep',
-      gaps: [],
-    });
-    expect(result).toBe(true);
-  });
-
-  it('returns false when reason mentions code errors', () => {
-    const result = isHumanOnlyRemaining({
-      verdict: 'failed',
-      confidence: 80,
-      reason: 'Type error in TypeScript compilation',
-      gaps: [],
-    });
-    expect(result).toBe(false);
-  });
-
-  it('returns false when no gaps and reason has no human keywords', () => {
-    const result = isHumanOnlyRemaining({
+  it('puts jobs on review hold when structured verification is missing and ignores judge prose changes', async () => {
+    const first = createPhaseJob();
+    const firstRunner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: NonNullable<ReturnType<typeof getJob>>, projectDirArg: string, stepArg: typeof first.step) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleGapsContinuation: ReturnType<typeof vi.fn>;
+    };
+    firstRunner.runJudge = vi.fn().mockResolvedValue({
       verdict: 'gaps_found',
-      confidence: 70,
-      reason: 'Some remaining work to complete',
-      gaps: [],
+      confidence: 45,
+      reason: 'Manual review only',
+      gaps: ['human-sounding prose'],
     });
-    expect(result).toBe(false);
-  });
+    firstRunner.handleGapsContinuation = vi.fn().mockResolvedValue(undefined);
 
-  it('returns false when gaps mix human and code items', () => {
-    const result = isHumanOnlyRemaining({
+    await firstRunner.executeJudgeStep(getJob(first.jobId)!, projectDir, first.step);
+
+    const firstJob = getJob(first.jobId)!;
+    expect(firstRunner.handleGapsContinuation).not.toHaveBeenCalled();
+    expect(firstJob.status).toBe('review_hold');
+    expect(firstJob.resumeHint).toContain('verification-artifact-missing');
+    expect(JSON.parse(firstJob.judgeVerdict!)).toMatchObject({
+      verificationStatus: 'unavailable',
+      routingDecision: 'review-hold',
+    });
+
+    const second = createPhaseJob();
+    const secondRunner = createRunner({ once: true }) as unknown as {
+      executeJudgeStep: (jobArg: NonNullable<ReturnType<typeof getJob>>, projectDirArg: string, stepArg: typeof second.step) => Promise<void>;
+      runJudge: ReturnType<typeof vi.fn>;
+      handleGapsContinuation: ReturnType<typeof vi.fn>;
+    };
+    secondRunner.runJudge = vi.fn().mockResolvedValue({
       verdict: 'gaps_found',
-      confidence: 60,
-      reason: 'Mixed items',
-      gaps: ['visual review needed', 'missing error handling in auth.ts'],
+      confidence: 45,
+      reason: 'Needs a bug fix immediately',
+      gaps: ['code-sounding prose'],
     });
-    expect(result).toBe(false);
-  });
+    secondRunner.handleGapsContinuation = vi.fn().mockResolvedValue(undefined);
 
-  it('returns true when gaps contain "review by hand" keyword', () => {
-    const result = isHumanOnlyRemaining({
-      verdict: 'gaps_found',
-      confidence: 75,
-      reason: 'Needs manual verification',
-      gaps: ['verify by hand that the form submits correctly'],
-    });
-    expect(result).toBe(true);
-  });
+    await secondRunner.executeJudgeStep(getJob(second.jobId)!, projectDir, second.step);
 
-  it('returns true when reason mentions design review without code problems', () => {
-    const result = isHumanOnlyRemaining({
-      verdict: 'doubting',
-      confidence: 72,
-      reason: 'Design review required for the UI components — no code issues found',
-      gaps: [],
+    const secondJob = getJob(second.jobId)!;
+    expect(secondRunner.handleGapsContinuation).not.toHaveBeenCalled();
+    expect(secondJob.status).toBe('review_hold');
+    expect(JSON.parse(secondJob.judgeVerdict!)).toMatchObject({
+      verificationStatus: 'unavailable',
+      routingDecision: 'review-hold',
     });
-    expect(result).toBe(true);
   });
 });
 

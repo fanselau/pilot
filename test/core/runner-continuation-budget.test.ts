@@ -207,139 +207,73 @@ describe('Phase 84 continuation-cycle guard compatibility', () => {
   });
 });
 
-// ── isHumanOnlyRemaining — extended signals ────────────────────────────────
+// ── Structured verification routing snapshot ───────────────────────────────
 
-describe('isHumanOnlyRemaining — extended signals', () => {
-  // Helper type matching JudgeVerdict shape
-  type Verdict = { verdict: string; confidence: number; reason: string; gaps?: string[] };
+describe('structured verification routing snapshot', () => {
+  it('treats the k87k class gap as actionable even when manual checks also exist', async () => {
+    const verification = await import('../../src/core/verification-artifact.js');
+    const routing = verification.deriveVerificationRouting({
+      available: true,
+      verificationStatus: 'gaps_found',
+      artifactPath: '/tmp/87-VERIFICATION.md',
+      unavailableReason: null,
+      gaps: [
+        {
+          truth: 'Missing integration test coverage',
+          status: 'failed',
+          reason: 'Regression still reproducible',
+          artifacts: ['test/core/runner.test.ts'],
+          missing: ['Mixed artifact continuation regression'],
+          actionable: true,
+        },
+      ],
+      humanVerification: [
+        {
+          test: 'Check info output wording manually',
+          expected: 'Routing basis is easy to understand',
+          whyHuman: 'Terminal readability',
+        },
+      ],
+    });
 
-  let isHumanOnlyRemaining: (verdict: Verdict) => boolean;
-
-  it('loads isHumanOnlyRemaining from runner.ts', async () => {
-    const runner = await import('../../src/core/runner.js');
-    isHumanOnlyRemaining = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as typeof isHumanOnlyRemaining;
-    expect(typeof isHumanOnlyRemaining).toBe('function');
+    expect(routing.actionableGapCount).toBe(1);
+    expect(routing.humanVerificationCount).toBe(1);
+    expect(routing.routingDecision).toBe('continue-gaps');
   });
 
-  // Approval/sign-off keywords
-  it('detects "approve", "sign-off", "QA", "stakeholder", "product owner" keywords', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
+  it('routes pure human-needed artifacts to human review', async () => {
+    const verification = await import('../../src/core/verification-artifact.js');
+    const routing = verification.deriveVerificationRouting({
+      available: true,
+      verificationStatus: 'human_needed',
+      artifactPath: '/tmp/88-VERIFICATION.md',
+      unavailableReason: null,
+      gaps: [],
+      humanVerification: [
+        {
+          test: 'Verify layout in a browser',
+          expected: 'Spacing matches design intent',
+          whyHuman: 'Visual QA',
+        },
+      ],
+    });
 
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Needs stakeholder approve'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Requires sign-off from lead'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['QA pass needed'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Product owner review'] })).toBe(true);
+    expect(routing.actionableGapCount).toBe(0);
+    expect(routing.routingDecision).toBe('human-review');
   });
 
-  // Deploy/release keywords
-  it('detects "deploy", "release", "publish", "ship" as human-action signals', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
+  it('uses review-hold for explicit unavailable snapshots instead of prose inference', async () => {
+    const verification = await import('../../src/core/verification-artifact.js');
+    const routing = verification.deriveVerificationRouting({
+      available: false,
+      verificationStatus: 'unavailable',
+      artifactPath: null,
+      unavailableReason: 'verification-artifact-unreadable',
+      gaps: [],
+      humanVerification: [],
+    });
 
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Deploy to production'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Release to app store'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Publish package'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Ship to customers'] })).toBe(true);
-  });
-
-  // Soft/review/polish keywords
-  it('detects "polish", "tweak", "copy edit", "wording" as soft/review items', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Polish the UI spacing'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Tweak button alignment'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Copy edit the homepage'] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Fix wording on the landing page'] })).toBe(true);
-  });
-
-  // Confidence-based: high confidence + all soft gaps → true
-  it('with confidence >= 85 and all gaps matching soft-review patterns (no code keywords) returns true', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    // Soft gaps that match the softGapKeywords but NOT the humanKeywords regex directly
-    expect(fn({
-      verdict: 'gaps_found',
-      confidence: 85,
-      reason: 'Minor adjustments needed',
-      gaps: ['spacing adjustment', 'alignment check', 'padding fix'],
-    })).toBe(true);
-
-    expect(fn({
-      verdict: 'gaps_found',
-      confidence: 90,
-      reason: 'Almost done',
-      gaps: ['color adjust needed', 'font size tweak'],
-    })).toBe(true);
-  });
-
-  // Confidence-based: high confidence + gaps with code keywords → false
-  it('with confidence >= 85 BUT gaps containing code keywords returns false', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({
-      verdict: 'gaps_found',
-      confidence: 90,
-      reason: 'Nearly there',
-      gaps: ['Fix the compile error in auth.ts'],
-    })).toBe(false);
-
-    expect(fn({
-      verdict: 'gaps_found',
-      confidence: 95,
-      reason: 'Close',
-      gaps: ['polish UI', 'bug in login form'],
-    })).toBe(false);
-  });
-
-  // Low confidence + soft gaps → still true (keyword match alone is sufficient)
-  it('with confidence < 85 and soft gaps still returns true (keyword match alone is sufficient)', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({
-      verdict: 'gaps_found',
-      confidence: 50,
-      reason: '',
-      gaps: ['Deploy to staging'],
-    })).toBe(true);
-  });
-
-  // Code keywords → always false
-  it('returns false for gaps with "bug", "error", "crash", "test fail", "missing implementation"', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Fix the bug in parser'] })).toBe(false);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['Handle the error case'] })).toBe(false);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['App crash on startup'] })).toBe(false);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['test fail in auth module'] })).toBe(false);
-    expect(fn({ verdict: 'gaps_found', confidence: 70, reason: '', gaps: ['missing implementation for API'] })).toBe(false);
-  });
-
-  // Backward compatibility: existing behavior preserved
-  it('preserves existing behavior — "manual review needed" in reason returns true', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({ verdict: 'gaps_found', confidence: 60, reason: 'Needs manual review', gaps: [] })).toBe(true);
-    expect(fn({ verdict: 'gaps_found', confidence: 60, reason: 'visual inspection needed', gaps: [] })).toBe(true);
-  });
-
-  it('preserves existing behavior — code keyword in reason overrides human keyword', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({ verdict: 'gaps_found', confidence: 60, reason: 'manual review needed but there is a bug', gaps: [] })).toBe(false);
-  });
-
-  it('returns false when no human signals at all', async () => {
-    const runner = await import('../../src/core/runner.js');
-    const fn = (runner as Record<string, unknown>)['isHumanOnlyRemaining'] as (v: Verdict) => boolean;
-
-    expect(fn({ verdict: 'gaps_found', confidence: 60, reason: 'Some work needed', gaps: ['implement feature X'] })).toBe(false);
+    expect(routing.routingDecision).toBe('review-hold');
+    expect(routing.routingReason).toContain('verification-artifact-unreadable');
   });
 });
