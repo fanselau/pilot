@@ -1745,3 +1745,19 @@ Wave structure:
 - Wave 1: 97-01 (server functions + route + layout foundation)
 - Wave 2: 97-02 (config sections + form state + save flow, depends on 97-01)
 - Wave 3: 97-03 (data-driven sections: models/projects/skills, depends on 97-01 + 97-02)
+
+### Phase 98: Pilot — Add UI Review Step to Phase Lifecycle @/home/luca/dev/punchlab/pilot/requirements/pilot-add-ui-review-step.md
+
+**Goal:** Extend the phase runner so UI-eligible phases automatically run an advisory post-judge `ui-review` audit, recover safely from interactive/hung branches, and surface the audit outcome across operator views without changing judge pass/fail semantics.
+**Requirements**: UIREV-01, UIREV-02, UIREV-03, UIREV-04, UIREV-05, UIREV-06, UIREV-08, UIREV-09
+**Depends on:** Phase 97
+**Plans:** 3 plans
+
+Plans:
+- [ ] 98-01-PLAN.md — Shared ui-review helper module + runner advisory lifecycle wiring
+- [ ] 98-02-PLAN.md — CLI observability for ui-review state, badges, and artifact paths
+- [ ] 98-03-PLAN.md — Web timeline semantics and semantic-helper regressions for ui-review
+
+Wave structure:
+- Wave 1: 98-01 (core helper contract + runner pass-path/advisory recovery)
+- Wave 2: 98-02 + 98-03 (CLI observability and web semantics, both depend on 98-01 and do not overlap)

@@ -286,6 +286,28 @@ Requirements for initial release. Each maps to roadmap phases.
 | MOBILE-STEP-NAV | Phase 96 | Complete |
 | MOBILE-SUBSESSION-CHIPS | Phase 96 | Complete |
 
+### Pilot UI Review Step in Phase Lifecycle
+
+- [ ] **UIREV-01**: Pilot appends an explicit `ui-review` step for UI-eligible phase jobs only after judge pass; it is not part of the initial pre-judge step list
+- [ ] **UIREV-02**: UI-review eligibility is derived deterministically from existing UI signals (`intent.uiPhase`, prior `ui-phase` step, or existing `UI-SPEC.md`) and non-UI phases omit the step
+- [ ] **UIREV-03**: Existing `UI-REVIEW.md` causes duplicate-safe skip/no-op behavior rather than re-running interactive audit branches
+- [ ] **UIREV-04**: `ui-review` never runs after judge fail, judge gaps, shutdown/interruption, or retry/redelegation failure paths
+- [ ] **UIREV-05**: `ui-review` uses advisory artifact-aware recovery: existing `UI-REVIEW.md` => completed, no artifact on hung/non-clean exit => skipped, and neither path re-delegates the job
+- [ ] **UIREV-06**: Judge remains the only pass/fail/gaps gate; `ui-review` does not change judge verdict storage, retry routing, or gap-closure semantics in the first rollout
+- [ ] **UIREV-08**: `pilot status`, `pilot info`, and `pilot log` surface `ui-review` ran/skipped/path state separately from judge verdicts
+- [ ] **UIREV-09**: Core/web timeline semantics classify `ui-review` as `UI Review`, and session-title identity parsing recognizes runner titles containing `ui-review`
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| UIREV-01 | Phase 98 | Pending |
+| UIREV-02 | Phase 98 | Pending |
+| UIREV-03 | Phase 98 | Pending |
+| UIREV-04 | Phase 98 | Pending |
+| UIREV-05 | Phase 98 | Pending |
+| UIREV-06 | Phase 98 | Pending |
+| UIREV-08 | Phase 98 | Pending |
+| UIREV-09 | Phase 98 | Pending |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -428,10 +450,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | REATTR-06 | Phase 95 | Complete |
 
 **Coverage:**
-- v1 requirements: 128 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95)
-- Mapped to phases: 128
+- v1 requirements: 136 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95 + 8 Phase 98)
+- Mapped to phases: 136
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-24 after adding Phase 95 redelegation attribution requirements*
+*Last updated: 2026-03-26 after adding Phase 98 ui-review lifecycle requirements*
