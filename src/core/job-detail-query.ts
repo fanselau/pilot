@@ -487,6 +487,11 @@ interface TimelineCandidate {
   sessionTitle: string | null;
 }
 
+interface SessionBranchChild {
+  sessionId: string;
+  timeCreated: number;
+}
+
 function parseStepTime(value: string | null): number | null {
   return safeParseTimestamp(value);
 }
@@ -764,6 +769,7 @@ function getJobTimeline(
   const sessionStatus = new Map<string, 'active' | 'done' | 'unknown'>();
   const sessionModels = new Map<string, string[]>();
   const sessionDuration = new Map<string, number | null>();
+  const sessionCreatedAt = new Map<string, number>();
 
   // Seed depth 0 for all initially-queued sessions
   for (const entry of queue) {
@@ -787,6 +793,21 @@ function getJobTimeline(
 
     seenSessions.add(current.sessionId);
     sessionTitleById.set(current.sessionId, current.title);
+
+    const currentMeta = getSessionMeta(current.sessionId);
+    if (currentMeta) {
+      sessionCreatedAt.set(current.sessionId, currentMeta.timeCreated);
+      sessionDuration.set(
+        current.sessionId,
+        currentMeta.timeUpdated > currentMeta.timeCreated
+          ? currentMeta.timeUpdated - currentMeta.timeCreated
+          : null,
+      );
+    }
+    const currentDone = isSessionDone(current.sessionId);
+    const currentMessageCount = getAssistantMessageCount(current.sessionId);
+    sessionStatus.set(current.sessionId, currentDone ? 'done' : (currentMessageCount > 0 ? 'active' : 'unknown'));
+    sessionModels.set(current.sessionId, getSessionModelsRecursive(current.sessionId));
 
     const parts = getSessionParts(current.sessionId);
     for (const part of parts) {
@@ -820,6 +841,7 @@ function getJobTimeline(
             toolInputRaw: part.toolInputRaw,
             toolOutput: part.toolOutput,
             toolStatus: part.toolStatus,
+            spawnedSessionId: part.spawnedSessionId,
             patchFiles: part.patchFiles,
           },
           createdAt: part.createdAt,
@@ -860,6 +882,7 @@ function getJobTimeline(
         ? child.timeUpdated - child.timeCreated
         : null;
 
+      sessionCreatedAt.set(child.id, child.timeCreated);
       sessionStatus.set(child.id, done ? 'done' : (messageCount > 0 ? 'active' : 'unknown'));
       sessionModels.set(child.id, models);
       sessionDuration.set(child.id, durationMs);
@@ -932,65 +955,117 @@ function getJobTimeline(
     const items = itemsByStep.get(step.stepIndex);
     if (!items || items.length === 0) continue;
 
-    // Group items by sessionId, then interleave child sections at their
-    // fork point within the root session timeline. Each child gets one
-    // consolidated section, inserted where it was spawned.
     const perSession = new Map<string, StepTimelineItem[]>();
-    const childFirstSeen = new Map<string, number>();
 
     for (const item of items) {
       const sid = item.sessionId;
       if (!perSession.has(sid)) {
         perSession.set(sid, []);
-        if (sid !== step.sessionId) childFirstSeen.set(sid, item.createdAt);
       }
       perSession.get(sid)!.push(item);
     }
 
-    // Sort each session's items chronologically
     for (const arr of perSession.values()) arr.sort((a, b) => a.createdAt - b.createdAt);
-
-    // Sort children by their fork time
-    const sortedChildren = [...childFirstSeen.entries()]
-      .sort((a, b) => a[1] - b[1]);
-
-    // Walk root items and interleave children at their fork points
-    const rootItems = perSession.get(step.sessionId ?? '') ?? [];
     const sections: TimelineSection[] = [];
-    let rootBatch: StepTimelineItem[] = [];
-    let childIdx = 0;
+    const anchoredChildrenByParent = new Map<string, Map<string, SessionBranchChild[]>>();
+    const appendedBranches = new Set<string>();
 
-    for (const item of rootItems) {
-      // Insert any children whose fork time is at or before this root item
-      while (childIdx < sortedChildren.length && sortedChildren[childIdx][1] <= item.createdAt) {
-        // Flush accumulated root items as a section
-        if (rootBatch.length > 0) {
-          sections.push(buildSection(step.sessionId ?? '', rootBatch));
-          rootBatch = [];
+    for (const [parentSessionId, sessionItems] of perSession.entries()) {
+      for (const item of sessionItems) {
+        if (item.kind !== 'tool-summary' || item.tool !== 'task' || !item.spawnedSessionId) {
+          continue;
         }
-        const childSid = sortedChildren[childIdx][0];
-        const childItems = perSession.get(childSid);
-        if (childItems && childItems.length > 0) {
-          sections.push(buildSection(childSid, childItems));
+        const childSessionId = item.spawnedSessionId;
+        if (sessionParent.get(childSessionId) !== parentSessionId || !perSession.has(childSessionId)) {
+          continue;
         }
-        childIdx++;
+        let partMap = anchoredChildrenByParent.get(parentSessionId);
+        if (!partMap) {
+          partMap = new Map<string, SessionBranchChild[]>();
+          anchoredChildrenByParent.set(parentSessionId, partMap);
+        }
+        const existing = partMap.get(item.partId) ?? [];
+        if (!existing.some((entry) => entry.sessionId === childSessionId)) {
+          existing.push({
+            sessionId: childSessionId,
+            timeCreated: sessionCreatedAt.get(childSessionId) ?? Number.MAX_SAFE_INTEGER,
+          });
+          partMap.set(item.partId, existing);
+        }
       }
-      rootBatch.push(item);
     }
 
-    // Flush remaining root items
-    if (rootBatch.length > 0) {
-      sections.push(buildSection(step.sessionId ?? '', rootBatch));
+    function appendSessionBranch(sessionId: string): void {
+      if (appendedBranches.has(sessionId)) {
+        return;
+      }
+      appendedBranches.add(sessionId);
+
+      const sessionItems = perSession.get(sessionId) ?? [];
+      if (sessionItems.length === 0) {
+        return;
+      }
+
+      let batch: StepTimelineItem[] = [];
+      for (const item of sessionItems) {
+        batch.push(item);
+        if (item.kind !== 'tool-summary' || item.tool !== 'task') {
+          continue;
+        }
+        const anchoredChildren = [...(anchoredChildrenByParent.get(sessionId)?.get(item.partId) ?? [])]
+          .sort((a, b) => a.timeCreated - b.timeCreated || a.sessionId.localeCompare(b.sessionId));
+        if (anchoredChildren.length === 0) {
+          continue;
+        }
+        sections.push(buildSection(sessionId, batch));
+        batch = [];
+        for (const child of anchoredChildren) {
+          appendSessionBranch(child.sessionId);
+        }
+      }
+
+      if (batch.length > 0) {
+        sections.push(buildSection(sessionId, batch));
+      }
+
+      const fallbackChildren = getBranchChildren(sessionId)
+        .filter((child) => !appendedBranches.has(child.sessionId));
+      for (const child of fallbackChildren) {
+        appendSessionBranch(child.sessionId);
+      }
     }
 
-    // Append any children that started after all root items
-    while (childIdx < sortedChildren.length) {
-      const childSid = sortedChildren[childIdx][0];
-      const childItems = perSession.get(childSid);
-      if (childItems && childItems.length > 0) {
-        sections.push(buildSection(childSid, childItems));
+    function getBranchChildren(parentSessionId: string): SessionBranchChild[] {
+      const children: SessionBranchChild[] = [];
+      for (const childSessionId of perSession.keys()) {
+        if (sessionParent.get(childSessionId) !== parentSessionId) {
+          continue;
+        }
+        children.push({
+          sessionId: childSessionId,
+          timeCreated: sessionCreatedAt.get(childSessionId) ?? Number.MAX_SAFE_INTEGER,
+        });
       }
-      childIdx++;
+      return children.sort((a, b) => a.timeCreated - b.timeCreated || a.sessionId.localeCompare(b.sessionId));
+    }
+
+    if (step.sessionId && perSession.has(step.sessionId)) {
+      appendSessionBranch(step.sessionId);
+    }
+
+    for (const sessionId of [...perSession.keys()].sort((a, b) => {
+      const aCreated = sessionCreatedAt.get(a) ?? Number.MAX_SAFE_INTEGER;
+      const bCreated = sessionCreatedAt.get(b) ?? Number.MAX_SAFE_INTEGER;
+      return aCreated - bCreated || a.localeCompare(b);
+    })) {
+      if (sessionId === step.sessionId || appendedBranches.has(sessionId)) {
+        continue;
+      }
+      const parentSessionId = sessionParent.get(sessionId);
+      if (parentSessionId && perSession.has(parentSessionId)) {
+        continue;
+      }
+      appendSessionBranch(sessionId);
     }
 
     groups.push({

@@ -90,6 +90,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackSessionKey: null,
     notifyRoute: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: 'aaa111',
     gitHeadCommit: 'bbb222',
     startedDirty: false,
