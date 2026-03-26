@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: completed
 stopped_at: Completed quick task 260326-ujj
-last_updated: "2026-03-26T22:13:02Z"
+last_updated: "2026-03-26T22:17:37Z"
 progress:
   total_phases: 100
   completed_phases: 57
@@ -29,6 +29,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
 **Current focus:** Phase 100 — pilot-managed-gsd-distribution-approved-version-and-controlled-rollouts-home-luca-dev-punchlab-pilot-requirements-pilot-managed-gsd-distribution-md
+Last activity: 2026-03-26 - Completed quick task 260326-ujj: Replace heuristic child-session placement with exact task-anchored subsession ordering
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
@@ -331,7 +332,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 | 260322-uyd | Pilot fast scope native detection + compat fallback + UI labels | 2026-03-22 | ec41458 | | [260322-uyd-pilot-fast-scope-should-use-native-upstr](./quick/260322-uyd-pilot-fast-scope-should-use-native-upstr/) |
 | 260323-o5h | UI-Phase completion handoff detection — detect successful ui-phase completion and auto-advance to plan-phase | 2026-03-23 | 79ce790 | | [260323-o5h-ui-phase-completion-handoff-detection-de](./quick/260323-o5h-ui-phase-completion-handoff-detection-de/) |
 | 260325-ebl | pilot add — Warn when adding to a blocked project | 2026-03-25 | b0a9527 | | [260325-ebl-pilot-add-warn-when-adding-to-a-blocked-](./quick/260325-ebl-pilot-add-warn-when-adding-to-a-blocked-/) |
-| 260326-ujj | Replace heuristic child-session placement with exact task-anchored subsession ordering | 2026-03-26 | 4e43433 | Verified | [260326-ujj-read-home-luca-dev-punchlab-pilot-requir](./quick/260326-ujj-read-home-luca-dev-punchlab-pilot-requir/) |
+| 260326-ujj | Replace heuristic child-session placement with exact task-anchored subsession ordering | 2026-03-26 | 4e43433 | Needs Review | [260326-ujj-read-home-luca-dev-punchlab-pilot-requir](./quick/260326-ujj-read-home-luca-dev-punchlab-pilot-requir/) |
 
 ## Accumulated Context
 
