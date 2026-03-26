@@ -593,6 +593,8 @@ function computeSemanticLabel(command: string, source: string): string {
   }
   if (command === 'unattributed') return 'Unattributed';
   if (command === 'add-phase') return 'Add Phase';
+  if (command === 'ui-phase') return 'UI Phase';
+  if (command === 'ui-review') return 'UI Review';
   const isGap = source === 'judge:gaps' || source === 'judge:failed';
   if (source === 'judge:hung') return 'Recovery';
   if (source === 'operator') return 'Manual';

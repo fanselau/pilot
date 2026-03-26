@@ -10,7 +10,7 @@
 
 import type { StepTimelineGroup } from '@pilot/core/types.js'
 import {
-  Route, FolderPlus, Map, Hammer, Scale, Forward,
+  Route, FolderPlus, Map, Hammer, Scale, Forward, Eye,
   MapPin, Wrench, ShieldCheck, Zap, User, HelpCircle,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -22,6 +22,7 @@ export type SemanticSessionType =
   | 'add-phase'
   | 'planning'
   | 'execution'
+  | 'ui-review'
   | 'judge'
   | 'continuation-delegation'
   | 'gap-planning'
@@ -51,6 +52,7 @@ export const SEMANTIC_TYPE_CONFIG: Record<SemanticSessionType, SemanticTypeConfi
   'add-phase':                { label: 'Add Phase',                icon: FolderPlus,   bgClass: 'bg-violet-50/50 dark:bg-violet-900/20',  subBgClass: 'bg-violet-100/40 dark:bg-violet-900/40',  borderClass: 'border-violet-300/40 dark:border-violet-600/30', isGap: false },
   'planning':                 { label: 'Planning',                 icon: Map,          bgClass: 'bg-blue-50/50 dark:bg-blue-900/20',      subBgClass: 'bg-blue-100/40 dark:bg-blue-900/40',      borderClass: 'border-blue-300/40 dark:border-blue-600/30', isGap: false },
   'execution':                { label: 'Execution',                icon: Hammer,       bgClass: 'bg-emerald-50/50 dark:bg-emerald-900/20',subBgClass: 'bg-emerald-100/40 dark:bg-emerald-900/40',borderClass: 'border-emerald-300/40 dark:border-emerald-600/30', isGap: false },
+  'ui-review':                { label: 'UI Review',                icon: Eye,          bgClass: 'bg-sky-50/50 dark:bg-sky-900/20',        subBgClass: 'bg-sky-100/40 dark:bg-sky-900/40',        borderClass: 'border-sky-300/40 dark:border-sky-600/30', isGap: false },
   'judge':                    { label: 'Judge',                    icon: Scale,        bgClass: 'bg-amber-50/50 dark:bg-amber-900/20',    subBgClass: 'bg-amber-100/40 dark:bg-amber-900/40',    borderClass: 'border-amber-300/40 dark:border-amber-600/30', isGap: false },
   'continuation-delegation':  { label: 'Continuation Delegation',  icon: Forward,      bgClass: 'bg-orange-50/50 dark:bg-orange-900/20',  subBgClass: 'bg-orange-100/40 dark:bg-orange-900/40',  borderClass: 'border-orange-300/40 dark:border-orange-600/30', isGap: false },
   'gap-planning':             { label: 'Gap Planning',             icon: MapPin,       bgClass: 'bg-blue-50/30 dark:bg-blue-900/10',      subBgClass: 'bg-blue-100/30 dark:bg-blue-900/30',      borderClass: 'border-blue-300/30 dark:border-blue-600/20', isGap: true },
@@ -86,6 +88,7 @@ export function resolveSemanticType(group: StepTimelineGroup): SemanticSessionTy
     if (group.command === 'add-phase') return 'add-phase'
     return isGap ? 'gap-planning' : (isFailed ? 'gap-planning' : 'planning')
   }
+  if (group.command === 'ui-review') return 'ui-review'
   if (group.command.includes('execute')) {
     return isGap ? 'gap-execution' : (isFailed ? 'gap-execution' : 'execution')
   }
@@ -110,6 +113,7 @@ export function resolveSemanticType(group: StepTimelineGroup): SemanticSessionTy
 export function resolveSemanticHint(title: string): SemanticSessionType {
   const lower = title.toLowerCase()
   if (lower.includes('plan-phase') || lower.includes('planning')) return 'planning'
+  if (lower.includes('ui-review')) return 'ui-review'
   if (lower.includes('execute-phase') || lower.includes('execution')) return 'execution'
   if (lower.includes('judge') || lower.includes('verify') || lower.includes('verification')) return 'judge'
   // redelegate/continuation MUST come before generic delegate — 'redelegate' contains 'delegate'
@@ -195,6 +199,7 @@ export function stepSemanticClass(group: StepTimelineGroup): string {
   if (source === 'operator') return 'step-manual'
 
   if (group.command.includes('plan')) return 'step-planning'
+  if (group.command === 'ui-review') return 'step-ui-review'
   if (group.command.includes('execute')) return 'step-execution'
   if (group.command.includes('judge') || group.command.includes('verify')) return 'step-judge'
   if (group.command === 'fast') return 'step-fast'
@@ -295,6 +300,7 @@ export function synthesizeHeaderFields(group: StepTimelineGroup): SynthesizedHea
     stage = 'Manual'
   } else if (group.source === 'delegation') {
     if (group.command.includes('plan')) stage = 'Planning'
+    else if (group.command === 'ui-review') stage = 'Design QA'
     else if (group.command.includes('execute')) stage = 'Execution'
     else if (group.command.includes('judge') || group.command.includes('verify')) stage = 'Verification'
     else if (group.command === 'fast') stage = 'Fast Task'
@@ -371,7 +377,7 @@ export function deriveBranchIdentity(title: string): BranchIdentity {
   }
 
   // GSD runner command titles
-  const gsdMatch = normalized.match(/-((?:add|plan|execute|verify|ui)-phase|judge|debugger|fast|quick|new-project|new-milestone|audit-milestone)-/)
+  const gsdMatch = normalized.match(/-((?:add|plan|execute|verify|ui)-phase|ui-review|judge|debugger|fast|quick|new-project|new-milestone|audit-milestone)-/)
   if (gsdMatch) {
     return { label: gsdMatch[1], role: gsdMatch[1], purpose: normalized, semanticHint }
   }
