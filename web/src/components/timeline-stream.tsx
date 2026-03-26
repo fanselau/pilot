@@ -314,14 +314,11 @@ function PatchRow({ item }: { item: TimelineToolSummaryItem }) {
   return (
     <ToolChrome icon={Package} label="patch" detail={`${files.length} file${files.length !== 1 ? 's' : ''} changed`} status={item.toolStatus} time={item.createdAt}>
       {files.length > 0 && (
-        <div className="rounded overflow-hidden border border-amber-900/30">
-          <div className="px-2 py-0.5 text-[9px] font-mono text-amber-300 bg-amber-900/30 border-b border-amber-900/20 select-none">
-            changes applied
-          </div>
+        <div className="rounded overflow-hidden border border-border/30">
           {files.map((f, i) => (
-            <div key={f} className={`flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono ${i > 0 ? 'border-t border-amber-900/10' : ''} bg-amber-950/20`}>
-              <FileEdit className="h-2.5 w-2.5 text-amber-400/60 shrink-0" />
-              <span className="text-amber-100/70 truncate min-w-0">{f}</span>
+            <div key={f} className={`flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono ${i > 0 ? 'border-t border-border/15' : ''}`}>
+              <FileEdit className="h-2.5 w-2.5 text-muted-foreground/40 shrink-0" />
+              <span className="text-foreground/70 truncate min-w-0">{f}</span>
             </div>
           ))}
         </div>
