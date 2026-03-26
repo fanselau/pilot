@@ -709,6 +709,208 @@ describe('getJobTimeline', () => {
     expect(page.childCount).toBe(2);
   });
 
+  it('anchors a child section immediately after the exact spawning task item', () => {
+    mockGetJob.mockReturnValue(makeJob({ sessionTitles: JSON.stringify(['root-session']) }));
+    mockGetJobSteps.mockReturnValue([
+      makeStep({ stepIndex: 0, sessionId: 'sess-root', sessionTitle: 'root-session' }),
+    ]);
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [{ id: 'child-1', title: 'Child 1', timeCreated: 1300, timeUpdated: 2200 }];
+      }
+      return [];
+    });
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [
+          makePart({ id: 'root-before', type: 'text', text: 'before child', createdAt: 1000 }),
+          makePart({
+            id: 'root-task',
+            type: 'tool',
+            tool: 'task',
+            toolInput: 'spawn child',
+            spawnedSessionId: 'child-1',
+            createdAt: 1100,
+          }),
+          makePart({ id: 'root-after', type: 'text', text: 'after child anchor', createdAt: 1200 }),
+        ];
+      }
+      if (sessionId === 'child-1') {
+        return [makePart({ id: 'child-activity', type: 'text', text: 'child work', createdAt: 2000 })];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockImplementation((sessionId: string) => sessionId === 'child-1');
+    mockGetAssistantMessageCount.mockReturnValue(2);
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 10, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+
+    const page = getJobTimeline('ab12')!;
+    const sections = page.groups[0].sections;
+
+    expect(sections).toHaveLength(3);
+    expect(sections[0].sessionId).toBe('sess-root');
+    expect(sections[0].items.map((item) => item.partId)).toEqual(['root-before', 'root-task']);
+    expect(sections[1].sessionId).toBe('child-1');
+    expect(sections[2].sessionId).toBe('sess-root');
+    expect(sections[2].items.map((item) => item.partId)).toEqual(['root-after']);
+
+    const taskItem = sections[0].items[1];
+    expect(taskItem.kind).toBe('tool-summary');
+    if (taskItem.kind === 'tool-summary') {
+      expect(taskItem.spawnedSessionId).toBe('child-1');
+    }
+  });
+
+  it('keeps multiple spawned children ordered by parent task call order', () => {
+    mockGetJob.mockReturnValue(makeJob({ sessionTitles: JSON.stringify(['root-session']) }));
+    mockGetJobSteps.mockReturnValue([
+      makeStep({ stepIndex: 0, sessionId: 'sess-root', sessionTitle: 'root-session' }),
+    ]);
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [
+          { id: 'child-1', title: 'Child 1', timeCreated: 1400, timeUpdated: 2400 },
+          { id: 'child-2', title: 'Child 2', timeCreated: 1500, timeUpdated: 2300 },
+        ];
+      }
+      return [];
+    });
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [
+          makePart({ id: 'root-before', type: 'text', text: 'before', createdAt: 1000 }),
+          makePart({ id: 'task-1', type: 'tool', tool: 'task', toolInput: 'spawn 1', spawnedSessionId: 'child-1', createdAt: 1100 }),
+          makePart({ id: 'root-middle', type: 'text', text: 'middle', createdAt: 1200 }),
+          makePart({ id: 'task-2', type: 'tool', tool: 'task', toolInput: 'spawn 2', spawnedSessionId: 'child-2', createdAt: 1300 }),
+          makePart({ id: 'root-tail', type: 'text', text: 'tail', createdAt: 1350 }),
+        ];
+      }
+      if (sessionId === 'child-1') {
+        return [makePart({ id: 'child-1-part', type: 'text', text: 'child one', createdAt: 2200 })];
+      }
+      if (sessionId === 'child-2') {
+        return [makePart({ id: 'child-2-part', type: 'text', text: 'child two', createdAt: 2100 })];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(2);
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 10, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+
+    const page = getJobTimeline('ab12')!;
+    const sectionOrder = page.groups[0].sections.map((section) => `${section.sessionId}:${section.items.map((item) => item.partId).join(',')}`);
+
+    expect(sectionOrder).toEqual([
+      'sess-root:root-before,task-1',
+      'child-1:child-1-part',
+      'sess-root:root-middle,task-2',
+      'child-2:child-2-part',
+      'sess-root:root-tail',
+    ]);
+  });
+
+  it('anchors nested grandchildren inside the child session stream', () => {
+    mockGetJob.mockReturnValue(makeJob({ sessionTitles: JSON.stringify(['root-session']) }));
+    mockGetJobSteps.mockReturnValue([
+      makeStep({ stepIndex: 0, sessionId: 'sess-root', sessionTitle: 'root-session' }),
+    ]);
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [{ id: 'child-1', title: 'Child 1', timeCreated: 1200, timeUpdated: 2600 }];
+      }
+      if (parentId === 'child-1') {
+        return [{ id: 'grandchild-1', title: 'Grandchild 1', timeCreated: 1500, timeUpdated: 2400 }];
+      }
+      return [];
+    });
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [makePart({ id: 'root-task', type: 'tool', tool: 'task', toolInput: 'spawn child', spawnedSessionId: 'child-1', createdAt: 1000 })];
+      }
+      if (sessionId === 'child-1') {
+        return [
+          makePart({ id: 'child-before', type: 'text', text: 'child before', createdAt: 1100 }),
+          makePart({ id: 'child-task', type: 'tool', tool: 'task', toolInput: 'spawn grandchild', spawnedSessionId: 'grandchild-1', createdAt: 1200 }),
+          makePart({ id: 'child-after', type: 'text', text: 'child after', createdAt: 1300 }),
+        ];
+      }
+      if (sessionId === 'grandchild-1') {
+        return [makePart({ id: 'grandchild-part', type: 'text', text: 'grandchild work', createdAt: 2300 })];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(2);
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 10, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+
+    const page = getJobTimeline('ab12')!;
+    const sections = page.groups[0].sections;
+
+    expect(sections.map((section) => `${section.sessionId}:${section.items.map((item) => item.partId).join(',')}`)).toEqual([
+      'sess-root:root-task',
+      'child-1:child-before,child-task',
+      'grandchild-1:grandchild-part',
+      'child-1:child-after',
+    ]);
+    expect(sections[2].depth).toBe(2);
+    expect(sections[2].parentSessionId).toBe('child-1');
+  });
+
+  it('keeps unmatched parent_id fallback children visible after anchored content', () => {
+    mockGetJob.mockReturnValue(makeJob({ sessionTitles: JSON.stringify(['root-session']) }));
+    mockGetJobSteps.mockReturnValue([
+      makeStep({ stepIndex: 0, sessionId: 'sess-root', sessionTitle: 'root-session' }),
+    ]);
+    mockFindSessionByTitle.mockReturnValue('sess-root');
+    mockGetChildSessions.mockImplementation((parentId: string) => {
+      if (parentId === 'sess-root') {
+        return [
+          { id: 'child-anchored', title: 'Anchored Child', timeCreated: 1200, timeUpdated: 2200 },
+          { id: 'child-fallback', title: 'Fallback Child', timeCreated: 1300, timeUpdated: 2300 },
+        ];
+      }
+      return [];
+    });
+    mockGetSessionParts.mockImplementation((sessionId: string) => {
+      if (sessionId === 'sess-root') {
+        return [
+          makePart({ id: 'root-task', type: 'tool', tool: 'task', toolInput: 'spawn anchored', spawnedSessionId: 'child-anchored', createdAt: 1000 }),
+          makePart({ id: 'root-tail', type: 'text', text: 'tail', createdAt: 1100 }),
+        ];
+      }
+      if (sessionId === 'child-anchored') {
+        return [makePart({ id: 'anchored-part', type: 'text', text: 'anchored child', createdAt: 2000 })];
+      }
+      if (sessionId === 'child-fallback') {
+        return [makePart({ id: 'fallback-part', type: 'text', text: 'fallback child', createdAt: 1500 })];
+      }
+      return [];
+    });
+    mockIsSessionDone.mockReturnValue(true);
+    mockGetAssistantMessageCount.mockReturnValue(2);
+    mockGetSessionTokensRecursive.mockReturnValue({ input: 10, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+    mockGetSessionModelsRecursive.mockReturnValue(['anthropic/claude-sonnet-4-6']);
+    mockGetLastMessage.mockReturnValue(null);
+
+    const page = getJobTimeline('ab12')!;
+
+    expect(page.groups[0].sections.map((section) => section.sessionId)).toEqual([
+      'sess-root',
+      'child-anchored',
+      'sess-root',
+      'child-fallback',
+    ]);
+  });
+
   it('maps text/reasoning parts to activity kind and tool/patch parts to tool-summary kind', () => {
     mockGetJob.mockReturnValue(
       makeJob({ sessionTitles: JSON.stringify(['root-session']) }),
