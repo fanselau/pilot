@@ -240,6 +240,23 @@ program
     await updateCommand();
   });
 
+const gsdVersionCmd = program
+  .command('gsd-version')
+  .description('Show or change the approved managed GSD version');
+
+gsdVersionCmd.action(async () => {
+  const { gsdVersionShowCommand } = await import('./commands/gsd-version.js');
+  await gsdVersionShowCommand();
+});
+
+gsdVersionCmd
+  .command('set <version>')
+  .description('Set the approved managed GSD version')
+  .action(async (version: string) => {
+    const { gsdVersionSetCommand } = await import('./commands/gsd-version.js');
+    await gsdVersionSetCommand(version);
+  });
+
 const configCmd = program
   .command('config')
   .description('Configuration management');
