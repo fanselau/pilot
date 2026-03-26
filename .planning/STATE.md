@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 99-02-PLAN.md
-last_updated: "2026-03-26T15:32:46.391Z"
+status: executing
+stopped_at: Completed 100-01-PLAN.md
+last_updated: "2026-03-26T16:01:55.659Z"
 progress:
-  total_phases: 99
+  total_phases: 100
   completed_phases: 56
-  total_plans: 195
-  completed_plans: 183
+  total_plans: 198
+  completed_plans: 184
 ---
 
 # State
@@ -20,19 +20,19 @@ progress:
 
 ## Current Position
 
-Phase: 99 (pilot-runtime-agent-skills-patching-for-per-job-skill-delivery-home-luca-dev-punchlab-pilot-requirements-pilot-runtime-agent-skills-patching-md) — EXECUTING
-Plan: 2 of 2
+Phase: 100 (pilot-managed-gsd-distribution-approved-version-and-controlled-rollouts-home-luca-dev-punchlab-pilot-requirements-pilot-managed-gsd-distribution-md) — EXECUTING
+Plan: 2 of 3
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
-**Current focus:** Phase 99 — pilot-runtime-agent-skills-patching-for-per-job-skill-delivery-home-luca-dev-punchlab-pilot-requirements-pilot-runtime-agent-skills-patching-md
+**Current focus:** Phase 100 — pilot-managed-gsd-distribution-approved-version-and-controlled-rollouts-home-luca-dev-punchlab-pilot-requirements-pilot-managed-gsd-distribution-md
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Phase complete — ready for verification
+- **Status:** Ready to execute
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -426,6 +426,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - Phase 97 added: Settings Page — Full Configuration Management in Web UI
 - Phase 98 added: Pilot — Add UI Review Step to Phase Lifecycle @/home/luca/dev/punchlab/pilot/requirements/pilot-add-ui-review-step.md
 - Phase 99 added: "Pilot — Runtime `agent_skills` Patching for Per-Job Skill Delivery" @/home/luca/dev/punchlab/pilot/requirements/pilot-runtime-agent-skills-patching.md
+- Phase 100 added: "Pilot — Managed GSD Distribution, Approved Version, and Controlled Rollouts" @/home/luca/dev/punchlab/pilot/requirements/pilot-managed-gsd-distribution.md
 
 ## Decisions
 
@@ -1046,6 +1047,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 99]: Merge user agent skill paths first, append normalized Pilot paths second, then restore exact prior state
 - [Phase 99]: Apply runtime agent_skills once per launch after skill installation and before delegation, then restore in finally before cleanup.
 - [Phase 99]: Keep human-facing pilot info output concise while exposing the full persisted runtime snapshot under runtimeSkills in JSON mode.
+- [Phase 100]: Use config.gsd.approvedVersion as the single approved-version policy source
+- [Phase 100]: Persist last inspected project GSD version and drift state on each project row
 
 ## Blockers/Concerns Carried Forward
 
@@ -1054,6 +1057,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-26T15:32:46.382Z
-Stopped at: Completed 99-02-PLAN.md
+Last session: 2026-03-26T16:01:55.650Z
+Stopped at: Completed 100-01-PLAN.md
 Resume file: None

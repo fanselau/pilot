@@ -1772,3 +1772,15 @@ Wave structure:
 Plans:
 - [x] 99-01-PLAN.md - Runtime agent_skills foundation: snapshot schema, config mutation helper, and apply/restore core
 - [x] 99-02-PLAN.md - Runner lifecycle integration and `pilot info` observability for runtime skill patching
+
+### Phase 100: "Pilot — Managed GSD Distribution, Approved Version, and Controlled Rollouts" @/home/luca/dev/punchlab/pilot/requirements/pilot-managed-gsd-distribution.md
+
+**Goal:** Make Pilot manage GSD as an approved-version product surface with explicit version authority, safe setup/refresh/update semantics, visible project drift, and controlled fleet rollout reporting.
+**Requirements**: MGSD-01, MGSD-02, MGSD-03, MGSD-04, MGSD-05, MGSD-06, MGSD-07
+**Depends on:** Phase 99
+**Plans:** 1/3 plans executed
+
+Plans:
+- [x] 100-01-PLAN.md — Approved-version foundation: config authority, drift classification, and project state persistence
+- [ ] 100-02-PLAN.md — Setup/refresh semantics and controlled rollout behavior
+- [ ] 100-03-PLAN.md — Approved-version control surface and project drift visibility
