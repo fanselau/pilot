@@ -455,9 +455,9 @@ Deferred to future release. Tracked but not in current roadmap.
 - [x] **MGSD-02**: Pilot detects each managed project's installed GSD version and classifies drift as `matches`, `behind`, `ahead`, or `unknown`.
 - [ ] **MGSD-03**: `pilot setup` and `pilot setup --refresh` install or repair only against the approved-version contract and never silently downgrade ahead-of-approved projects.
 - [ ] **MGSD-04**: `pilot update` converges Pilot's managed installer to the approved version and performs a controlled rollout across managed projects with per-project outcome reporting.
-- [ ] **MGSD-05**: Pilot exposes approved version, installed version, and drift status in first-class operator surfaces and JSON output.
+- [x] **MGSD-05**: Pilot exposes approved version, installed version, and drift status in first-class operator surfaces and JSON output.
 - [x] **MGSD-06**: The supported GSD distribution model is explicit and approved-version-governed even if Pilot still uses `get-shit-done-cc` internally.
-- [ ] **MGSD-07**: Regression tests cover approved-version install, refresh safety, rollout behavior, ahead/behind/unknown detection, and partial rollout failure.
+- [x] **MGSD-07**: Regression tests cover approved-version install, refresh safety, rollout behavior, ahead/behind/unknown detection, and partial rollout failure.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -465,9 +465,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | MGSD-02 | Phase 100 | Complete |
 | MGSD-03 | Phase 100 | Pending |
 | MGSD-04 | Phase 100 | Pending |
-| MGSD-05 | Phase 100 | Pending |
+| MGSD-05 | Phase 100 | Complete |
 | MGSD-06 | Phase 100 | Complete |
-| MGSD-07 | Phase 100 | Pending |
+| MGSD-07 | Phase 100 | Complete |
 
 **Coverage:**
 - v1 requirements: 143 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95 + 8 Phase 98 + 7 Phase 100)

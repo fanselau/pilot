@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 100-01-PLAN.md
-last_updated: "2026-03-26T16:01:55.659Z"
+stopped_at: Completed 100-03-PLAN.md
+last_updated: "2026-03-26T16:10:31.653Z"
 progress:
   total_phases: 100
   completed_phases: 56
   total_plans: 198
-  completed_plans: 184
+  completed_plans: 185
 ---
 
 # State
@@ -21,7 +21,7 @@ progress:
 ## Current Position
 
 Phase: 100 (pilot-managed-gsd-distribution-approved-version-and-controlled-rollouts-home-luca-dev-punchlab-pilot-requirements-pilot-managed-gsd-distribution-md) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Project Reference
 
@@ -1049,6 +1049,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 99]: Keep human-facing pilot info output concise while exposing the full persisted runtime snapshot under runtimeSkills in JSON mode.
 - [Phase 100]: Use config.gsd.approvedVersion as the single approved-version policy source
 - [Phase 100]: Persist last inspected project GSD version and drift state on each project row
+- [Phase 100]: Expose approved-version policy through a dedicated pilot gsd-version command instead of overloading pilot update.
+- [Phase 100]: Render project and fleet GSD state from live inspectProjectGsdState() results so human and JSON surfaces stay truthful.
 
 ## Blockers/Concerns Carried Forward
 
@@ -1057,6 +1059,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-26T16:01:55.650Z
-Stopped at: Completed 100-01-PLAN.md
+Last session: 2026-03-26T16:10:31.645Z
+Stopped at: Completed 100-03-PLAN.md
 Resume file: None
