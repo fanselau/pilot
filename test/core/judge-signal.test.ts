@@ -31,12 +31,15 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackSessionKey: null,
     notifyRoute: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
     startedDirty: false,
     skipGracePeriod: false,
     retryBudget: 3,
     retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
     hungCount: 0,
     lastHungReason: null,
     ...overrides,
@@ -256,11 +259,30 @@ describe('buildJudgeSignal — Phase 73 canonical verdicts', () => {
 
   it('maps gaps_found to gaps outcome', () => {
     const signal = buildJudgeSignal(makeJob({
-      judgeVerdict: JSON.stringify({ verdict: 'gaps_found', confidence: 45, reason: 'gaps remain', gaps: ['auth test'] }),
+      judgeVerdict: JSON.stringify({
+        verdict: 'gaps_found',
+        confidence: 45,
+        reason: 'gaps remain',
+        gaps: ['auth test'],
+        verificationStatus: 'gaps_found',
+        actionableGapCount: 2,
+        humanVerificationCount: 1,
+        routingDecision: 'continue-gaps',
+        routingReason: 'Structured verification reports 2 actionable gap(s)',
+        artifactPath: '/tmp/87-VERIFICATION.md',
+      }),
     }));
     expect(signal.outcome).toBe('gaps');
     expect(signal.badge).toBe('judge:gaps 45%');
     expect(signal.gaps).toEqual(['auth test']);
+    expect(signal.verification).toMatchObject({
+      status: 'gaps_found',
+      actionableGapCount: 2,
+      humanVerificationCount: 1,
+      routingDecision: 'continue-gaps',
+      routingReason: 'Structured verification reports 2 actionable gap(s)',
+      artifactPath: '/tmp/87-VERIFICATION.md',
+    });
   });
 
   it('maps legacy doubting to gaps outcome', () => {
@@ -291,5 +313,14 @@ describe('formatJudgeBadge — Phase 73', () => {
 
   it('handles inconclusive with null confidence', () => {
     expect(formatJudgeBadge('inconclusive', null)).toBe('judge:inconclusive');
+  });
+
+  it('keeps older verdict payloads backward compatible when structured verification fields are absent', () => {
+    const signal = buildJudgeSignal(makeJob({
+      judgeVerdict: JSON.stringify({ verdict: 'succeeded', confidence: 92, reason: 'legacy payload' }),
+    }));
+
+    expect(signal.outcome).toBe('pass');
+    expect(signal.verification).toBeNull();
   });
 });

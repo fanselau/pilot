@@ -561,6 +561,36 @@ describe('infoCommand recovery visibility', () => {
     expect(output).toContain('judge:gaps 55%');
   });
 
+  it('shows structured verification routing details for phase review states', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        scope: 'phase',
+        status: 'review_hold',
+        resumeHint: 'Structured verification fallback: verification artifact unreadable',
+        judgeVerdict: JSON.stringify({
+          verdict: 'gaps_found',
+          confidence: 48,
+          reason: 'judge found open issues',
+          verificationStatus: 'unavailable',
+          actionableGapCount: 0,
+          humanVerificationCount: 0,
+          routingDecision: 'review-hold',
+          routingReason: 'Structured verification unavailable: verification-artifact-unreadable',
+          artifactPath: '/resolved/my-project/.planning/phases/87-routing/87-VERIFICATION.md',
+        }),
+      }),
+    );
+
+    await infoCommand('ab12', {});
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('Structured verification status: unavailable');
+    expect(output).toContain('Actionable gaps remaining: 0');
+    expect(output).toContain('Human verification checks remaining: 0');
+    expect(output).toContain('Routing decision: review-hold');
+    expect(output).toContain('Routing reason: Structured verification unavailable: verification-artifact-unreadable');
+  });
+
   it('shows UI Review completed path when the advisory artifact exists', async () => {
     mockGetJob.mockReturnValue(makeJob({ scope: 'phase' }));
     mockFindExistingUiReview.mockReturnValue('/resolved/my-project/.planning/phases/98-ui-review-lifecycle/98-UI-REVIEW.md');

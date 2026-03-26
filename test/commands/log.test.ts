@@ -82,6 +82,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: '1111111111111111111111111111111111111111',
     gitHeadCommit: '1111111111111111111111111111111111111111',
     notifyRoute: null,
@@ -308,6 +309,34 @@ describe('logCommand --summary', () => {
     expect(output).toContain('what: Last run failed.');
     expect(output).toContain('next: Run pilot unblock');
     expect(output).toContain('retry guidance: failed (failed)');
+  });
+
+  it('shows structured verification routing basis in summary output', async () => {
+    mockGetJob.mockReturnValue(
+      makeJob({
+        status: 'completed_pending_review',
+        judgeVerdict: JSON.stringify({
+          verdict: 'gaps_found',
+          confidence: 52,
+          reason: 'judge found review items',
+          verificationStatus: 'human_needed',
+          actionableGapCount: 0,
+          humanVerificationCount: 2,
+          routingDecision: 'human-review',
+          routingReason: 'Structured verification reports 2 human verification item(s) and no actionable gaps',
+          artifactPath: '/resolved/my-project/.planning/phases/87-routing/87-VERIFICATION.md',
+        }),
+      }),
+    );
+
+    await logCommand('ab12', { summary: true });
+
+    const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
+    expect(output).toContain('structured verification: status=human_needed');
+    expect(output).toContain('actionable=0');
+    expect(output).toContain('human=2');
+    expect(output).toContain('routing=human-review');
+    expect(output).toContain('Structured verification reports 2 human verification item(s) and no actionable gaps');
   });
 
   it('surfaces safe undo/no-step fallback state without transcript reads', async () => {
