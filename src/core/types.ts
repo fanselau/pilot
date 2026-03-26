@@ -278,6 +278,7 @@ export interface SessionPart {
   toolInputRaw?: string; // JSON-stringified structured input (for edit diffs, bash desc)
   toolOutput?: string;   // truncated output summary
   toolStatus?: string;   // running, completed, error
+  spawnedSessionId?: string; // child session ID parsed from task tool output
   // Text/reasoning fields
   text?: string;         // text content
   // Patch fields
@@ -530,6 +531,7 @@ export interface TimelineToolSummaryItem {
   toolInputRaw?: string;
   toolOutput?: string;
   toolStatus?: string;
+  spawnedSessionId?: string;
   patchFiles?: string[];
 }
 

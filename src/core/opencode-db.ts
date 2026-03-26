@@ -381,10 +381,34 @@ function extractToolOutput(tool: string, stateOutput: unknown): string | undefin
   const outputStr = typeof stateOutput === 'string' ? stateOutput : JSON.stringify(stateOutput);
 
   if (tool === 'bash') {
-    return truncateStr(outputStr, 4000);
+    const firstTwoLines = outputStr.split('\n').slice(0, 2).join('\n');
+    return truncateStr(firstTwoLines, 4000);
   }
 
   return truncateStr(outputStr, 1000);
+}
+
+function extractSpawnedSessionId(stateOutput: unknown): string | undefined {
+  if (stateOutput == null) return undefined;
+
+  let outputStr: string;
+  if (typeof stateOutput === 'string') {
+    outputStr = stateOutput;
+  } else {
+    try {
+      outputStr = JSON.stringify(stateOutput);
+    } catch {
+      return undefined;
+    }
+  }
+
+  const match = outputStr.match(/task_id:[ \t]*([^\s"'\\,}\]]+)/m);
+  if (!match) {
+    return undefined;
+  }
+
+  const sessionId = match[1]?.trim();
+  return sessionId ? sessionId : undefined;
 }
 
 /**
@@ -421,6 +445,9 @@ function parsePartRow(
     if (tool && state) {
       base.toolInput = extractToolInput(tool, state.input);
       base.toolOutput = extractToolOutput(tool, state.output);
+      if (tool === 'task') {
+        base.spawnedSessionId = extractSpawnedSessionId(state.output);
+      }
       // Preserve structured input for tools that benefit from rich rendering
       if (state.input != null && (tool === 'edit' || tool === 'bash' || tool === 'grep' || tool === 'glob' || tool === 'task')) {
         try {
@@ -1141,6 +1168,7 @@ export {
   getSessionModels,
   getSessionMeta,
   extractToolInput,
+  extractSpawnedSessionId,
   _resetDbCache,
   _setTestDb,
 };
