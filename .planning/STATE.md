@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 100-03-PLAN.md
-last_updated: "2026-03-26T16:10:31.653Z"
+status: verifying
+stopped_at: Completed 100-02-PLAN.md
+last_updated: "2026-03-26T16:14:50.229Z"
 progress:
   total_phases: 100
-  completed_phases: 56
+  completed_phases: 57
   total_plans: 198
-  completed_plans: 185
+  completed_plans: 186
 ---
 
 # State
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Ready to execute
+- **Status:** Phase complete — ready for verification
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -1051,6 +1051,9 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 100]: Persist last inspected project GSD version and drift state on each project row
 - [Phase 100]: Expose approved-version policy through a dedicated pilot gsd-version command instead of overloading pilot update.
 - [Phase 100]: Render project and fleet GSD state from live inspectProjectGsdState() results so human and JSON surfaces stay truthful.
+- [Phase 100]: Setup now prepares the approved runtime once before installer work
+- [Phase 100]: Refresh and fleet update skip ahead-of-approved projects instead of silently downgrading them
+- [Phase 100]: Update JSON output now includes approvedVersion runtimeVersion and per-project rollout records
 
 ## Blockers/Concerns Carried Forward
 
@@ -1059,6 +1062,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-26T16:10:31.645Z
-Stopped at: Completed 100-03-PLAN.md
+Last session: 2026-03-26T16:14:50.221Z
+Stopped at: Completed 100-02-PLAN.md
 Resume file: None

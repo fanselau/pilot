@@ -1778,9 +1778,9 @@ Plans:
 **Goal:** Make Pilot manage GSD as an approved-version product surface with explicit version authority, safe setup/refresh/update semantics, visible project drift, and controlled fleet rollout reporting.
 **Requirements**: MGSD-01, MGSD-02, MGSD-03, MGSD-04, MGSD-05, MGSD-06, MGSD-07
 **Depends on:** Phase 99
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 100-01-PLAN.md — Approved-version foundation: config authority, drift classification, and project state persistence
-- [ ] 100-02-PLAN.md — Setup/refresh semantics and controlled rollout behavior
+- [x] 100-02-PLAN.md — Setup/refresh semantics and controlled rollout behavior
 - [x] 100-03-PLAN.md — Approved-version control surface and project drift visibility

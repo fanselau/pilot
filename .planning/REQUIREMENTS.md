@@ -453,8 +453,8 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - [x] **MGSD-01**: Pilot stores one explicit approved GSD version as an operator-controlled source of truth, independent of incidental `node_modules` state.
 - [x] **MGSD-02**: Pilot detects each managed project's installed GSD version and classifies drift as `matches`, `behind`, `ahead`, or `unknown`.
-- [ ] **MGSD-03**: `pilot setup` and `pilot setup --refresh` install or repair only against the approved-version contract and never silently downgrade ahead-of-approved projects.
-- [ ] **MGSD-04**: `pilot update` converges Pilot's managed installer to the approved version and performs a controlled rollout across managed projects with per-project outcome reporting.
+- [x] **MGSD-03**: `pilot setup` and `pilot setup --refresh` install or repair only against the approved-version contract and never silently downgrade ahead-of-approved projects.
+- [x] **MGSD-04**: `pilot update` converges Pilot's managed installer to the approved version and performs a controlled rollout across managed projects with per-project outcome reporting.
 - [x] **MGSD-05**: Pilot exposes approved version, installed version, and drift status in first-class operator surfaces and JSON output.
 - [x] **MGSD-06**: The supported GSD distribution model is explicit and approved-version-governed even if Pilot still uses `get-shit-done-cc` internally.
 - [x] **MGSD-07**: Regression tests cover approved-version install, refresh safety, rollout behavior, ahead/behind/unknown detection, and partial rollout failure.
@@ -463,8 +463,8 @@ Deferred to future release. Tracked but not in current roadmap.
 |-------------|-------|--------|
 | MGSD-01 | Phase 100 | Complete |
 | MGSD-02 | Phase 100 | Complete |
-| MGSD-03 | Phase 100 | Pending |
-| MGSD-04 | Phase 100 | Pending |
+| MGSD-03 | Phase 100 | Complete |
+| MGSD-04 | Phase 100 | Complete |
 | MGSD-05 | Phase 100 | Complete |
 | MGSD-06 | Phase 100 | Complete |
 | MGSD-07 | Phase 100 | Complete |
