@@ -112,6 +112,46 @@ async function ensureLockTarget(configPath: string): Promise<void> {
   }
 }
 
+async function mutatePlanningConfig(
+  projectDir: string,
+  updater: (config: JsonObject) => JsonObject | void,
+): Promise<JsonObject> {
+  const planningDir = path.join(projectDir, '.planning');
+  const configPath = path.join(planningDir, 'config.json');
+
+  await mkdir(planningDir, { recursive: true });
+  await ensureLockTarget(configPath);
+
+  let release: (() => Promise<void>) | null = null;
+
+  try {
+    release = await lockfile.lock(configPath, {
+      realpath: false,
+      retries: {
+        retries: 25,
+        factor: 1.2,
+        minTimeout: 20,
+        maxTimeout: 100,
+      },
+    });
+
+    const existing = await readConfigOrEmpty(configPath);
+    const updated = updater(existing);
+    const nextConfig = updated ?? existing;
+
+    await writeConfigAtomically(configPath, nextConfig);
+    return nextConfig;
+  } finally {
+    if (release) {
+      try {
+        await release();
+      } catch {
+        // Best effort unlock.
+      }
+    }
+  }
+}
+
 async function readConfigOrEmpty(configPath: string): Promise<JsonObject> {
   try {
     const raw = await readFile(configPath, 'utf8');
@@ -158,39 +198,10 @@ function isAutonomousGsdConfig(config: unknown): boolean {
 }
 
 async function ensureAutonomousGsdConfig(projectDir: string): Promise<void> {
-  const planningDir = path.join(projectDir, '.planning');
-  const configPath = path.join(planningDir, 'config.json');
-
-  await mkdir(planningDir, { recursive: true });
-  await ensureLockTarget(configPath);
-
-  let release: (() => Promise<void>) | null = null;
-
-  try {
-    release = await lockfile.lock(configPath, {
-      realpath: false,
-      retries: {
-        retries: 25,
-        factor: 1.2,
-        minTimeout: 20,
-        maxTimeout: 100,
-      },
-    });
-
-    const existing = await readConfigOrEmpty(configPath);
+  await mutatePlanningConfig(projectDir, (existing) => {
     const merged = deepMergeWithUserValues(AUTONOMOUS_GSD_DEFAULTS, existing);
-    const nextConfig = applyPilotWins(merged);
-
-    await writeConfigAtomically(configPath, nextConfig);
-  } finally {
-    if (release) {
-      try {
-        await release();
-      } catch {
-        // Best effort unlock.
-      }
-    }
-  }
+    return applyPilotWins(merged);
+  });
 }
 
 export {
@@ -198,4 +209,6 @@ export {
   PILOT_WINS_PATHS,
   ensureAutonomousGsdConfig,
   isAutonomousGsdConfig,
+  mutatePlanningConfig,
+  type JsonObject,
 };
