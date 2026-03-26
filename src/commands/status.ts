@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
-import { getQueue, getRecent, getProject, getJob } from '../core/db.js';
+import { getQueue, getRecent, getProject, getJob, getJobSteps } from '../core/db.js';
 import { getConfig } from '../core/config.js';
 import { buildJobObservability } from '../core/job-observability.js';
 import { buildJudgeSignal } from '../core/judge-signal.js';
@@ -22,6 +22,29 @@ import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, blue, yellow } from '../util/colors.js';
 import { formatRelativeTime } from '../util/format.js';
 import type { Job, JobObservabilitySnapshot } from '../core/types.js';
+
+function getUiReviewBadge(job: Job): string | null {
+  if (job.scope !== 'phase') return null;
+
+  const steps = getJobSteps(job.id);
+  const latestUiReviewStep = [...steps]
+    .filter((step) => step.command === 'ui-review')
+    .sort((a, b) => b.stepIndex - a.stepIndex)[0];
+
+  if (!latestUiReviewStep) return null;
+
+  switch (latestUiReviewStep.status) {
+    case 'completed':
+      return 'ui-review';
+    case 'skipped':
+      return 'ui-review:skipped';
+    case 'pending':
+    case 'running':
+      return 'ui-review:running';
+    default:
+      return null;
+  }
+}
 
 interface RecoveryTag {
   tag: string;
@@ -415,6 +438,11 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
         job.status === 'completed' && job.scope === 'phase' && judgeSignal.badge
           ? `${dim(`[${judgeSignal.badge}]`)} `
           : '';
+      const uiReviewBadge =
+        job.status === 'completed' && job.scope === 'phase'
+          ? getUiReviewBadge(job)
+          : null;
+      const uiReviewBadgeText = uiReviewBadge ? `${dim(`[${uiReviewBadge}]`)} ` : '';
       const statusWhy = why[job.id];
       const statusBadge =
         job.status === 'failed' || job.status === 'cancelled'
@@ -428,7 +456,7 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
                 : '';
       const failReason = job.status === 'failed' && job.error ? dim(` — ${job.error.slice(0, 60).replace(/\n/g, ' ')}`) : '';
       outputHuman(
-        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${judgeBadge}${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
+        `  ${icon} ${dim(job.id)}  ${job.project}  ${dim(job.scope)}  "${desc}"  ${dim(elapsed)}  ${judgeBadge}${uiReviewBadgeText}${statusBadge}${dim(`[${formatRecoveryTag(job)}]`)}  ${dim(`[obs ${formatCompactObservability(observability[job.id])}]`)}${failReason}`,
       );
       if (showWhy && (job.status === 'failed' || job.status === 'cancelled' || statusWhy.code === 'no-commit-delta')) {
         outputHuman(`    ${dim(`└ ${formatWhyLine(statusWhy.what, statusWhy.why, statusWhy.next)}`)}`);

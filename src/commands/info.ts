@@ -21,6 +21,7 @@ import { buildJobObservability } from '../core/job-observability.js';
 import { buildJudgeSignal, formatJudgeReason } from '../core/judge-signal.js';
 import { findSessionByTitle, getSessionTokens } from '../core/opencode-db.js';
 import { resolveAllAgentModels } from '../core/models.js';
+import { extractPhaseNumberFromStepArgs, findExistingUiReview } from '../core/ui-review.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, green, red, yellow, cyan } from '../util/colors.js';
 import type { DelegationResult, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
@@ -77,6 +78,52 @@ function formatStatusColor(status: string): string {
 
 function hr(): string {
   return '────────────────────────────────────────────────────────────────────────────';
+}
+
+interface UiReviewInfo {
+  phaseNumber: number | null;
+  artifactPath: string | null;
+  display: string;
+}
+
+function resolveUiReviewInfo(job: Job, steps: JobStep[]): UiReviewInfo {
+  const phaseStep = steps.find((step) => step.command === 'plan-phase' || step.command === 'execute-phase');
+  const phaseNumber = phaseStep ? extractPhaseNumberFromStepArgs(phaseStep.args) : null;
+  const projectDir = resolveProjectDir(job.project);
+  const artifactPath = phaseNumber ? findExistingUiReview(projectDir, phaseNumber) : null;
+  const uiReviewStep = [...steps]
+    .filter((step) => step.command === 'ui-review')
+    .sort((a, b) => b.stepIndex - a.stepIndex)[0];
+
+  if (artifactPath) {
+    return {
+      phaseNumber,
+      artifactPath,
+      display: `completed - ${artifactPath}`,
+    };
+  }
+
+  if (uiReviewStep?.status === 'skipped') {
+    return {
+      phaseNumber,
+      artifactPath: null,
+      display: 'skipped - advisory audit did not produce UI-REVIEW.md',
+    };
+  }
+
+  if (uiReviewStep?.status === 'pending' || uiReviewStep?.status === 'running') {
+    return {
+      phaseNumber,
+      artifactPath: null,
+      display: 'queued',
+    };
+  }
+
+  return {
+    phaseNumber,
+    artifactPath: null,
+    display: 'not applicable',
+  };
 }
 
 interface RecoveryInfo {
@@ -500,6 +547,7 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
   const retryLineage = buildRetryLineage(job);
   const observability = buildJobObservability(job);
   const failureContext = buildFailureContext(job, steps, triage);
+  const uiReview = resolveUiReviewInfo(job, steps);
   const tokenTotals = observability.tokens.totals ?? {
     input: 0,
     output: 0,
@@ -524,9 +572,10 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
       retryLineage,
       resolvedModels,
       observability,
-      failureContext,
-      actualModels: job.actualModels,
-      tokenUsage: {
+        failureContext,
+        uiReview,
+        actualModels: job.actualModels,
+        tokenUsage: {
         totalInput: tokenTotals.input,
         totalOutput: tokenTotals.output,
         total: tokenTotals.total,
@@ -707,6 +756,9 @@ async function infoCommand(id: string, opts: { json?: boolean }): Promise<void> 
         outputHuman(`      ${dim(`Session: ${step.sessionTitle}${tokenStr}`)}`);
       }
     }
+    outputHuman('');
+
+    outputHuman(`  ${dim(pad('UI Review:'))} ${uiReview.display}`);
     outputHuman('');
   }
 

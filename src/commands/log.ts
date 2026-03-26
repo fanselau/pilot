@@ -25,6 +25,12 @@ import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
 import type { SessionPart, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
 
+const KNOWN_GSD_COMMANDS = [
+  'add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'ui-phase', 'ui-review',
+  'judge', 'debugger', 'fast', 'quick',
+  'new-project', 'new-milestone', 'audit-milestone',
+];
+
 interface LogOptions {
   json?: boolean;
   summary?: boolean;
@@ -75,9 +81,8 @@ function categorizeSessions(sessionTitles: string[]): CategorizedSession[] {
     }
 
     // Extract command from title by matching against known GSD commands
-    const knownCommands = ['add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'phase', 'quick', 'new-project'];
     let command: string | undefined;
-    for (const cmd of knownCommands) {
+    for (const cmd of KNOWN_GSD_COMMANDS) {
       if (title.includes(`-${cmd}-`) || title.includes(`-gsd-${cmd}-`)) {
         command = cmd;
         break;
@@ -658,13 +663,6 @@ function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
  * - Non-empty unrecognized → full title (preserves whatever identity exists)
  * - Empty → 'subagent' (only truly empty gets generic fallback)
  */
-/** Known GSD commands that appear in runner session titles as `{project}-{command}-{jobId}-{ts}` */
-const KNOWN_GSD_COMMANDS = [
-  'add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'ui-phase',
-  'judge', 'debugger', 'fast', 'quick',
-  'new-project', 'new-milestone', 'audit-milestone',
-];
-
 function extractAgentIdentity(title: string): string {
   if (!title) return 'subagent';
 

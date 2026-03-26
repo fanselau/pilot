@@ -44,6 +44,8 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     skipGracePeriod: false,
     retryBudget: 3,
     retryCount: 0,
+    retryHint: null,
+    lastFailureFingerprint: null,
     hungCount: 0,
     lastHungReason: null,
     ...overrides,
@@ -55,11 +57,13 @@ function makeJob(overrides: Partial<Job> = {}): Job {
 let mockQueue: Job[] = [];
 let mockRecent: Job[] = [];
 let mockProjects: Record<string, { status: 'active' | 'blocked'; blockedReason: string | null }> = {};
+let mockJobSteps: Record<string, Array<{ command: string; args: string; stepIndex: number; status: string }>> = {};
 
 vi.mock('../../src/core/db.js', () => ({
   getQueue: () => mockQueue,
   getRecent: (_limit: number) => mockRecent,
   getJob: (id: string) => [...mockQueue, ...mockRecent].find((job) => job.id === id) ?? null,
+  getJobSteps: (id: string) => mockJobSteps[id] ?? [],
   getProject: (projectPath: string) => {
     const project = mockProjects[projectPath];
     if (!project) return null;
@@ -186,6 +190,7 @@ beforeEach(() => {
   mockQueue = [];
   mockRecent = [];
   mockProjects = {};
+  mockJobSteps = {};
   mockBuildJobObservability.mockImplementation((job: Job) => makeObservability(job));
 });
 
