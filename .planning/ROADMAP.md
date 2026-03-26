@@ -1767,8 +1767,8 @@ Wave structure:
 **Goal:** Keep Pilot's category-based skill system as the source of truth while adding a reversible runtime `agent_skills` transport layer that writes explicit per-agent skill paths into `.planning/config.json` for the current job, restores the original config afterward, and leaves operators with concise, inspectable evidence of what was injected.
 **Requirements**: ASKILL-01, ASKILL-02, ASKILL-03, ASKILL-04, ASKILL-05
 **Depends on:** Phase 98
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 99-01-PLAN.md - Runtime agent_skills foundation: snapshot schema, config mutation helper, and apply/restore core
-- [ ] 99-02-PLAN.md - Runner lifecycle integration and `pilot info` observability for runtime skill patching
+- [x] 99-02-PLAN.md - Runner lifecycle integration and `pilot info` observability for runtime skill patching

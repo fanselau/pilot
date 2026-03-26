@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 99-01-PLAN.md
-last_updated: "2026-03-26T15:27:54.677Z"
+status: verifying
+stopped_at: Completed 99-02-PLAN.md
+last_updated: "2026-03-26T15:32:46.391Z"
 progress:
   total_phases: 99
-  completed_phases: 55
+  completed_phases: 56
   total_plans: 195
-  completed_plans: 182
+  completed_plans: 183
 ---
 
 # State
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ### Phase 1: Project Scaffolding + Core Data Layer
 
-- **Status:** Ready to execute
+- **Status:** Phase complete — ready for verification
 
 ### Phase 2: CLI Commands (Phase 1 Monitoring + Setup)
 
@@ -1044,6 +1044,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 - [Phase 99]: Persist runtime skill injection as structured job snapshot metadata
 - [Phase 99]: Reuse mutatePlanningConfig() as the shared lock-safe atomic config writer
 - [Phase 99]: Merge user agent skill paths first, append normalized Pilot paths second, then restore exact prior state
+- [Phase 99]: Apply runtime agent_skills once per launch after skill installation and before delegation, then restore in finally before cleanup.
+- [Phase 99]: Keep human-facing pilot info output concise while exposing the full persisted runtime snapshot under runtimeSkills in JSON mode.
 
 ## Blockers/Concerns Carried Forward
 
@@ -1052,6 +1054,6 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Session Continuity
 
-Last session: 2026-03-26T15:27:54.669Z
-Stopped at: Completed 99-01-PLAN.md
+Last session: 2026-03-26T15:32:46.382Z
+Stopped at: Completed 99-02-PLAN.md
 Resume file: None
