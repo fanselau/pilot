@@ -396,6 +396,94 @@ describe('getSessionParts', () => {
     expect(parts[1].type).toBe('text');
     expect(parts[2].type).toBe('step-finish');
   });
+
+  it('extracts spawnedSessionId from exact task output lines', () => {
+    insertSession(db, 'sess-task', 'task-session', 1000, 2000);
+    insertMessage(db, 'msg-task', 'sess-task', 1000, { role: 'assistant' });
+    insertPart(db, 'task-part-1', 'msg-task', 'sess-task', 1000, {
+      type: 'tool',
+      tool: 'task',
+      state: {
+        status: 'completed',
+        input: { description: 'Delegate child work', subagent_type: 'worker' },
+        output: 'Created child session\ntask_id: child-123\nQueued successfully',
+      },
+    });
+
+    const parts = getSessionParts('sess-task');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].tool).toBe('task');
+    expect(parts[0].spawnedSessionId).toBe('child-123');
+    expect(parts[0].toolInput).toContain('Delegate child work');
+  });
+
+  it('extracts spawnedSessionId from multiline structured task output', () => {
+    insertSession(db, 'sess-task', 'task-session', 1000, 2000);
+    insertMessage(db, 'msg-task', 'sess-task', 1000, { role: 'assistant' });
+    insertPart(db, 'task-part-2', 'msg-task', 'sess-task', 1000, {
+      type: 'tool',
+      tool: 'task',
+      state: {
+        status: 'completed',
+        input: { description: 'Delegate child work', subagent_type: 'worker' },
+        output: {
+          summary: 'Child created',
+          details: 'Parent notes before child\ntask_id: child-456\nParent notes after child',
+        },
+      },
+    });
+
+    const parts = getSessionParts('sess-task');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].spawnedSessionId).toBe('child-456');
+  });
+
+  it('does not invent spawnedSessionId when task output is missing or unparseable', () => {
+    insertSession(db, 'sess-task', 'task-session', 1000, 3000);
+    insertMessage(db, 'msg-task', 'sess-task', 1000, { role: 'assistant' });
+    insertPart(db, 'task-part-3', 'msg-task', 'sess-task', 1000, {
+      type: 'tool',
+      tool: 'task',
+      state: {
+        status: 'completed',
+        input: { description: 'Delegate child work', subagent_type: 'worker' },
+        output: 'Created child session without explicit marker',
+      },
+    });
+    insertPart(db, 'task-part-4', 'msg-task', 'sess-task', 2000, {
+      type: 'tool',
+      tool: 'task',
+      state: {
+        status: 'completed',
+        input: { description: 'Delegate child work', subagent_type: 'worker' },
+        output: 'task_id:\nmissing-inline-value',
+      },
+    });
+
+    const parts = getSessionParts('sess-task');
+    expect(parts).toHaveLength(2);
+    expect(parts[0].spawnedSessionId).toBeUndefined();
+    expect(parts[1].spawnedSessionId).toBeUndefined();
+  });
+
+  it('does not set spawnedSessionId for non-task tools', () => {
+    insertSession(db, 'sess-task', 'task-session', 1000, 2000);
+    insertMessage(db, 'msg-task', 'sess-task', 1000, { role: 'assistant' });
+    insertPart(db, 'bash-part-1', 'msg-task', 'sess-task', 1000, {
+      type: 'tool',
+      tool: 'bash',
+      state: {
+        status: 'completed',
+        input: { command: 'printf task_id: child-999' },
+        output: 'task_id: child-999',
+      },
+    });
+
+    const parts = getSessionParts('sess-task');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].tool).toBe('bash');
+    expect(parts[0].spawnedSessionId).toBeUndefined();
+  });
 });
 
 // ── getLastMessage ─────────────────────────────────────────────────────────
