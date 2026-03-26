@@ -182,25 +182,25 @@ function EditRow({ item }: { item: TimelineToolSummaryItem }) {
 
           {/* Side-by-side diff */}
           {showDiff && (
-            <div className="grid grid-cols-2 gap-px rounded overflow-hidden border border-border/30 bg-border/20">
+            <div className="grid grid-cols-2 gap-px rounded overflow-hidden border border-border/40">
               {/* Old (removed) */}
-              <div className="bg-red-500/[0.08] min-w-0 overflow-hidden">
-                <div className="px-2 py-0.5 text-[9px] font-mono text-red-400/70 bg-red-500/10 border-b border-border/20 select-none">removed</div>
-                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-red-300/90 whitespace-pre-wrap break-all">
+              <div className="bg-red-950/50 min-w-0 overflow-hidden">
+                <div className="px-2 py-0.5 text-[9px] font-mono text-red-300 bg-red-900/40 border-b border-red-800/40 select-none">− removed</div>
+                <pre className="px-2 py-1.5 font-mono text-[10px] leading-snug text-red-100 whitespace-pre-wrap break-all">
                   {oldLines.slice(0, maxPreview).join('\n')}
                 </pre>
                 {oldLines.length > maxPreview && (
-                  <div className="px-2 pb-1 text-[9px] text-red-400/50">…{oldLines.length - maxPreview} more lines</div>
+                  <div className="px-2 pb-1 text-[9px] text-red-300/70">…{oldLines.length - maxPreview} more lines</div>
                 )}
               </div>
               {/* New (added) */}
-              <div className="bg-emerald-500/[0.08] min-w-0 overflow-hidden">
-                <div className="px-2 py-0.5 text-[9px] font-mono text-emerald-400/70 bg-emerald-500/10 border-b border-border/20 select-none">added</div>
-                <pre className="px-2 py-1 font-mono text-[10px] leading-snug text-emerald-300/90 whitespace-pre-wrap break-all">
+              <div className="bg-emerald-950/50 min-w-0 overflow-hidden">
+                <div className="px-2 py-0.5 text-[9px] font-mono text-emerald-300 bg-emerald-900/40 border-b border-emerald-800/40 select-none">+ added</div>
+                <pre className="px-2 py-1.5 font-mono text-[10px] leading-snug text-emerald-100 whitespace-pre-wrap break-all">
                   {newLines.slice(0, maxPreview).join('\n')}
                 </pre>
                 {newLines.length > maxPreview && (
-                  <div className="px-2 pb-1 text-[9px] text-emerald-400/50">…{newLines.length - maxPreview} more lines</div>
+                  <div className="px-2 pb-1 text-[9px] text-emerald-300/70">…{newLines.length - maxPreview} more lines</div>
                 )}
               </div>
             </div>
@@ -215,27 +215,56 @@ function EditRow({ item }: { item: TimelineToolSummaryItem }) {
 }
 
 function WriteRow({ item }: { item: TimelineToolSummaryItem }) {
-  const [showOutput, setShowOutput] = useState(false)
-  const out = item.toolOutput
+  const [showContent, setShowContent] = useState(false)
+  const [fullContent, setFullContent] = useState<string | null>(null)
+  const filePath = item.toolInput ?? ''
+  const raw = parseRaw(item.toolInputRaw)
+  const content = fullContent ?? (raw && typeof raw.content === 'string' ? raw.content : null)
+  const { text: preview, more } = content ? truncLines(content, 25) : { text: '', more: 0 }
+  const isErr = item.toolStatus === 'error'
+
+  async function handleShowFull() {
+    const result = await getFullMessageFn({ data: { sessionId: item.sessionId, partId: item.partId } })
+    if (result?.toolInputRaw) {
+      const full = parseRaw(result.toolInputRaw)
+      if (full && typeof full.content === 'string') setFullContent(full.content)
+    }
+  }
 
   return (
-    <ToolChrome icon={FileText} label="write" detail={shortPath(item.toolInput ?? '')} status={item.toolStatus} time={item.createdAt}>
-      {item.toolStatus === 'error' && out && (
-        <pre className="font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all bg-red-500/[0.06] rounded px-2 py-1">{out}</pre>
+    <ToolChrome icon={FileText} label="write" detail={shortPath(filePath)} status={item.toolStatus} time={item.createdAt}>
+      {isErr && item.toolOutput && (
+        <pre className="font-mono text-[10px] text-red-300 whitespace-pre-wrap break-all bg-red-500/[0.06] rounded px-2 py-1">{item.toolOutput}</pre>
       )}
-      {item.toolStatus !== 'error' && out && (
-        <>
-          <button type="button" onClick={() => setShowOutput(!showOutput)}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70">
-            {showOutput ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
-            <span>preview</span>
+      {content && (
+        <div className="rounded overflow-hidden border border-border/30">
+          {/* File tab header */}
+          <button type="button" onClick={() => setShowContent(!showContent)}
+            className="flex items-center gap-1.5 w-full text-left px-2 py-0.5 bg-emerald-950/30 hover:bg-emerald-950/40 border-b border-emerald-900/20">
+            {showContent ? <ChevronDown className="h-2.5 w-2.5 text-emerald-400/50" /> : <ChevronRight className="h-2.5 w-2.5 text-emerald-400/50" />}
+            <FileText className="h-2.5 w-2.5 text-emerald-400/60" />
+            <span className="text-[10px] font-mono text-emerald-200/80">{filePath.split('/').pop()}</span>
+            <span className="text-[9px] text-emerald-400/40 ml-auto">new file</span>
           </button>
-          {showOutput && (
-            <pre className="mt-0.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all text-muted-foreground/70 bg-muted/20 rounded px-2.5 py-1.5">
-              {out}
-            </pre>
+          {showContent && (
+            <div className="bg-emerald-950/15">
+              <pre className="px-2.5 py-1.5 font-mono text-[10px] leading-snug whitespace-pre-wrap break-all text-emerald-100/80">
+                {more > 0 && !fullContent ? preview : content}
+              </pre>
+              {more > 0 && !fullContent && (
+                <div className="px-2 pb-1 border-t border-emerald-900/15">
+                  <button type="button" onClick={() => void handleShowFull()}
+                    className="text-[10px] text-emerald-400/50 hover:text-emerald-400/80">
+                    …{more} more lines · show full
+                  </button>
+                </div>
+              )}
+            </div>
           )}
-        </>
+        </div>
+      )}
+      {!content && !isErr && (
+        <span className="text-[10px] text-muted-foreground/30 italic">file written</span>
       )}
     </ToolChrome>
   )
@@ -283,15 +312,19 @@ function TaskRow({ item }: { item: TimelineToolSummaryItem }) {
 function PatchRow({ item }: { item: TimelineToolSummaryItem }) {
   const files = item.patchFiles ?? []
   return (
-    <ToolChrome icon={Package} label="patch" status={item.toolStatus} time={item.createdAt}>
-      {files.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {files.map((f) => (
-            <span key={f} className="text-[10px] font-mono text-foreground/60 bg-muted/40 rounded px-1 py-px">{shortPath(f)}</span>
+    <ToolChrome icon={Package} label="patch" detail={`${files.length} file${files.length !== 1 ? 's' : ''} changed`} status={item.toolStatus} time={item.createdAt}>
+      {files.length > 0 && (
+        <div className="rounded overflow-hidden border border-amber-900/30">
+          <div className="px-2 py-0.5 text-[9px] font-mono text-amber-300 bg-amber-900/30 border-b border-amber-900/20 select-none">
+            changes applied
+          </div>
+          {files.map((f, i) => (
+            <div key={f} className={`flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono ${i > 0 ? 'border-t border-amber-900/10' : ''} bg-amber-950/20`}>
+              <FileEdit className="h-2.5 w-2.5 text-amber-400/60 shrink-0" />
+              <span className="text-amber-100/70 truncate min-w-0">{f}</span>
+            </div>
           ))}
         </div>
-      ) : (
-        <span className="text-[10px] text-muted-foreground/30">no files</span>
       )}
     </ToolChrome>
   )
@@ -372,7 +405,7 @@ export function ActivityRow({ item, isLastMessage, accentClass, accentBorder }: 
 
   const displayText = fullText ?? item.text
   const { text: preview, more } = useMemo(
-    () => truncLines(displayText, item.isReasoning ? 3 : 15),
+    () => truncLines(displayText, item.isReasoning ? 3 : 50),
     [displayText, item.isReasoning],
   )
 

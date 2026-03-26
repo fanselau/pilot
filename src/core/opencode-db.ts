@@ -428,6 +428,13 @@ function parsePartRow(
           if (raw.length <= 5000) base.toolInputRaw = raw; // cap size
         } catch { /* skip if not serializable */ }
       }
+      // Write tool: extract content separately (can be large, cap at 8000 chars)
+      if (tool === 'write' && state.input != null && typeof state.input === 'object') {
+        const inp = state.input as Record<string, unknown>;
+        if (typeof inp.content === 'string') {
+          base.toolInputRaw = JSON.stringify({ content: truncateStr(inp.content, 8000) });
+        }
+      }
     }
     return base;
   }
