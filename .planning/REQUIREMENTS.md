@@ -308,6 +308,48 @@ Requirements for initial release. Each maps to roadmap phases.
 | UIREV-08 | Phase 98 | Complete |
 | UIREV-09 | Phase 98 | Complete |
 
+### Modular Notification Backends
+
+- [x] **NBACK-TYPES**: NotifyBackend interface with deliver/detect/validateConfig methods and NotifyRoute discriminated union types
+- [x] **NBACK-REGISTRY**: Backend registry with getBackend(), getAllBackends(), getEnabledBackends(), enableBackend(), disableBackend(), config helpers
+- [x] **NBACK-KIMAKI**: Kimaki (Discord) backend implementation with sessionId/channelId routing via execa
+- [x] **NBACK-OPENCLAW**: OpenClaw backend — move from openclaw-deliver.ts into notify-backends module, delete old file
+- [x] **NBACK-WEBHOOK**: Webhook (HTTP POST) backend using native fetch() with JSON body and 30s timeout
+- [x] **NBACK-TELEGRAM**: Telegram Bot API backend using native fetch() with configurable botToken
+- [x] **NBACK-ROUTE-REFACTOR**: Rename resolveNotifyRoute→resolveNotifyRoutes returning NotifyRoute[], delete NotifyRouteResult union
+- [x] **NBACK-CALLBACK-FANOUT**: notifyJobCompletion fans out to all backends via Promise.allSettled, returns true if any succeed
+- [x] **NBACK-TYPE-CHANGES**: Job.notifyRoute→NotifyRoute[]|null, Project.notifyRoutes→NotifyRoute[]|null, backward-compat array wrapping
+- [x] **NBACK-DB-MIGRATION**: ALTER TABLE projects ADD COLUMN notify_routes, migrate existing owner→openclaw notify route entries
+- [x] **NBACK-CONFIG-SCHEMA**: notifications.backends array + nested backend config sections + CONFIG_FIELD_SPECS update
+- [x] **NBACK-ADD-INTEGRATION**: pilot add --notify-kimaki/--notify-webhook/--notify-telegram flags, multi-flag combine, --no-notify, enabled-backend validation
+- [x] **NBACK-PROJECT-INTEGRATION**: pilot project --notify-kimaki-channel/--notify-webhook/--notify-telegram/--clear-notify route management
+- [x] **NBACK-OWNER-REMOVAL**: Hard remove project.owner, --owner flags, registerProject(path, owner), updateProjectOwner() from types/CLI/DB
+- [x] **NBACK-NOTIFY-CLI**: pilot notify subcommand group: list, enable, disable, test, config
+- [x] **NBACK-INIT-DETECTION**: pilot init detects available backends, auto-enables in --yes mode, prompts in interactive mode
+- [x] **NBACK-WEB-UI**: Web UI displays project.notifyRoutes instead of project.owner in settings, project list, and project detail
+- [x] **NBACK-TESTS**: Comprehensive tests: backend unit tests, registry tests, route resolution tests, callback fan-out tests, add/project/notify CLI tests
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| NBACK-TYPES | Phase 101 | Complete |
+| NBACK-REGISTRY | Phase 101 | Complete |
+| NBACK-KIMAKI | Phase 101 | Complete |
+| NBACK-OPENCLAW | Phase 101 | Complete |
+| NBACK-WEBHOOK | Phase 101 | Complete |
+| NBACK-TELEGRAM | Phase 101 | Complete |
+| NBACK-ROUTE-REFACTOR | Phase 101 | Complete |
+| NBACK-CALLBACK-FANOUT | Phase 101 | Complete |
+| NBACK-TYPE-CHANGES | Phase 101 | Complete |
+| NBACK-DB-MIGRATION | Phase 101 | Complete |
+| NBACK-CONFIG-SCHEMA | Phase 101 | Complete |
+| NBACK-ADD-INTEGRATION | Phase 101 | Complete |
+| NBACK-PROJECT-INTEGRATION | Phase 101 | Complete |
+| NBACK-OWNER-REMOVAL | Phase 101 | Complete |
+| NBACK-NOTIFY-CLI | Phase 101 | Complete |
+| NBACK-INIT-DETECTION | Phase 101 | Complete |
+| NBACK-WEB-UI | Phase 101 | Complete |
+| NBACK-TESTS | Phase 101 | Complete |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -470,10 +512,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | MGSD-07 | Phase 100 | Complete |
 
 **Coverage:**
-- v1 requirements: 143 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95 + 8 Phase 98 + 7 Phase 100)
-- Mapped to phases: 143
+- v1 requirements: 161 total (31 Phase 68 + 11 Phase 80 + 9 Phase 82 + 16 Phase 81/83 + 6 Phase 87 + 10 Phase 88 + 10 Phase 89 + 10 Phase 90 + 14 Phase 91 + 5 Phase 94 + 6 Phase 95 + 8 Phase 98 + 7 Phase 100 + 18 Phase 101)
+- Mapped to phases: 161
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-26 after adding Phase 100 managed GSD distribution requirements*
+*Last updated: 2026-03-30 after adding Phase 101 modular notification backends requirements*
