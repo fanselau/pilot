@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 101-01-PLAN.md
-last_updated: "2026-03-30T11:33:06.787Z"
+stopped_at: Completed 101-02-PLAN.md
+last_updated: "2026-03-30T11:43:00.901Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 101
   completed_phases: 57
   total_plans: 203
-  completed_plans: 187
+  completed_plans: 188
 ---
 
 # State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 101 (modular-notification-backends) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 
 ## Project Reference
 
@@ -1060,6 +1060,7 @@ Last activity: 2026-03-30
 - [Phase 100]: Refresh and fleet update skip ahead-of-approved projects instead of silently downgrading them
 - [Phase 100]: Update JSON output now includes approvedVersion runtimeVersion and per-project rollout records
 - [Phase 101]: NotifyBackend deliver() uses minimal job shape to avoid circular imports — Backends only need id/project/status/description/startedAt/completedAt/error
+- [Phase 101]: Job.notifyRoute → NotifyRoute[], Project.notifyRoutes, fan-out via Promise.allSettled
 
 ## Blockers/Concerns Carried Forward
 
@@ -1068,6 +1069,6 @@ Last activity: 2026-03-30
 
 ## Session Continuity
 
-Last session: 2026-03-30T11:32:44.831Z
-Stopped at: Completed 101-01-PLAN.md
+Last session: 2026-03-30T11:42:49.613Z
+Stopped at: Completed 101-02-PLAN.md
 Resume file: None
