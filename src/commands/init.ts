@@ -16,7 +16,7 @@ import { detectProviders, getAvailableModes, getDefaultMode } from '../core/prov
 import { outputHuman } from '../util/output.js';
 import { bold, dim, green, yellow } from '../util/colors.js';
 import { installOpenClawSkill } from '../core/openclaw-skill.js';
-import { getAllBackends, enableBackend } from '../core/notify-backends/registry.js';
+import { getAllBackends, enableBackend, setBackendConfig } from '../core/notify-backends/registry.js';
 import type { DetectResult } from '../core/notify-backends/types.js';
 import type { ProviderMode } from '../core/types.js';
 
@@ -241,12 +241,40 @@ async function initCommand(opts: InitOptions): Promise<void> {
         }
       }
     } else {
-      // Interactive mode: show detected backends, hint for later setup
-      for (const s of selectable) {
+      // Interactive mode: prompt for backend selection
+      outputHuman('  Available notification backends:');
+      for (let idx = 0; idx < selectable.length; idx++) {
+        const s = selectable[idx];
         const tag = s.result === 'detected' ? green('detected') : dim('available');
-        outputHuman(`    ${s.displayName} (${tag})`);
+        outputHuman(`    ${idx + 1}. ${s.displayName} (${tag})`);
       }
-      outputHuman(dim(`  Enable backends later: pilot notify enable <kind>`));
+      outputHuman(`    ${selectable.length + 1}. Skip (enable later with: pilot notify enable <kind>)`);
+
+      const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const askBackend = (q: string): Promise<string> => new Promise(resolve => rl2.question(q, resolve));
+
+      const answer = await askBackend(`\n  Enable backends [1-${selectable.length + 1}, comma-separated]: `);
+      rl2.close();
+
+      const choices = answer.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+
+      for (const choice of choices) {
+        if (choice >= 1 && choice <= selectable.length) {
+          const selected = selectable[choice - 1];
+          const backend = backends.find(b => b.kind === selected.kind);
+          if (!backend) continue;
+
+          // Check if backend needs config before enabling
+          const configError = backend.validateConfig();
+          if (configError) {
+            outputHuman(dim(`  ${selected.displayName}: ${configError}`));
+            outputHuman(dim(`    Configure later: pilot notify config ${selected.kind}`));
+          }
+
+          enableBackend(backend.kind);
+          outputHuman(`  ${green('✓')} Enabled: ${selected.displayName}`);
+        }
+      }
     }
     outputHuman('');
   } else {
