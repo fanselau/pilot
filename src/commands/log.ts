@@ -12,9 +12,7 @@
  */
 
 import { getJob, getQueue, getJobSteps, getRetryAttempts } from '../core/db.js';
-import { buildJobWhy, buildRetryWhy } from '../core/job-introspection.js';
-import { buildJobObservability } from '../core/job-observability.js';
-import { buildJudgeSignal } from '../core/judge-signal.js';
+import { buildJobExecutiveSummary } from '../core/job-summary.js';
 import {
   findSessionByTitle,
   getSessionParts,
@@ -22,9 +20,10 @@ import {
   getSessionTokens,
   getSessionTokensRecursive,
 } from '../core/opencode-db.js';
+import { renderSummaryHuman } from './summary.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { bold, dim, cyan, green, yellow, red } from '../util/colors.js';
-import type { SessionPart, Job, JobStep, JobObservabilitySnapshot } from '../core/types.js';
+import type { SessionPart, Job, JobStep } from '../core/types.js';
 
 const KNOWN_GSD_COMMANDS = [
   'add-phase', 'plan-phase', 'execute-phase', 'verify-phase', 'ui-phase', 'ui-review',
@@ -298,25 +297,6 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
-function formatObservabilityStatus(status: JobObservabilitySnapshot['tokens']['status']): string {
-  switch (status) {
-    case 'available':
-      return 'available';
-    case 'partial':
-      return 'partial/live';
-    default:
-      return 'unavailable';
-  }
-}
-
-function formatEstimatedCost(observability: JobObservabilitySnapshot): string {
-  if (observability.cost.estimatedUsd === null) {
-    return `unavailable (${observability.cost.status})`;
-  }
-  const precision = observability.cost.estimatedUsd >= 1 ? 2 : 4;
-  return `~$${observability.cost.estimatedUsd.toFixed(precision)} (${observability.cost.status})`;
-}
-
 /**
  * Render a compact step summary for the human log output.
  * Includes per-step token usage when available from opencode DB.
@@ -386,280 +366,6 @@ function formatStepsSummary(steps: JobStep[]): string[] {
   }
 
   return lines;
-}
-
-type OutcomeSignal = 'pass' | 'fail' | null;
-
-interface LogSummaryStep {
-  kind: 'current' | 'final';
-  index: number;
-  total: number;
-  command: string;
-  status: JobStep['status'];
-  verdictSource: string | null;
-  verdictReason: string | null;
-}
-
-interface LogSummaryData {
-  what: string;
-  why: string;
-  next: string;
-  badge: string;
-  code: string;
-  step: LogSummaryStep | null;
-  signals: {
-    build: OutcomeSignal;
-    test: OutcomeSignal;
-  };
-  observability: JobObservabilitySnapshot;
-  failureContext: {
-    failed: boolean;
-    failedStep: {
-      index: number;
-      total: number;
-      command: string;
-      verdictSource: string | null;
-      verdictReason: string | null;
-    } | null;
-    completedBeforeFailure: {
-      completed: number;
-      total: number;
-    };
-    retry: ReturnType<typeof buildRetryWhy>;
-  };
-  commitDelta: {
-    state: 'changed' | 'no-op' | 'unknown';
-    baseCommit: string | null;
-    headCommit: string | null;
-  };
-  failureReason: string | null;
-  verification: ReturnType<typeof buildJudgeSignal>['verification'];
-}
-
-function mergeOutcome(current: OutcomeSignal, incoming: OutcomeSignal): OutcomeSignal {
-  if (current === 'fail' || incoming === 'fail') return 'fail';
-  if (current === 'pass') return 'pass';
-  return incoming;
-}
-
-function detectOutcomeFromText(text: string, kind: 'build' | 'test'): OutcomeSignal {
-  const lower = text.toLowerCase();
-  if (!lower.trim()) return null;
-
-  if (kind === 'build') {
-    const buildMentioned = /(build|compile|compilation|tsc)/.test(lower);
-    if (!buildMentioned) return null;
-    if (/(failed|failure|error|errors|broke|broken)/.test(lower)) return 'fail';
-    if (/(pass|passed|success|succeeded|successful|clean|ok)/.test(lower)) return 'pass';
-    return null;
-  }
-
-  const testMentioned = /(test|tests|vitest|jest|pytest|unit test|integration test)/.test(lower);
-  if (!testMentioned) return null;
-  if (/(failed|failing|failure|error|errors|red)/.test(lower)) return 'fail';
-  if (/(pass|passed|success|succeeded|successful|green|ok)/.test(lower)) return 'pass';
-  return null;
-}
-
-function collectOutcomeSignals(steps: JobStep[]): { build: OutcomeSignal; test: OutcomeSignal } {
-  let build: OutcomeSignal = null;
-  let test: OutcomeSignal = null;
-
-  const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
-  for (const step of ordered) {
-    const text = `${step.verdictSource ?? ''} ${step.verdictReason ?? ''}`;
-    build = mergeOutcome(build, detectOutcomeFromText(text, 'build'));
-    test = mergeOutcome(test, detectOutcomeFromText(text, 'test'));
-  }
-
-  return { build, test };
-}
-
-function resolveSummaryStep(steps: JobStep[]): LogSummaryStep | null {
-  if (steps.length === 0) return null;
-
-  const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
-  const running = ordered.find((step) => step.status === 'running');
-  const chosen = running ?? ordered[ordered.length - 1];
-
-  return {
-    kind: running ? 'current' : 'final',
-    index: chosen.stepIndex + 1,
-    total: ordered.length,
-    command: chosen.command,
-    status: chosen.status,
-    verdictSource: chosen.verdictSource,
-    verdictReason: chosen.verdictReason,
-  };
-}
-
-function resolveCommitDelta(job: Job): LogSummaryData['commitDelta'] {
-  const baseCommit = job.gitBaseCommit;
-  const headCommit = job.gitHeadCommit;
-  if (!baseCommit || !headCommit) {
-    return { state: 'unknown', baseCommit, headCommit };
-  }
-  return {
-    state: baseCommit === headCommit ? 'no-op' : 'changed',
-    baseCommit,
-    headCommit,
-  };
-}
-
-function shortCommit(commit: string | null): string {
-  return commit ? commit.slice(0, 12) : '—';
-}
-
-function buildSummaryData(job: Job, steps: JobStep[]): LogSummaryData {
-  const why = buildJobWhy(job);
-  const retry = buildRetryWhy(job);
-  const observability = buildJobObservability(job);
-  const step = resolveSummaryStep(steps);
-  const ordered = [...steps].sort((a, b) => a.stepIndex - b.stepIndex);
-  const failedStep = [...ordered].reverse().find((entry) => entry.status === 'failed');
-  const completedCount = ordered.filter((entry) => entry.status === 'completed').length;
-
-  let failureReason: string | null = null;
-  if (job.status === 'failed' || job.status === 'cancelled') {
-    failureReason = failedStep?.verdictReason ?? job.error ?? step?.verdictReason ?? null;
-  }
-
-  return {
-    what: why.what,
-    why: why.why,
-    next: why.next,
-    badge: why.badge,
-    code: why.code,
-    step,
-    signals: collectOutcomeSignals(steps),
-    observability,
-    failureContext: {
-      failed: job.status === 'failed' || job.status === 'cancelled',
-      failedStep: failedStep
-        ? {
-          index: failedStep.stepIndex + 1,
-          total: ordered.length,
-          command: failedStep.command,
-          verdictSource: failedStep.verdictSource,
-          verdictReason: failedStep.verdictReason,
-        }
-        : null,
-      completedBeforeFailure: {
-        completed: completedCount,
-        total: ordered.length,
-      },
-      retry,
-    },
-    commitDelta: resolveCommitDelta(job),
-    failureReason,
-    verification: buildJudgeSignal(job).verification,
-  };
-}
-
-function renderSummaryHuman(job: Job, summary: LogSummaryData): void {
-  outputHuman('');
-  outputHuman(`  ${bold(job.project)} · ${job.scope} · ${dim(job.id)}`);
-  outputHuman(`  ${bold('Summary')}`);
-  outputHuman(`  ${dim(`status: ${job.status}  attempts: ${job.attempts}  badge: ${summary.badge}`)}`);
-
-  if (summary.step) {
-    outputHuman(
-      `  ${dim(`${summary.step.kind} step:`)} ${summary.step.index}/${summary.step.total} ${summary.step.command} ${dim(`[${summary.step.status}]`)}`,
-    );
-    if (summary.step.verdictSource || summary.step.verdictReason) {
-      const verdictParts = [summary.step.verdictSource, summary.step.verdictReason]
-        .filter((part): part is string => Boolean(part));
-      outputHuman(`  ${dim(`step verdict: ${verdictParts.join(': ')}`)}`);
-    }
-  } else {
-    outputHuman(`  ${dim('step: no step metadata recorded')}`);
-  }
-
-  const signalParts: string[] = [];
-  if (summary.signals.build) signalParts.push(`build=${summary.signals.build}`);
-  if (summary.signals.test) signalParts.push(`test=${summary.signals.test}`);
-  if (signalParts.length > 0) {
-    outputHuman(`  ${dim(`signals: ${signalParts.join('  ')}`)}`);
-  }
-
-  const observedModels = summary.observability.observed.models.length > 0
-    ? summary.observability.observed.models.join(', ')
-    : '—';
-  outputHuman(
-    `  ${dim(`observed models (${formatObservabilityStatus(summary.observability.observed.status)}): ${observedModels}`)}`,
-  );
-  if (summary.observability.tokens.totals) {
-    const totals = summary.observability.tokens.totals;
-    outputHuman(
-      `  ${dim(`tokens (${formatObservabilityStatus(summary.observability.tokens.status)}): ${formatTokenCount(totals.total)} total (${formatTokenCount(totals.input)} in / ${formatTokenCount(totals.output)} out / ${formatTokenCount(totals.reasoning)} thinking)`)}`,
-    );
-  } else {
-    outputHuman(`  ${dim(`tokens (${formatObservabilityStatus(summary.observability.tokens.status)}): unavailable`)}`);
-  }
-  outputHuman(`  ${dim(`estimated cost: ${formatEstimatedCost(summary.observability)}`)}`);
-
-  if (summary.commitDelta.state === 'unknown') {
-    outputHuman('  commit delta: unknown (missing recovery checkpoints)');
-  } else if (summary.commitDelta.state === 'no-op') {
-    outputHuman(
-      `  commit delta: no-op (${shortCommit(summary.commitDelta.baseCommit)} == ${shortCommit(summary.commitDelta.headCommit)})`,
-    );
-  } else {
-    outputHuman(
-      `  commit delta: changed (${shortCommit(summary.commitDelta.baseCommit)} -> ${shortCommit(summary.commitDelta.headCommit)})`,
-    );
-  }
-
-  if (summary.failureReason) {
-    outputHuman(`  ${red(`failure: ${summary.failureReason}`)}`);
-  }
-
-  if (summary.verification) {
-    outputHuman(
-      `  ${dim(`structured verification: status=${summary.verification.status ?? '—'} actionable=${summary.verification.actionableGapCount ?? 0} human=${summary.verification.humanVerificationCount ?? 0} routing=${summary.verification.routingDecision ?? '—'}`)}`,
-    );
-    if (summary.verification.routingReason) {
-      outputHuman(`  ${dim(`routing reason: ${summary.verification.routingReason}`)}`);
-    }
-  }
-
-  if (summary.failureContext.failed) {
-    if (summary.failureContext.failedStep) {
-      const failureStep = summary.failureContext.failedStep;
-      outputHuman(
-        `  ${dim(`failure step: ${failureStep.index}/${failureStep.total} ${failureStep.command}`)}`,
-      );
-      if (failureStep.verdictSource || failureStep.verdictReason) {
-        const reason = [failureStep.verdictSource, failureStep.verdictReason]
-          .filter((part): part is string => Boolean(part))
-          .join(': ');
-        outputHuman(`  ${dim(`failure detail: ${reason}`)}`);
-      }
-    } else {
-      outputHuman(`  ${dim('failure step: unavailable (no step metadata)')}`);
-    }
-    outputHuman(
-      `  ${dim(`completed before failure: ${summary.failureContext.completedBeforeFailure.completed}/${summary.failureContext.completedBeforeFailure.total}`)}`,
-    );
-    outputHuman(
-      `  ${dim(`retry guidance: ${summary.failureContext.retry.badge} (${summary.failureContext.retry.code}) — ${summary.failureContext.retry.next}`)}`,
-    );
-  }
-
-  for (const note of summary.observability.observed.notes) {
-    outputHuman(`  ${dim(`observed note: ${note}`)}`);
-  }
-  for (const note of summary.observability.tokens.notes) {
-    outputHuman(`  ${dim(`token note: ${note}`)}`);
-  }
-  for (const note of summary.observability.cost.notes) {
-    outputHuman(`  ${dim(`cost note: ${note}`)}`);
-  }
-
-  outputHuman(`  ${dim(`what: ${summary.what}`)}`);
-  outputHuman(`  ${dim(`why: ${summary.why}`)}`);
-  outputHuman(`  ${dim(`next: ${summary.next}`)}`);
-  outputHuman('');
 }
 
 // ── Agent identity extraction ─────────────────────────────────────────────
@@ -798,26 +504,27 @@ async function logCommand(
   const steps = getJobSteps(jobId);
   const attemptGroups = buildAttemptSessionGroups(job, steps, opts.chain === true);
 
-  const summary = buildSummaryData(job, steps);
-
   if (opts.summary) {
+    const summary = buildJobExecutiveSummary(job, steps);
+    const payload = {
+      job: {
+        id: job.id,
+        project: job.project,
+        scope: job.scope,
+        description: job.description,
+        status: job.status,
+        attempts: job.attempts,
+        currentStep: job.currentStep,
+      },
+      summary,
+    };
+
     if (isJsonMode()) {
-      outputJson({
-        job: {
-          id: job.id,
-          project: job.project,
-          scope: job.scope,
-          description: job.description,
-          status: job.status,
-          attempts: job.attempts,
-          currentStep: job.currentStep,
-        },
-        summary,
-      });
+      outputJson(payload as unknown as Record<string, unknown>);
       return;
     }
 
-    renderSummaryHuman(job, summary);
+    renderSummaryHuman(job, payload);
     return;
   }
 

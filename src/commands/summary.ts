@@ -60,6 +60,10 @@ function renderSummaryHuman(job: Job, payload: SummaryPayload): void {
     );
   }
 
+  if (summary.failureReason) {
+    outputHuman(`  ${dim(`failure: ${summary.failureReason}`)}`);
+  }
+
   if (summary.keyArtifacts.length > 0) {
     outputHuman(`  ${dim(`key artifacts: ${summary.keyArtifacts.join(', ')}`)}`);
   }
