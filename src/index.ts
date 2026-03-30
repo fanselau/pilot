@@ -371,6 +371,56 @@ skillsCmd
     await skillsSeedCommand(opts as { yes?: boolean; projectDir?: string });
   });
 
+const notifyCmd = program
+  .command('notify')
+  .description('Manage notification backends');
+
+// Default action (no subcommand) = list
+notifyCmd.action(async () => {
+  const { notifyListCommand } = await import('./commands/notify.js');
+  await notifyListCommand();
+});
+
+notifyCmd
+  .command('list')
+  .description('List all backends with status and detection')
+  .action(async () => {
+    const { notifyListCommand } = await import('./commands/notify.js');
+    await notifyListCommand();
+  });
+
+notifyCmd
+  .command('enable <kind>')
+  .description('Enable a notification backend')
+  .action(async (kind: string) => {
+    const { notifyEnableCommand } = await import('./commands/notify.js');
+    await notifyEnableCommand(kind);
+  });
+
+notifyCmd
+  .command('disable <kind>')
+  .description('Disable a notification backend')
+  .action(async (kind: string) => {
+    const { notifyDisableCommand } = await import('./commands/notify.js');
+    await notifyDisableCommand(kind);
+  });
+
+notifyCmd
+  .command('test <kind> <target>')
+  .description('Send test notification through a backend')
+  .action(async (kind: string, target: string) => {
+    const { notifyTestCommand } = await import('./commands/notify.js');
+    await notifyTestCommand(kind, target);
+  });
+
+notifyCmd
+  .command('config <kind> [key] [value]')
+  .description('Get/set backend config')
+  .action(async (kind: string, key?: string, value?: string) => {
+    const { notifyConfigCommand } = await import('./commands/notify.js');
+    await notifyConfigCommand(kind, key, value);
+  });
+
 const modelsCmd = program
   .command('models')
   .description('View and edit model assignments');
