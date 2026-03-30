@@ -37,6 +37,7 @@ function makeJob(overrides: Partial<Job> = {}): Job {
     callbackUrl: null,
     callbackSessionKey: null,
     categories: null,
+    runtimeSkillSnapshot: null,
     gitBaseCommit: null,
     gitHeadCommit: null,
     notifyRoute: null,
@@ -283,6 +284,8 @@ describe('statusCommand', () => {
     expect(output).toContain('[failed]');
     expect(output).toContain('[needs-revision]');
     expect(output).toContain('This failure suggests a requirement or outcome mismatch.');
+    expect(output).toContain('pilot summary rt11');
+    expect(output).toContain('pilot unblock "test-proj"');
   });
 
   it('shows undo:safe tag for checkpointed terminal jobs', async () => {
@@ -504,6 +507,43 @@ describe('statusCommand', () => {
     const holdLine = lines.find((line) => line.includes('rh11'));
     expect(holdLine).toBeDefined();
     expect(holdLine).not.toContain('✗');
+    expect(output).toContain('pilot review rh11 --approve');
+  });
+
+  it('shows review approve hint for completed_pending_review jobs', async () => {
+    mockRecent = [
+      makeJob({ id: 'rp11', status: 'completed_pending_review', project: 'review-proj', description: 'review task', completedAt: '2026-03-21T10:00:00' }),
+    ];
+
+    await statusCommand({});
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('pilot review rp11 --approve');
+  });
+
+  it('shows summary and log hints for running phase jobs when --why is enabled', async () => {
+    mockQueue = [
+      makeJob({ id: 'rn11', status: 'running', scope: 'phase', project: 'run-proj', description: 'running phase', startedAt: '2026-03-02T09:50:00' }),
+    ];
+
+    await statusCommand({ why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('pilot summary rn11');
+    expect(output).toContain('pilot log rn11');
+  });
+
+  it('keeps ordinary launchable queue rows compact without extra hint lines', async () => {
+    mockQueue = [
+      makeJob({ id: 'pq11', status: 'pending', project: 'plain-queue', description: 'plain queue row', createdAt: '2026-03-02T09:00:00' }),
+    ];
+
+    await statusCommand({ why: true });
+
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).not.toContain('pilot summary pq11');
+    expect(output).not.toContain('pilot log pq11');
+    expect(output).not.toContain('pilot unblock "plain-queue"');
   });
 
   it('outputs JSON with correct structure', async () => {
