@@ -7,9 +7,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type {
   DelegationResult,
-  OpenClawDeliverRoute,
   RuntimeAgentSkillsSnapshot,
 } from '../../src/core/types.js';
+import type { NotifyRoute } from '../../src/core/notify-backends/types.js';
 import { _resetConfigCache } from '../../src/core/config.js';
 
 // Import the module under test — will fail until db.ts is implemented
@@ -41,8 +41,7 @@ import {
   registerProject,
   getProject,
   getAllProjects,
-  updateProjectOwner,
-  updateProjectNotifyOpenClawRoute,
+  updateProjectNotifyRoutes,
   updateProjectGsdState,
   blockProject,
   unblockProject,
@@ -155,13 +154,15 @@ describe('pilot.db', () => {
     });
 
     it('stores notifyRoute snapshot and round-trips through getJob', () => {
-      const route: OpenClawDeliverRoute = {
-        kind: 'openclaw-agent-deliver',
-        agentId: 'benefitu',
-        channel: 'telegram',
-        to: 'telegram:-5181925291',
-        accountId: 'benefitu',
-      };
+      const routes: NotifyRoute[] = [
+        {
+          kind: 'openclaw-agent-deliver',
+          agentId: 'benefitu',
+          channel: 'telegram',
+          to: 'telegram:-5181925291',
+          accountId: 'benefitu',
+        },
+      ];
 
       const job = addJob(
         'proj',
@@ -176,11 +177,11 @@ describe('pilot.db', () => {
         undefined,
         0,
         false,
-        route,
+        routes,
       );
 
-      expect(job.notifyRoute).toEqual(route);
-      expect(getJob(job.id)!.notifyRoute).toEqual(route);
+      expect(job.notifyRoute).toEqual(routes);
+      expect(getJob(job.id)!.notifyRoute).toEqual(routes);
     });
 
     it('maps malformed notify_route JSON to null without crashing', () => {
@@ -1296,20 +1297,20 @@ describe('managed projects', () => {
 
   describe('registerProject / getProject', () => {
     it('registers a new project', () => {
-      registerProject('/path/to/proj', 'agent:main:main');
+      registerProject('/path/to/proj');
       const p = getProject('/path/to/proj');
       expect(p).not.toBeNull();
       expect(p!.path).toBe('/path/to/proj');
-      expect(p!.owner).toBe('agent:main:main');
-      expect(p!.notifyOpenClawRoute).toBeNull();
+      expect(p!.notifyRoutes).toBeNull();
       expect(p!.status).toBe('active');
     });
 
-    it('re-registering same path updates owner (idempotent)', () => {
-      registerProject('/path/to/proj', 'agent:main:main');
-      registerProject('/path/to/proj', 'agent:other:other');
+    it('re-registering same path is idempotent', () => {
+      registerProject('/path/to/proj');
+      registerProject('/path/to/proj');
       const p = getProject('/path/to/proj');
-      expect(p!.owner).toBe('agent:other:other');
+      expect(p).not.toBeNull();
+      expect(p!.path).toBe('/path/to/proj');
     });
 
     it('returns null for unregistered project', () => {
@@ -1317,56 +1318,47 @@ describe('managed projects', () => {
     });
   });
 
-  describe('updateProjectOwner', () => {
-    it('updates owner on existing project', () => {
-      registerProject('/path/to/proj', 'old-owner');
-      updateProjectOwner('/path/to/proj', 'new-owner');
-      expect(getProject('/path/to/proj')!.owner).toBe('new-owner');
-    });
-  });
+  describe('updateProjectNotifyRoutes', () => {
+    it('persists notify routes array and round-trips through getProject', () => {
+      registerProject('/path/to/proj');
+      const routes: NotifyRoute[] = [
+        {
+          kind: 'openclaw-agent-deliver',
+          agentId: 'main',
+          channel: 'telegram',
+          to: 'telegram:6102973659',
+          accountId: 'gorb',
+        },
+      ];
 
-  describe('updateProjectNotifyOpenClawRoute', () => {
-    it('persists structured notify route and round-trips through getProject', () => {
-      registerProject('/path/to/proj', 'owner');
-      const route: OpenClawDeliverRoute = {
-        kind: 'openclaw-agent-deliver',
-        agentId: 'main',
-        channel: 'telegram',
-        to: 'telegram:6102973659',
-        accountId: 'gorb',
-      };
-
-      updateProjectNotifyOpenClawRoute('/path/to/proj', route);
-      expect(getProject('/path/to/proj')!.notifyOpenClawRoute).toEqual(route);
+      updateProjectNotifyRoutes('/path/to/proj', routes);
+      expect(getProject('/path/to/proj')!.notifyRoutes).toEqual(routes);
     });
 
-    it('clears stored route when set to null', () => {
-      registerProject('/path/to/proj', 'owner');
-      updateProjectNotifyOpenClawRoute('/path/to/proj', {
-        kind: 'openclaw-agent-deliver',
-        agentId: 'main',
-        channel: 'telegram',
-        to: 'telegram:6102973659',
-      });
+    it('clears stored routes when set to null', () => {
+      registerProject('/path/to/proj');
+      updateProjectNotifyRoutes('/path/to/proj', [
+        { kind: 'kimaki', sessionId: 'ses_abc' },
+      ]);
 
-      updateProjectNotifyOpenClawRoute('/path/to/proj', null);
-      expect(getProject('/path/to/proj')!.notifyOpenClawRoute).toBeNull();
+      updateProjectNotifyRoutes('/path/to/proj', null);
+      expect(getProject('/path/to/proj')!.notifyRoutes).toBeNull();
     });
 
-    it('maps malformed notify_openclaw_route JSON to null without crashing', () => {
+    it('maps malformed notify_routes JSON to null without crashing', () => {
       const db = _getTestDb();
-      registerProject('/path/to/proj', 'owner');
-      db.prepare('UPDATE projects SET notify_openclaw_route = ? WHERE path = ?').run('{not-json', '/path/to/proj');
+      registerProject('/path/to/proj');
+      db.prepare('UPDATE projects SET notify_routes = ? WHERE path = ?').run('{not-json', '/path/to/proj');
 
       const project = getProject('/path/to/proj');
       expect(project).not.toBeNull();
-      expect(project!.notifyOpenClawRoute).toBeNull();
+      expect(project!.notifyRoutes).toBeNull();
     });
   });
 
   describe('project gsd state', () => {
     it('round-trips project gsd state through the Project type', () => {
-      registerProject('/path/to/proj', 'owner');
+      registerProject('/path/to/proj');
 
       updateProjectGsdState('/path/to/proj', {
         approvedVersion: '1.24.0',
@@ -1387,7 +1379,7 @@ describe('managed projects', () => {
 
     it('stores exact values and clears them when state is null', () => {
       const db = _getTestDb();
-      registerProject('/path/to/proj', 'owner');
+      registerProject('/path/to/proj');
 
       updateProjectGsdState('/path/to/proj', {
         approvedVersion: '1.24.0',
@@ -1442,8 +1434,8 @@ describe('managed projects', () => {
     });
 
     it('returns all registered projects ordered by path', () => {
-      registerProject('/b/proj', 'owner-b');
-      registerProject('/a/proj', 'owner-a');
+      registerProject('/b/proj');
+      registerProject('/a/proj');
       const all = getAllProjects();
       expect(all.length).toBe(2);
       expect(all[0].path).toBe('/a/proj');
@@ -1453,7 +1445,7 @@ describe('managed projects', () => {
 
   describe('blockProject / unblockProject', () => {
     it('blocks a project with reason', () => {
-      registerProject('/path/to/proj', 'owner');
+      registerProject('/path/to/proj');
       blockProject('/path/to/proj', 'Build failed: type error');
       const p = getProject('/path/to/proj');
       expect(p!.status).toBe('blocked');
@@ -1462,7 +1454,7 @@ describe('managed projects', () => {
     });
 
     it('unblocks a blocked project', () => {
-      registerProject('/path/to/proj', 'owner');
+      registerProject('/path/to/proj');
       blockProject('/path/to/proj', 'some reason');
       unblockProject('/path/to/proj');
       const p = getProject('/path/to/proj');
@@ -1474,7 +1466,7 @@ describe('managed projects', () => {
 
   describe('markFailed → blocks project', () => {
     it('blocking a project after job failure if project is registered', () => {
-      registerProject('/test/proj', 'owner');
+      registerProject('/test/proj');
       const job = addJob('/test/proj', 'quick', 'test task');
       markRunning(job.id);
       markFailed(job.id, 'Something went wrong');
@@ -1492,7 +1484,7 @@ describe('managed projects', () => {
 
   describe('claimNextLaunchable — skips blocked projects', () => {
     it('skips pending jobs for blocked projects', () => {
-      registerProject('/blocked/proj', 'owner');
+      registerProject('/blocked/proj');
       blockProject('/blocked/proj', 'blocked');
       addJob('/blocked/proj', 'quick', 'should be skipped');
 
@@ -1501,10 +1493,10 @@ describe('managed projects', () => {
     });
 
     it('claims jobs for active projects but not blocked ones', () => {
-      registerProject('/blocked/proj', 'owner');
+      registerProject('/blocked/proj');
       blockProject('/blocked/proj', 'reason');
 
-      registerProject('/active/proj', 'owner');
+      registerProject('/active/proj');
       addJob('/blocked/proj', 'quick', 'blocked job');
       addJob('/active/proj', 'quick', 'active job');
 
@@ -1564,7 +1556,7 @@ describe('managed projects', () => {
 
   describe('review state transitions', () => {
     it('markCompletedPendingReview sets status to completed_pending_review', () => {
-      registerProject('/review/proj', 'owner');
+      registerProject('/review/proj');
       const job = addJob('/review/proj', 'quick', 'review task');
       markRunning(job.id);
       markCompletedPendingReview(job.id);
@@ -1574,7 +1566,7 @@ describe('managed projects', () => {
     });
 
     it('markCompletedPendingReview does NOT block the project', () => {
-      registerProject('/review/proj2', 'owner');
+      registerProject('/review/proj2');
       const job = addJob('/review/proj2', 'quick', 'review job');
       markRunning(job.id);
       markCompletedPendingReview(job.id);
@@ -1603,7 +1595,7 @@ describe('managed projects', () => {
     });
 
     it('markReviewHold sets status to review_hold without blocking project', () => {
-      registerProject('/review/proj3', 'owner');
+      registerProject('/review/proj3');
       const job = addJob('/review/proj3', 'quick', 'mid-phase job');
       markRunning(job.id);
       markReviewHold(job.id, 'Verify migration results before continuing');
@@ -1664,7 +1656,7 @@ describe('managed projects', () => {
     });
 
     it('markFailed still blocks project (existing behavior preserved)', () => {
-      registerProject('/test/proj-fail2', 'owner');
+      registerProject('/test/proj-fail2');
       const job = addJob('/test/proj-fail2', 'quick', 'fail task');
       markRunning(job.id);
       markFailed(job.id, 'Something went wrong');
@@ -1674,7 +1666,7 @@ describe('managed projects', () => {
     });
 
     it('claimNextLaunchable does NOT skip projects that only have completed_pending_review jobs', () => {
-      registerProject('/review/proj4', 'owner');
+      registerProject('/review/proj4');
       const job1 = addJob('/review/proj4', 'quick', 'first job');
       markRunning(job1.id);
       markCompletedPendingReview(job1.id);

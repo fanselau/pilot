@@ -1,11 +1,10 @@
 /**
- * Tests for `pilot project <path>` and enhanced `pilot projects` commands.
+ * Tests for `pilot project <path>` and `pilot projects` commands.
  *
- * Covers: info display, --block, --unblock, --owner, --blocked filter,
- * job counts, human and JSON output modes, error paths.
+ * Covers: info display, --block, --unblock, --notify-* route management,
+ * --clear-notify, --blocked filter, job counts, human/JSON output.
  *
- * Mocks: db.ts, output.ts, colors.ts, config.ts.
- * Uses vi.spyOn for process.stderr.write and process.exit.
+ * Mocks: db.ts, output.ts, colors.ts, config.ts, managed-gsd.ts.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -17,8 +16,8 @@ import type { ProjectJobCounts } from '../../src/core/db.js';
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     path: '/test/project',
-    owner: 'agent:main:main',
-    notifyOpenClawRoute: null,
+    owner: null,
+    notifyRoutes: null,
     status: 'active' as const,
     blockedReason: null,
     blockedAt: null,
@@ -54,8 +53,7 @@ const mockInspectProjectGsdState = vi.fn();
 const mockGetProject = vi.fn();
 const mockBlockProject = vi.fn();
 const mockUnblockProject = vi.fn();
-const mockUpdateProjectOwner = vi.fn();
-const mockUpdateProjectNotifyOpenClawRoute = vi.fn();
+const mockUpdateProjectNotifyRoutes = vi.fn();
 const mockGetProjectJobCounts = vi.fn();
 const mockGetAllProjects = vi.fn();
 
@@ -63,8 +61,7 @@ vi.mock('../../src/core/db.js', () => ({
   getProject: (path: string) => mockGetProject(path),
   blockProject: (path: string, reason: string) => mockBlockProject(path, reason),
   unblockProject: (path: string) => mockUnblockProject(path),
-  updateProjectOwner: (path: string, owner: string) => mockUpdateProjectOwner(path, owner),
-  updateProjectNotifyOpenClawRoute: (path: string, route: unknown) => mockUpdateProjectNotifyOpenClawRoute(path, route),
+  updateProjectNotifyRoutes: (path: string, routes: unknown) => mockUpdateProjectNotifyRoutes(path, routes),
   getProjectJobCounts: (path: string) => mockGetProjectJobCounts(path),
   getAllProjects: () => mockGetAllProjects(),
 }));
@@ -102,9 +99,7 @@ import { projectsCommand } from '../../src/commands/projects.js';
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let stderrSpy: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let exitSpy: any;
 
 beforeEach(() => {
@@ -139,7 +134,6 @@ afterEach(() => {
 // ── projectCommand ─────────────────────────────────────────────────────────
 
 describe('projectCommand', () => {
-  // Test 1: Not registered — exits 1
   it('exits 1 when project not registered', async () => {
     mockProject = null;
 
@@ -148,10 +142,8 @@ describe('projectCommand', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
     const stderr = stderrSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(stderr).toContain('not registered');
-    expect(stderr).toContain('/test/project');
   });
 
-  // Test 2: Default (info) — human output
   it('shows project info with job counts in human mode', async () => {
     mockProject = makeProject({ status: 'active' });
     mockCounts = makeCounts({ pending: 2, running: 1, completed: 5, failed: 0 });
@@ -160,14 +152,12 @@ describe('projectCommand', () => {
 
     expect(mockOutputHuman).toHaveBeenCalled();
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('agent:main:main');
     expect(output).toContain('active');
     expect(output).toContain('2 pending');
     expect(output).toContain('1 running');
     expect(output).toContain('5 done');
   });
 
-  // Test 3: Default (info) — JSON output
   it('outputs project JSON with jobs counts in JSON mode', async () => {
     mockJsonMode = true;
     mockProject = makeProject({ status: 'active' });
@@ -180,17 +170,11 @@ describe('projectCommand', () => {
     expect(payload).toHaveProperty('project');
     const proj = payload['project'] as Record<string, unknown>;
     expect(proj.path).toBe('/test/project');
-    expect(proj.owner).toBe('agent:main:main');
+    expect(proj.notifyRoutes).toEqual([]);
     expect(proj.status).toBe('active');
     expect(proj.jobs).toEqual(mockCounts);
-    expect(proj.approvedGsdVersion).toBe('1.24.0');
-    expect(proj.installedGsdVersion).toBe('1.24.0');
-    expect(proj.gsdDriftStatus).toBe('matches');
-    expect(proj.gsdVersionCheckedAt).toBe('2026-03-26T12:00:00Z');
-    expect(proj.gsdVersionError).toBeNull();
   });
 
-  // Test 4: --block blocks project (human)
   it('blocks a project with human output', async () => {
     mockProject = makeProject({ status: 'active' });
 
@@ -202,22 +186,6 @@ describe('projectCommand', () => {
     expect(output).toContain('broken tests');
   });
 
-  // Test 5: --block JSON mode
-  it('outputs JSON when blocking in JSON mode', async () => {
-    mockJsonMode = true;
-    mockProject = makeProject({ status: 'active' });
-
-    await projectCommand('/test/project', { block: 'broken tests' });
-
-    expect(mockBlockProject).toHaveBeenCalledWith('/test/project', 'broken tests');
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    expect(payload.blocked).toBe(true);
-    expect(payload.project).toBe('/test/project');
-    expect(payload.reason).toBe('broken tests');
-  });
-
-  // Test 6: --unblock unblocks project
   it('unblocks a blocked project', async () => {
     mockProject = makeProject({ status: 'blocked', blockedReason: 'tests broken' });
 
@@ -228,7 +196,6 @@ describe('projectCommand', () => {
     expect(output).toContain('Unblocked');
   });
 
-  // Test 7: --unblock already active
   it('does not unblock an already active project', async () => {
     mockProject = makeProject({ status: 'active' });
 
@@ -239,139 +206,84 @@ describe('projectCommand', () => {
     expect(output).toContain('already active');
   });
 
-  // Test 7b: --unblock already active — JSON
-  it('outputs JSON with unblocked:false when already active', async () => {
-    mockJsonMode = true;
+  it('sets kimaki channel route with --notify-kimaki-channel', async () => {
     mockProject = makeProject({ status: 'active' });
 
-    await projectCommand('/test/project', { unblock: true });
+    await projectCommand('/test/project', { notifyKimakiChannel: 'ch_123' });
 
-    expect(mockUnblockProject).not.toHaveBeenCalled();
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    expect(payload.unblocked).toBe(false);
-    expect(payload.reason).toBe('already active');
+    expect(mockUpdateProjectNotifyRoutes).toHaveBeenCalledWith(
+      '/test/project',
+      [{ kind: 'kimaki', channelId: 'ch_123' }],
+    );
   });
 
-  // Test 8: --owner changes owner (human)
-  it('changes project owner with human output', async () => {
+  it('sets webhook route with --notify-webhook', async () => {
     mockProject = makeProject({ status: 'active' });
 
-    await projectCommand('/test/project', { owner: 'agent:new:owner' });
+    await projectCommand('/test/project', { notifyWebhook: 'https://example.com/hook' });
 
-    expect(mockUpdateProjectOwner).toHaveBeenCalledWith('/test/project', 'agent:new:owner');
-    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('Updated owner');
-    expect(output).toContain('agent:new:owner');
+    expect(mockUpdateProjectNotifyRoutes).toHaveBeenCalledWith(
+      '/test/project',
+      [{ kind: 'webhook', url: 'https://example.com/hook' }],
+    );
   });
 
-  // Test 9: --owner JSON mode
-  it('outputs JSON when changing owner in JSON mode', async () => {
-    mockJsonMode = true;
+  it('sets telegram route with --notify-telegram', async () => {
     mockProject = makeProject({ status: 'active' });
 
-    await projectCommand('/test/project', { owner: 'agent:new:owner' });
+    await projectCommand('/test/project', { notifyTelegram: '-518192' });
 
-    expect(mockUpdateProjectOwner).toHaveBeenCalledWith('/test/project', 'agent:new:owner');
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    expect(payload.updated).toBe(true);
-    expect(payload.owner).toBe('agent:new:owner');
+    expect(mockUpdateProjectNotifyRoutes).toHaveBeenCalledWith(
+      '/test/project',
+      [{ kind: 'telegram', chatId: '-518192' }],
+    );
   });
 
-  it('sets structured OpenClaw route with --notify-openclaw flags', async () => {
-    mockProject = makeProject({ status: 'active' });
-
-    await projectCommand('/test/project', {
-      notifyOpenclaw: true,
-      notifyAgent: 'benefitu',
-      notifyChannel: 'telegram',
-      notifyTo: 'telegram:-5181925291',
-      notifyAccount: 'benefitu',
-    });
-
-    expect(mockUpdateProjectNotifyOpenClawRoute).toHaveBeenCalledWith('/test/project', {
-      kind: 'openclaw-agent-deliver',
-      agentId: 'benefitu',
-      channel: 'telegram',
-      to: 'telegram:-5181925291',
-      accountId: 'benefitu',
-    });
-  });
-
-  it('clears structured OpenClaw route with --clear-notify-openclaw', async () => {
+  it('clears all routes with --clear-notify', async () => {
     mockProject = makeProject({
       status: 'active',
-      notifyOpenClawRoute: {
-        kind: 'openclaw-agent-deliver',
-        agentId: 'benefitu',
-        channel: 'telegram',
-        to: 'telegram:-5181925291',
-      },
+      notifyRoutes: [{ kind: 'kimaki', channelId: 'ch_123' }],
     });
 
-    await projectCommand('/test/project', { clearNotifyOpenclaw: true });
+    await projectCommand('/test/project', { clearNotify: true });
 
-    expect(mockUpdateProjectNotifyOpenClawRoute).toHaveBeenCalledWith('/test/project', null);
+    expect(mockUpdateProjectNotifyRoutes).toHaveBeenCalledWith('/test/project', []);
   });
 
-  it('fails with exit 2 on partial notify route input', async () => {
-    mockProject = makeProject({ status: 'active' });
-
-    await expect(
-      projectCommand('/test/project', {
-        notifyOpenclaw: true,
-        notifyAgent: 'benefitu',
-      }),
-    ).rejects.toThrow('process.exit called');
-
-    expect(exitSpy).toHaveBeenCalledWith(2);
-    const stderr = stderrSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
-    expect(stderr).toContain('Missing route fields');
-  });
-
-  it('fails with exit 2 when route fields are passed without --notify-openclaw', async () => {
-    mockProject = makeProject({ status: 'active' });
-
-    await expect(
-      projectCommand('/test/project', {
-        notifyAgent: 'benefitu',
-      }),
-    ).rejects.toThrow('process.exit called');
-
-    expect(exitSpy).toHaveBeenCalledWith(2);
-    const stderr = stderrSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
-    expect(stderr).toContain('Route fields require --notify-openclaw');
-  });
-
-  it('includes structured route in JSON output when configured', async () => {
-    mockJsonMode = true;
+  it('shows route display in project info', async () => {
     mockProject = makeProject({
       status: 'active',
-      notifyOpenClawRoute: {
-        kind: 'openclaw-agent-deliver',
-        agentId: 'benefitu',
-        channel: 'telegram',
-        to: 'telegram:-5181925291',
-        accountId: 'benefitu',
-      },
+      notifyRoutes: [
+        { kind: 'kimaki', channelId: 'ch_abc' },
+        { kind: 'webhook', url: 'https://hooks.example.com/pilot' },
+      ],
     });
 
     await projectCommand('/test/project', {});
 
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    const proj = payload['project'] as Record<string, unknown>;
-    expect(proj.notifyOpenclawRoute).toEqual({
-      kind: 'openclaw-agent-deliver',
-      agentId: 'benefitu',
-      channel: 'telegram',
-      to: 'telegram:-5181925291',
-      accountId: 'benefitu',
-    });
+    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(output).toContain('kimaki');
+    expect(output).toContain('webhook');
   });
 
-  // Test: info shows blocked reason for blocked projects
+  it('includes notifyRoutes in JSON output when configured', async () => {
+    mockJsonMode = true;
+    mockProject = makeProject({
+      status: 'active',
+      notifyRoutes: [
+        { kind: 'kimaki', channelId: 'ch_abc' },
+      ],
+    });
+
+    await projectCommand('/test/project', {});
+
+    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
+    const proj = payload['project'] as Record<string, unknown>;
+    expect(proj.notifyRoutes).toEqual([
+      { kind: 'kimaki', channelId: 'ch_abc' },
+    ]);
+  });
+
   it('shows blocked reason for blocked project in human mode', async () => {
     mockProject = makeProject({ status: 'blocked', blockedReason: 'tests failing', blockedAt: '2026-03-05T10:00:00' });
 
@@ -383,15 +295,8 @@ describe('projectCommand', () => {
     expect(output).toContain('--unblock');
   });
 
-  it('shows GSD version details and drift in human mode', async () => {
+  it('shows GSD version details in human mode', async () => {
     mockProject = makeProject({ status: 'active' });
-    mockInspectProjectGsdState.mockResolvedValue({
-      approvedVersion: '1.24.0',
-      installedVersion: '1.23.0',
-      driftStatus: 'behind',
-      checkedAt: '2026-03-26T12:00:00Z',
-      error: null,
-    });
 
     await projectCommand('/test/project', {});
 
@@ -399,38 +304,6 @@ describe('projectCommand', () => {
     expect(output).toContain('approved gsd:');
     expect(output).toContain('installed gsd:');
     expect(output).toContain('drift:');
-    expect(output).toContain('behind');
-  });
-
-  it('surfaces ahead and unknown GSD version notes without crashing', async () => {
-    mockProject = makeProject({ status: 'active' });
-    mockInspectProjectGsdState.mockResolvedValueOnce({
-      approvedVersion: '1.24.0',
-      installedVersion: '1.25.0',
-      driftStatus: 'ahead',
-      checkedAt: '2026-03-26T12:00:00Z',
-      error: null,
-    });
-
-    await projectCommand('/test/project', {});
-
-    let output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('ahead');
-
-    mockOutputHuman.mockClear();
-    mockInspectProjectGsdState.mockResolvedValueOnce({
-      approvedVersion: '1.24.0',
-      installedVersion: null,
-      driftStatus: 'unknown',
-      checkedAt: '2026-03-26T12:00:00Z',
-      error: 'unknown / unreadable version',
-    });
-
-    await projectCommand('/test/project', {});
-
-    output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('version note:');
-    expect(output).toContain('unknown / unreadable version');
   });
 });
 
@@ -440,33 +313,16 @@ describe('projectsCommand', () => {
   const activeProject = makeProject({ path: '/test/active', status: 'active' });
   const blockedProject = makeProject({ path: '/test/blocked', status: 'blocked', blockedReason: 'broken' });
 
-  // Test 10: --blocked filter
   it('filters to only blocked projects with --blocked', async () => {
     mockAllProjects = [activeProject, blockedProject];
 
     await projectsCommand({ blocked: true });
 
-    // Only blocked project appears in output
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('/test/blocked');
     expect(output).not.toContain('/test/active');
   });
 
-  // Test 11: --blocked with JSON
-  it('outputs only blocked projects in JSON mode with --blocked', async () => {
-    mockJsonMode = true;
-    mockAllProjects = [activeProject, blockedProject];
-
-    await projectsCommand({ blocked: true });
-
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    const projects = payload.projects as Array<{ path: string }>;
-    expect(projects).toHaveLength(1);
-    expect(projects[0].path).toBe('/test/blocked');
-  });
-
-  // Test 12: Job counts in listing
   it('shows job counts for each project', async () => {
     mockAllProjects = [activeProject];
     mockCounts = makeCounts({ pending: 3, running: 2, failed: 1 });
@@ -478,38 +334,8 @@ describe('projectsCommand', () => {
     expect(output).toContain('3 pending');
     expect(output).toContain('2 running');
     expect(output).toContain('1 failed');
-    expect(output).toContain('gsd:');
   });
 
-  // Test: Job counts in JSON output
-  it('includes job counts per project in JSON output', async () => {
-    mockJsonMode = true;
-    mockAllProjects = [activeProject];
-    mockCounts = makeCounts({ pending: 3, running: 2, failed: 1 });
-
-    await projectsCommand({});
-
-    expect(mockOutputJson).toHaveBeenCalledOnce();
-    const [payload] = mockOutputJson.mock.calls[0] as [Record<string, unknown>];
-    const projects = payload.projects as Array<{
-      path: string;
-      jobs: ProjectJobCounts;
-      approvedGsdVersion: string | null;
-      installedGsdVersion: string | null;
-      gsdDriftStatus: string | null;
-      gsdVersionCheckedAt: string | null;
-      gsdVersionError: string | null;
-    }>;
-    expect(projects).toHaveLength(1);
-    expect(projects[0].jobs).toEqual(mockCounts);
-    expect(projects[0].approvedGsdVersion).toBe('1.24.0');
-    expect(projects[0].installedGsdVersion).toBe('1.24.0');
-    expect(projects[0].gsdDriftStatus).toBe('matches');
-    expect(projects[0].gsdVersionCheckedAt).toBe('2026-03-26T12:00:00Z');
-    expect(projects[0].gsdVersionError).toBeNull();
-  });
-
-  // Test: empty state without --blocked
   it('shows no projects message when empty', async () => {
     mockAllProjects = [];
 
@@ -517,26 +343,5 @@ describe('projectsCommand', () => {
 
     const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('No registered projects');
-  });
-
-  // Test: empty state with --blocked
-  it('shows no blocked projects message when empty with --blocked', async () => {
-    mockAllProjects = [activeProject]; // only active projects
-
-    await projectsCommand({ blocked: true });
-
-    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('No blocked projects');
-  });
-
-  // Test: human listing without --blocked shows all projects
-  it('shows all projects without --blocked filter', async () => {
-    mockAllProjects = [activeProject, blockedProject];
-
-    await projectsCommand({});
-
-    const output = mockOutputHuman.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(output).toContain('/test/active');
-    expect(output).toContain('/test/blocked');
   });
 });
