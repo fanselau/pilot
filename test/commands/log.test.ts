@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Job, JobStep, JobObservabilitySnapshot } from '../../src/core/types.js';
+import type { JobExecutiveSummary } from '../../src/core/job-summary.js';
 
 const mockGetJob = vi.fn();
 const mockGetQueue = vi.fn();
@@ -28,9 +29,14 @@ vi.mock('../../src/core/opencode-db.js', () => ({
 }));
 
 const mockBuildJobObservability = vi.fn();
+const mockBuildJobExecutiveSummary = vi.fn();
 
 vi.mock('../../src/core/job-observability.js', () => ({
   buildJobObservability: (...args: unknown[]) => mockBuildJobObservability(...args),
+}));
+
+vi.mock('../../src/core/job-summary.js', () => ({
+  buildJobExecutiveSummary: (...args: unknown[]) => mockBuildJobExecutiveSummary(...args),
 }));
 
 let mockJsonMode = false;
@@ -179,6 +185,39 @@ function makeObservability(overrides: Partial<JobObservabilitySnapshot> = {}): J
   };
 }
 
+function makeExecutiveSummary(overrides: Partial<JobExecutiveSummary> = {}): JobExecutiveSummary {
+  return {
+    what: 'Implemented shared summary builder',
+    why: 'Need a single executive summary surface',
+    next: 'Run pilot summary ab12',
+    statusBadge: 'completed',
+    outcome: 'success',
+    currentOrFinalStep: {
+      index: 2,
+      total: 2,
+      command: 'execute-phase',
+      status: 'completed',
+    },
+    failureReason: null,
+    judge: null,
+    verification: null,
+    commitDelta: {
+      state: 'no-op',
+      baseCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      headCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+    observability: makeObservability(),
+    keyArtifacts: ['src/core/job-summary.ts'],
+    lastAssistantMessages: [{ stepIndex: 2, sessionTitle: 'session-2', text: 'Summary builder complete.' }],
+    steps: [],
+    drilldown: {
+      summaryCommand: 'pilot summary ab12',
+      logCommand: 'pilot log ab12',
+    },
+    ...overrides,
+  };
+}
+
 describe('logCommand --summary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -194,9 +233,10 @@ describe('logCommand --summary', () => {
     mockGetSessionTokens.mockReturnValue({ input: 0, output: 0 });
     mockGetSessionTokensRecursive.mockReturnValue({ input: 0, output: 0, reasoning: 0 });
     mockBuildJobObservability.mockReturnValue(makeObservability());
+    mockBuildJobExecutiveSummary.mockReturnValue(makeExecutiveSummary());
   });
 
-  it('renders deterministic human summary for completed no-op jobs', async () => {
+  it('renders shared executive summary fields for human summary mode', async () => {
     mockGetJob.mockReturnValue(
       makeJob({
         status: 'completed',
@@ -222,140 +262,105 @@ describe('logCommand --summary', () => {
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('Summary');
-    expect(output).toContain('final step: 2/2 execute-phase [completed]');
-    expect(output).toContain('signals: build=pass  test=pass');
-    expect(output).toContain('observed models (available): anthropic/claude-sonnet-4-6');
-    expect(output).toContain('tokens (available): 16.0k total (12.0k in / 3.0k out / 1.0k thinking)');
-    expect(output).toContain('estimated cost: ~$0.0810 (partial)');
-    expect(output).toContain('cost note: Reasoning tokens are present but excluded from estimate.');
-    expect(output).toContain('commit delta: no-op');
-    expect(output).toContain('Job produced no commit delta');
+    expect(output).toContain('my-project · phase · ab12 · success · completed');
+    expect(output).toContain('what: Implemented shared summary builder');
+    expect(output).toContain('why: Need a single executive summary surface');
+    expect(output).toContain('next: Run pilot summary ab12');
+    expect(output).toContain('step: 2/2 execute-phase [completed]');
+    expect(output).toContain('key artifacts: src/core/job-summary.ts');
+    expect(output).toContain('assistant messages:');
+    expect(output).toContain('2. Summary builder complete.');
     expect(mockGetSessionParts).not.toHaveBeenCalled();
   });
 
-  it('returns compact JSON summary for failed jobs with outcome signals', async () => {
+  it('returns shared { job, summary } JSON output in summary mode', async () => {
     mockJsonMode = true;
-    mockGetJob.mockReturnValue(
-      makeJob({
-        status: 'failed',
-        error: 'runner timeout',
-        gitBaseCommit: '1111111111111111111111111111111111111111',
-        gitHeadCommit: '2222222222222222222222222222222222222222',
-      }),
-    );
-    mockGetJobSteps.mockReturnValue([
-      makeStep({
-        stepIndex: 0,
-        status: 'failed',
-        verdictSource: 'semantic-check',
-        verdictReason: 'build failed and tests failed',
-      }),
-    ]);
+    const summary = makeExecutiveSummary({
+      outcome: 'failure',
+      failureReason: 'build failed and tests failed',
+    });
+    mockBuildJobExecutiveSummary.mockReturnValue(summary);
 
     await logCommand('ab12', { summary: true, json: true });
 
     expect(mockOutputJson).toHaveBeenCalledTimes(1);
-    const payload = mockOutputJson.mock.calls[0][0];
-    expect(payload).toHaveProperty('job');
-    expect(payload).toHaveProperty('summary');
-    expect(payload.summary.step).toMatchObject({
-      kind: 'final',
-      index: 1,
-      total: 1,
-      command: 'execute-phase',
-      status: 'failed',
-      verdictSource: 'semantic-check',
-    });
-    expect(payload.summary.signals).toMatchObject({ build: 'fail', test: 'fail' });
-    expect(payload.summary.commitDelta).toMatchObject({ state: 'changed' });
-    expect(payload.summary.failureReason).toContain('build failed and tests failed');
-    expect(payload.summary.observability).toMatchObject({
-      observed: { status: 'available' },
-      tokens: { status: 'available' },
-      cost: { status: 'partial' },
-    });
-    expect(payload.summary.failureContext).toMatchObject({
-      failed: true,
-      failedStep: {
-        index: 1,
-        total: 1,
-        command: 'execute-phase',
+    expect(mockOutputJson).toHaveBeenCalledWith({
+      job: {
+        id: 'ab12',
+        project: 'my-project',
+        scope: 'phase',
+        description: 'test job',
+        status: 'completed',
+        attempts: 1,
+        currentStep: 1,
       },
-      completedBeforeFailure: {
-        completed: 0,
-        total: 1,
-      },
-      retry: {
-        code: 'failed',
-      },
+      summary,
     });
     expect(mockGetSessionParts).not.toHaveBeenCalled();
   });
 
-  it('shows actionable retry guidance for failed jobs in human summary', async () => {
-    mockGetJob.mockReturnValue(
-      makeJob({
-        status: 'failed',
-        error: 'network timeout',
-        gitBaseCommit: '1111111111111111111111111111111111111111',
-        gitHeadCommit: '2222222222222222222222222222222222222222',
-      }),
-    );
+  it('shows actionable shared-builder guidance for failed jobs in human summary', async () => {
+    mockBuildJobExecutiveSummary.mockReturnValue(makeExecutiveSummary({
+      outcome: 'failure',
+      statusBadge: 'failed',
+      failureReason: 'network timeout',
+      next: 'Run pilot unblock "my-project"',
+      drilldown: {
+        summaryCommand: 'pilot summary ab12',
+        logCommand: 'pilot log ab12',
+        unblockCommand: 'pilot unblock "my-project"',
+      },
+    }));
 
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('what: Last run failed.');
-    expect(output).toContain('next: Run pilot unblock');
-    expect(output).toContain('retry guidance: failed (failed)');
+    expect(output).toContain('next: Run pilot unblock "my-project"');
+    expect(output).toContain('network timeout');
+    expect(output).toContain('pilot unblock "my-project"');
   });
 
-  it('shows structured verification routing basis in summary output', async () => {
-    mockGetJob.mockReturnValue(
-      makeJob({
-        status: 'completed_pending_review',
-        judgeVerdict: JSON.stringify({
-          verdict: 'gaps_found',
-          confidence: 52,
-          reason: 'judge found review items',
-          verificationStatus: 'human_needed',
-          actionableGapCount: 0,
-          humanVerificationCount: 2,
-          routingDecision: 'human-review',
-          routingReason: 'Structured verification reports 2 human verification item(s) and no actionable gaps',
-          artifactPath: '/resolved/my-project/.planning/phases/87-routing/87-VERIFICATION.md',
-        }),
-      }),
-    );
+  it('shows review guidance from the shared builder in summary output', async () => {
+    mockBuildJobExecutiveSummary.mockReturnValue(makeExecutiveSummary({
+      outcome: 'review_pending',
+      statusBadge: 'review-pending',
+      verification: {
+        status: 'human_needed',
+        actionableGapCount: 0,
+        humanVerificationCount: 2,
+        routingDecision: 'human-review',
+        routingReason: 'Structured verification reports 2 human verification item(s) and no actionable gaps',
+        artifactPath: '/resolved/my-project/.planning/phases/87-routing/87-VERIFICATION.md',
+      },
+      drilldown: {
+        summaryCommand: 'pilot summary ab12',
+        logCommand: 'pilot log ab12',
+        reviewCommand: 'pilot review ab12 --approve',
+      },
+    }));
 
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('structured verification: status=human_needed');
+    expect(output).toContain('verification: human_needed');
     expect(output).toContain('actionable=0');
     expect(output).toContain('human=2');
     expect(output).toContain('routing=human-review');
-    expect(output).toContain('Structured verification reports 2 human verification item(s) and no actionable gaps');
+    expect(output).toContain('pilot review ab12 --approve');
   });
 
-  it('surfaces safe undo/no-step fallback state without transcript reads', async () => {
-    mockGetJob.mockReturnValue(
-      makeJob({
-        status: 'completed',
-        startedDirty: true,
-        gitBaseCommit: '1111111111111111111111111111111111111111',
-        gitHeadCommit: '2222222222222222222222222222222222222222',
-      }),
-    );
+  it('uses shared-builder fallback state without transcript reads', async () => {
     mockGetJobSteps.mockReturnValue([]);
+    mockBuildJobExecutiveSummary.mockReturnValue(makeExecutiveSummary({
+      statusBadge: 'undo:safe',
+      currentOrFinalStep: null,
+    }));
 
     await logCommand('ab12', { summary: true });
 
     const output = mockOutputHuman.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(output).toContain('badge: undo:safe');
+    expect(output).toContain('undo:safe');
     expect(output).toContain('step: no step metadata recorded');
-    expect(output).toContain('commit delta: changed');
     expect(mockGetSessionParts).not.toHaveBeenCalled();
   });
 });
