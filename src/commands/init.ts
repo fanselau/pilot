@@ -16,6 +16,8 @@ import { detectProviders, getAvailableModes, getDefaultMode } from '../core/prov
 import { outputHuman } from '../util/output.js';
 import { bold, dim, green, yellow } from '../util/colors.js';
 import { installOpenClawSkill } from '../core/openclaw-skill.js';
+import { getAllBackends, enableBackend } from '../core/notify-backends/registry.js';
+import type { DetectResult } from '../core/notify-backends/types.js';
 import type { ProviderMode } from '../core/types.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -93,10 +95,14 @@ function buildConfigContent(opts: {
       scope: null,
     },
     notifications: {
+      backends: [],
       openclawHooksUrl: null,
       openclawHooksToken: null,
       telegramBotToken: null,
       telegramChatId: null,
+      openclaw: {},
+      webhook: {},
+      telegram: {},
     },
     logging: {
       level: 'INFO',
@@ -206,6 +212,47 @@ async function initCommand(opts: InitOptions): Promise<void> {
   const json = JSON.stringify(config, null, 2) + '\n';
   writeFileSync(configPath, json, 'utf-8');
   chmodSync(configPath, 0o600);
+
+  // === Notification Backends ===
+  const backends = getAllBackends();
+  const detectionResults: Array<{ kind: string; displayName: string; result: DetectResult }> = [];
+
+  for (const backend of backends) {
+    const result = await backend.detect();
+    detectionResults.push({ kind: backend.kind, displayName: backend.displayName, result });
+  }
+
+  // Filter to only detected/available backends (skip not-found and not-configured)
+  const selectable = detectionResults.filter(
+    d => d.result === 'detected' || d.result === 'available',
+  );
+
+  if (selectable.length > 0) {
+    outputHuman('  Notification backends:');
+
+    if (opts.yes) {
+      // --yes mode: auto-enable backends that have valid config (no config needed)
+      for (const s of selectable) {
+        const backend = backends.find(b => b.kind === s.kind);
+        if (backend && backend.validateConfig() === null) {
+          enableBackend(backend.kind);
+          const tag = s.result === 'detected' ? green('detected') : dim('available');
+          outputHuman(`  ${green('✓')} Auto-enabled: ${s.displayName} (${tag})`);
+        }
+      }
+    } else {
+      // Interactive mode: show detected backends, hint for later setup
+      for (const s of selectable) {
+        const tag = s.result === 'detected' ? green('detected') : dim('available');
+        outputHuman(`    ${s.displayName} (${tag})`);
+      }
+      outputHuman(dim(`  Enable backends later: pilot notify enable <kind>`));
+    }
+    outputHuman('');
+  } else {
+    outputHuman(`  ${dim('No notification backends detected. You can enable them later: pilot notify enable <kind>')}`);
+    outputHuman('');
+  }
 
   // Install OpenClaw skill if OpenClaw is detected
   const skillResult = installOpenClawSkill();
