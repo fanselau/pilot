@@ -61,9 +61,11 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 
 - Phase 98 is complete.
 - Phase 100 is complete.
+- Phase 101 is complete.
 - The phase lifecycle now supports an advisory post-judge `ui-review` step for UI-eligible phases.
 - Runner, CLI, and web timeline semantics all expose `ui-review` explicitly while judge remains the sole completion gate.
 - Pilot now manages GSD as an approved-version surface with explicit version authority, controlled setup/update behavior, and visible per-project drift reporting.
+- Notification system is now modular: typed backend interface, 4 backends (kimaki, openclaw, webhook, telegram), fan-out delivery, `pilot notify` CLI, multi-backend `pilot add` flags, project route management, `pilot init` auto-detection. Owner field fully removed.
 
 ## Key Decisions
 
@@ -77,4 +79,4 @@ Judge verdicts must include actionable retry recommendations (`retry-resume` / `
 | VERIFICATION.md primary + transcript secondary | VERIFICATION.md is structured machine-readable evidence; transcript is fallback | — Pending |
 
 ---
-*Last updated: 2026-03-26 after Phase 100 completion — managed GSD approved-version controls and drift visibility added*
+*Last updated: 2026-03-30 after Phase 101 completion — modular notification backends, owner removal, fan-out delivery*
