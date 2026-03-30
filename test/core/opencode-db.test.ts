@@ -12,6 +12,7 @@ import {
   getSessionMessages,
   getSessionParts,
   getLastMessage,
+  getLatestUsefulAssistantTextMessage,
   isSessionDone,
   getSessionTokens,
   getSessionTokensRecursive,
@@ -514,6 +515,61 @@ describe('getLastMessage', () => {
   it('returns null for nonexistent session', () => {
     const last = getLastMessage('nonexistent');
     expect(last).toBeNull();
+  });
+});
+
+describe('getLatestUsefulAssistantTextMessage', () => {
+  it('returns latest useful assistant text even when a newer user message exists', () => {
+    insertSession(db, 'sess1', 'assistant-session', 1000, 4000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1', 'msg1', 'sess1', 1000, { type: 'text', text: 'Earlier assistant update' });
+    insertMessage(db, 'msg2', 'sess1', 3000, { role: 'assistant' });
+    insertPart(db, 'part2a', 'msg2', 'sess1', 3000, { type: 'text', text: 'Latest useful update' });
+    insertPart(db, 'part2b', 'msg2', 'sess1', 3001, { type: 'tool', tool: 'bash', state: { status: 'completed' } });
+    insertMessage(db, 'msg3', 'sess1', 4000, { role: 'user' });
+    insertPart(db, 'part3', 'msg3', 'sess1', 4000, { type: 'text', text: 'Can you confirm?' });
+
+    expect(getLastMessage('sess1')?.role).toBe('user');
+    expect(getLastMessage('sess1')?.content).toBe('Can you confirm?');
+
+    expect(getLatestUsefulAssistantTextMessage('sess1')).toMatchObject({
+      id: 'msg2',
+      role: 'assistant',
+      content: 'Latest useful update',
+      createdAt: 3000,
+    });
+  });
+
+  it('skips assistant messages with only tool content', () => {
+    insertSession(db, 'sess1', 'assistant-session', 1000, 3000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1', 'msg1', 'sess1', 1000, { type: 'tool', tool: 'read', state: { status: 'completed' } });
+    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant' });
+    insertPart(db, 'part2', 'msg2', 'sess1', 2000, { type: 'text', text: 'Useful text survives' });
+
+    expect(getLatestUsefulAssistantTextMessage('sess1')).toMatchObject({
+      id: 'msg2',
+      content: 'Useful text survives',
+    });
+  });
+
+  it('skips empty or whitespace-only assistant text', () => {
+    insertSession(db, 'sess1', 'assistant-session', 1000, 3000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'assistant' });
+    insertPart(db, 'part1', 'msg1', 'sess1', 1000, { type: 'text', text: '   ' });
+    insertMessage(db, 'msg2', 'sess1', 2000, { role: 'assistant' });
+    insertPart(db, 'part2', 'msg2', 'sess1', 2000, { type: 'text', text: '\n\n' });
+
+    expect(getLatestUsefulAssistantTextMessage('sess1')).toBeNull();
+  });
+
+  it('returns null when no matching assistant text exists', () => {
+    insertSession(db, 'sess1', 'assistant-session', 1000, 2000);
+    insertMessage(db, 'msg1', 'sess1', 1000, { role: 'user' });
+    insertPart(db, 'part1', 'msg1', 'sess1', 1000, { type: 'text', text: 'User message only' });
+
+    expect(getLatestUsefulAssistantTextMessage('sess1')).toBeNull();
+    expect(getLatestUsefulAssistantTextMessage('missing-session')).toBeNull();
   });
 });
 
