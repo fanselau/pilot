@@ -52,7 +52,10 @@ program
   .option('--force', 'Bypass project setup check')
   .option('--start-immediately', 'Bypass queue grace wait and launch as soon as eligible (less review/cancel time)')
   .option('--timeout <minutes>', 'Per-job timeout in minutes (default: 0 = infinite)', (v: string) => parseInt(v, 10))
-  .option('--notify <agentId>', 'Agent ID to notify on completion (optional, e.g. main)')
+  .option('--notify <agentId>', 'Agent ID to notify on completion via OpenClaw (legacy)')
+  .option('--notify-kimaki <sessionId>', 'Kimaki session to notify on completion')
+  .option('--notify-webhook <url>', 'Webhook URL to POST on completion')
+  .option('--notify-telegram <chatId>', 'Telegram chat ID to notify on completion')
   .option('--notify-url <url>', 'Custom webhook URL for completion callback')
   .option('--no-notify', 'Explicitly skip completion notification')
   .option('--categories <cats>', 'Skill categories for this job (comma-separated): frontend,testing')
@@ -179,12 +182,10 @@ program
   .option('--refresh', 'Refresh existing setup (re-link symlinks, merge config)')
   .option('--force', 'With --refresh: overwrite opencode.json instead of merging')
   .option('--skip-skills', 'With --refresh: skip skill re-offering')
-  .option('--owner <agentId>', 'Register project owner (agent ID for notifications)')
-  .option('--update', 'Update owner of existing registered project')
   .option('--categories <categories>', 'Set default skill categories for this project (comma-separated)')
   .action(async (dir: string, opts: Record<string, unknown>) => {
     const { setupCommand } = await import('./commands/setup.js');
-    await setupCommand(dir, opts as { verify?: boolean; refresh?: boolean; force?: boolean; skipSkills?: boolean; owner?: string; update?: boolean; categories?: string });
+    await setupCommand(dir, opts as { verify?: boolean; refresh?: boolean; force?: boolean; skipSkills?: boolean; categories?: string });
   });
 
 program
@@ -201,13 +202,10 @@ program
   .description('Show or manage a registered project')
   .option('--block <reason>', 'Block project with reason')
   .option('--unblock', 'Unblock a blocked project')
-  .option('--owner <agentId>', 'Change project owner')
-  .option('--notify-openclaw', 'Set a structured OpenClaw notify route on this project')
-  .option('--notify-agent <agentId>', 'Route field: target OpenClaw agent id')
-  .option('--notify-channel <channel>', 'Route field: reply channel (e.g. telegram)')
-  .option('--notify-to <target>', 'Route field: reply target (e.g. telegram:-123456)')
-  .option('--notify-account <accountId>', 'Route field: optional reply account id')
-  .option('--clear-notify-openclaw', 'Clear the structured OpenClaw notify route for this project')
+  .option('--notify-kimaki-channel <channelId>', 'Default kimaki channel for project notifications')
+  .option('--notify-webhook <url>', 'Default webhook URL for project notifications')
+  .option('--notify-telegram <chatId>', 'Default Telegram chat for project notifications')
+  .option('--clear-notify', 'Remove all project notification routes')
   .option('--jobs', 'Show recent jobs for this project')
   .action(async (path: string, opts: Record<string, unknown>) => {
     const { projectCommand } = await import('./commands/project.js');

@@ -13,12 +13,14 @@ import { accessSync, existsSync, lstatSync, readFileSync, realpathSync, statSync
 import path from 'node:path';
 import { addJob, bump, findDuplicateJob, getProject, updateJobCategories, getLatestFailedJob } from '../core/db.js';
 import { formatCategoryHelp } from '../core/skills.js';
-import { resolveProjectDir, getConfig, getConfigFileDefaults } from '../core/config.js';
-import { resolveNotifyRoute } from '../core/notify-route.js';
+import { resolveProjectDir, getConfigFileDefaults } from '../core/config.js';
+import { deriveRouteFromLegacyValue } from '../core/notify-route.js';
+import type { NotifyRoute } from '../core/notify-backends/types.js';
+import { getEnabledBackends, getBackendConfig } from '../core/notify-backends/registry.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow } from '../util/colors.js';
 import { getProviderMode, getProviderModes } from '../core/model-store.js';
-import type { Job, JobScope, ModelProfile, OpenClawDeliverRoute } from '../core/types.js';
+import type { JobScope, ModelProfile } from '../core/types.js';
 
 const VALID_PROFILES: readonly ModelProfile[] = ['quality', 'balanced', 'budget'];
 const BUILTIN_PROVIDERS = ['hybrid', 'claude-only', 'openai-only'] as const;
@@ -31,7 +33,10 @@ interface AddOptions {
   provider?: string;
   force?: boolean;
   timeout?: number;   // Per-job timeout in minutes (0 = infinite, default)
-  notify?: string;    // Agent ID to notify on completion (e.g. "main")
+  notify?: string;    // Agent ID to notify on completion (legacy openclaw — e.g. "main")
+  notifyKimaki?: string;    // --notify-kimaki <sessionId>
+  notifyWebhook?: string;   // --notify-webhook <url>
+  notifyTelegram?: string;  // --notify-telegram <chatId>
   notifyUrl?: string; // Custom webhook URL for completion callback
   noNotify?: boolean; // Explicitly skip completion notification
   dryRun?: boolean;   // Show what would happen without queuing
@@ -297,39 +302,97 @@ async function addCommand(
     }
   }
 
-  // Resolve notify target:
-  //   1. --no-notify → skip notification (callbackSessionKey = undefined)
-  //   2. --notify <key> → use that key
-  //   3. Neither → check PILOT_DEFAULT_NOTIFY env var
-  //   4. Still nothing and NOT --dry-run → error
-  //   5. --dry-run → skip the requirement entirely
+  // ── Build notify routes from flags ──────────────────────────────────────
+  let notifyRoutes: NotifyRoute[] = [];
   let resolvedNotifyKey: string | undefined;
+
   if (opts.noNotify) {
-    // Explicitly opted out — no callback
-    resolvedNotifyKey = undefined;
-  } else if (opts.notify) {
-    // --notify <key> takes precedence
-    resolvedNotifyKey = opts.notify;
+    notifyRoutes = []; // Explicit opt-out — store empty array
   } else {
-    // Check env var fallback
-    const defaultKey = getConfig().defaultNotifySessionKey;
-    if (defaultKey) {
-      resolvedNotifyKey = defaultKey;
-    } else if (projectRecord?.owner) {
-      resolvedNotifyKey = projectRecord.owner;
-    } else {
-      // No notify intent — resolvedNotifyKey stays undefined (notifications disabled)
-      // Print informational hint in human mode (not an error)
-      if (!opts.dryRun && !isJsonMode()) {
-        outputHuman(`  ${dim('ℹ Notifications not configured. See: pilot add --help')}`);
+    // Collect routes from explicit flags
+    if (opts.notifyKimaki) {
+      notifyRoutes.push({ kind: 'kimaki', sessionId: opts.notifyKimaki });
+    }
+    if (opts.notify) {
+      // Legacy --notify <agentId> → derive openclaw route
+      resolvedNotifyKey = opts.notify;
+      const derived = deriveRouteFromLegacyValue(
+        `agent:${opts.notify}:${opts.notify}:group:${opts.notify}`,
+      );
+      if (derived) notifyRoutes.push(derived);
+    }
+    if (opts.notifyWebhook) {
+      notifyRoutes.push({ kind: 'webhook', url: opts.notifyWebhook });
+    }
+    if (opts.notifyTelegram) {
+      notifyRoutes.push({ kind: 'telegram', chatId: opts.notifyTelegram });
+    }
+
+    // Check enabled backends for missing routes (skip for --dry-run)
+    if (!opts.dryRun) {
+      const enabledBackends = getEnabledBackends();
+      const routeKinds = new Set(notifyRoutes.map(r => r.kind));
+      const missing: string[] = [];
+
+      for (const kind of enabledBackends) {
+        if (routeKinds.has(kind)) continue;
+
+        // Check for backend-specific defaults
+        if (kind === 'kimaki') {
+          const projectRoutes = projectRecord?.notifyRoutes ?? [];
+          const kimakiDefault = projectRoutes.find(r => r.kind === 'kimaki' && 'channelId' in r);
+          if (kimakiDefault) {
+            notifyRoutes.push(kimakiDefault);
+            continue;
+          }
+          missing.push('kimaki: --notify-kimaki <sessionId> (no default available)');
+        } else if (kind === 'openclaw-agent-deliver') {
+          const projectRoutes = projectRecord?.notifyRoutes ?? [];
+          const oclawDefault = projectRoutes.find(r => r.kind === 'openclaw-agent-deliver');
+          if (oclawDefault) {
+            notifyRoutes.push(oclawDefault);
+            continue;
+          }
+          missing.push('openclaw: --notify <agentId> (no project default)');
+        } else if (kind === 'webhook') {
+          const cfg = getBackendConfig('webhook');
+          const defaultUrl = cfg?.defaultUrl;
+          if (typeof defaultUrl === 'string' && defaultUrl) {
+            notifyRoutes.push({ kind: 'webhook', url: defaultUrl });
+            continue;
+          }
+          missing.push('webhook: --notify-webhook <url> OR set notifications.webhook.defaultUrl in config');
+        } else if (kind === 'telegram') {
+          const cfg = getBackendConfig('telegram');
+          const defaultChatId = cfg?.defaultChatId;
+          if (typeof defaultChatId === 'string' && defaultChatId) {
+            notifyRoutes.push({ kind: 'telegram', chatId: defaultChatId });
+            continue;
+          }
+          missing.push('telegram: --notify-telegram <chatId> OR set notifications.telegram.defaultChatId in config');
+        }
       }
+
+      if (missing.length > 0) {
+        process.stderr.write(`Error: Enabled notification backends require targets:\n`);
+        for (const m of missing) {
+          process.stderr.write(`  ${m}\n`);
+        }
+        process.stderr.write(`Use --no-notify to skip all notifications.\n`);
+        process.exit(1);
+      }
+    }
+
+    // PILOT_DEFAULT_NOTIFY deprecation warning
+    if (process.env.PILOT_DEFAULT_NOTIFY && notifyRoutes.length === 0) {
+      process.stderr.write(`  ⚠ PILOT_DEFAULT_NOTIFY is deprecated. Use per-backend config defaults or --notify-* flags.\n`);
     }
   }
 
   // Warn if project is not registered (non-blocking — one-off jobs are valid)
   if (!projectRecord) {
     process.stderr.write(
-      `  ⚠ Project not registered. Run: pilot setup ${resolvedProject} --owner <agentId>\n`,
+      `  ⚠ Project not registered. Run: pilot setup ${resolvedProject}\n`,
     );
   }
 
@@ -337,76 +400,31 @@ async function addCommand(
   if (opts.dryRun) {
     const shortDesc = description.length > 60 ? description.slice(0, 60) + '…' : description;
     outputHuman(`  ${dim('[dry-run]')} Would queue: ${project} · ${scope} · "${shortDesc}"`);
-    if (resolvedNotifyKey) {
-      outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
+    if (notifyRoutes.length > 0) {
+      outputHuman(`  ${dim(`notify → ${notifyRoutes.map(r => r.kind).join(', ')}`)}`);
     }
     outputHuman(`  ${dim('Project:')} ${resolvedProject}`);
     return;
   }
 
-  let notifyRouteSnapshot: OpenClawDeliverRoute | null | undefined;
-  if (!opts.noNotify && resolvedNotifyKey !== undefined) {
-    const configuredRoute = projectRecord?.notifyOpenClawRoute;
-    if (opts.notify && configuredRoute && opts.notify !== configuredRoute.agentId) {
-      process.stderr.write(
-        `Error: --notify (${opts.notify}) conflicts with configured project route agent (${configuredRoute.agentId}). `
-        + `Use --notify ${configuredRoute.agentId}, remove --notify, or update the project route with `
-        + `pilot project "${resolvedProject}" --notify-openclaw ...\n`,
-      );
-      process.exit(2);
-    }
-
-    const routeResolution = resolveNotifyRoute(
-      {
-        callbackSessionKey: resolvedNotifyKey ?? null,
-        notifyRoute: null,
-      } as Job,
-      projectRecord,
-    );
-    if (!routeResolution.ok) {
-      process.stderr.write(`Error: ${routeResolution.error.message}\n`);
-      process.stderr.write(
-        `Configure a structured route: pilot project "${resolvedProject}" --notify-openclaw --notify-agent <id> --notify-channel <channel> --notify-to <target> [--notify-account <id>]\n`,
-      );
-      process.exit(2);
-    }
-
-    notifyRouteSnapshot = routeResolution.route;
-  }
-
   // Fast scope always skips grace period so the runner picks it up immediately
   const skipGrace = scope === 'fast' || opts.startImmediately === true;
 
-  const job = notifyRouteSnapshot
-    ? addJob(
-      resolvedProject,
-      scope,
-      description,
-      requirementPath ?? undefined,
-      modelProfile,
-      providerMode,
-      undefined,             // dependsOn (not used in add command)
-      undefined,             // parentJobId (not used in add command)
-      resolvedNotifyKey,     // callbackSessionKey (resolved)
-      opts.notifyUrl,        // callbackUrl
-      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-      skipGrace,
-      notifyRouteSnapshot,
-    )
-    : addJob(
-      resolvedProject,
-      scope,
-      description,
-      requirementPath ?? undefined,
-      modelProfile,
-      providerMode,
-      undefined,             // dependsOn (not used in add command)
-      undefined,             // parentJobId (not used in add command)
-      resolvedNotifyKey,     // callbackSessionKey (resolved)
-      opts.notifyUrl,        // callbackUrl
-      opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
-      skipGrace,
-    );
+  const job = addJob(
+    resolvedProject,
+    scope,
+    description,
+    requirementPath ?? undefined,
+    modelProfile,
+    providerMode,
+    undefined,             // dependsOn (not used in add command)
+    undefined,             // parentJobId (not used in add command)
+    resolvedNotifyKey,     // callbackSessionKey (legacy)
+    opts.notifyUrl,        // callbackUrl
+    opts.timeout ?? 0,     // timeout in minutes (0 = infinite)
+    skipGrace,
+    notifyRoutes.length > 0 ? notifyRoutes : (opts.noNotify ? [] : undefined),
+  );
 
   // --next: bump to front of queue (same mechanism as `pilot bump`)
   if (opts.next) {
@@ -475,8 +493,8 @@ async function addCommand(
   } else {
     outputHuman('  Start mode: waits for queue grace window before launch.');
   }
-  if (resolvedNotifyKey) {
-    outputHuman(`  ${dim(`notify → ${resolvedNotifyKey}`)}`);
+  if (notifyRoutes.length > 0) {
+    outputHuman(`  ${dim(`notify → ${notifyRoutes.map(r => r.kind).join(', ')}`)}`);
   }
   outputHuman(`  ${dim('Run:')} pilot service start ${dim('to process queue')}`);
 }
