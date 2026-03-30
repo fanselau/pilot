@@ -268,6 +268,7 @@ async function buildDebugEnv(opts: DebugEnvOpts = {}) {
     resumeFromReviewHold: vi.fn(),
     getResumedReviewHoldJobs: vi.fn(() => []),
     clearResumedFlag: vi.fn(),
+    updateJobRuntimeSkillSnapshot: vi.fn(),
     _getTestDb: vi.fn(() => null),
   }));
 
@@ -302,6 +303,12 @@ async function buildDebugEnv(opts: DebugEnvOpts = {}) {
 
   vi.doMock('../../src/core/skills.js', () => ({
     installSkillsForJob: vi.fn(async () => []),
+    cleanupInstalledSkills: vi.fn(),
+  }));
+
+  vi.doMock('../../src/core/runtime-agent-skills.js', () => ({
+    applyRuntimeAgentSkillsPatch: vi.fn(async () => ({ configPath: '/tmp/test-config.json', snapshotPath: null, snapshot: { categories: [], selectedSkills: [], invalidSkills: [], agentSkills: {}, mergePolicy: 'append-user-then-pilot', applied: false, restoreStatus: 'skipped', restoreError: null }, applied: false, previousAgentSkills: null, hadAgentSkillsKey: false })),
+    restoreRuntimeAgentSkillsPatch: vi.fn(async () => ({ categories: [], selectedSkills: [], invalidSkills: [], agentSkills: {}, mergePolicy: 'append-user-then-pilot', applied: false, restoreStatus: 'skipped', restoreError: null })),
   }));
 
   vi.doMock('../../src/core/callback.js', () => ({
