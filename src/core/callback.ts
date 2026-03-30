@@ -37,60 +37,116 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   }
 }
 
-function buildOutcomeHeadline(job: Job, summary: ReturnType<typeof buildJobExecutiveSummary>): string {
-  if (summary.outcome === 'failure') {
-    return `Failure — ${truncate(summary.failureReason ?? summary.what, 160)}`;
+const OUTCOME_EMOJI: Record<string, string> = {
+  success: '✅',
+  failure: '❌',
+  review_pending: '👀',
+  review_hold: '⏸️',
+  unknown: '❓',
+};
+
+function outcomeLabel(outcome: string): string {
+  switch (outcome) {
+    case 'success': return 'Completed';
+    case 'failure': return 'Failed';
+    case 'review_pending': return 'Needs Review';
+    case 'review_hold': return 'Paused';
+    default: return 'Unknown';
   }
-  if (summary.outcome === 'review_pending') {
-    return `Review pending — ${truncate(summary.what, 160)}`;
-  }
-  if (summary.outcome === 'review_hold') {
-    return `Review hold — ${truncate(summary.what, 160)}`;
-  }
-  return `Success — ${truncate(summary.what, 160)}`;
+}
+
+function projectName(project: string): string {
+  const parts = project.split('/');
+  return parts.length >= 2 ? parts.slice(-2).join('/') : parts[parts.length - 1] ?? project;
 }
 
 function buildDeliveryPrompt(job: Job): string {
   const summary = buildJobExecutiveSummary(job, getJobSteps(job.id));
-  const lines: string[] = [buildOutcomeHeadline(job, summary), '', `What: ${truncate(summary.what, 220)}`, `Why: ${truncate(summary.why, 220)}`, `Next: ${truncate(summary.next, 220)}`, ''];
+  const emoji = OUTCOME_EMOJI[summary.outcome] ?? '❓';
+  const label = outcomeLabel(summary.outcome);
+  const duration = formatDuration(job.startedAt, job.completedAt);
+  const proj = projectName(job.project);
+  const lines: string[] = [];
 
-  if (summary.outcome === 'failure' && summary.failureReason) {
-    lines.push(`Evidence:`);
-    lines.push(`Failure: ${truncate(summary.failureReason, 300)}`);
+  // ── Header: one-line scannable outcome ──
+  lines.push(`${emoji} **Pilot \`${job.id}\` — ${label}** (${job.scope}, ${duration})`);
+  lines.push(`> **${proj}** · ${truncate(job.description, 140)}`);
+  lines.push('');
+
+  // ── Body: outcome-specific content ──
+  if (summary.outcome === 'failure') {
+    lines.push(`**Failure:** ${truncate(summary.failureReason ?? summary.what, 300)}`);
+    if (summary.lastAssistantMessages[0]) {
+      lines.push(`**Agent said:** ${truncate(summary.lastAssistantMessages[0].text, 300)}`);
+    }
   } else if (summary.outcome === 'review_pending') {
-    lines.push('Evidence:');
-    lines.push('This is not a failure. Human review is required before closing the loop.');
+    lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
+    lines.push('**Action required:** Human review before this work can land.');
   } else if (summary.outcome === 'review_hold') {
-    lines.push('Evidence:');
-    lines.push('This is not a failure. Execution resumes on approval.');
+    lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
+    lines.push('**Paused:** Execution will resume after approval.');
   } else {
-    lines.push('Key result: ' + truncate(summary.lastAssistantMessages[0]?.text ?? summary.what, 300));
+    // success
+    const agentSaid = summary.lastAssistantMessages[0]?.text;
+    if (agentSaid && agentSaid !== summary.what) {
+      lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
+      lines.push(`**Agent said:** ${truncate(agentSaid, 300)}`);
+    } else {
+      lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
+    }
   }
 
+  // ── Artifacts ──
   if (summary.keyArtifacts.length > 0) {
-    lines.push(`Artifacts: ${summary.keyArtifacts.join(', ')}`);
-  }
-  if (summary.judge) {
-    lines.push(`Judge: ${summary.judge.badge}${summary.judge.reason ? ` — ${truncate(summary.judge.reason, 220)}` : ''}`);
-  }
-  if (summary.verification) {
-    lines.push(`Verification: ${summary.verification.status ?? '—'} | actionable=${summary.verification.actionableGapCount ?? 0} | human=${summary.verification.humanVerificationCount ?? 0} | routing=${summary.verification.routingDecision ?? '—'}`);
+    lines.push(`**Artifacts:** ${summary.keyArtifacts.map(a => `\`${a}\``).join(', ')}`);
   }
 
-  lines.push('', 'Drilldown:', `- pilot summary ${job.id}`, `- pilot log ${job.id}`, '- pilot status --why');
+  // ── Judge + Verification (only for phase jobs that have them) ──
+  if (summary.judge && summary.judge.verdict) {
+    const conf = summary.judge.confidence !== null ? ` (${summary.judge.confidence}%)` : '';
+    const reason = summary.judge.reason ? ` — ${truncate(summary.judge.reason, 160)}` : '';
+    lines.push(`**Judge:** ${summary.judge.verdict}${conf}${reason}`);
+  }
+  if (summary.verification && summary.verification.routingDecision) {
+    const gaps = summary.verification.actionableGapCount ?? 0;
+    const human = summary.verification.humanVerificationCount ?? 0;
+    if (gaps > 0 || human > 0) {
+      lines.push(`**Verification:** ${gaps} actionable gap${gaps !== 1 ? 's' : ''}, ${human} need${human !== 1 ? '' : 's'} human check`);
+    }
+  }
+
+  // ── Commit delta (one line, only when meaningful) ──
+  if (summary.commitDelta.state === 'changed') {
+    lines.push(`**Commits:** \`${summary.commitDelta.baseCommit?.slice(0, 8)}\` → \`${summary.commitDelta.headCommit?.slice(0, 8)}\``);
+  } else if (summary.commitDelta.state === 'no-op') {
+    lines.push('**Commits:** no changes');
+  }
+
+  lines.push('');
+
+  // ── Next action: clear, concrete, outcome-specific ──
+  lines.push(`**Next:** ${truncate(summary.next, 300)}`);
+  lines.push('');
+
+  // ── Commands: compact, copy-pasteable ──
+  const cmds: string[] = [];
+  if (summary.outcome === 'review_pending') {
+    cmds.push(`pilot review ${job.id} --approve`);
+    cmds.push(`pilot review ${job.id} --reject "reason"`);
+  } else if (summary.outcome === 'review_hold') {
+    cmds.push(`pilot review ${job.id} --approve`);
+  }
   if (summary.drilldown.unblockCommand) {
-    lines.push(`- ${summary.drilldown.unblockCommand}`);
+    cmds.push(summary.drilldown.unblockCommand);
   }
-  if (job.status === 'completed_pending_review') {
-    lines.push(`- pilot review ${job.id} --approve`);
-    lines.push(`- pilot review ${job.id} --reject "reason"`);
-  } else if (job.status === 'review_hold') {
-    lines.push(`- pilot review ${job.id} --approve`);
-  } else if (summary.drilldown.reviewCommand) {
-    lines.push(`- ${summary.drilldown.reviewCommand}`);
-  }
+  cmds.push(`pilot summary ${job.id}`);
+  cmds.push(`pilot log ${job.id}`);
 
-  lines.push('', 'Identifiers:', `job_id: ${job.id}`, `project: ${job.project}`, `scope: ${job.scope}`, `status: ${job.status}`, `description: ${truncate(job.description, 180)}`, `duration: ${formatDuration(job.startedAt, job.completedAt)}`, '', 'This is a real event. Do not ignore it.');
+  lines.push('```');
+  for (const cmd of cmds) {
+    lines.push(cmd);
+  }
+  lines.push('```');
 
   return lines.join('\n');
 }

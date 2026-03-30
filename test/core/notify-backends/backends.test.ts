@@ -17,6 +17,8 @@ import type { NotifyRoute } from '../../../src/core/notify-backends/types.js';
 
 const mockExeca = vi.mocked(execa);
 const mockLoadConfig = vi.mocked(loadConfigFile);
+const TEST_KIMAKI_BIN = '/tmp/test-kimaki';
+const originalKimakiBin = process.env.KIMAKI_BIN;
 
 // Lazy imports so mocks are in place
 let kimakiBackend: typeof import('../../../src/core/notify-backends/kimaki.js').kimakiBackend;
@@ -36,6 +38,7 @@ const MOCK_JOB = {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  process.env.KIMAKI_BIN = TEST_KIMAKI_BIN;
   // Reset modules to re-evaluate with fresh mocks
   const kimakiMod = await import('../../../src/core/notify-backends/kimaki.js');
   kimakiBackend = kimakiMod.kimakiBackend;
@@ -47,6 +50,14 @@ beforeEach(async () => {
   telegramBackend = telegramMod.telegramBackend;
 });
 
+afterEach(() => {
+  if (originalKimakiBin === undefined) {
+    delete process.env.KIMAKI_BIN;
+  } else {
+    process.env.KIMAKI_BIN = originalKimakiBin;
+  }
+});
+
 // ── Kimaki Backend ────────────────────────────────────────────────────────
 
 describe('kimakiBackend', () => {
@@ -56,7 +67,7 @@ describe('kimakiBackend', () => {
     const result = await kimakiBackend.deliver(route, 'Job done', MOCK_JOB);
     expect(result.ok).toBe(true);
     expect(mockExeca).toHaveBeenCalledWith(
-      'kimaki',
+      TEST_KIMAKI_BIN,
       ['send', '--session', 'ses_xxx', '--prompt', 'Job done'],
       expect.objectContaining({ timeout: 30_000, reject: false }),
     );
@@ -68,7 +79,7 @@ describe('kimakiBackend', () => {
     const result = await kimakiBackend.deliver(route, 'Job done', MOCK_JOB);
     expect(result.ok).toBe(true);
     expect(mockExeca).toHaveBeenCalledWith(
-      'kimaki',
+      TEST_KIMAKI_BIN,
       ['send', '--channel', 'ch_xxx', '--prompt', 'Job done'],
       expect.objectContaining({ timeout: 30_000, reject: false }),
     );
@@ -80,7 +91,7 @@ describe('kimakiBackend', () => {
     const result = await kimakiBackend.deliver(route, 'Job done', MOCK_JOB);
     expect(result.ok).toBe(true);
     expect(mockExeca).toHaveBeenCalledWith(
-      'kimaki',
+      TEST_KIMAKI_BIN,
       ['send', '--session', 'ses_xxx', '--prompt', 'Job done'],
       expect.objectContaining({ timeout: 30_000, reject: false }),
     );
@@ -89,19 +100,25 @@ describe('kimakiBackend', () => {
   it('detect returns detected on exit 0, not-found otherwise', async () => {
     mockExeca.mockResolvedValueOnce({ exitCode: 0, stderr: '', stdout: '1.0.0' } as any);
     expect(await kimakiBackend.detect()).toBe('detected');
+    expect(mockExeca).toHaveBeenNthCalledWith(
+      1,
+      TEST_KIMAKI_BIN,
+      ['--version'],
+      expect.objectContaining({ timeout: 5_000, reject: false }),
+    );
 
     mockExeca.mockResolvedValueOnce({ exitCode: 1, stderr: '', stdout: '' } as any);
     expect(await kimakiBackend.detect()).toBe('not-found');
   });
 
-  it('deliver returns ok:false when binary not found (ENOENT)', async () => {
+  it('deliver returns ok:false when kimaki binary not found (ENOENT)', async () => {
     const err = new Error('spawn kimaki ENOENT') as NodeJS.ErrnoException;
     err.code = 'ENOENT';
     mockExeca.mockRejectedValueOnce(err);
     const route: NotifyRoute = { kind: 'kimaki', sessionId: 'ses_xxx' };
     const result = await kimakiBackend.deliver(route, 'Job done', MOCK_JOB);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('kimaki binary not found on PATH');
+    expect(result.error).toContain('kimaki binary not found');
   });
 
   it('deliver returns ok:false on non-zero exit code', async () => {

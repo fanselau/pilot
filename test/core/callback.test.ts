@@ -265,75 +265,90 @@ describe('buildDeliveryPrompt', () => {
     mockBuildJobExecutiveSummary.mockReturnValue(makeSummary());
   });
 
-  it('success prompt leads with outcome, what/why/next, evidence, and drilldown commands', () => {
+  it('success prompt has markdown header, summary, agent message, artifacts, next action, and commands', () => {
     const prompt = buildDeliveryPrompt(makeJob({ status: 'completed' }));
 
-    expect(prompt).toContain('Success — Implemented shared summary builder');
-    expect(prompt).toContain('What: Implemented shared summary builder');
-    expect(prompt).toContain('Why: Phase 102 needs a reusable executive summary model');
-    expect(prompt).toContain('Next: Run pilot summary ab12');
-    expect(prompt).toContain('Key result: Summary builder is complete.');
-    expect(prompt).toContain('artifacts/report.md');
+    // Header with emoji, job ID, outcome label, scope, duration
+    expect(prompt).toMatch(/✅.*Pilot.*ab12.*Completed/);
+    expect(prompt).toContain('phase');
+    // Project short name in blockquote
+    expect(prompt).toContain('test-project');
+    // Summary content
+    expect(prompt).toContain('**Summary:** Implemented shared summary builder');
+    expect(prompt).toContain('**Agent said:** Summary builder is complete.');
+    // Artifacts in backticks
+    expect(prompt).toContain('`artifacts/report.md`');
+    // Judge verdict
+    expect(prompt).toContain('**Judge:** passed (95%)');
+    // Next action is concrete
+    expect(prompt).toContain('**Next:**');
+    expect(prompt).not.toContain('Retry');
+    // Commands in code block
     expect(prompt).toContain('pilot summary ab12');
     expect(prompt).toContain('pilot log ab12');
-    expect(prompt).toContain('pilot status --why');
+    // No generic acknowledgement wording
+    expect(prompt).not.toContain('Acknowledge success');
+    expect(prompt).not.toContain('This is a real event');
   });
 
-  it('failed prompt leads with failure reason and unblock guidance before identifiers', () => {
+  it('failed prompt leads with failure reason, includes agent context and unblock command', () => {
     mockBuildJobExecutiveSummary.mockReturnValue(makeSummary({
       outcome: 'failure',
       statusBadge: 'failed',
       failureReason: 'Build failed: TypeScript compilation errors',
+      lastAssistantMessages: [{ stepIndex: 1, sessionTitle: 's1', text: 'tsc found 3 errors in src/core/types.ts' }],
       drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12', unblockCommand: 'pilot unblock "test-project"' },
     }));
 
     const prompt = buildDeliveryPrompt(makeJob({ status: 'failed', error: 'Build failed: TypeScript compilation errors' }));
 
-    expect(prompt).toContain('Failure — Build failed: TypeScript compilation errors');
-    expect(prompt).toContain('Failure: Build failed: TypeScript compilation errors');
+    expect(prompt).toMatch(/❌.*Pilot.*ab12.*Failed/);
+    expect(prompt).toContain('**Failure:** Build failed: TypeScript compilation errors');
+    expect(prompt).toContain('**Agent said:** tsc found 3 errors in src/core/types.ts');
     expect(prompt).toContain('pilot log ab12');
     expect(prompt).toContain('pilot unblock "test-project"');
   });
 
-  it('review pending prompt includes exact approve and reject commands and says it is not a failure', () => {
+  it('review pending prompt includes approve/reject commands and action-required notice', () => {
     mockBuildJobExecutiveSummary.mockReturnValue({
-      what: 'Awaiting human review', why: 'Judge requested human verification', next: 'Approve or reject review', statusBadge: 'review-pending', outcome: 'review_pending',
+      what: 'Awaiting human review', why: 'Judge requested human verification', next: 'Human review required. Run `pilot review ab12 --approve` to approve or reject.', statusBadge: 'review-pending', outcome: 'review_pending',
       currentOrFinalStep: null, failureReason: null, judge: null, verification: { status: 'human_needed', actionableGapCount: 0, humanVerificationCount: 1, routingDecision: 'human-review', routingReason: 'Need human eyes', artifactPath: null },
-      commitDelta: { state: 'changed', baseCommit: 'a', headCommit: 'b' }, observability: { jobId: 'ab12', jobStatus: 'completed_pending_review', terminal: true, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
+      commitDelta: { state: 'changed', baseCommit: 'aaaaaaaa', headCommit: 'bbbbbbbb' }, observability: { jobId: 'ab12', jobStatus: 'completed_pending_review', terminal: true, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
       keyArtifacts: [], lastAssistantMessages: [], steps: [],
       drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12', reviewCommand: 'pilot review ab12 --approve' },
     });
     const prompt = buildDeliveryPrompt(makeJob({ status: 'completed_pending_review' }));
 
-    expect(prompt).toContain('Review pending');
-    expect(prompt).toContain('This is not a failure.');
+    expect(prompt).toMatch(/👀.*Needs Review/);
+    expect(prompt).toContain('**Action required:** Human review');
     expect(prompt).toContain('pilot review ab12 --approve');
     expect(prompt).toContain('pilot review ab12 --reject "reason"');
   });
 
-  it('review hold prompt includes exact resume command before transcript guidance', () => {
+  it('review hold prompt includes resume command and paused notice', () => {
     mockBuildJobExecutiveSummary.mockReturnValue({
-      what: 'Execution paused for review', why: 'Human checkpoint reached', next: 'Approve to resume execution', statusBadge: 'review-hold', outcome: 'review_hold',
+      what: 'Execution paused for review', why: 'Human checkpoint reached', next: 'Execution paused. Run `pilot review ab12 --approve` to resume.', statusBadge: 'review-hold', outcome: 'review_hold',
       currentOrFinalStep: null, failureReason: null, judge: null, verification: null,
-      commitDelta: { state: 'changed', baseCommit: 'a', headCommit: 'b' }, observability: { jobId: 'ab12', jobStatus: 'review_hold', terminal: false, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
+      commitDelta: { state: 'changed', baseCommit: 'aaaaaaaa', headCommit: 'bbbbbbbb' }, observability: { jobId: 'ab12', jobStatus: 'review_hold', terminal: false, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
       keyArtifacts: [], lastAssistantMessages: [], steps: [],
       drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12', reviewCommand: 'pilot review ab12 --approve' },
     });
     const prompt = buildDeliveryPrompt(makeJob({ status: 'review_hold' }));
 
-    expect(prompt).toContain('Review hold');
+    expect(prompt).toMatch(/⏸️.*Paused/);
+    expect(prompt).toContain('**Paused:** Execution will resume after approval.');
     expect(prompt).toContain('pilot review ab12 --approve');
-    expect(prompt).toContain('Execution resumes on approval.');
   });
 
-  it('includes stable identifiers and single real-event warning without generic acknowledgement wording', () => {
+  it('does not duplicate summary and agent-said when they are the same text', () => {
+    mockBuildJobExecutiveSummary.mockReturnValue(makeSummary({
+      what: 'All tests passing now.',
+      lastAssistantMessages: [{ stepIndex: 1, sessionTitle: 's1', text: 'All tests passing now.' }],
+    }));
     const prompt = buildDeliveryPrompt(makeJob({ status: 'completed' }));
 
-    expect(prompt).toContain('job_id: ab12');
-    expect(prompt).toContain('project: test-project');
-    expect(prompt).toContain('scope: phase');
-    expect(prompt).toContain('status: completed');
-    expect(prompt).toContain('This is a real event. Do not ignore it.');
-    expect(prompt).not.toContain('Acknowledge success');
+    // Should have summary but NOT a separate agent-said since they match
+    expect(prompt).toContain('**Summary:** All tests passing now.');
+    expect(prompt).not.toContain('**Agent said:**');
   });
 });

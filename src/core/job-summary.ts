@@ -115,6 +115,24 @@ function buildStepEvidence(step: JobStep, artifactPath: string | null, assistant
   return Array.from(new Set(evidence)).slice(0, 4);
 }
 
+function resolveNextAction(job: Job, drilldown: JobExecutiveSummary['drilldown']): string {
+  switch (job.status) {
+    case 'completed':
+      return `Review the changes, then continue with follow-up work. Run \`${drilldown.logCommand}\` for the full transcript.`;
+    case 'completed_pending_review':
+      return `Human review required. Run \`${drilldown.reviewCommand ?? `pilot review ${job.id} --approve`}\` to approve or reject.`;
+    case 'review_hold':
+      return `Execution paused. Run \`${drilldown.reviewCommand ?? `pilot review ${job.id} --approve`}\` to resume.`;
+    case 'failed':
+    case 'cancelled':
+      return drilldown.unblockCommand
+        ? `Inspect the failure, then run \`${drilldown.unblockCommand}\` and queue a corrective job.`
+        : `Inspect the failure with \`${drilldown.logCommand}\`, fix the issue, and queue a new job.`;
+    default:
+      return `Run \`${drilldown.summaryCommand}\` for the latest state.`;
+  }
+}
+
 function mapOutcome(status: Job['status']): JobExecutiveSummary['outcome'] {
   switch (status) {
     case 'completed':
@@ -238,10 +256,12 @@ export function buildJobExecutiveSummary(job: Job, steps: JobStep[]): JobExecuti
     drilldown.unblockCommand = `pilot unblock "${job.project}"`;
   }
 
+  const nextAction = resolveNextAction(job, drilldown);
+
   return {
     what: preferredWhat ?? why.what,
     why: why.why,
-    next: why.next,
+    next: nextAction,
     statusBadge: why.badge,
     outcome: mapOutcome(job.status),
     currentOrFinalStep: currentOrFinal,

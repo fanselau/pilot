@@ -6,8 +6,46 @@
  * - channelId: creates a new standalone notification thread in the channel
  * sessionId takes priority when both are present.
  */
+import { existsSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { execa } from 'execa';
 import type { NotifyBackend, NotifyResult, NotifyRoute, DetectResult } from './types.js';
+
+function resolveKimakiBinary(): string {
+  const override = process.env.KIMAKI_BIN?.trim();
+  if (override) {
+    return override;
+  }
+
+  const home = process.env.HOME?.trim() || homedir();
+  const fnmBase = path.join(home, '.local', 'share', 'fnm', 'node-versions');
+
+  try {
+    const versions = readdirSync(fnmBase, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+
+    for (const version of versions) {
+      const candidate = path.join(fnmBase, version, 'installation', 'bin', 'kimaki');
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  } catch {
+    // Fall back to PATH-based resolution below.
+  }
+
+  return 'kimaki';
+}
+
+async function runKimakiCli(args: string[], timeout: number) {
+  return execa(resolveKimakiBinary(), args, {
+    timeout,
+    reject: false,
+  });
+}
 
 export const kimakiBackend: NotifyBackend = {
   kind: 'kimaki',
@@ -30,7 +68,7 @@ export const kimakiBackend: NotifyBackend = {
     }
 
     try {
-      const result = await execa('kimaki', args, { timeout: 30_000, reject: false });
+      const result = await runKimakiCli(args, 30_000);
 
       if (result.exitCode === 0) {
         return { ok: true };
@@ -46,15 +84,15 @@ export const kimakiBackend: NotifyBackend = {
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        return { ok: false, error: 'kimaki binary not found on PATH' };
+        return { ok: false, error: 'kimaki binary not found for notification delivery' };
       }
-      return { ok: false, error: `Failed to execute kimaki send: ${err.message}` };
+      return { ok: false, error: `Failed to execute kimaki: ${err.message}` };
     }
   },
 
   async detect(): Promise<DetectResult> {
     try {
-      const result = await execa('kimaki', ['--version'], { timeout: 5_000, reject: false });
+      const result = await runKimakiCli(['--version'], 5_000);
       return result.exitCode === 0 ? 'detected' : 'not-found';
     } catch {
       return 'not-found';

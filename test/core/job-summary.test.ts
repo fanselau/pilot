@@ -184,7 +184,7 @@ describe('buildJobExecutiveSummary', () => {
 
     expect(summary.what).toBe('Implemented src/core/job-summary.ts and src/commands/summary.ts');
     expect(summary.why).toBe('Fallback why');
-    expect(summary.next).toBe('Fallback next');
+    expect(summary.next).toContain('Review the changes, then continue with follow-up work');
     expect(summary.statusBadge).toBe('pending-ready');
     expect(summary.outcome).toBe('success');
     expect(summary.currentOrFinalStep).toEqual({
