@@ -1135,6 +1135,7 @@ function getProjectsWithStats(): ProjectWithStats[] {
     return {
       path: p.path,
       owner: p.owner,
+      notifyRoutes: p.notifyRoutes,
       status: p.status,
       blockedReason: p.blockedReason,
       blockedAt: p.blockedAt,
@@ -1171,6 +1172,7 @@ function getProjectDetail(projectPath: string): ProjectWithStats | null {
   return {
     path: project.path,
     owner: project.owner,
+    notifyRoutes: project.notifyRoutes,
     status: project.status,
     blockedReason: project.blockedReason,
     blockedAt: project.blockedAt,

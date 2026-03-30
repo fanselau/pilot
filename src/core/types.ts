@@ -404,6 +404,7 @@ export interface Project {
 export interface ProjectWithStats {
   path: string;
   owner: string | null;
+  notifyRoutes: NotifyRoute[] | null; // project-level notification routes
   status: ProjectStatus;
   blockedReason: string | null;
   blockedAt: string | null;

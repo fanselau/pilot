@@ -108,7 +108,21 @@ function ProjectRow({
             </span>
           </div>
         </TableCell>
-        <TableCell className="text-sm">{project.owner ?? '—'}</TableCell>
+        <TableCell className="text-sm">
+          {project.notifyRoutes && project.notifyRoutes.length > 0 ? (
+            project.notifyRoutes.map((r) => {
+              const labels: Record<string, string> = {
+                kimaki: 'Kimaki',
+                'openclaw-agent-deliver': 'OpenClaw',
+                webhook: 'Webhook',
+                telegram: 'Telegram',
+              }
+              return labels[r.kind] ?? r.kind
+            }).join(', ')
+          ) : (
+            <span className="text-muted-foreground">No routes</span>
+          )}
+        </TableCell>
         <TableCell>
           {isBlocked ? (
             <Badge variant="destructive">blocked</Badge>
@@ -283,7 +297,7 @@ export function SectionProjects() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-48">Project Path</TableHead>
-                  <TableHead>Owner</TableHead>
+                  <TableHead>Notifications</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Categories</TableHead>
                 </TableRow>

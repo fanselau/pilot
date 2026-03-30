@@ -73,10 +73,26 @@ function ProjectCard({ project }: { project: ProjectWithStats }) {
             </Badge>
           </div>
 
-          {/* Owner */}
-          <p className="text-xs text-muted-foreground">
-            {project.owner ?? <span className="italic">No owner</span>}
-          </p>
+          {/* Notification routes */}
+          <div className="flex flex-wrap gap-1">
+            {project.notifyRoutes && project.notifyRoutes.length > 0 ? (
+              project.notifyRoutes.map((r, i) => {
+                const labels: Record<string, string> = {
+                  kimaki: 'Kimaki',
+                  'openclaw-agent-deliver': 'OpenClaw',
+                  webhook: 'Webhook',
+                  telegram: 'Telegram',
+                }
+                return (
+                  <Badge key={`${r.kind}-${i}`} variant="outline" size="sm">
+                    {labels[r.kind] ?? r.kind}
+                  </Badge>
+                )
+              })
+            ) : (
+              <span className="text-xs italic text-muted-foreground">No notification routes</span>
+            )}
+          </div>
 
           {/* Path — truncated with tooltip */}
           <Tooltip>

@@ -125,10 +125,33 @@ function ProjectDetailPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Owner</CardTitle>
+              <CardTitle className="text-sm">Notifications</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-lg font-semibold">{project.owner ?? '\u2014'}</p>
+              {project.notifyRoutes && project.notifyRoutes.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {project.notifyRoutes.map((r, i) => {
+                    let label = r.kind as string
+                    if (r.kind === 'kimaki') {
+                      label = 'sessionId' in r && r.sessionId
+                        ? `Kimaki: session ${r.sessionId}`
+                        : 'channelId' in r && r.channelId
+                          ? `Kimaki: channel ${r.channelId}`
+                          : 'Kimaki'
+                    } else if (r.kind === 'openclaw-agent-deliver') {
+                      label = `OpenClaw: agent ${'agentId' in r ? r.agentId : '—'}`
+                    } else if (r.kind === 'webhook') {
+                      const url = 'url' in r ? r.url : ''
+                      label = `Webhook: ${url.length > 40 ? url.slice(0, 40) + '…' : url}`
+                    } else if (r.kind === 'telegram') {
+                      label = `Telegram: chat ${'chatId' in r ? r.chatId : '—'}`
+                    }
+                    return <li key={`${r.kind}-${i}`}>{label}</li>
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No notification routes configured</p>
+              )}
             </CardContent>
           </Card>
           <Card>
