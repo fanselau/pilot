@@ -2,34 +2,34 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 101-08-PLAN.md
-last_updated: "2026-03-30T12:57:13.410Z"
+status: in_progress
+stopped_at: Completed 102-01-PLAN.md
+last_updated: "2026-03-30T18:44:51.499Z"
 last_activity: 2026-03-30
 progress:
-  total_phases: 101
+  total_phases: 102
   completed_phases: 58
-  total_plans: 206
-  completed_plans: 194
+  total_plans: 209
+  completed_plans: 195
 ---
 
 # State
 
 ## Current Milestone: launch-v1
 
-## Current Phase: 73
+## Current Phase: 102
 
 ## Current Position
 
-Phase: 101
-Plan: Not started
+Phase: 102
+Plan: 02
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Judge verdicts must include actionable retry recommendations so the runner can make intelligent retry decisions without operator intervention.
-**Current focus:** Phase 101 — modular-notification-backends
+**Current focus:** Phase 102 — pilot-executive-job-summaries-and-notification-discoverability
 Last activity: 2026-03-30
 
 ### Phase 1: Project Scaffolding + Core Data Layer
@@ -432,6 +432,7 @@ Last activity: 2026-03-30
 - Phase 99 added: "Pilot — Runtime `agent_skills` Patching for Per-Job Skill Delivery" @/home/luca/dev/punchlab/pilot/requirements/pilot-runtime-agent-skills-patching.md
 - Phase 100 added: "Pilot — Managed GSD Distribution, Approved Version, and Controlled Rollouts" @/home/luca/dev/punchlab/pilot/requirements/pilot-managed-gsd-distribution.md
 - Phase 101 added: "Modular Notification Backends" @requirements/modular-notification-backends.md
+- Phase 102 added: "Pilot — Executive Job Summaries and Notification Discoverability" @/home/luca/dev/punchlab/pilot/requirements/pilot-executive-job-summaries-and-notification-format.md
 
 ## Decisions
 
@@ -1063,6 +1064,9 @@ Last activity: 2026-03-30
 - [Phase 101]: Job.notifyRoute → NotifyRoute[], Project.notifyRoutes, fan-out via Promise.allSettled
 - [Phase 101]: Added cleanupInstalledSkills, runtime-agent-skills.js mock, and updateJobRuntimeSkillSnapshot to db.js mock
 - [Phase 101]: Removed owner from db.ts rowToProject as cascading type fix when owner was removed from Project interface
+- [Phase 102]: Kept getLastMessage() unchanged and added a dedicated assistant-text helper so existing callers preserve last-message semantics.
+- [Phase 102]: Made the final useful assistant text from the active/final step the preferred narrative what, while leaving why and next sourced from buildJobWhy().
+- [Phase 102]: Limited artifact extraction to verification artifact paths plus obvious path-like tokens from strong assistant summaries to avoid transcript scraping drift.
 
 ## Blockers/Concerns Carried Forward
 
@@ -1071,6 +1075,6 @@ Last activity: 2026-03-30
 
 ## Session Continuity
 
-Last session: 2026-03-30T12:45:51.146Z
-Stopped at: Completed 101-08-PLAN.md
+Last session: 2026-03-30T18:44:51.491Z
+Stopped at: Completed 102-01-PLAN.md
 Resume file: None
