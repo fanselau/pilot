@@ -1790,14 +1790,14 @@ Plans:
 **Goal:** Replace hardcoded OpenClaw notification with a modular backend system — typed backend interface, 4 built-in backends (kimaki, openclaw, webhook, telegram), fan-out delivery, `pilot notify` CLI subcommand, multi-backend `pilot add` flags, project route management, `pilot init` auto-detection, config schema update, owner removal, and comprehensive tests.
 **Requirements**: NBACK-TYPES, NBACK-REGISTRY, NBACK-KIMAKI, NBACK-OPENCLAW, NBACK-WEBHOOK, NBACK-TELEGRAM, NBACK-ROUTE-REFACTOR, NBACK-CALLBACK-FANOUT, NBACK-TYPE-CHANGES, NBACK-DB-MIGRATION, NBACK-CONFIG-SCHEMA, NBACK-ADD-INTEGRATION, NBACK-PROJECT-INTEGRATION, NBACK-OWNER-REMOVAL, NBACK-NOTIFY-CLI, NBACK-INIT-DETECTION, NBACK-WEB-UI, NBACK-TESTS
 **Depends on:** Phase 100
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 101-01-PLAN.md — Backend types, 4 backend implementations, and registry module
 - [x] 101-02-PLAN.md — Type changes, DB migration, config schema, route refactor, callback fan-out
 - [x] 101-03-PLAN.md — CLI: pilot add multi-backend flags + project route management + owner removal
 - [x] 101-04-PLAN.md — CLI: pilot notify subcommand + pilot init backend detection
-- [ ] 101-05-PLAN.md — Web UI owner→notifyRoutes + comprehensive tests + regression fixes
+- [x] 101-05-PLAN.md — Web UI owner→notifyRoutes + comprehensive tests + regression fixes
 
 Wave structure:
 - Wave 1: 101-01 (backend abstraction foundation — types, implementations, registry)
