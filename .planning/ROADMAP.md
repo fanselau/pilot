@@ -1818,9 +1818,9 @@ Read requirements/modular-notification-backends.md for full spec.
 **Goal:** Add one shared, deterministic executive summary system for Pilot jobs so notifications, `pilot summary`, and `pilot log --summary` all lead with outcome, meaning, evidence, and exact next-step commands instead of transcript-heavy metadata.
 **Requirements**: JSUM-01, JSUM-02, JSUM-03, JSUM-04, JSUM-05, JSUM-06, JSUM-07
 **Depends on:** Phase 101
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 102-01-PLAN.md — Shared executive summary builder + useful assistant message extraction foundation
-- [ ] 102-02-PLAN.md — `pilot summary` command + `pilot log --summary` parity on the shared builder
+- [x] 102-02-PLAN.md — `pilot summary` command + `pilot log --summary` parity on the shared builder
 - [ ] 102-03-PLAN.md — Notification format rewrite + status discoverability hints

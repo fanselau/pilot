@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: Completed 102-01-PLAN.md
-last_updated: "2026-03-30T18:44:51.499Z"
+status: completed
+stopped_at: Completed 102-02-PLAN.md
+last_updated: "2026-03-30T18:54:44.184Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 102
   completed_phases: 58
   total_plans: 209
-  completed_plans: 195
+  completed_plans: 196
 ---
 
 # State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 102
-Plan: 02
+Plan: 03
 
 ## Project Reference
 
@@ -1067,6 +1067,9 @@ Last activity: 2026-03-30
 - [Phase 102]: Kept getLastMessage() unchanged and added a dedicated assistant-text helper so existing callers preserve last-message semantics.
 - [Phase 102]: Made the final useful assistant text from the active/final step the preferred narrative what, while leaving why and next sourced from buildJobWhy().
 - [Phase 102]: Limited artifact extraction to verification artifact paths plus obvious path-like tokens from strong assistant summaries to avoid transcript scraping drift.
+- [Phase 102]: Made pilot summary and pilot log --summary share the same { job, summary } payload shape to eliminate command drift.
+- [Phase 102]: Reused one human summary renderer from src/commands/summary.ts so summary copy stays aligned across both CLI entry points.
+- [Phase 102]: Kept transcript-mode code paths in log.ts untouched outside the opts.summary branch so child-session expansion and follow behavior remain stable.
 
 ## Blockers/Concerns Carried Forward
 
@@ -1075,6 +1078,6 @@ Last activity: 2026-03-30
 
 ## Session Continuity
 
-Last session: 2026-03-30T18:44:51.491Z
-Stopped at: Completed 102-01-PLAN.md
+Last session: 2026-03-30T18:54:44.176Z
+Stopped at: Completed 102-02-PLAN.md
 Resume file: None
