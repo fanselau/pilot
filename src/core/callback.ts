@@ -1,15 +1,16 @@
 /**
- * Job completion callback — OpenClaw `agent --deliver` notification.
+ * Job completion callback — multi-backend fan-out notification.
  *
  * Fire-and-forget notifications — NEVER throws. All failures are logged to stderr.
- * Uses route-first resolution (job route -> project route -> strict legacy derive)
- * and delivers via OpenClaw CLI with explicit reply routing.
+ * Uses resolveNotifyRoutes() to get NotifyRoute[], then fans out delivery to all
+ * backends via Promise.allSettled(). Returns true if at least one backend succeeded.
  */
 
 import { getProject, getJobSteps } from './db.js';
 import { errMsg } from '../util/errors.js';
-import { resolveNotifyRoute } from './notify-route.js';
-import { executeOpenClawDeliver } from './openclaw-deliver.js';
+import { resolveNotifyRoutes } from './notify-route.js';
+import { getBackend } from './notify-backends/registry.js';
+import type { NotifyRoute } from './notify-backends/types.js';
 import type { Job } from './types.js';
 
 interface ParsedJudgeVerdict {
@@ -170,25 +171,36 @@ async function notifyJobCompletion(job: Job): Promise<boolean> {
     if (job.scope === 'milestone') return false;
 
     const project = getProject(job.project);
-    const routeResult = resolveNotifyRoute(job, project);
-    if (!routeResult.ok) {
-      process.stderr.write(
-        `[callback] OpenClaw notify route error for job ${job.id} (${routeResult.error.code}): ${routeResult.error.message}\n`,
-      );
+    const routes = resolveNotifyRoutes(job, project);
+
+    if (routes.length === 0) {
+      process.stderr.write(`[callback] no notify routes for job ${job.id}\n`);
       return false;
     }
 
     const prompt = buildDeliveryPrompt(job);
-    const delivery = await executeOpenClawDeliver(routeResult.route, prompt);
 
-    if (!delivery.ok) {
-      process.stderr.write(
-        `[callback] OpenClaw delivery failed for job ${job.id}: ${delivery.error ?? 'unknown error'}\n`,
-      );
-      return false;
-    }
+    const results = await Promise.allSettled(
+      routes.map(async (route: NotifyRoute) => {
+        const backend = getBackend(route.kind);
+        if (!backend) {
+          process.stderr.write(`[callback] unknown backend '${route.kind}' for job ${job.id}\n`);
+          return { ok: false, error: `unknown backend: ${route.kind}` };
+        }
+        const result = await backend.deliver(route, prompt, job);
+        if (result.ok) {
+          process.stderr.write(`[callback] backend '${route.kind}' delivered for job ${job.id}\n`);
+        } else {
+          process.stderr.write(`[callback] backend '${route.kind}' failed for job ${job.id}: ${result.error ?? 'unknown'}\n`);
+        }
+        return result;
+      }),
+    );
 
-    return true;
+    // Return true if at least one backend succeeded
+    return results.some(
+      (r) => r.status === 'fulfilled' && r.value.ok === true,
+    );
   } catch (error) {
     process.stderr.write(
       `[callback] notifyJobCompletion failed for job ${job.id}: ${errMsg(error)}\n`,
