@@ -76,9 +76,17 @@ program
   });
 
 program
+  .command('summary [id]')
+  .description('Executive summary for a job (shared with log --summary)')
+  .action(async (id: string | undefined, opts: Record<string, unknown>) => {
+    const { summaryCommand } = await import('./commands/summary.js');
+    await summaryCommand(id, { ...program.opts(), ...opts } as Parameters<typeof summaryCommand>[1]);
+  });
+
+program
   .command('log [id]')
   .description('Session activity stream')
-  .option('--summary', 'Show compact metadata summary instead of full transcript stream')
+  .option('--summary', 'Show executive summary instead of full transcript stream')
   .option('--follow', 'Live tail new activity')
   .option('--last <n>', 'Show last N parts', parseInt)
   .option('-v, --verbose', 'Show reasoning and full tool output')
