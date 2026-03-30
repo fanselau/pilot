@@ -7,38 +7,15 @@
  */
 
 import { getProject, getJobSteps } from './db.js';
+import { buildJobExecutiveSummary } from './job-summary.js';
 import { errMsg } from '../util/errors.js';
 import { resolveNotifyRoutes } from './notify-route.js';
 import { getBackend } from './notify-backends/registry.js';
 import type { NotifyRoute } from './notify-backends/types.js';
 import type { Job } from './types.js';
 
-interface ParsedJudgeVerdict {
-  verdict: string;
-  confidence: number;
-  reason?: string;
-}
-
 function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}...` : value;
-}
-
-function parseJudgeVerdict(value: string | null): ParsedJudgeVerdict | null {
-  if (!value) return null;
-
-  try {
-    const parsed = JSON.parse(value) as Partial<ParsedJudgeVerdict>;
-    if (typeof parsed.verdict !== 'string' || typeof parsed.confidence !== 'number') {
-      return null;
-    }
-    return {
-      verdict: parsed.verdict,
-      confidence: parsed.confidence,
-      ...(typeof parsed.reason === 'string' ? { reason: parsed.reason } : {}),
-    };
-  } catch {
-    return null;
-  }
 }
 
 function formatDuration(startedAt: string | null, completedAt: string | null): string {
@@ -60,108 +37,60 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   }
 }
 
-function nextStepGuidance(job: Job): string {
-  if (job.status === 'completed') {
-    return 'Acknowledge completion and continue with the next planned item.';
+function buildOutcomeHeadline(job: Job, summary: ReturnType<typeof buildJobExecutiveSummary>): string {
+  if (summary.outcome === 'failure') {
+    return `Failure — ${truncate(summary.failureReason ?? summary.what, 160)}`;
   }
-  if (job.status === 'completed_pending_review') {
-    return `Autonomous work is complete. Human review is needed. Run: pilot review ${job.id} --approve  OR  pilot review ${job.id} --reject "reason"`;
+  if (summary.outcome === 'review_pending') {
+    return `Review pending — ${truncate(summary.what, 160)}`;
   }
-  if (job.status === 'review_hold') {
-    return `Execution is paused for mid-phase human review. Run: pilot review ${job.id} --approve  to resume, or pilot review ${job.id} --reject "reason" to cancel.`;
+  if (summary.outcome === 'review_hold') {
+    return `Review hold — ${truncate(summary.what, 160)}`;
   }
-  return `The project is now blocked. Run: pilot log ${job.id} to read the full build transcript, then pilot unblock "${job.project}" to unblock. Queue a new job with pilot add.`;
+  return `Success — ${truncate(summary.what, 160)}`;
 }
 
 function buildDeliveryPrompt(job: Job): string {
-  const verdict = parseJudgeVerdict(job.judgeVerdict);
-  const failed = job.status === 'failed';
-  const reviewPending = job.status === 'completed_pending_review';
-  const reviewHold = job.status === 'review_hold';
+  const summary = buildJobExecutiveSummary(job, getJobSteps(job.id));
+  const lines: string[] = [buildOutcomeHeadline(job, summary), '', `What: ${truncate(summary.what, 220)}`, `Why: ${truncate(summary.why, 220)}`, `Next: ${truncate(summary.next, 220)}`, ''];
 
-  const statusWord = failed ? 'failed'
-    : reviewPending ? 'completed (pending human review)'
-    : reviewHold ? 'paused for human review'
-    : 'completed';
-
-  const lines: string[] = [
-    `A Pilot job just ${statusWord}. Reply in your target chat with a concise, natural-language update for the team.`,
-    '',
-    'Job details:',
-    `job_id: ${job.id}`,
-    `project: ${job.project}`,
-    `description: ${truncate(job.description, 180)}`,
-    `status: ${job.status}`,
-    `duration: ${formatDuration(job.startedAt, job.completedAt)}`,
-  ];
-
-  if (verdict) {
-    lines.push(`verdict: ${verdict.verdict}`);
-    lines.push(`confidence: ${verdict.confidence}%`);
-    if (verdict.reason) {
-      lines.push(`verdict_reason: ${truncate(verdict.reason, 300)}`);
-    }
-  }
-
-  if (job.error) {
-    lines.push(`error: ${truncate(job.error, 300)}`);
-  }
-
-  // Enrich notification for hung-session failures
-  const isHungFailure = job.error?.includes('Retry budget exhausted')
-    || (job.error?.includes('consecutive') && job.error?.includes('hangs'));
-  if (isHungFailure && failed) {
-    if (job.lastHungReason) {
-      lines.push(`hung_reason: ${job.lastHungReason}`);
-    }
-    lines.push(`hung_count: ${job.hungCount ?? 0}`);
-    if (job.sessionTitles) {
-      try {
-        const titles = JSON.parse(job.sessionTitles) as string[];
-        const lastTitle = titles[titles.length - 1];
-        if (lastTitle) {
-          lines.push(`session_title: ${lastTitle}`);
-        }
-      } catch { /* ignore parse failures */ }
-    }
-    lines.push('');
-    lines.push('This job failed because the AI session kept getting stuck waiting for interactive input.');
-    lines.push('The operator should check if the project has an interactive prompt or confirmation dialog that blocks automation.');
-  }
-
-  // Build step history summary for notification
-  const steps = getJobSteps(job.id);
-  if (steps.length > 0) {
-    lines.push('');
-    lines.push('Step history:');
-    for (const step of steps) {
-      const statusIcon = step.status === 'completed' ? '✓'
-        : step.status === 'failed' ? '✗'
-        : step.status === 'pending' ? '○'
-        : step.status === 'skipped' ? '⊘'
-        : '◆';
-      const sourceTag = step.source !== 'delegation' ? ` [${step.source}]` : '';
-      const errorSuffix = step.error ? ` — ${truncate(step.error, 80)}` : '';
-      lines.push(`  ${statusIcon} Step ${step.stepIndex + 1}: ${step.command} ${truncate(step.args, 40)}${sourceTag}${errorSuffix}`);
-    }
-  }
-
-  lines.push(`next_step: ${nextStepGuidance(job)}`);
-  lines.push('');
-
-  if (failed) {
-    lines.push(`Flag the failure clearly. The project is now blocked — no further jobs will run until someone unblocks it.`);
-    lines.push(`Tell the team to run pilot log ${job.id} to inspect the transcript, then pilot unblock "${job.project}" and queue a new job with pilot add.`);
-  } else if (reviewPending) {
-    lines.push('The autonomous work is complete but human review is needed. This is NOT a failure — the project is NOT blocked.');
-    lines.push(`Tell the team to run pilot review ${job.id} --approve when review passes, or pilot review ${job.id} --reject "reason" to note issues.`);
-  } else if (reviewHold) {
-    lines.push('Execution is paused for mid-phase human review. This is NOT a failure — the project is NOT blocked.');
-    lines.push(`Tell the team to run pilot review ${job.id} --approve to resume execution.`);
+  if (summary.outcome === 'failure' && summary.failureReason) {
+    lines.push(`Evidence:`);
+    lines.push(`Failure: ${truncate(summary.failureReason, 300)}`);
+  } else if (summary.outcome === 'review_pending') {
+    lines.push('Evidence:');
+    lines.push('This is not a failure. Human review is required before closing the loop.');
+  } else if (summary.outcome === 'review_hold') {
+    lines.push('Evidence:');
+    lines.push('This is not a failure. Execution resumes on approval.');
   } else {
-    lines.push('Acknowledge success, mention the project and what was done, and note the natural next action.');
+    lines.push('Key result: ' + truncate(summary.lastAssistantMessages[0]?.text ?? summary.what, 300));
   }
-  lines.push('Do NOT choose NO_REPLY — this is a real event the team needs to know about.');
+
+  if (summary.keyArtifacts.length > 0) {
+    lines.push(`Artifacts: ${summary.keyArtifacts.join(', ')}`);
+  }
+  if (summary.judge) {
+    lines.push(`Judge: ${summary.judge.badge}${summary.judge.reason ? ` — ${truncate(summary.judge.reason, 220)}` : ''}`);
+  }
+  if (summary.verification) {
+    lines.push(`Verification: ${summary.verification.status ?? '—'} | actionable=${summary.verification.actionableGapCount ?? 0} | human=${summary.verification.humanVerificationCount ?? 0} | routing=${summary.verification.routingDecision ?? '—'}`);
+  }
+
+  lines.push('', 'Drilldown:', `- pilot summary ${job.id}`, `- pilot log ${job.id}`, '- pilot status --why');
+  if (summary.drilldown.unblockCommand) {
+    lines.push(`- ${summary.drilldown.unblockCommand}`);
+  }
+  if (job.status === 'completed_pending_review') {
+    lines.push(`- pilot review ${job.id} --approve`);
+    lines.push(`- pilot review ${job.id} --reject "reason"`);
+  } else if (job.status === 'review_hold') {
+    lines.push(`- pilot review ${job.id} --approve`);
+  } else if (summary.drilldown.reviewCommand) {
+    lines.push(`- ${summary.drilldown.reviewCommand}`);
+  }
+
+  lines.push('', 'Identifiers:', `job_id: ${job.id}`, `project: ${job.project}`, `scope: ${job.scope}`, `status: ${job.status}`, `description: ${truncate(job.description, 180)}`, `duration: ${formatDuration(job.startedAt, job.completedAt)}`, '', 'This is a real event. Do not ignore it.');
 
   return lines.join('\n');
 }

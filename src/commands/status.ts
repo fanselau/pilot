@@ -277,6 +277,22 @@ function formatWhyLine(what: string, why: string, next: string): string {
   return `what: ${what} | why: ${why} | next: ${next}`;
 }
 
+function renderStatusHintLine(job: Job, statusWhy: ReturnType<typeof buildJobWhy>, showWhy: boolean): string | null {
+  if (job.status === 'failed' || job.status === 'cancelled') {
+    return `pilot summary ${job.id}  |  pilot unblock "${job.project}"`;
+  }
+  if (job.status === 'completed_pending_review' || job.status === 'review_hold') {
+    return `pilot review ${job.id} --approve`;
+  }
+  if (job.status === 'running' && showWhy && (job.scope === 'phase' || job.scope === 'debug' || job.scope === 'fast')) {
+    return `pilot summary ${job.id}  |  pilot log ${job.id}`;
+  }
+  if (statusWhy.code === 'no-commit-delta') {
+    return `pilot summary ${job.id}`;
+  }
+  return null;
+}
+
 function getPendingWhy(job: Job, nowEpochSeconds: number, queueGraceSeconds: number, runningProjects: Set<string>) {
   const project = getProject(job.project);
   return buildJobWhy(job, {
@@ -367,6 +383,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       if (activity) {
         outputHuman(`    ${dim('└ ' + activity)}`);
       }
+      const hint = renderStatusHintLine(job, why[job.id], showWhy);
+      if (hint) {
+        outputHuman(`    ${dim('↳ ' + hint)}`);
+      }
     }
     outputHuman('');
   }
@@ -395,6 +415,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       );
       if (job.resumeHint) {
         outputHuman(`    ${dim('└ ' + job.resumeHint.split('\n')[0])}`);
+      }
+      const hint = renderStatusHintLine(job, why[job.id], showWhy);
+      if (hint) {
+        outputHuman(`    ${dim('↳ ' + hint)}`);
       }
     }
     outputHuman('');
@@ -460,6 +484,10 @@ async function statusCommand(opts: StatusOptions): Promise<void> {
       );
       if (showWhy && (job.status === 'failed' || job.status === 'cancelled' || statusWhy.code === 'no-commit-delta')) {
         outputHuman(`    ${dim(`└ ${formatWhyLine(statusWhy.what, statusWhy.why, statusWhy.next)}`)}`);
+      }
+      const hint = renderStatusHintLine(job, statusWhy, showWhy);
+      if (hint) {
+        outputHuman(`    ${dim('↳ ' + hint)}`);
       }
     }
     outputHuman('');
