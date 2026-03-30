@@ -81,10 +81,10 @@ function buildDeliveryPrompt(job: Job): string {
     }
   } else if (summary.outcome === 'review_pending') {
     lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
-    lines.push('**Action required:** Human review before this work can land.');
+    lines.push('**Action required:** Human review needed. Do not approve automatically — a human must inspect the work first.');
   } else if (summary.outcome === 'review_hold') {
     lines.push(`**Summary:** ${truncate(summary.what, 300)}`);
-    lines.push('**Paused:** Execution will resume after approval.');
+    lines.push('**Paused:** Waiting for human review. Do not approve automatically — a human must decide whether the work is acceptable.');
   } else {
     // success
     const agentSaid = summary.lastAssistantMessages[0]?.text;
@@ -130,12 +130,6 @@ function buildDeliveryPrompt(job: Job): string {
 
   // ── Commands: compact, copy-pasteable ──
   const cmds: string[] = [];
-  if (summary.outcome === 'review_pending') {
-    cmds.push(`pilot review ${job.id} --approve`);
-    cmds.push(`pilot review ${job.id} --reject "reason"`);
-  } else if (summary.outcome === 'review_hold') {
-    cmds.push(`pilot review ${job.id} --approve`);
-  }
   if (summary.drilldown.unblockCommand) {
     cmds.push(summary.drilldown.unblockCommand);
   }

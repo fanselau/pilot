@@ -270,12 +270,12 @@ describe('buildJobExecutiveSummary', () => {
     ]);
   });
 
-  it('adds exact review commands for pending-review and review-hold jobs', () => {
+  it('does not include reviewCommand in drilldown to prevent autonomous auto-approval', () => {
     const pending = buildJobExecutiveSummary(makeJob({ status: 'completed_pending_review' }), []);
     const hold = buildJobExecutiveSummary(makeJob({ status: 'review_hold' }), []);
 
-    expect(pending.drilldown.reviewCommand).toBe('pilot review ab12 --approve');
-    expect(hold.drilldown.reviewCommand).toBe('pilot review ab12 --approve');
+    expect(pending.drilldown.reviewCommand).toBeUndefined();
+    expect(hold.drilldown.reviewCommand).toBeUndefined();
   });
 
   it('uses strict shortSummary fallback order of assistant text then verdict then error then null', () => {

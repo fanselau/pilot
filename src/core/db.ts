@@ -988,8 +988,25 @@ function approveReview(id: string): void {
 }
 
 /**
+ * Approve a review_hold job — finalize as completed (work accepted as-is).
+ * This does NOT resume execution. It transitions directly to 'completed'.
+ */
+function approveReviewHold(id: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'completed', resume_hint = NULL
+    WHERE id = ? AND status = 'review_hold'
+  `).run(id);
+}
+
+/**
  * Resume from review_hold — transition back to 'running' for continued execution.
  * Clears resume_hint. Returns the updated Job, or null if not in review_hold.
+ *
+ * NOTE: This is intentionally NOT exposed via `pilot review --approve` to prevent
+ * autonomous agents from accidentally triggering unbounded gap-continuation loops.
+ * Use only from internal runner logic or explicit manual intervention.
  */
 function resumeFromReviewHold(id: string): Job | null {
   const db = getDb();
@@ -2264,6 +2281,7 @@ export {
   markCompletedPendingReview,
   markReviewHold,
   approveReview,
+  approveReviewHold,
   resumeFromReviewHold,
   // Phase 83: resumed review_hold pickup
   getResumedReviewHoldJobs,

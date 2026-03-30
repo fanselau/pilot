@@ -172,7 +172,6 @@ function makeSummary(overrides: Partial<JobExecutiveSummary> = {}): JobExecutive
     drilldown: {
       summaryCommand: 'pilot summary ab12',
       logCommand: 'pilot log ab12',
-      reviewCommand: 'pilot review ab12 --approve',
       unblockCommand: 'pilot unblock "my-project"',
     },
     ...overrides,

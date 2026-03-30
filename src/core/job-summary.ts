@@ -120,9 +120,9 @@ function resolveNextAction(job: Job, drilldown: JobExecutiveSummary['drilldown']
     case 'completed':
       return `Review the changes, then continue with follow-up work. Run \`${drilldown.logCommand}\` for the full transcript.`;
     case 'completed_pending_review':
-      return `Human review required. Run \`${drilldown.reviewCommand ?? `pilot review ${job.id} --approve`}\` to approve or reject.`;
+      return `Human review required. Inspect the work with \`${drilldown.logCommand}\`, then decide.`;
     case 'review_hold':
-      return `Execution paused. Run \`${drilldown.reviewCommand ?? `pilot review ${job.id} --approve`}\` to resume.`;
+      return `Paused for human review. Inspect the work with \`${drilldown.logCommand}\`, then decide.`;
     case 'failed':
     case 'cancelled':
       return drilldown.unblockCommand
@@ -249,9 +249,8 @@ export function buildJobExecutiveSummary(job: Job, steps: JobStep[]): JobExecuti
     summaryCommand: `pilot summary ${job.id}`,
     logCommand: `pilot log ${job.id}`,
   };
-  if (job.status === 'completed_pending_review' || job.status === 'review_hold') {
-    drilldown.reviewCommand = `pilot review ${job.id} --approve`;
-  }
+  // Review commands intentionally omitted from drilldown to prevent autonomous agents
+  // from auto-approving. Humans can run `pilot review <id>` manually.
   if ((job.status === 'failed' || job.status === 'cancelled') && retry.next.includes('pilot unblock')) {
     drilldown.unblockCommand = `pilot unblock "${job.project}"`;
   }

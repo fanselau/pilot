@@ -311,33 +311,34 @@ describe('buildDeliveryPrompt', () => {
 
   it('review pending prompt includes approve/reject commands and action-required notice', () => {
     mockBuildJobExecutiveSummary.mockReturnValue({
-      what: 'Awaiting human review', why: 'Judge requested human verification', next: 'Human review required. Run `pilot review ab12 --approve` to approve or reject.', statusBadge: 'review-pending', outcome: 'review_pending',
+      what: 'Awaiting human review', why: 'Judge requested human verification', next: 'Human review required. Inspect the work with `pilot log ab12`, then decide.', statusBadge: 'review-pending', outcome: 'review_pending',
       currentOrFinalStep: null, failureReason: null, judge: null, verification: { status: 'human_needed', actionableGapCount: 0, humanVerificationCount: 1, routingDecision: 'human-review', routingReason: 'Need human eyes', artifactPath: null },
       commitDelta: { state: 'changed', baseCommit: 'aaaaaaaa', headCommit: 'bbbbbbbb' }, observability: { jobId: 'ab12', jobStatus: 'completed_pending_review', terminal: true, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
       keyArtifacts: [], lastAssistantMessages: [], steps: [],
-      drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12', reviewCommand: 'pilot review ab12 --approve' },
+      drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12' },
     });
     const prompt = buildDeliveryPrompt(makeJob({ status: 'completed_pending_review' }));
 
     expect(prompt).toMatch(/👀.*Needs Review/);
-    expect(prompt).toContain('**Action required:** Human review');
-    expect(prompt).toContain('pilot review ab12 --approve');
-    expect(prompt).toContain('pilot review ab12 --reject "reason"');
+    expect(prompt).toContain('**Action required:**');
+    expect(prompt).toContain('Do not approve automatically');
+    expect(prompt).not.toContain('pilot review ab12 --approve');
   });
 
   it('review hold prompt includes resume command and paused notice', () => {
     mockBuildJobExecutiveSummary.mockReturnValue({
-      what: 'Execution paused for review', why: 'Human checkpoint reached', next: 'Execution paused. Run `pilot review ab12 --approve` to resume.', statusBadge: 'review-hold', outcome: 'review_hold',
+      what: 'Execution paused for review', why: 'Human checkpoint reached', next: 'Paused for human review. Inspect the work with `pilot log ab12`, then decide.', statusBadge: 'review-hold', outcome: 'review_hold',
       currentOrFinalStep: null, failureReason: null, judge: null, verification: null,
       commitDelta: { state: 'changed', baseCommit: 'aaaaaaaa', headCommit: 'bbbbbbbb' }, observability: { jobId: 'ab12', jobStatus: 'review_hold', terminal: false, requested: { modelProfile: 'balanced', providerMode: 'claude-only', scope: 'phase', intendedExecutorModel: 'model', notes: [] }, observed: { status: 'available', models: [], notes: [] }, tokens: { status: 'available', totals: null, byModel: {}, notes: [] }, cost: { status: 'estimated', currency: 'USD', estimatedUsd: null, byModel: [], notes: [] } },
       keyArtifacts: [], lastAssistantMessages: [], steps: [],
-      drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12', reviewCommand: 'pilot review ab12 --approve' },
+      drilldown: { summaryCommand: 'pilot summary ab12', logCommand: 'pilot log ab12' },
     });
     const prompt = buildDeliveryPrompt(makeJob({ status: 'review_hold' }));
 
     expect(prompt).toMatch(/⏸️.*Paused/);
-    expect(prompt).toContain('**Paused:** Execution will resume after approval.');
-    expect(prompt).toContain('pilot review ab12 --approve');
+    expect(prompt).toContain('**Paused:**');
+    expect(prompt).toContain('Do not approve automatically');
+    expect(prompt).not.toContain('pilot review ab12 --approve');
   });
 
   it('does not duplicate summary and agent-said when they are the same text', () => {

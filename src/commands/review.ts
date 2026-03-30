@@ -3,10 +3,10 @@
  *
  * Supports two flows:
  * - completed_pending_review: --approve transitions to completed, --reject accepts as-is with note
- * - review_hold: --approve resumes step execution, --reject cancels
+ * - review_hold: --approve finalizes as completed (work accepted as-is), --reject cancels
  */
 
-import { getJob, approveReview, resumeFromReviewHold, cancel } from '../core/db.js';
+import { getJob, approveReview, approveReviewHold, cancel } from '../core/db.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, dim, yellow, red } from '../util/colors.js';
 
@@ -68,17 +68,13 @@ async function reviewCommand(jobId: string, opts: ReviewOptions): Promise<void> 
       }
       outputHuman(`  ${green('✓')} Approved: Job ${job.id} → completed`);
     } else if (job.status === 'review_hold') {
-      const resumed = resumeFromReviewHold(job.id);
-      if (!resumed) {
-        process.stderr.write(`Failed to resume job ${job.id} — state may have changed.\n`);
-        process.exit(1);
-      }
+      approveReviewHold(job.id);
       if (isJsonMode()) {
-        outputJson({ reviewed: true, action: 'resumed', previousStatus: 'review_hold', newStatus: 'running' });
+        outputJson({ reviewed: true, action: 'approved', previousStatus: 'review_hold', newStatus: 'completed' });
         return;
       }
-      outputHuman(`  ${green('✓')} Resumed: Job ${job.id} → running`);
-      outputHuman(`  ${dim('The runner will continue execution from the next pending step on its next poll cycle.')}`);
+      outputHuman(`  ${green('✓')} Approved: Job ${job.id} → completed`);
+      outputHuman(`  ${dim('Work accepted as-is. Queue a new job if follow-up work is needed.')}`);
     }
     return;
   }
