@@ -606,6 +606,52 @@ function getLastMessage(sessionId: string): SessionMessage | null {
 }
 
 /**
+ * Get the latest assistant-authored message with useful text content.
+ * Returns null when the DB is unavailable, no matching assistant message exists,
+ * or the newest assistant messages only contain empty/tool-only content.
+ */
+function getLatestUsefulAssistantTextMessage(sessionId: string): SessionMessage | null {
+  const db = openDb();
+  if (db === null) {
+    return null;
+  }
+
+  try {
+    const row = db.prepare(
+      `SELECT m.id, m.data, m.time_created,
+        (SELECT GROUP_CONCAT(json_extract(p.data, '$.text'), char(10))
+         FROM part p
+         WHERE p.message_id = m.id
+           AND json_extract(p.data, '$.type') = 'text'
+         ORDER BY p.time_created ASC
+        ) as text_content
+      FROM message m
+      WHERE m.session_id = ?
+        AND json_extract(m.data, '$.role') = 'assistant'
+        AND NULLIF(trim(replace(replace(replace(COALESCE(
+          (SELECT GROUP_CONCAT(json_extract(p.data, '$.text'), char(10))
+           FROM part p
+           WHERE p.message_id = m.id
+             AND json_extract(p.data, '$.type') = 'text'
+           ORDER BY p.time_created ASC
+          ),
+          ''
+        ), char(10), ''), char(13), ''), char(9), '')), '') IS NOT NULL
+      ORDER BY m.time_created DESC LIMIT 1`,
+    ).get(sessionId) as { id: string; data: string; time_created: number; text_content: string | null } | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return parseMessageRow(row);
+  } catch (err) {
+    handleDbError(err);
+    return null;
+  }
+}
+
+/**
  * Check if a session has completed by querying the most recent `step-finish` part.
  *
  * Uses `step-finish` reason as the ground truth for session completion:
@@ -1156,6 +1202,7 @@ export {
   getSessionMessages,
   getSessionParts,
   getLastMessage,
+  getLatestUsefulAssistantTextMessage,
   getAssistantMessageCount,
   isSessionDone,
   getSessionState,
