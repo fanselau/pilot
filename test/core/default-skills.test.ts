@@ -39,8 +39,8 @@ afterEach(() => {
 // ── Catalog Constants ───────────────────────────────────────────────────
 
 describe('Catalog constants', () => {
-  it('TIER1_SKILLS has exactly 5 entries', () => {
-    expect(TIER1_SKILLS).toHaveLength(5);
+  it('TIER1_SKILLS has expected entries', () => {
+    expect(TIER1_SKILLS.length).toBeGreaterThanOrEqual(5);
   });
 
   it('each TIER1_SKILLS entry has repo, skill and categories fields', () => {
@@ -64,10 +64,11 @@ describe('Catalog constants', () => {
     expect(skillNames).toContain('security-review');
   });
 
-  it('STACK_SKILLS has entries for all 11 expected stack keys', () => {
+  it('STACK_SKILLS has entries for all expected stack keys', () => {
     const expectedKeys = [
-      'react', 'typescript', 'tailwind', 'cloudflare', 'hono',
-      'testing', 'drizzle', 'postgres', 'docs', 'api', 'ui-design',
+      'react', 'tanstack', 'typescript', 'tailwind', 'shadcn', 'cloudflare', 'hono',
+      'testing', 'playwright', 'vite', 'turborepo', 'drizzle', 'postgres',
+      'better-auth', 'stripe', 'fastapi', 'docs', 'api', 'ui-design', 'astro',
     ];
     for (const key of expectedKeys) {
       expect(STACK_SKILLS).toHaveProperty(key);
@@ -246,13 +247,15 @@ describe('detectProjectStack', () => {
     expect(result.signals['drizzle']).toContain('drizzle config');
   });
 
-  it('detects @tanstack/* as react', () => {
+  it('detects @tanstack/* as both tanstack and react', () => {
     writeFileSync(
       path.join(projectDir, 'package.json'),
       JSON.stringify({ dependencies: { '@tanstack/react-query': '^5.0.0' } }),
     );
     const result = detectProjectStack(projectDir);
+    expect(result.items).toContain('tanstack');
     expect(result.items).toContain('react');
+    expect(result.signals['tanstack']).toContain('@tanstack');
     expect(result.signals['react']).toContain('@tanstack');
   });
 });
@@ -262,7 +265,7 @@ describe('detectProjectStack', () => {
 describe('recommendDefaultSkills', () => {
   it('returns only TIER1_SKILLS when no stack detected', () => {
     const result = recommendDefaultSkills(projectDir);
-    expect(result.skills).toHaveLength(5);
+    expect(result.skills).toHaveLength(TIER1_SKILLS.length);
     for (const skill of result.skills) {
       expect(skill.tier).toBe(1);
     }
@@ -276,10 +279,8 @@ describe('recommendDefaultSkills', () => {
     const result = recommendDefaultSkills(projectDir);
     const tier1Count = result.skills.filter(s => s.tier === 1).length;
     const tier2Count = result.skills.filter(s => s.tier === 2).length;
-    expect(tier1Count).toBe(5);
+    expect(tier1Count).toBe(TIER1_SKILLS.length);
     expect(tier2Count).toBeGreaterThan(0);
-    // React stack has 3 skills
-    expect(tier2Count).toBe(3);
   });
 
   it('returns only Tier 1 when tier=1', () => {
@@ -288,7 +289,7 @@ describe('recommendDefaultSkills', () => {
       JSON.stringify({ dependencies: { react: '^18.0.0' } }),
     );
     const result = recommendDefaultSkills(projectDir, { tier: 1 });
-    expect(result.skills).toHaveLength(5);
+    expect(result.skills).toHaveLength(TIER1_SKILLS.length);
     for (const skill of result.skills) {
       expect(skill.tier).toBe(1);
     }

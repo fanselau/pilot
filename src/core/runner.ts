@@ -842,14 +842,25 @@ class Runner {
       this.patchModelsForJob(job, projectDir);
 
       // Step 1: Delegation — get intent
+      // Fast scope skips delegation entirely — the intent is predetermined.
+      // This avoids the delegation AI executing the task and returning plain text
+      // instead of the expected JSON intent structure.
       let result: DelegationResult;
-      try {
-        const delegationOutput = await delegate(job, projectDir);
-        const { _sessionTitle, ...resultData } = delegationOutput as DelegationResult & { _sessionTitle?: string };
-        result = resultData;
-        if (_sessionTitle) updateSessionTitles(job.id, [_sessionTitle]);
-      } catch (err) {
-        throw new Error(`Delegation failed: ${errMsg(err)}`);
+      if (job.scope === 'fast') {
+        result = {
+          intent: { type: 'fast', description: job.description },
+          reasoning: 'Fast scope — delegation skipped, intent synthesized directly',
+        };
+        process.stderr.write(`[runner] Fast scope: skipping delegation, synthesizing intent directly\n`);
+      } else {
+        try {
+          const delegationOutput = await delegate(job, projectDir);
+          const { _sessionTitle, ...resultData } = delegationOutput as DelegationResult & { _sessionTitle?: string };
+          result = resultData;
+          if (_sessionTitle) updateSessionTitles(job.id, [_sessionTitle]);
+        } catch (err) {
+          throw new Error(`Delegation failed: ${errMsg(err)}`);
+        }
       }
       updateDelegationPayload(job.id, result);
 
