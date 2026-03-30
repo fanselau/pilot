@@ -152,7 +152,7 @@ describe('buildJobExecutiveSummary', () => {
       badge: 'failed',
       what: 'Retry what',
       why: 'Retry why',
-      next: 'Run unblock',
+      next: 'Run pilot unblock "/repo/project" and queue a new job.',
     });
     mockBuildJobObservability.mockReturnValue(makeObservability());
     mockBuildJudgeSignal.mockReturnValue({
@@ -321,7 +321,7 @@ describe('buildJobExecutiveSummary', () => {
     expect(summary.lastAssistantMessages).toEqual([
       { stepIndex: 5, sessionTitle: 'five', text: 'newest summary' },
       { stepIndex: 4, sessionTitle: 'four', text: 'third newest' },
-      { stepIndex: 1, sessionTitle: 'one', text: 'same summary' },
+      { stepIndex: 2, sessionTitle: 'two', text: 'same summary' },
     ]);
   });
 
