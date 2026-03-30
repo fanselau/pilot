@@ -307,7 +307,6 @@ function rowToProject(row: ProjectRow): Project {
 
   return {
     path: row.path,
-    owner: row.owner,
     notifyRoutes,
     status: row.status as ProjectStatus,
     blockedReason: row.blocked_reason,

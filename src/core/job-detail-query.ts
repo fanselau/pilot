@@ -1134,7 +1134,6 @@ function getProjectsWithStats(): ProjectWithStats[] {
     const counts = getProjectJobCounts(p.path);
     return {
       path: p.path,
-      owner: p.owner,
       notifyRoutes: p.notifyRoutes,
       status: p.status,
       blockedReason: p.blockedReason,
@@ -1171,7 +1170,6 @@ function getProjectDetail(projectPath: string): ProjectWithStats | null {
   const counts = getProjectJobCounts(projectPath);
   return {
     path: project.path,
-    owner: project.owner,
     notifyRoutes: project.notifyRoutes,
     status: project.status,
     blockedReason: project.blockedReason,

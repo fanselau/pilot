@@ -387,7 +387,6 @@ export type ManagedGsdDriftStatus = 'matches' | 'behind' | 'ahead' | 'unknown';
 
 export interface Project {
   path: string;              // absolute project path (primary key)
-  owner: string | null;      // agent ID e.g. "main"
   notifyRoutes: NotifyRoute[] | null; // project-level default notification routes (multi-backend)
   status: ProjectStatus;
   blockedReason: string | null;
@@ -403,7 +402,6 @@ export interface Project {
 
 export interface ProjectWithStats {
   path: string;
-  owner: string | null;
   notifyRoutes: NotifyRoute[] | null; // project-level notification routes
   status: ProjectStatus;
   blockedReason: string | null;

@@ -36,7 +36,7 @@ export function ProjectsPanel(props: ProjectsPanelProps) {
       title={title()}
     >
       <Show when={props.projects.length === 0}>
-        <text fg={theme.muted}>No registered projects. Run: pilot setup &lt;dir&gt; --owner &lt;key&gt;</text>
+        <text fg={theme.muted}>No registered projects. Run: pilot setup &lt;dir&gt;</text>
       </Show>
       <For each={props.projects}>
         {(project, i) => {
@@ -52,7 +52,7 @@ export function ProjectsPanel(props: ProjectsPanelProps) {
               <box flexDirection="column" flexGrow={1}>
                 <text fg={isSelected() ? theme.fg : theme.muted}>{shortPath}</text>
                 <text fg={theme.muted}>
-                  owner: {project.owner ?? '(none)'}  status: {isBlocked() ? 'BLOCKED' : 'active'}
+                  notify: {(project.notifyRoutes && project.notifyRoutes.length > 0) ? project.notifyRoutes.map((r: any) => r.kind).join(', ') : '(none)'}  status: {isBlocked() ? 'BLOCKED' : 'active'}
                 </text>
                 <Show when={isBlocked() && !!project.blockedReason}>
                   <text fg={statusColors.warning}>
