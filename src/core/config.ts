@@ -340,11 +340,18 @@ const CONFIG_FILE_MAP: Record<string, (fc: ConfigFileSchema) => unknown> = {
   memoryKillThresholdMb: (fc) => fc.memory?.killThresholdMb,
   logLevel: (fc) => fc.logging?.level,
   noColor: (fc) => fc.logging?.noColor,
-  telegramBotToken: (fc) => fc.notifications?.telegramBotToken,
-  telegramChatId: (fc) => fc.notifications?.telegramChatId,
-  openclawHooksUrl: (fc) => fc.notifications?.openclawHooksUrl,
-  openclawHooksToken: (fc) => fc.notifications?.openclawHooksToken,
+  telegramBotToken: (fc) => fc.notifications?.telegram?.botToken ?? fc.notifications?.telegramBotToken,
+  telegramChatId: (fc) => fc.notifications?.telegram?.defaultChatId ?? fc.notifications?.telegramChatId,
+  openclawHooksUrl: (fc) => fc.notifications?.openclaw?.hooksUrl ?? fc.notifications?.openclawHooksUrl,
+  openclawHooksToken: (fc) => fc.notifications?.openclaw?.hooksToken ?? fc.notifications?.openclawHooksToken,
   defaultNotifySessionKey: (fc) => fc.defaults?.notifyTarget,
+  // Phase 101: modular notification backends
+  'notifications.backends': (fc) => fc.notifications?.backends,
+  'notifications.openclaw.hooksUrl': (fc) => fc.notifications?.openclaw?.hooksUrl ?? fc.notifications?.openclawHooksUrl,
+  'notifications.openclaw.hooksToken': (fc) => fc.notifications?.openclaw?.hooksToken ?? fc.notifications?.openclawHooksToken,
+  'notifications.webhook.defaultUrl': (fc) => fc.notifications?.webhook?.defaultUrl,
+  'notifications.telegram.botToken': (fc) => fc.notifications?.telegram?.botToken ?? fc.notifications?.telegramBotToken,
+  'notifications.telegram.defaultChatId': (fc) => fc.notifications?.telegram?.defaultChatId ?? fc.notifications?.telegramChatId,
 };
 
 /** Fields that are auto-detected when neither env var nor config file set them. */

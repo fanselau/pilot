@@ -27,6 +27,7 @@ import type {
   RuntimeAgentSkillsSnapshot,
   StepSource,
 } from './types.js';
+import type { NotifyRoute } from './notify-backends/types.js';
 import { AGENT_MODELS } from './models.js';
 import type { ProjectGsdState } from './managed-gsd.js';
 
@@ -241,6 +242,7 @@ interface ProjectRow {
   path: string;
   owner: string | null;
   notify_openclaw_route: string | null;
+  notify_routes: string | null;
   status: string;
   blocked_reason: string | null;
   blocked_at: string | null;
@@ -281,11 +283,32 @@ function parseOpenClawDeliverRoute(value: string | null | undefined): OpenClawDe
   return null;
 }
 
+/**
+ * Parse notify routes from JSON column — handles both legacy single-object
+ * `{kind:...}` and new array `[{kind:...}]` formats for backward compat.
+ */
+function parseNotifyRoutes(raw: string | null): NotifyRoute[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed as NotifyRoute[];
+    if (parsed && typeof parsed === 'object' && 'kind' in parsed) return [parsed as NotifyRoute];
+    return null;
+  } catch { return null; }
+}
+
 function rowToProject(row: ProjectRow): Project {
+  // Prefer new notify_routes column; fall back to legacy notify_openclaw_route
+  const notifyRoutes = parseNotifyRoutes(row.notify_routes)
+    ?? (() => {
+      const legacy = parseOpenClawDeliverRoute(row.notify_openclaw_route);
+      return legacy ? [legacy] : null;
+    })();
+
   return {
     path: row.path,
     owner: row.owner,
-    notifyOpenClawRoute: parseOpenClawDeliverRoute(row.notify_openclaw_route),
+    notifyRoutes,
     status: row.status as ProjectStatus,
     blockedReason: row.blocked_reason,
     blockedAt: row.blocked_at,
@@ -453,7 +476,7 @@ function rowToJob(row: JobRow): Job {
     })(),
     callbackUrl: row.callback_url ?? null,
     callbackSessionKey: row.callback_session_key ?? null,
-    notifyRoute: parseOpenClawDeliverRoute(row.notify_route),
+    notifyRoute: parseNotifyRoutes(row.notify_route),
     categories: (() => {
       if (!row.categories) return null;
       try { return JSON.parse(row.categories) as string[]; } catch { return null; }
@@ -702,6 +725,8 @@ function migrateSchema(db: DatabaseType): void {
      'ALTER TABLE projects ADD COLUMN gsd_drift_status TEXT DEFAULT NULL',
      'ALTER TABLE projects ADD COLUMN gsd_version_checked_at TEXT DEFAULT NULL',
      'ALTER TABLE projects ADD COLUMN gsd_version_error TEXT DEFAULT NULL',
+     // Phase 101: modular notification backends — add notify_routes column to projects
+     'ALTER TABLE projects ADD COLUMN notify_routes TEXT DEFAULT NULL',
   ];
   for (const sql of migrations) {
     try {
@@ -709,6 +734,16 @@ function migrateSchema(db: DatabaseType): void {
     } catch {
       // Column already exists — ignore
     }
+  }
+
+  // Phase 101: migrate existing project owner → notify_routes (best-effort)
+  try {
+    db.exec(`
+      UPDATE projects SET notify_routes = json_array(json_object('kind','openclaw-agent-deliver','agentId',owner,'channel','','to',''))
+      WHERE owner IS NOT NULL AND notify_routes IS NULL
+    `);
+  } catch {
+    // Ignore errors — best-effort migration
   }
 }
 
@@ -829,7 +864,7 @@ function addJob(
   callbackUrl?: string,
   timeout?: number,
   skipGracePeriod?: boolean,
-  notifyRoute?: OpenClawDeliverRoute | null,
+  notifyRoute?: NotifyRoute[] | null,
 ): Job {
   const db = getDb();
   const id = generateUniqueId(db);
@@ -1878,19 +1913,15 @@ function findDuplicateJob(
 // ── Project CRUD ──────────────────────────────────────────────────────────
 
 /**
- * Register a project (INSERT OR IGNORE) and update its owner.
- * If the project already exists, updates the owner.
+ * Register a project (INSERT OR IGNORE).
  * Returns the current project row.
  */
-function registerProject(path: string, owner: string): Project {
+function registerProject(path: string): Project {
   const db = getDb();
   db.prepare(`
-    INSERT OR IGNORE INTO projects (path, owner)
-    VALUES (?, ?)
-  `).run(path, owner);
-  db.prepare(`
-    UPDATE projects SET owner = ? WHERE path = ?
-  `).run(owner, path);
+    INSERT OR IGNORE INTO projects (path)
+    VALUES (?)
+  `).run(path);
   return getProject(path)!;
 }
 
@@ -1913,17 +1944,12 @@ function getAllProjects(): Project[] {
 }
 
 /**
- * Update the owner of a project.
+ * Update notification routes for a project.
  */
-function updateProjectOwner(path: string, owner: string): void {
+function updateProjectNotifyRoutes(path: string, routes: NotifyRoute[] | null): void {
   const db = getDb();
-  db.prepare('UPDATE projects SET owner = ? WHERE path = ?').run(owner, path);
-}
-
-function updateProjectNotifyOpenClawRoute(path: string, route: OpenClawDeliverRoute | null): void {
-  const db = getDb();
-  db.prepare('UPDATE projects SET notify_openclaw_route = ? WHERE path = ?').run(
-    route ? JSON.stringify(route) : null,
+  db.prepare('UPDATE projects SET notify_routes = ? WHERE path = ?').run(
+    routes && routes.length > 0 ? JSON.stringify(routes) : null,
     path,
   );
 }
@@ -2174,8 +2200,7 @@ export {
   registerProject,
   getProject,
   getAllProjects,
-  updateProjectOwner,
-  updateProjectNotifyOpenClawRoute,
+  updateProjectNotifyRoutes,
   updateProjectDefaultCategories,
   updateProjectGsdState,
   blockProject,

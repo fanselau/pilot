@@ -108,6 +108,19 @@ function getDefaultConfigFileContent(): Record<string, unknown> {
       scope: null,
     },
     notifications: {
+      backends: [],
+      openclaw: {
+        hooksUrl: null,
+        hooksToken: null,
+      },
+      webhook: {
+        defaultUrl: null,
+      },
+      telegram: {
+        botToken: null,
+        defaultChatId: null,
+      },
+      // Legacy flat fields (backward compat)
       openclawHooksUrl: null,
       openclawHooksToken: null,
       telegramBotToken: null,
@@ -141,10 +154,16 @@ const CONFIG_FIELD_SPECS: Record<string, FieldSpec> = {
   'defaults.providerMode': { type: 'string', path: ['defaults', 'providerMode'] },
   'defaults.notifyTarget': { type: 'nullable-string', path: ['defaults', 'notifyTarget'] },
   'defaults.scope': { type: 'enum', path: ['defaults', 'scope'], enum: ['quick', 'phase', 'debug', 'fast'] },
+  'notifications.backends': { type: 'string', path: ['notifications', 'backends'] },
   'notifications.openclawHooksUrl': { type: 'nullable-string', path: ['notifications', 'openclawHooksUrl'] },
   'notifications.openclawHooksToken': { type: 'nullable-string', path: ['notifications', 'openclawHooksToken'] },
   'notifications.telegramBotToken': { type: 'nullable-string', path: ['notifications', 'telegramBotToken'] },
   'notifications.telegramChatId': { type: 'nullable-string', path: ['notifications', 'telegramChatId'] },
+  'notifications.openclaw.hooksUrl': { type: 'nullable-string', path: ['notifications', 'openclaw', 'hooksUrl'] },
+  'notifications.openclaw.hooksToken': { type: 'nullable-string', path: ['notifications', 'openclaw', 'hooksToken'] },
+  'notifications.webhook.defaultUrl': { type: 'nullable-string', path: ['notifications', 'webhook', 'defaultUrl'] },
+  'notifications.telegram.botToken': { type: 'nullable-string', path: ['notifications', 'telegram', 'botToken'] },
+  'notifications.telegram.defaultChatId': { type: 'nullable-string', path: ['notifications', 'telegram', 'defaultChatId'] },
   'logging.level': { type: 'enum', path: ['logging', 'level'], enum: ['DEBUG', 'INFO', 'WARN', 'ERROR'] },
   'logging.noColor': { type: 'boolean', path: ['logging', 'noColor'] },
 };

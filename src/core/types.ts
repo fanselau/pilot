@@ -5,6 +5,8 @@
  * Pure type definitions — no runtime code, no dependencies.
  */
 
+import type { NotifyRoute } from './notify-backends/types.js';
+
 // ── Configuration ─────────────────────────────────────────────────────────
 
 /**
@@ -34,6 +36,21 @@ export interface ConfigFileSchema {
     scope?: 'quick' | 'phase' | 'debug' | 'fast' | null;
   };
   notifications?: {
+    backends?: string[];
+    kimaki?: Record<string, unknown>;
+    openclaw?: {
+      hooksUrl?: string | null;
+      hooksToken?: string | null;
+    };
+    webhook?: {
+      defaultUrl?: string | null;
+      defaultHeaders?: Record<string, string> | null;
+    };
+    telegram?: {
+      botToken?: string | null;
+      defaultChatId?: string | null;
+    };
+    // Legacy flat fields (backward compat)
     openclawHooksUrl?: string | null;
     openclawHooksToken?: string | null;
     telegramBotToken?: string | null;
@@ -67,9 +84,13 @@ export interface PilotConfig {
   memoryKillThresholdMb: number;   // watchdog kills if available drops below this, default 2048
   logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   noColor: boolean;
+  /** @deprecated Use notifications.telegram.botToken in config file instead */
   telegramBotToken: string | null;   // PILOT_TELEGRAM_BOT_TOKEN — optional Telegram notifications
+  /** @deprecated Use notifications.telegram.defaultChatId in config file instead */
   telegramChatId: string | null;     // PILOT_TELEGRAM_CHAT_ID — optional Telegram chat ID
+  /** @deprecated Use notifications.openclaw.hooksUrl in config file instead */
   openclawHooksUrl: string | null;   // PILOT_OPENCLAW_HOOKS_URL — base webhook URL for session wake
+  /** @deprecated Use notifications.openclaw.hooksToken in config file instead */
   openclawHooksToken: string | null; // PILOT_OPENCLAW_HOOKS_TOKEN — auth token for hooks endpoint
   defaultNotifySessionKey: string | null;  // PILOT_DEFAULT_NOTIFY — fallback agent ID for --notify
 }
@@ -89,6 +110,7 @@ export interface ModelEntry {
   variant?: string;
 }
 
+/** @deprecated Use NotifyRoute from notify-backends/types.ts instead */
 export interface OpenClawDeliverRoute {
   kind: 'openclaw-agent-deliver';
   agentId: string;
@@ -134,7 +156,7 @@ export interface Job {
   actualModels: string[] | null;  // actual provider/model strings from opencode DB
   callbackUrl: string | null;     // custom webhook URL for job completion notification
   callbackSessionKey: string | null;  // Agent ID to notify on completion (e.g. "main")
-  notifyRoute: OpenClawDeliverRoute | null; // queue-time snapshot of structured OpenClaw delivery route
+  notifyRoute: NotifyRoute[] | null; // queue-time snapshot of notification routes (multi-backend fan-out)
   categories: string[] | null;    // user-assigned skill categories for the job
   runtimeSkillSnapshot: RuntimeAgentSkillsSnapshot | null;
   gitBaseCommit: string | null;
@@ -366,7 +388,7 @@ export type ManagedGsdDriftStatus = 'matches' | 'behind' | 'ahead' | 'unknown';
 export interface Project {
   path: string;              // absolute project path (primary key)
   owner: string | null;      // agent ID e.g. "main"
-  notifyOpenClawRoute: OpenClawDeliverRoute | null; // structured OpenClaw deliver route
+  notifyRoutes: NotifyRoute[] | null; // project-level default notification routes (multi-backend)
   status: ProjectStatus;
   blockedReason: string | null;
   blockedAt: string | null;  // ISO 8601
