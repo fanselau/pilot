@@ -1812,3 +1812,15 @@ Wave structure:
 
 **Details:**
 Read requirements/modular-notification-backends.md for full spec.
+
+### Phase 102: Pilot — Executive Job Summaries and Notification Discoverability
+
+**Goal:** Add one shared, deterministic executive summary system for Pilot jobs so notifications, `pilot summary`, and `pilot log --summary` all lead with outcome, meaning, evidence, and exact next-step commands instead of transcript-heavy metadata.
+**Requirements**: JSUM-01, JSUM-02, JSUM-03, JSUM-04, JSUM-05, JSUM-06, JSUM-07
+**Depends on:** Phase 101
+**Plans:** 3 plans
+
+Plans:
+- [ ] 102-01-PLAN.md — Shared executive summary builder + useful assistant message extraction foundation
+- [ ] 102-02-PLAN.md — `pilot summary` command + `pilot log --summary` parity on the shared builder
+- [ ] 102-03-PLAN.md — Notification format rewrite + status discoverability hints
