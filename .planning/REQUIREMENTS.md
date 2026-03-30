@@ -515,9 +515,9 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - [x] **JSUM-01**: Pilot exposes one shared deterministic summary builder in `src/core/job-summary.ts` and removes summary-business-logic drift between `pilot log --summary`, notifications, and new summary surfaces
 - [x] **JSUM-02**: Step summaries prefer the latest useful assistant-authored text per session, fall back to verdict reason then error, and capture up to 3 high-signal assistant messages without transcript dumps
-- [ ] **JSUM-03**: Notification delivery prompt is rebuilt from `JobExecutiveSummary`, leading with outcome/meaning/evidence/drilldown commands and exact review/unblock guidance for non-success states
+- [x] **JSUM-03**: Notification delivery prompt is rebuilt from `JobExecutiveSummary`, leading with outcome/meaning/evidence/drilldown commands and exact review/unblock guidance for non-success states
 - [x] **JSUM-04**: New `pilot summary [id]` command is the primary executive-summary entry point, and `pilot log --summary` uses the same shared summary object and output contract
-- [ ] **JSUM-05**: CLI discoverability improves so `pilot status`, `pilot log` help text, and review/failure states point operators to `pilot summary`, `pilot log`, `pilot review`, and `pilot unblock` with concrete next commands
+- [x] **JSUM-05**: CLI discoverability improves so `pilot status`, `pilot log` help text, and review/failure states point operators to `pilot summary`, `pilot log`, `pilot review`, and `pilot unblock` with concrete next commands
 - [x] **JSUM-06**: Executive summaries surface key artifacts/results cheaply from existing verification metadata, step context, and strong assistant result messages without broad transcript scraping or LLM summarization
 - [x] **JSUM-07**: Regression coverage locks the shared summary builder, assistant-message fallback order, notification prompt shape, `pilot summary`, `pilot log --summary`, and status discoverability behavior
 
@@ -525,9 +525,9 @@ Deferred to future release. Tracked but not in current roadmap.
 |-------------|-------|--------|
 | JSUM-01 | Phase 102 | Complete |
 | JSUM-02 | Phase 102 | Complete |
-| JSUM-03 | Phase 102 | Pending |
+| JSUM-03 | Phase 102 | Complete |
 | JSUM-04 | Phase 102 | Complete |
-| JSUM-05 | Phase 102 | Pending |
+| JSUM-05 | Phase 102 | Complete |
 | JSUM-06 | Phase 102 | Complete |
 | JSUM-07 | Phase 102 | Complete |
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 102-02-PLAN.md
-last_updated: "2026-03-30T18:54:44.184Z"
+stopped_at: Completed 102-03-PLAN.md
+last_updated: "2026-03-30T19:01:29.758Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 102
-  completed_phases: 58
+  completed_phases: 59
   total_plans: 209
-  completed_plans: 196
+  completed_plans: 197
 ---
 
 # State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 102
-Plan: 03
+Plan: Completed
 
 ## Project Reference
 
@@ -1070,6 +1070,9 @@ Last activity: 2026-03-30
 - [Phase 102]: Made pilot summary and pilot log --summary share the same { job, summary } payload shape to eliminate command drift.
 - [Phase 102]: Reused one human summary renderer from src/commands/summary.ts so summary copy stays aligned across both CLI entry points.
 - [Phase 102]: Kept transcript-mode code paths in log.ts untouched outside the opts.summary branch so child-session expansion and follow behavior remain stable.
+- [Phase 102]: Rewrote buildDeliveryPrompt() as a renderer over buildJobExecutiveSummary() instead of keeping callback-specific business logic.
+- [Phase 102]: Put status hints only on actionable rows (failed, review, running deep-inspection, no-op) to preserve dashboard scanability.
+- [Phase 102]: Kept one short real-event warning and removed generic acknowledgement instructions so notifications stay concrete and copy-pasteable.
 
 ## Blockers/Concerns Carried Forward
 
@@ -1078,6 +1081,6 @@ Last activity: 2026-03-30
 
 ## Session Continuity
 
-Last session: 2026-03-30T18:54:44.176Z
-Stopped at: Completed 102-02-PLAN.md
+Last session: 2026-03-30T19:01:29.750Z
+Stopped at: Completed 102-03-PLAN.md
 Resume file: None
