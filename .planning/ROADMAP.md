@@ -1790,7 +1790,7 @@ Plans:
 **Goal:** Replace hardcoded OpenClaw notification with a modular backend system — typed backend interface, 4 built-in backends (kimaki, openclaw, webhook, telegram), fan-out delivery, `pilot notify` CLI subcommand, multi-backend `pilot add` flags, project route management, `pilot init` auto-detection, config schema update, owner removal, and comprehensive tests.
 **Requirements**: NBACK-TYPES, NBACK-REGISTRY, NBACK-KIMAKI, NBACK-OPENCLAW, NBACK-WEBHOOK, NBACK-TELEGRAM, NBACK-ROUTE-REFACTOR, NBACK-CALLBACK-FANOUT, NBACK-TYPE-CHANGES, NBACK-DB-MIGRATION, NBACK-CONFIG-SCHEMA, NBACK-ADD-INTEGRATION, NBACK-PROJECT-INTEGRATION, NBACK-OWNER-REMOVAL, NBACK-NOTIFY-CLI, NBACK-INIT-DETECTION, NBACK-WEB-UI, NBACK-TESTS
 **Depends on:** Phase 100
-**Plans:** 8 plans (5 complete + 3 gap closure)
+**Plans:** 6/8 plans executed
 
 Plans:
 - [x] 101-01-PLAN.md — Backend types, 4 backend implementations, and registry module
@@ -1799,7 +1799,7 @@ Plans:
 - [x] 101-04-PLAN.md — CLI: pilot notify subcommand + pilot init backend detection
 - [x] 101-05-PLAN.md — Web UI owner→notifyRoutes + comprehensive tests + regression fixes
 - [ ] 101-06-PLAN.md — Gap closure: owner removal completion + init interactive selection + REQUIREMENTS.md
-- [ ] 101-07-PLAN.md — Gap closure: fix debug-lane test stale mocks (15 failing tests)
+- [x] 101-07-PLAN.md — Gap closure: fix debug-lane test stale mocks (15 failing tests)
 - [ ] 101-08-PLAN.md — Gap closure: notify CLI tests + add multi-backend flag combination tests
 
 Wave structure:
