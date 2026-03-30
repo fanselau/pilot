@@ -140,6 +140,15 @@ vi.mock('../../src/core/config.js', () => {
   return { getConfig, resolveProjectDir, getConfigFileDefaults, loadConfigFile, _resetConfigCache };
 });
 
+// Mock notify-backends registry — default: no enabled backends (existing tests unaffected)
+const mockGetEnabledBackends = vi.fn((): string[] => []);
+const mockGetBackendConfig = vi.fn((_kind: string): Record<string, unknown> => ({}));
+
+vi.mock('../../src/core/notify-backends/registry.js', () => ({
+  getEnabledBackends: () => mockGetEnabledBackends(),
+  getBackendConfig: (kind: string) => mockGetBackendConfig(kind),
+}));
+
 import { addCommand, detectScope } from '../../src/commands/add.js';
 import { addJob, bump, findDuplicateJob, getProject, updateJobCategories, getLatestFailedJob } from '../../src/core/db.js';
 import { getConfigFileDefaults } from '../../src/core/config.js';
@@ -726,6 +735,176 @@ describe('notify flag validation (modular backends)', () => {
 // uses --notify-kimaki, --notify-webhook, --notify-telegram flags with per-backend enabled
 // validation. Legacy --notify <value> still works for backward compat but is no longer the
 // primary path. Tests for the new model are above.
+
+// ── multi-backend notification flag combinations ───────────────────────────
+
+describe('multi-backend notification flag combinations', () => {
+  let multiBackendDir: string;
+
+  beforeAll(() => {
+    multiBackendDir = mkdtempSync(path.join(tmpdir(), 'pilot-add-multi-'));
+    mockedProjectDir = multiBackendDir;
+    syncProjectDirEnv();
+
+    const projectDir = path.join(multiBackendDir, 'my-project');
+    mkdirSync(path.join(projectDir, '.opencode', 'command'), { recursive: true });
+    mkdirSync(path.join(projectDir, '.opencode', 'agents'), { recursive: true });
+    writeFileSync(path.join(projectDir, 'opencode.json'), '{}');
+  });
+
+  afterAll(() => {
+    rmSync(multiBackendDir, { recursive: true, force: true });
+    delete process.env.PILOT_PROJECT_DIR;
+  });
+
+  beforeEach(() => {
+    mockedProjectDir = multiBackendDir;
+    syncProjectDirEnv();
+    vi.mocked(findDuplicateJob).mockReturnValue(null);
+    vi.mocked(getProject).mockReturnValue(null);
+    mockGetEnabledBackends.mockReturnValue([]);
+    mockGetBackendConfig.mockReturnValue({});
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  afterEach(() => {
+    delete process.env.PILOT_DEFAULT_NOTIFY;
+  });
+
+  it('combines --notify-kimaki and --notify-webhook into NotifyRoute[]', async () => {
+    await addCommand('my-project', 'fix stuff', {
+      notifyKimaki: 'ses_123',
+      notifyWebhook: 'https://example.com/hook',
+      noCategories: true,
+    });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12]; // 13th arg = notifyRoute
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'kimaki', sessionId: 'ses_123' },
+        { kind: 'webhook', url: 'https://example.com/hook' },
+      ]),
+    );
+    expect((notifyRouteArg as unknown[]).length).toBe(2);
+  });
+
+  it('combines --notify-kimaki, --notify-webhook, and --notify-telegram into 3-route array', async () => {
+    await addCommand('my-project', 'fix stuff', {
+      notifyKimaki: 'ses_456',
+      notifyWebhook: 'https://hooks.example.com',
+      notifyTelegram: 'chat_789',
+      noCategories: true,
+    });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12] as unknown[];
+    expect(notifyRouteArg).toHaveLength(3);
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'kimaki', sessionId: 'ses_456' },
+        { kind: 'webhook', url: 'https://hooks.example.com' },
+        { kind: 'telegram', chatId: 'chat_789' },
+      ]),
+    );
+  });
+
+  it('--notify-kimaki with --notify-telegram produces 2-route array', async () => {
+    await addCommand('my-project', 'fix stuff', {
+      notifyKimaki: 'ses_abc',
+      notifyTelegram: 'chat_def',
+      noCategories: true,
+    });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12] as unknown[];
+    expect(notifyRouteArg).toHaveLength(2);
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'kimaki', sessionId: 'ses_abc' },
+        { kind: 'telegram', chatId: 'chat_def' },
+      ]),
+    );
+  });
+
+  it('errors when enabled backend has no route and no default', async () => {
+    // webhook is enabled but user provides no --notify-webhook and no config default
+    mockGetEnabledBackends.mockReturnValue(['webhook']);
+    mockGetBackendConfig.mockReturnValue({}); // no defaultUrl
+
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(
+      addCommand('my-project', 'fix stuff', { noCategories: true }),
+    ).rejects.toThrow('exit');
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const stderrOutput = stderrSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('');
+    expect(stderrOutput).toContain('webhook');
+    expect(stderrOutput).toContain('Enabled notification backends require targets');
+
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('uses project default route for enabled telegram backend when no flag given', async () => {
+    mockGetEnabledBackends.mockReturnValue(['telegram']);
+    mockGetBackendConfig.mockReturnValue({ defaultChatId: 'default_chat_999' });
+
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12] as unknown[];
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'telegram', chatId: 'default_chat_999' },
+      ]),
+    );
+  });
+
+  it('uses webhook defaultUrl from config when webhook is enabled and no --notify-webhook flag', async () => {
+    mockGetEnabledBackends.mockReturnValue(['webhook']);
+    mockGetBackendConfig.mockReturnValue({ defaultUrl: 'https://default.hook.io/notify' });
+
+    await addCommand('my-project', 'fix stuff', { noCategories: true });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12] as unknown[];
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'webhook', url: 'https://default.hook.io/notify' },
+      ]),
+    );
+  });
+
+  it('explicit flag + enabled backend default combine into multi-route array', async () => {
+    // User provides --notify-kimaki, telegram is enabled with a default chatId
+    mockGetEnabledBackends.mockReturnValue(['telegram']);
+    mockGetBackendConfig.mockReturnValue({ defaultChatId: 'auto_chat' });
+
+    await addCommand('my-project', 'fix stuff', {
+      notifyKimaki: 'ses_explicit',
+      noCategories: true,
+    });
+
+    expect(addJob).toHaveBeenCalled();
+    const callArgs = vi.mocked(addJob).mock.calls[0];
+    const notifyRouteArg = callArgs[12] as unknown[];
+    expect(notifyRouteArg).toHaveLength(2);
+    expect(notifyRouteArg).toEqual(
+      expect.arrayContaining([
+        { kind: 'kimaki', sessionId: 'ses_explicit' },
+        { kind: 'telegram', chatId: 'auto_chat' },
+      ]),
+    );
+  });
+});
 
 // ── --next flag (bump to front of queue) ───────────────────────────────────
 
