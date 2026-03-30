@@ -295,24 +295,29 @@ async function projectHealthCheck(projectPath: string, smokeTest?: boolean, skip
 
   try {
     const { getProject } = await import('../core/db.js');
+    const { getEnabledBackends } = await import('../core/notify-backends/registry.js');
     const projectRecord = getProject(absPath);
-    if (projectRecord?.notifyOpenClawRoute) {
+    const routes = projectRecord?.notifyRoutes ?? [];
+    const enabledBackends = getEnabledBackends();
+
+    if (routes.length > 0) {
+      const routeKinds = routes.map(r => r.kind).join(', ');
       checks.push({
-        name: 'Notify route',
+        name: 'Notify routes',
         status: 'pass',
-        detail: `Structured route configured (agent: ${projectRecord.notifyOpenClawRoute.agentId})`,
+        detail: `Configured backends: ${routeKinds}`,
       });
-    } else if (projectRecord?.owner) {
+    } else if (enabledBackends.length > 0) {
       checks.push({
-        name: 'Notify route',
+        name: 'Notify routes',
         status: 'warn',
-        detail: `Owner '${projectRecord.owner}' set but no structured route. Run: pilot project "${absPath}" --notify-openclaw --notify-agent ${projectRecord.owner} --notify-channel <channel> --notify-to <target>`,
+        detail: `Backends enabled (${enabledBackends.join(', ')}) but no project routes configured. Use: pilot project "${absPath}" --notify-kimaki-channel <id>`,
       });
     } else {
       checks.push({
-        name: 'Notify route',
-        status: 'warn',
-        detail: 'No notify configured (optional). To enable: pilot setup <dir> --owner <agent-id>',
+        name: 'Notify routes',
+        status: 'pass',
+        detail: 'No notification backends enabled (optional)',
       });
     }
   } catch {

@@ -5,8 +5,6 @@
  * adds .opencode/ to .gitignore, and initializes git if needed.
  *
  * With --verify, checks an existing setup without modifying anything.
- * With --owner <agentId>, registers the project with an owner agent ID.
- * With --update, updates the owner of an existing registered project.
  */
 
 import path from 'node:path';
@@ -19,8 +17,6 @@ interface SetupOptions {
   refresh?: boolean;     // re-link symlinks, merge opencode.json, re-offer skills/AGENTS.md
   force?: boolean;       // with --refresh: overwrite opencode.json instead of merging
   skipSkills?: boolean;  // with --refresh: skip skill re-offering
-  owner?: string;        // agent ID to register as project owner
-  update?: boolean;      // if true, update owner of existing project
   categories?: string;   // comma-separated default categories for this project
 }
 
@@ -104,32 +100,6 @@ async function setupCommand(dir: string, opts: SetupOptions): Promise<void> {
 
   if (result.errors.length > 0) {
     process.exit(1);
-  }
-
-  // After setup completes successfully, handle owner registration
-  if (!opts.owner && !isJsonMode()) {
-    outputHuman('');
-    outputHuman(`  ${dim('ℹ Notifications are optional.')} To enable:`);
-    outputHuman(`    pilot setup ${dir} --owner <agent-id>`);
-    outputHuman(`    ${dim('Then jobs notify the owner on completion/failure.')}`);
-    outputHuman('');
-  }
-
-  if (opts.owner) {
-    const { registerProject, updateProjectOwner, getProject } = await import('../core/db.js');
-    const absDir = path.resolve(dir);
-    if (opts.update) {
-      const existing = getProject(absDir);
-      if (!existing) {
-        process.stderr.write(`  ✗ Project not registered: ${absDir}\n`);
-        process.exit(1);
-      }
-      updateProjectOwner(absDir, opts.owner);
-      outputHuman(`  ${green('✓')} Updated owner: ${opts.owner}`);
-    } else {
-      registerProject(absDir, opts.owner);
-      outputHuman(`  ${green('✓')} Registered project owner: ${opts.owner}`);
-    }
   }
 
   // Set default categories if --categories provided

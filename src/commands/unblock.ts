@@ -12,7 +12,7 @@ async function unblockCommand(project: string): Promise<void> {
   const existing = getProject(resolvedPath);
 
   if (!existing) {
-    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${project} --owner <agentId>\n`);
+    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${project}\n`);
     process.exit(1);
   }
 

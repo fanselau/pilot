@@ -788,7 +788,7 @@ class Runner {
     const projectRecord = getProject(job.project);
     if (!projectRecord) {
       process.stderr.write(
-        `[runner] Warning: job ${job.id} targets unregistered project "${job.project}". Register with: pilot setup <dir> --owner <key>\n`,
+        `[runner] Warning: job ${job.id} targets unregistered project "${job.project}". Register with: pilot setup <dir>\n`,
       );
     }
 
@@ -933,20 +933,6 @@ class Runner {
       const failedJob = getJob(job.id);
       if (failedJob) {
         notifyJobCompletion(failedJob).catch(() => {});
-
-        if (!failedJob.callbackSessionKey) {
-          const project = getProject(failedJob.project);
-          if (project?.owner) {
-            const ownerNotifyJob = {
-              ...failedJob,
-              callbackSessionKey: project.owner,
-              error: `Job ${failedJob.id} failed and blocked project ${failedJob.project}.\n` +
-                     `Reason: ${error}\n` +
-                     `Actions: pilot unblock "${failedJob.project}"  ·  queue a new job with pilot add`,
-            };
-            notifyJobCompletion(ownerNotifyJob).catch(() => {});
-          }
-        }
       }
     } finally {
       this.continuationCycles.delete(this.getCycleKey(job.id, 'gaps'));

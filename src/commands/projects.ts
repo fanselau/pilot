@@ -39,7 +39,7 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
     if (opts.blocked) {
       outputHuman(`  ${dim('No blocked projects.')}`);
     } else {
-      outputHuman(`  ${dim('No registered projects. Use: pilot setup <dir> --owner <agentId>')}`);
+      outputHuman(`  ${dim('No registered projects. Use: pilot setup <dir>')}`);
     }
     return;
   }
@@ -53,7 +53,8 @@ async function projectsCommand(opts: { blocked?: boolean } = {}): Promise<void> 
     const statusLabel = p.status === 'active' ? green('active') : red('BLOCKED');
     const shortPath = p.path.replace(process.env['HOME'] ?? '', '~');
     outputHuman(`  ${statusIcon} ${shortPath}`);
-    outputHuman(`    ${dim('owner:')}  ${p.owner ?? dim('(none)')}`);
+    const routeKinds = (p.notifyRoutes ?? []).map((r: { kind: string }) => r.kind).join(', ');
+    outputHuman(`    ${dim('notify:')}  ${routeKinds || dim('none configured')}`);
     outputHuman(`    ${dim('status:')} ${statusLabel}`);
     if (p.status === 'blocked' && p.blockedReason) {
       outputHuman(`    ${dim('reason:')} ${yellow(p.blockedReason.slice(0, 120))}`);

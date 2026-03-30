@@ -2,49 +2,57 @@
  * `pilot project <path>` — Show or manage a registered project.
  *
  * Flags:
- *   (none)        Show project info: status, owner, blocked reason, job counts
- *   --block       Manually block a project with a reason
- *   --unblock     Unblock a blocked project
- *   --owner       Change project owner (session key)
- *   --jobs        (nice-to-have) Show recent jobs for this project
+ *   (none)                       Show project info: status, routes, blocked reason, job counts
+ *   --block                      Manually block a project with a reason
+ *   --unblock                    Unblock a blocked project
+ *   --notify-kimaki-channel      Set default kimaki channel for project notifications
+ *   --notify-webhook             Set default webhook URL for project notifications
+ *   --notify-telegram            Set default telegram chat for project notifications
+ *   --clear-notify               Remove all project notification routes
+ *   --jobs                       (nice-to-have) Show recent jobs for this project
  */
 
 import {
   getProject,
   blockProject,
   unblockProject,
-  updateProjectOwner,
-  updateProjectNotifyOpenClawRoute,
+  updateProjectNotifyRoutes,
   getProjectJobCounts,
 } from '../core/db.js';
 import { resolveProjectDir } from '../core/config.js';
 import { inspectProjectGsdState } from '../core/managed-gsd.js';
-import { validateOpenClawDeliverRoute } from '../core/notify-route.js';
-import type { OpenClawDeliverRoute } from '../core/types.js';
+import type { NotifyRoute } from '../core/notify-backends/types.js';
 import { outputJson, outputHuman, isJsonMode } from '../util/output.js';
 import { green, red, dim, bold, yellow } from '../util/colors.js';
 
 interface ProjectOptions {
   block?: string;
   unblock?: boolean;
-  owner?: string;
   jobs?: boolean;
-  notifyOpenclaw?: boolean;
-  clearNotifyOpenclaw?: boolean;
-  notifyAgent?: string;
-  notifyChannel?: string;
-  notifyTo?: string;
-  notifyAccount?: string;
+  notifyKimakiChannel?: string;
+  notifyWebhook?: string;
+  notifyTelegram?: string;
+  clearNotify?: boolean;
 }
 
-function usageError(message: string): never {
-  process.stderr.write(`${message}\n`);
-  process.exit(2);
-}
-
-function formatRouteSummary(route: OpenClawDeliverRoute): string {
-  const account = route.accountId ? route.accountId : '(none)';
-  return `agent=${route.agentId} channel=${route.channel} to=${route.to} account=${account}`;
+function formatRoutesSummary(routes: NotifyRoute[]): string {
+  if (routes.length === 0) return 'none configured';
+  return routes.map(r => {
+    switch (r.kind) {
+      case 'kimaki':
+        if ('sessionId' in r && r.sessionId) return `kimaki (session: ${r.sessionId})`;
+        if ('channelId' in r && r.channelId) return `kimaki (channel: ${r.channelId})`;
+        return 'kimaki';
+      case 'openclaw-agent-deliver':
+        return `openclaw (agent: ${r.agentId})`;
+      case 'webhook':
+        return `webhook (${r.url})`;
+      case 'telegram':
+        return `telegram (chat: ${r.chatId})`;
+      default:
+        return (r as NotifyRoute).kind;
+    }
+  }).join(', ');
 }
 
 async function projectCommand(projectPath: string, opts: ProjectOptions): Promise<void> {
@@ -52,82 +60,62 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
   const existing = getProject(resolvedPath);
 
   if (!existing) {
-    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${projectPath} --owner <agentId>\n`);
+    process.stderr.write(`Project not registered: ${resolvedPath}\nRun: pilot setup ${projectPath}\n`);
     process.exit(1);
   }
 
   const routeFlagPresent =
-    opts.notifyOpenclaw
-    || opts.clearNotifyOpenclaw
-    || opts.notifyAgent !== undefined
-    || opts.notifyChannel !== undefined
-    || opts.notifyTo !== undefined
-    || opts.notifyAccount !== undefined;
+    opts.notifyKimakiChannel !== undefined
+    || opts.notifyWebhook !== undefined
+    || opts.notifyTelegram !== undefined
+    || opts.clearNotify;
 
-  if (routeFlagPresent && (opts.block || opts.unblock || opts.owner)) {
-    usageError('Route flags cannot be combined with --block, --unblock, or --owner in the same command.');
+  if (routeFlagPresent && (opts.block || opts.unblock)) {
+    process.stderr.write('Route flags cannot be combined with --block or --unblock in the same command.\n');
+    process.exit(2);
   }
 
-  if ((opts.notifyAgent || opts.notifyChannel || opts.notifyTo || opts.notifyAccount) && !opts.notifyOpenclaw) {
-    usageError('Route fields require --notify-openclaw. Example: pilot project <path> --notify-openclaw --notify-agent <id> --notify-channel <channel> --notify-to <target> [--notify-account <id>]');
-  }
-
-  if (opts.notifyOpenclaw && opts.clearNotifyOpenclaw) {
-    usageError('Use either --notify-openclaw or --clear-notify-openclaw, not both.');
-  }
-
-  if (opts.clearNotifyOpenclaw && (opts.notifyAgent || opts.notifyChannel || opts.notifyTo || opts.notifyAccount)) {
-    usageError('--clear-notify-openclaw cannot be combined with route fields.');
-  }
-
-  if (opts.notifyOpenclaw) {
-    if (!opts.notifyAgent || !opts.notifyChannel || !opts.notifyTo) {
-      usageError('Missing route fields. Use --notify-agent <id>, --notify-channel <channel>, and --notify-to <target> with --notify-openclaw.');
-    }
-
-    const validated = validateOpenClawDeliverRoute(
-      {
-        kind: 'openclaw-agent-deliver',
-        agentId: opts.notifyAgent,
-        channel: opts.notifyChannel,
-        to: opts.notifyTo,
-        ...(opts.notifyAccount ? { accountId: opts.notifyAccount } : {}),
-      },
-      'project notify route',
-    );
-    if (!validated.ok) {
-      usageError(`Invalid notify route: ${validated.error.message}`);
-    }
-
-    updateProjectNotifyOpenClawRoute(resolvedPath, validated.route);
+  // Handle --clear-notify
+  if (opts.clearNotify) {
+    updateProjectNotifyRoutes(resolvedPath, []);
 
     if (isJsonMode()) {
-      outputJson({
-        updated: true,
-        project: resolvedPath,
-        notifyOpenclawRoute: validated.route,
-      });
+      outputJson({ updated: true, project: resolvedPath, notifyRoutes: [] });
       return;
     }
 
-    outputHuman(`  ${green('✓')} Updated OpenClaw notify route: ${resolvedPath}`);
-    outputHuman(`  ${dim('notify:')}  ${formatRouteSummary(validated.route)}`);
+    outputHuman(`  ${green('✓')} Cleared all notification routes: ${resolvedPath}`);
     return;
   }
 
-  if (opts.clearNotifyOpenclaw) {
-    updateProjectNotifyOpenClawRoute(resolvedPath, null);
+  // Handle route additions (--notify-kimaki-channel, --notify-webhook, --notify-telegram)
+  if (opts.notifyKimakiChannel || opts.notifyWebhook || opts.notifyTelegram) {
+    let updatedRoutes: NotifyRoute[] = [...(existing.notifyRoutes ?? [])];
+
+    if (opts.notifyKimakiChannel) {
+      updatedRoutes = updatedRoutes.filter(r => r.kind !== 'kimaki');
+      updatedRoutes.push({ kind: 'kimaki', channelId: opts.notifyKimakiChannel });
+    }
+
+    if (opts.notifyWebhook) {
+      updatedRoutes = updatedRoutes.filter(r => r.kind !== 'webhook');
+      updatedRoutes.push({ kind: 'webhook', url: opts.notifyWebhook });
+    }
+
+    if (opts.notifyTelegram) {
+      updatedRoutes = updatedRoutes.filter(r => r.kind !== 'telegram');
+      updatedRoutes.push({ kind: 'telegram', chatId: opts.notifyTelegram });
+    }
+
+    updateProjectNotifyRoutes(resolvedPath, updatedRoutes);
 
     if (isJsonMode()) {
-      outputJson({
-        updated: true,
-        project: resolvedPath,
-        notifyOpenclawRoute: null,
-      });
+      outputJson({ updated: true, project: resolvedPath, notifyRoutes: updatedRoutes });
       return;
     }
 
-    outputHuman(`  ${green('✓')} Cleared OpenClaw notify route: ${resolvedPath}`);
+    outputHuman(`  ${green('✓')} Updated notification routes: ${resolvedPath}`);
+    outputHuman(`  ${dim('notify:')}  ${formatRoutesSummary(updatedRoutes)}`);
     return;
   }
 
@@ -162,28 +150,17 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
     return;
   }
 
-  // Handle --owner
-  if (opts.owner) {
-    updateProjectOwner(resolvedPath, opts.owner);
-    if (isJsonMode()) {
-      outputJson({ updated: true, project: resolvedPath, owner: opts.owner });
-      return;
-    }
-    outputHuman(`  ${green('✓')} Updated owner: ${opts.owner}`);
-    return;
-  }
-
   // Default: show project info
   const counts = getProjectJobCounts(resolvedPath);
   const gsdState = await inspectProjectGsdState(resolvedPath);
   const shortPath = resolvedPath.replace(process.env['HOME'] ?? '', '~');
+  const routes = existing.notifyRoutes ?? [];
 
   if (isJsonMode()) {
     outputJson({
       project: {
         path: resolvedPath,
-        owner: existing.owner,
-        notifyOpenclawRoute: existing.notifyOpenClawRoute,
+        notifyRoutes: routes,
         status: existing.status,
         blockedReason: existing.blockedReason,
         blockedAt: existing.blockedAt,
@@ -204,12 +181,7 @@ async function projectCommand(projectPath: string, opts: ProjectOptions): Promis
 
   outputHuman('');
   outputHuman(`  ${statusIcon} ${bold(shortPath)}`);
-  outputHuman(`    ${dim('owner:')}   ${existing.owner ?? dim('(none)')}`);
-  if (existing.notifyOpenClawRoute) {
-    outputHuman(`    ${dim('notify:')}  ${formatRouteSummary(existing.notifyOpenClawRoute)}`);
-  } else {
-    outputHuman(`    ${dim('notify:')}  ${dim('none configured')}`);
-  }
+  outputHuman(`    ${dim('notify:')}  ${formatRoutesSummary(routes)}`);
   outputHuman(`    ${dim('status:')}  ${statusLabel}`);
   if (existing.status === 'blocked' && existing.blockedReason) {
     outputHuman(`    ${dim('reason:')}  ${yellow(existing.blockedReason.slice(0, 120))}`);
